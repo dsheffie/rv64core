@@ -13,13 +13,15 @@
 #include <sys/stat.h>
 #include <sys/uio.h>
 #include <sys/utsname.h>
-#include <linux/utsname.h>
+
 
 #include "interpret.hh"
 #include "disassemble.hh"
 #include "helper.hh"
 #include "globals.hh"
 
+#ifdef __linux__
+#include <linux/utsname.h>
 /* stolen from QEMU */
 
 #define COPY_UTSNAME_FIELD(dest, src) \
@@ -227,3 +229,8 @@ void linux_o32_syscall(state_t *s){
       abort();
     }
 }
+#else
+void linux_o32_syscall(state_t *s){
+  abort();
+}
+#endif

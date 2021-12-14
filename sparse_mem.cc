@@ -11,7 +11,7 @@
 
 
 #define PROT (PROT_READ | PROT_WRITE)
-#define MAP (MAP_ANONYMOUS|MAP_PRIVATE|MAP_POPULATE)
+#define MAP (MAP_ANONYMOUS|MAP_PRIVATE)
 
 sparse_mem::sparse_mem() {
   mem = reinterpret_cast<uint8_t*>(mmap(nullptr, sparse_mem::sz, PROT, MAP, -1, 0));

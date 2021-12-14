@@ -13,13 +13,17 @@
 #include <sys/stat.h>
 #include <sys/uio.h>
 #include <sys/utsname.h>
-#include <linux/utsname.h>
+
 
 #include "interpret.hh"
 #include "disassemble.hh"
 #include "helper.hh"
 #include "globals.hh"
+
+#ifdef __linux__
+#include <linux/utsname.h>
 #include "linux_o32_syscall.hh"
+#endif
 
 static fpMode currFpMode = fpMode::mipsii;
 
