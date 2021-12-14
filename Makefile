@@ -2,7 +2,7 @@ UNAME_S = $(shell uname -s)
 
 OBJ = top.o verilated.o verilated_vcd_c.o loadelf.o interpret.o disassemble.o helper.o saveState.o sparse_mem.o interpret64.o linux_o32_syscall.o
 
-SV_SRC = core_l1d_l1i.sv core.sv exec.sv decode_mips32.sv ext_mask.sv shiftregbit.sv shift_right.sv mul.sv find_first_set.sv divider.sv l1d.sv l1i.sv machine.vh rob.vh uop.vh fpu.sv utlb.sv tlb.sv fp_mul.sv fp_add.sv ram1r1w.sv ram2r1w.sv count_leading_zeros.sv fp_trunc.sv fp_div.sv unsigned_divider.sv
+SV_SRC = core_l1d_l1i.sv core.sv exec.sv decode_mips32.sv ext_mask.sv shiftregbit.sv shift_right.sv mul.sv find_first_set.sv divider.sv l1d.sv l1i.sv machine.vh rob.vh uop.vh fpu.sv utlb.sv tlb.sv fp_compare.sv fp_mul.sv fp_add.sv ram1r1w.sv ram2r1w.sv count_leading_zeros.sv fp_trunc.sv fp_div.sv unsigned_divider.sv
 
 ifeq ($(UNAME_S),Linux)
 	CXX = clang++-12 -flto
@@ -24,12 +24,12 @@ ifeq ($(UNAME_S),FreeBSD)
 endif
 
 ifeq ($(UNAME_S),Darwin)
-	CXX = clang++ -march=native -I/opt/local/include
-	VERILATOR_SRC = /Users/dsheffie/local/share/verilator/include/verilated.cpp
-	VERILATOR_INC = /Users/dsheffie/local/share/verilator/include
-	VERILATOR_VCD = /Users/dsheffie/local/share/verilator/include/verilated_vcd_c.cpp
-	VERILATOR = /Users/dsheffie/local/bin/verilator
-	EXTRA_LD = -L/opt/local/lib -lboost_program_options-mt -lcapstone
+	CXX = clang++ -I/opt/homebrew/include -flto
+	VERILATOR_SRC = /opt/homebrew/Cellar/verilator/4.200_1/share/verilator/include/verilated.cpp
+	VERILATOR_INC = /opt/homebrew/Cellar/verilator/4.200_1/share/verilator/include
+	VERILATOR_VCD = /opt/homebrew/Cellar/verilator/4.200_1/share/verilator/include/verilated_vcd_c.cpp
+	VERILATOR = /opt/homebrew/bin/verilator
+	EXTRA_LD = -L/opt/homebrew/lib -lboost_program_options-mt -lcapstone
 endif
 
 OPT = -O3 -g -std=c++11 #-fomit-frame-pointer
