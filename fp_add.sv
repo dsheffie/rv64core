@@ -34,6 +34,8 @@ module fp_add(/*AUTOARG*/
    clk, sub, a, b, en
    );
    parameter W = 32;
+   parameter ADD_LAT = 2;
+   
    input logic clk;
    input logic sub;
    input logic [W-1:0] a;
@@ -44,16 +46,7 @@ module fp_add(/*AUTOARG*/
    localparam FW = (W==32) ? 23 : 52;
    localparam EW = (W==32) ? 8 : 11;
    
-   wire 	 cs0_swapped_out;
-   wire 	 cs0_complemented_out;
-   wire [W:0] 	 cs0_a_out;
-   wire [W:0] 	 cs0_b_out;
-   wire 	 cs0_a_out_zero;
-   wire 	 cs0_b_out_zero;
-   wire 	 cs0_a_larger;
-   
    wire 	 w_sign_toggle_b = sub ? ~b[W-1] : b[W-1];
-   
    wire [W-1:0] 	 w_b = {w_sign_toggle_b, b[W-2:0]};
 
 
@@ -120,7 +113,6 @@ module fp_add(/*AUTOARG*/
    //perform add
    logic [FW+4:0] t_align_sum;
    logic 	  t_align_sign;
-   
    always_comb
      begin
 	t_align_sum = {1'b0, t_a_align_mant} + t_b_align_mant;
@@ -137,13 +129,14 @@ module fp_add(/*AUTOARG*/
 		  t_align_sum = {1'b0, t_b_align_mant} - t_a_align_mant;
 		  t_align_sign = w_b[W-1];
 	       end
-	  end
+	  end // if (a[W-1] != w_b[W-1])
      end // always_comb
 
    //check add
    logic [FW:0] t_add_mant;
    logic [EW:0] t_add_exp;
    logic 	t_guard,t_round,t_sticky;
+
    
    always_comb
      begin
@@ -239,15 +232,12 @@ module fp_add(/*AUTOARG*/
 	  end
      end
 
-
-   wire [W-1:0] w_y = {t_align_sign, 
-		       t_round_add_exp[EW-1:0],
-		       t_round_add_mant[FW-1:0]
-		       };
+   wire w_is_zero = (a[W-1] ^ w_b[W-1]) & (t_round_add_mant=='d0);
+   wire [W-1:0] w_y = w_is_zero ? 'd0 : {t_align_sign, t_round_add_exp[EW-1:0], t_round_add_mant[FW-1:0]};
    
    always_ff@(negedge clk)
      begin
-   	if(en && (FW == 52))
+   	if(0 && en && (FW == 52))
    	  begin
     	     $display("IN : a sign %b exp = %d, a frac = %x", 
    		      a[W-1], a[W-2:FW], a[FW-1:0]);
@@ -256,8 +246,9 @@ module fp_add(/*AUTOARG*/
 	     
    	     $display("t_a_align_mant = %x", t_a_align_mant);
    	     $display("t_b_align_mant = %x", t_b_align_mant);
-
-   	     $display("t_add_mant = %b, dist = %d", t_add_mant, w_shft_lft_dist);
+	     
+   	     $display("t_add_mant = %b, dist = %d", 
+		      t_add_mant, w_shft_lft_dist);
 		      
    	     $display("\tnorm2 = sign %b exp %d, frac %x (t_dist_a = %d, t_dist_b = %d)",
    		      t_align_sign,
@@ -272,7 +263,7 @@ module fp_add(/*AUTOARG*/
      end
    
    
-   shiftreg #(.W(W), .D(4)) sr0 (.clk(clk), .in(w_y), .out(y));
+   shiftreg #(.W(W), .D(ADD_LAT)) sr0 (.clk(clk), .in(w_y), .out(y));
    
      
 endmodule // sp_add

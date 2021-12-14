@@ -73,8 +73,10 @@ module fp_div(
    logic [W-1:0]  r_y, n_y;
    
    logic 	  t_start_div;
+   logic 	  r_active, n_active;
    
-   assign active = (r_state != IDLE);
+   assign active = r_active;
+   //(r_state != IDLE);
    assign valid = r_valid;
    assign y = r_y;
    assign dst_ptr_out = r_dst_ptr;
@@ -107,6 +109,7 @@ module fp_div(
 	     r_exp_b <= 'd0;
 	     r_sign <= 1'b0;
 	     r_div_mant <= 'd0;
+	     r_active <= 1'b0;
 	  end
 	else
 	  begin
@@ -120,6 +123,7 @@ module fp_div(
 	     r_exp_b <= n_exp_b;
 	     r_sign <= n_sign;
 	     r_div_mant <= n_div_mant;
+	     r_active <= n_active;
 	  end
      end // always_ff@ (posedge clk)
 
@@ -135,7 +139,7 @@ module fp_div(
 	n_exp_b = r_exp_b;
 	n_sign = r_sign;
 	n_div_mant = r_div_mant;
-	
+	n_active = r_active;
 	t_start_div = 1'b0;
 	case(r_state)
 	  IDLE:
@@ -146,6 +150,7 @@ module fp_div(
 		    n_dst_ptr = dst_ptr_in;
 		    n_rob_ptr = rob_ptr_in;
 		    n_state = COMPUTE_EXP;
+		    n_active = 1'b1;
 		    // $display("%d : fp divider for rob ptr %d, dest %d starts", 
 		    // 	     r_cycle, rob_ptr_in, dst_ptr_in);		    
 		 end
@@ -186,6 +191,7 @@ module fp_div(
 	       //$display("r_y %x, %x\n", r_y[W-1:W/2], r_y[(W/2)-1:0]);
 	       
 	       n_state = IDLE;
+	       n_active = 1'b0;
 	       // $display("fp divider for rob ptr %d, dest %d stops", 
 	       // 		r_rob_ptr, r_dst_ptr);		    
 	       

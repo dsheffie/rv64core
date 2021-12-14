@@ -32,9 +32,7 @@ module shiftreg(clk,in,out);
    
 endmodule
 
-module fracmul(y,clk, a, b);
-   input clk;
-   parameter L = 3;
+module fracmul(y, a, b);
    parameter W = 24;
    localparam W2 = W*2;
    input [W-1:0]       a;
@@ -42,22 +40,21 @@ module fracmul(y,clk, a, b);
    output [W2-1:0] y;
 
    wire [W2-1:0] w_comb_mul = a * b;
-   shiftreg #(.W(W2), .D(L)) d (.clk(clk), .in(w_comb_mul), .out(y));
+   assign y = w_comb_mul;
 endmodule // fracmul
    
 
-module expadd(y, clk, a, b);
+module expadd(y, a, b);
    parameter L = 3;
    parameter W = 8;
-   input logic clk;
    input logic [W-1:0] a;
    input logic [W-1:0] b;
    output logic [W:0] y;
 
    wire [W-1:0] w_bias = ((1<<(W-1)) - 1);
    wire [W:0] w_comb_add = ((a+b) - w_bias);
+   assign y = w_comb_add;
 
-   shiftreg #(.W(W+1), .D(L)) d (.clk(clk), .in(w_comb_add), .out(y));
 endmodule // expadd
 
    
@@ -66,16 +63,13 @@ module detection(
    // Outputs
    zero, nan, infinity,
    // Inputs
-   clk, a, b
+   a, b
    );
-   parameter L = 4;
    parameter E = 11;
    parameter F = 52;
    
    localparam W = E + F + 1;
-
       
-   input logic clk;
    input logic [W-1:0] a;
    input logic [W-1:0] b;
    
@@ -83,10 +77,7 @@ module detection(
    output logic        nan;
    output logic        infinity;
 
-   
    wire 	w_nan = 1'b0;
-
-   
    logic 	t_az, t_bz;
    logic [2:0] 	t_detect, t_out;
 
@@ -102,15 +93,11 @@ module detection(
      begin
 	t_az = (a == 'd0);
 	t_bz = (b == 'd0);
-	t_detect = {t_az|t_bz, w_nan, w_infinity_a | w_infinity_b};
      end
-   
-   shiftreg #(.W(3), .D(L)) d (.clk(clk), .in(t_detect), .out(t_out));
-   
-   assign zero = t_out[2];
-   assign nan = t_out[1];
-   assign infinity = t_out[0];
 
+   assign zero = t_az|t_bz;
+   assign nan = w_nan;
+   assign infinity = w_infinity_a | w_infinity_b;
 endmodule // detection
 
 module normalize(/*AUTOARG*/
@@ -188,8 +175,8 @@ module fp_mul(
    // Inputs
    clk, a, b, en
    );
-   parameter SP_IMUL_LATENCY = 2;
    parameter W = 32;
+   parameter MUL_LAT = 4;
    localparam FW = (W==32) ? 23 : 52;
    localparam EW = (W==32) ? 8 : 11;
    localparam INFINITY = (1 << EW) - 1;
@@ -219,46 +206,28 @@ module fp_mul(
    wire [EW-1:0] w_exp_b = b[W-2:FW];
    wire 	 w_sign, w_zero, w_nan, w_infinity;
    
-   logic [EW-1:0]  r_exp;
-   logic [FW-1:0]  r_mant;
-   logic [(FW+4):0] r_rnd_mant_in;
-   logic [EW:0]     r_rnd_exp_in;
+   logic [EW-1:0]  t_exp;
+   logic [FW-1:0]  t_mant;
+   logic 	   t_sign;
   
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if(en)
-   // 	  begin
-   // 	     $display("A %x mant = %x, exp = %d", 
-   // 		      a, w_mant_a, w_exp_a);
-   // 	     $display("B %x mant = %x, exp = %d", b,
-   // 		      w_mant_b, w_exp_b);
-   // 	  end
-   //   end
-    
-   fracmul #(.L(SP_IMUL_LATENCY), .W(FW+1)) m0 
-     (.y(w_prod), .clk(clk),.a(w_mant_a), .b(w_mant_b));
-   expadd #(.L(SP_IMUL_LATENCY), .W(EW)) e0 
-     (.y(w_exp), .clk(clk), .a(w_exp_a), .b(w_exp_b));
+   fracmul #(.W(FW+1)) m0 
+     (.y(w_prod), .a(w_mant_a), .b(w_mant_b));
+   
+   expadd #(.W(EW)) e0 
+     (.y(w_exp), .a(w_exp_a), .b(w_exp_b));
 
-   detection #(.L(SP_IMUL_LATENCY+1), .E(EW), .F(FW)) d0 
-     (.clk(clk),.a(a),.b(b),.zero(w_zero), .nan(w_nan), .infinity(w_infinity));
+   detection #(.E(EW), .F(FW)) d0 
+     (.a(a),.b(b),.zero(w_zero), .nan(w_nan), .infinity(w_infinity));
 
    normalize #(.E(EW), .F(FW)) n0 
      (.exp_out(w_rnd_exp_in), .mant_out(w_rnd_mant_in),
       .exp_in(w_exp),.mant_in(w_prod[2*(FW+1)-1:(FW-3)]));
-   
-   
-   always_ff@(posedge clk)
-     begin
-	r_rnd_mant_in <= w_rnd_mant_in;
-	r_rnd_exp_in <= w_rnd_exp_in;
-     end
-        
+           
    round #(.E(EW), .F(FW)) r0 (
 	     .exp_out(w_rnd_exp_out),
 	     .mant_out(w_rnd_mant_out),
-	     .exp_in(r_rnd_exp_in),
-	     .mant_in(r_rnd_mant_in)
+	     .exp_in(w_rnd_exp_in),
+	     .mant_in(w_rnd_mant_in)
 	     );
    
    normalize #(.E(EW), .F(FW)) n1 (
@@ -270,36 +239,30 @@ module fp_mul(
 		 .mant_in		(w_rnd_mant_out)
 		 );
 
-
-   always_ff@(posedge clk)
+  
+   always_comb
      begin
+	t_exp = w_nrm_exp_out[EW-1:0];
+	t_mant = w_nrm_mant_out[FW+2:3];
+	t_sign = a[W-1]^b[W-1];
 	if(w_zero)
 	  begin
-	     r_exp <= 'd0;
-	     r_mant <= 'd0;
+	     t_exp = 'd0;
+	     t_mant = 'd0;
 	  end
 	else if(w_infinity)
 	  begin
-	     r_exp <= INFINITY;
-	     r_mant <= 'd0;
+	     t_exp = INFINITY;
+	     t_mant = 'd0;
 	  end
-	else
-	  begin
-	     r_exp <= w_nrm_exp_out[EW-1:0];
-	     r_mant <= w_nrm_mant_out[FW+2:3];
-	  end
-     end // always_ff@ (posedge clk)
-   	
+     end // always_comb
    
-   sign #(SP_IMUL_LATENCY + 2) s0 (
-	    .y(w_sign),
-	    .clk(clk),
-	    .a(a[W-1]),
-	    .b(b[W-1])
-	    );
-   
-   assign y = {w_sign, r_exp, r_mant};
-      
+   shiftreg #(.W(W), .D(MUL_LAT)) 
+   sr0 (
+	.clk(clk),
+	.in({t_sign, t_exp, t_mant}), 
+	.out(y)
+	);      
 
 endmodule // sp_mul
 

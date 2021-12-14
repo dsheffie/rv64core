@@ -594,7 +594,7 @@ module decode_mips32(in_64b_fpreg_mode, insn,
 	    end // case: 6'd1
 	  6'd2: /* J - just fold */
 	    begin
-	       uop.op = NOP;
+	       uop.op = J;
 	       uop.is_br = 1'b1;
 	       uop.is_int = 1'b1;
 	       uop.has_delay_slot = 1'b1;
@@ -1666,7 +1666,6 @@ module decode_mips32(in_64b_fpreg_mode, insn,
 	    begin
 	    end
 	endcase // case (insn[5:0])
-     
      end // always_comb
    
 

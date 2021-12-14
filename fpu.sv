@@ -1,5 +1,8 @@
+`include "fp_compare.vh"
+
 module fpu(clk,
 	   reset,
+	   pc,
 	   opcode,
 	   start,
 	   src_a,
@@ -21,9 +24,11 @@ module fpu(clk,
    parameter LG_PRF_WIDTH = 4;
    parameter LG_ROB_WIDTH = 4;
    parameter LG_FCR_WIDTH = 4;
+   parameter FPU_LAT = 2;
    
    input logic clk;
    input logic reset;
+   input logic [63:0] pc;
    input opcode_t opcode;
    input logic start;
    
@@ -50,15 +55,14 @@ module fpu(clk,
    logic [31:0] 		   t_sp_mult_result;
    logic [63:0] 		   t_dp_mult_result;
       
-   logic [3:0] 			   r_val;
-   logic [LG_PRF_WIDTH-1:0] 	   r_ptr [3:0];
-   logic [LG_ROB_WIDTH-1:0] 	   r_rob [3:0];
-   logic [LG_FCR_WIDTH-1:0] 	   r_fcr[3:0];
-   logic [2:0] 			   r_fcr_sel[3:0];
-   logic [7:0] 			   r_fcr_reg[3:0];
+   logic [FPU_LAT-1:0] 		   r_val;
+   logic [LG_PRF_WIDTH-1:0] 	   r_ptr [FPU_LAT-1:0];
+   logic [LG_ROB_WIDTH-1:0] 	   r_rob [FPU_LAT-1:0];
+   logic [LG_FCR_WIDTH-1:0] 	   r_fcr[FPU_LAT-1:0];
+   logic [2:0] 			   r_fcr_sel[FPU_LAT-1:0];
+   logic [7:0] 			   r_fcr_reg[FPU_LAT-1:0];
    logic [7:0] 			   fcr_reg;
-   
-   opcode_t r_opcode[3:0];
+   opcode_t r_opcode[FPU_LAT-1:0];
 
    
    assign dst_ptr_out = r_ptr[0];
@@ -66,9 +70,74 @@ module fpu(clk,
    assign fcr_ptr_out = r_fcr[0];
    assign fcr_reg = r_fcr_reg[0];
 
-   function logic [63:0] handle_fcr(logic b, logic [2:0] fcr_sel, logic [7:0] fcr_reg);
+   wire 			   w_sp_cmp, w_dp_cmp;
+   fp_cmp_t t_sp_cmp_type, t_dp_cmp_type;
+
+   always_comb
+     begin
+	t_sp_cmp_type = CMP_NONE;
+	case(opcode)
+	  SP_CMP_LT:
+	    begin
+	       t_sp_cmp_type = CMP_LT;
+	    end
+	  SP_CMP_EQ:
+	    begin
+	       t_sp_cmp_type = CMP_EQ;
+	    end
+	  SP_CMP_LE:	    
+	    begin
+	       t_sp_cmp_type = CMP_LE;	       
+	    end
+	  default:
+	    begin
+	    end
+	endcase
+     end // always_comb
+
+   always_comb
+     begin
+	t_dp_cmp_type = CMP_NONE;
+	case(opcode)
+	  DP_CMP_LT:
+	    begin
+	       t_dp_cmp_type = CMP_LT;
+	    end
+	  DP_CMP_EQ:
+	    begin
+	       t_dp_cmp_type = CMP_EQ;
+	    end
+	  DP_CMP_LE:	    
+	    begin
+	       t_dp_cmp_type = CMP_LE;	       
+	    end
+	  default:
+	    begin
+	    end
+	endcase
+     end // always_comb
+   
+   
+   fp_compare #(.W(32), .D(FPU_LAT)) 
+   sp_cmp(.clk(clk),
+	  .pc(pc),
+	  .a(src_a[31:0]),
+	  .b(src_b[31:0]), 
+	  .cmp_type(t_sp_cmp_type), 
+	  .y(w_sp_cmp));
+
+   fp_compare #(.W(64), .D(FPU_LAT)) 
+   dp_cmp(.clk(clk),
+	  .pc(pc),
+	  .a(src_a), 
+	  .b(src_b), 
+	  .cmp_type(t_dp_cmp_type), 
+	  .y(w_dp_cmp));
+
+   
+   function logic [63:0] handle_fcr(logic b, logic [2:0] sel, logic [7:0] fcr_reg);
       logic [63:0] 		   y;
-      case(fcr_sel)
+      case(sel)
 	3'd0:
 	  begin
 	     y = {56'd0, fcr_reg[7:1], b};
@@ -101,10 +170,9 @@ module fpu(clk,
 	  begin
 	     y = {56'd0, b, fcr_reg[6:0]};		      
 	  end
-      endcase // case (fcr_sel)
+      endcase // case (sel)
       return y;
-endfunction // handle_fcr
-   
+   endfunction // handle_fcr
    
    always_comb
      begin
@@ -145,32 +213,32 @@ endfunction // handle_fcr
 	  SP_CMP_LT:
 	    begin
 	       cmp_val = r_val[0];
-	       y = handle_fcr(t_sp_adder_result[31], r_fcr_sel[0], fcr_reg);
-	    end
-	  DP_CMP_LT:
-	    begin
-	       cmp_val = r_val[0];
-	       y = handle_fcr(t_dp_adder_result[63], r_fcr_sel[0], fcr_reg);
+	       y = handle_fcr(w_sp_cmp, r_fcr_sel[0], fcr_reg);
 	    end
 	  SP_CMP_LE:
 	    begin
 	       cmp_val = r_val[0];
-	       y = handle_fcr(t_sp_adder_result[31] || t_sp_adder_result=='d0, r_fcr_sel[0], fcr_reg);
-	    end
-	  DP_CMP_LE:
-	    begin
-	       cmp_val = r_val[0];
-	       y = handle_fcr(t_dp_adder_result[63] || t_dp_adder_result=='d0, r_fcr_sel[0], fcr_reg);
+	       y = handle_fcr(w_sp_cmp, r_fcr_sel[0], fcr_reg);
 	    end
 	  SP_CMP_EQ:
 	    begin
 	       cmp_val = r_val[0];
-	       y = handle_fcr(t_sp_adder_result=='d0, r_fcr_sel[0], fcr_reg);
+	       y = handle_fcr(w_sp_cmp, r_fcr_sel[0], fcr_reg);
+	    end
+	  DP_CMP_LT:
+	    begin
+	       cmp_val = r_val[0];
+	       y = handle_fcr(w_dp_cmp, r_fcr_sel[0], fcr_reg);
+	    end
+	  DP_CMP_LE:
+	    begin
+	       cmp_val = r_val[0];
+	       y = handle_fcr(w_dp_cmp, r_fcr_sel[0], fcr_reg);
 	    end
 	  DP_CMP_EQ:
 	    begin
 	       cmp_val = r_val[0];
-	       y = handle_fcr(t_dp_adder_result=='d0, r_fcr_sel[0], fcr_reg);
+	       y = handle_fcr(w_dp_cmp, r_fcr_sel[0], fcr_reg);
 	    end
 	  
 	  default:
@@ -178,90 +246,75 @@ endfunction // handle_fcr
 	    end
 	endcase // case (r_opcode[0])
      end // always_comb
-   
+
    always_ff@(posedge clk)
      begin
 	if(reset)
 	  begin
-	     r_val <= 'd0;
+	     r_val <= 'd0;	     
 	  end
 	else
 	  begin
-	     r_opcode[3] <= opcode;
-	     r_ptr[3] <= dst_ptr_in;
-	     r_fcr[3] <= fcr_ptr_in;
-	     r_rob[3] <= rob_ptr_in;
-	     r_val[3] <= start;
-	     r_fcr_sel[3] <= fcr_sel;
-	     r_fcr_reg[3] <= src_fcr;
-	     for(integer i = 3; i > 0; i=i-1)
+	     r_val[FPU_LAT-1] <= start;
+	     for(integer i = (FPU_LAT-1); i > 0; i=i-1)
 	       begin
-		  r_opcode[i-1] <= r_opcode[i];
-		  r_ptr[i-1] <= r_ptr[i];
-		  r_fcr[i-1] <= r_fcr[i];
-		  r_rob[i-1] <= r_rob[i];
 		  r_val[i-1] <= r_val[i];
-		  r_fcr_sel[i-1] <= r_fcr_sel[i];
-		  r_fcr_reg[i-1] <= r_fcr_reg[i];
 	       end
-	  end // else: !if(reset)
+	  end
+     end
+   
+   always_ff@(posedge clk)
+     begin
+	r_opcode[FPU_LAT-1] <= opcode;
+	r_ptr[FPU_LAT-1] <= dst_ptr_in;
+	r_fcr[FPU_LAT-1] <= fcr_ptr_in;
+	r_rob[FPU_LAT-1] <= rob_ptr_in;
+	r_fcr_sel[FPU_LAT-1] <= fcr_sel;
+	r_fcr_reg[FPU_LAT-1] <= src_fcr;
+	for(integer i = (FPU_LAT-1); i > 0; i=i-1)
+	  begin
+	     r_opcode[i-1] <= r_opcode[i];
+	     r_ptr[i-1] <= r_ptr[i];
+	     r_fcr[i-1] <= r_fcr[i];
+	     r_rob[i-1] <= r_rob[i];
+	     r_fcr_sel[i-1] <= r_fcr_sel[i];
+	     r_fcr_reg[i-1] <= r_fcr_reg[i];
+	  end
      end // always_ff@ (posedge clk)
 
-   fp_add #(.W(32)) sa (.clk(clk),
-	      .sub(opcode == SP_SUB || opcode == SP_CMP_LT || opcode == SP_CMP_EQ),
-	      .a(src_a[31:0]),
-	      .b(src_b[31:0]),
-	      .en(1'b1),
-	      .y(t_sp_adder_result)
-	      );
-
-   fp_add #(.W(64)) sd (.clk(clk),
-	      .sub(opcode == DP_SUB || opcode == DP_CMP_LT || opcode == DP_CMP_EQ),
-	      .a(src_a),
-	      .b(src_b),
-	      .en((opcode == DP_ADD || opcode == DP_SUB)&start),
-	      .y(t_dp_adder_result)
-	      );
-
-   wire [51:0] 	 w_mant = {1'b1, t_dp_adder_result[50:0]};
-   wire [10:0] 	 w_exp = t_dp_adder_result[62:52];
+   fp_add #(.W(32), .ADD_LAT(FPU_LAT)) 
+   sa (.clk(clk),
+       .sub(opcode == SP_SUB),
+       .a(src_a[31:0]),
+       .b(src_b[31:0]),
+       .en(1'b1),
+       .y(t_sp_adder_result)
+       );
    
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if(r_val[0] && (r_opcode[0] == DP_ADD))
-   // 	  begin
-   // 	     $display("rob ptr %d : add result %d, %x", 
-   // 		      r_rob[0], w_exp, w_mant);
-   // 	  end
-   //   end
+   fp_add #(.W(64), .ADD_LAT(FPU_LAT)) 
+   sd (.clk(clk),
+       .sub(opcode == DP_SUB),
+       .a(src_a),
+       .b(src_b),
+       .en(opcode == DP_SUB),
+       .y(t_dp_adder_result)
+       );
    
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if(opcode ==DP_CMP_LT && start)
-   // 	  begin
-   // 	     $display("starting dp_cmp_lt for %x and %x for rob %d",
-   // 		      src_a, src_b, rob_ptr_in);
-   // 	  end
-   // 	if(opcode ==DP_CMP_EQ && start)
-   // 	  begin
-   // 	     $display("starting dp_cmp_eq for %x and %x for rob %d",
-   // 		      src_a, src_b, rob_ptr_in);
-   // 	  end	
-   //   end
-
-   fp_mul #(.W(32)) sm (.clk(clk),
-	      .a(src_a[31:0]),
-	      .b(src_b[31:0]),
-	      .en(opcode == SP_MUL),
-	      .y(t_sp_mult_result)
-	      );
-
-   fp_mul #(.W(64)) dm (.clk(clk),
-	      .a(src_a[63:0]),
-	      .b(src_b[63:0]),
-	      .en(opcode == DP_MUL),
-	      .y(t_dp_mult_result)
-	      );
+   fp_mul #(.W(32), .MUL_LAT(FPU_LAT)) 
+   sm (.clk(clk),
+       .a(src_a[31:0]),
+       .b(src_b[31:0]),
+       .en(opcode == SP_MUL),
+       .y(t_sp_mult_result)
+       );
+   
+   fp_mul #(.W(64), .MUL_LAT(FPU_LAT)) 
+   dm (.clk(clk),
+       .a(src_a[63:0]),
+       .b(src_b[63:0]),
+       .en(opcode == DP_MUL),
+       .y(t_dp_mult_result)
+       );
 
    
 endmodule // fpu

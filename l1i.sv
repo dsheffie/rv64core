@@ -158,7 +158,8 @@ module l1i(clk,
    
    logic [`GBL_HIST_LEN-1:0] 	     n_arch_gbl_hist, r_arch_gbl_hist;
    logic [`GBL_HIST_LEN-1:0] 	     n_spec_gbl_hist, r_spec_gbl_hist;
-
+   logic [`GBL_HIST_LEN-1:0] 	     t_xor_pc_hist;
+   
    logic 			     n_utlb_miss_req, r_utlb_miss_req;
    logic [`M_WIDTH-`LG_PG_SZ-1:0]    n_utlb_miss_paddr, r_utlb_miss_paddr;
    
@@ -707,7 +708,7 @@ endfunction
 	       t_cache_idx = r_miss_pc[IDX_STOP-1:IDX_START];
 	       t_cache_tag = r_miss_pc[(`M_WIDTH-1):IDX_STOP];
 	       //if(fq_full) $stop();
-	       if(n_flush_req) $stop();
+	       //if(n_flush_req) $stop();
 	       if(tlb_rsp_valid)
 		 begin
 		    n_cache_pc = r_miss_pc;
@@ -751,9 +752,9 @@ endfunction
 
    always_comb
      begin
-	n_pht_idx = (n_cache_pc[15:0] ^ r_spec_gbl_hist[15:0]) ^
-		    (n_cache_pc[31:16] ^ r_spec_gbl_hist[31:16]) ^
-		    (r_spec_gbl_hist[47:32] ^ r_spec_gbl_hist[63:48]);
+	//t_xor_pc_hist = n_cache_pc[`GBL_HIST_LEN+1:2] ^ r_spec_gbl_hist;
+	t_xor_pc_hist = n_cache_pc[`GBL_HIST_LEN+1:2] ^ r_arch_gbl_hist;	
+	n_pht_idx = t_xor_pc_hist[`LG_PHT_SZ-1:0];
 	
 	t_pht_val = r_pht_update_out;
 	t_do_pht_wr = r_pht_update;
@@ -809,6 +810,20 @@ endfunction
 	     r_take_br <= took_branch;
 	  end
      end // always_ff@
+
+   //always_ff@(negedge clk)
+     //begin
+     //if(r_cache_pc == 'h21e74)
+	  //begin
+	     //$display("%x : %b maps to %d", r_cache_pc, r_arch_gbl_hist, n_pht_idx);
+	     //$display("%x : %b maps to %d", r_cache_pc, r_arch_gbl_hist, n_pht_idx);
+	  //end
+	//if(t_is_cflow)
+	//begin
+	//$display("%b -> %b (take br = %b)",n_spec_gbl_hist, r_spec_gbl_hist, t_take_br);
+	// end
+   //end
+	  
 
    ram2r1w #(.WIDTH(2), .LG_DEPTH(`LG_PHT_SZ) ) pht
      (

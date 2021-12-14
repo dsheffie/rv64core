@@ -1,6 +1,12 @@
 `ifndef __machine_hdr__
 `define __machine_hdr__
 
+//gshare branch predictor
+`define LG_PHT_SZ 16
+
+`define GBL_HIST_LEN 32
+
+//page size
 `define LG_PG_SZ 12
 
 `define LG_UTLB_ENTRIES 3
@@ -29,8 +35,6 @@
 /* mem queue */
 `define LG_MQ_ENTRIES 2
 
-`define LG_PHT_SZ 16
-
 `define MUL_LAT 2
 
 `define DIV32_LAT 35
@@ -40,6 +44,8 @@
 `define MAX_LAT (`DIV64_LAT)
 
 `define FP_MACC_LAT 8
+
+`define FPU_LAT 2
 
 `define FP_MAX_LAT (`FP_MACC_LAT)
 
@@ -56,7 +62,7 @@
 
 `define M_WIDTH (1 << `LG_M_WIDTH)
 
-`define GBL_HIST_LEN 64
+
 
 `define LG_BTB_SZ 7
 

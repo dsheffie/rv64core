@@ -673,7 +673,10 @@ module core(clk,
 	t_enough_hlprfs = !((t_uop.hilo_dst_valid) && (r_hilo_prf_free == 'd0));
 	t_enough_fprfs = !((t_uop.fp_dst_valid) && (r_fp_prf_free == 'd0));
 	t_enough_fcrprfs = !((t_uop.fcr_dst_valid) && (r_fcr_prf_free == 'd0));
-	t_fold_uop = (t_uop.op == NOP || t_uop.op == II || t_uop.op == ERET);
+	t_fold_uop = (t_uop.op == NOP || 
+		      t_uop.op == J  ||
+		      t_uop.op == II || 
+		      t_uop.op == ERET);
 	n_flush_req = 1'b0;
 	n_flush_cl_req = 1'b0;
 	n_flush_cl_addr = r_flush_cl_addr;
@@ -717,8 +720,12 @@ module core(clk,
 		 begin
 		    if(t_rob_head.faulted)
 		      begin
-			 //$display("cycle %d : got fault for %x, t_insns_in_rob = %d",
-			 //r_cycle, t_rob_head.pc, r_insns_in_rob_cnt);
+			 //$display("cycle %d : got fault for %x, t_insns_in_rob = %d, eret %b, break %d, ii %d, trap %d, tlb %b",
+			 //r_cycle, t_rob_head.pc, r_insns_in_rob_cnt,
+			 //t_rob_head.is_eret, t_rob_head.is_break,
+			 //t_rob_head.is_ii,t_rob_head.take_trap,
+			 //t_rob_head.exception_tlb_refill
+			 //	  );
 			 if(t_rob_head.is_eret)
 			   begin
 			      $stop();
@@ -1406,6 +1413,10 @@ module core(clk,
 		    begin
 		       t_rob_tail.faulted = 1'b1;
 		       t_rob_tail.is_eret = 1'b1;
+		    end
+		  else if(t_uop.op == J)
+		    begin
+		       t_rob_tail.take_br = 1'b1;
 		    end
 	       end
 	     

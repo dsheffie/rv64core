@@ -496,13 +496,14 @@ module exec(clk,
      begin
 	r_fp_wb_bitvec <= reset ? 'd0 : n_fp_wb_bitvec;
      end
+   
    always_comb
      begin
 	for(integer i = (`FP_MAX_LAT-1); i > -1; i = i-1)
 	  begin
 	     n_fp_wb_bitvec[i] = r_fp_wb_bitvec[i+1];
 	  end
-	n_fp_wb_bitvec[3] = t_start_fpu;
+	n_fp_wb_bitvec[`FPU_LAT-1] = t_start_fpu;
      end
    
    always_comb
@@ -1443,6 +1444,20 @@ module exec(clk,
 
    // always_ff@(negedge clk)
    //   begin
+   // 	if(fp_uq.op == FP_MOVT && t_fp_srcs_rdy && fp_uq.pc == 'h20bf8)
+   // 	  begin
+   // 	     $display("==> fp movt @ uq.pc = %x, prf %d, fcc%d, select = %b, bit %b", 
+   // 		      fp_uq.pc,
+   // 		      uq.hilo_src,
+   // 		      fp_uq.srcC[2:0],
+   // 		      r_fcr_prf[fp_uq.hilo_src],
+   // 		      r_fcr_prf[fp_uq.hilo_src][fp_uq.srcC[2:0]]
+   // 		      );
+   // 	  end
+   //   end
+   
+   // always_ff@(negedge clk)
+   //   begin
    // 	if(uq.op ==BC1TL && t_srcs_rdy)
    // 	  begin
    // 	     $display("BC1TL @ %x with fcc%d branch %b", uq.pc, uq.srcC[2:0], t_take_br);
@@ -1453,7 +1468,7 @@ module exec(clk,
    // 	  end
    // 	if(uq.op ==BC1FL && t_srcs_rdy)
    // 	  begin
-   // 	     $display("BC1FL @ %x with fcc%d branch %b", uq.pc, uq.srcC[2:0], t_take_br);
+   // 	     $display("BC1FL @ %x with fcc%d branch %b, bits %b", uq.pc, uq.srcC[2:0], t_take_br, r_fcr_prf[uq.hilo_src]);
    // 	  end
    // 	if(uq.op ==BC1T && t_srcs_rdy)
    // 	  begin
@@ -1552,7 +1567,8 @@ module exec(clk,
    //   end
    fpu #(.LG_PRF_WIDTH(`LG_PRF_ENTRIES), 
 	 .LG_ROB_WIDTH(`LG_ROB_ENTRIES),
-	 .LG_FCR_WIDTH(`LG_FCR_PRF_ENTRIES)) 
+	 .LG_FCR_WIDTH(`LG_FCR_PRF_ENTRIES),
+	 .FPU_LAT(`FPU_LAT)) 
    fpu0(
 	.y(t_fpu_result),
 	.val(t_fpu_result_valid),
@@ -1562,6 +1578,7 @@ module exec(clk,
 	.fcr_ptr_out(t_fpu_fcr_ptr),
 	.clk(clk),
 	.reset(reset),
+	.pc(fp_uq.pc),
 	.opcode(fp_uq.op),
 	.src_a(t_fp_srcA),
 	.src_b(t_fp_srcB),
@@ -1650,7 +1667,7 @@ module exec(clk,
 	    end // case: FP_MOVN
 	  FP_MOVT:
 	    begin
-	       if(r_fcr_prf[uq.hilo_src][uq.srcC[2:0]]==1'b1)
+	       if(r_fcr_prf[fp_uq.hilo_src][fp_uq.srcC[2:0]]==1'b1)
 		 begin
 		    t_fp_result = t_fp_srcA;
 		 end
@@ -1669,7 +1686,7 @@ module exec(clk,
 	    end // case: FP_MOVZ
 	  FP_MOVF:
 	    begin
-	       if(r_fcr_prf[uq.hilo_src][uq.srcC[2:0]]==1'b0)
+	       if(r_fcr_prf[fp_uq.hilo_src][fp_uq.srcC[2:0]]==1'b0)
 		 begin
 		    t_fp_result = t_fp_srcA;
 		 end
