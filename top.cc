@@ -15,6 +15,8 @@ static state_t *s = nullptr;
 static state_t *ss = nullptr;
 
 
+static boost::dynamic_bitset<> touched_lines(1UL<<28);
+
 
 static int buildArgcArgv(const char *filename, const char *sysArgs, char ***argv) {
   int cnt = 0;
@@ -61,10 +63,9 @@ int main(int argc, char **argv) {
   uint64_t heartbeat = 1UL<<36;
   uint64_t max_cycle = 0, max_icnt = 0, mem_lat = 2;
   uint64_t last_store_addr = 0, last_load_addr = 0, last_addr = 0;
-  uint64_t seq_mem_ops = 0, non_seq_mem_ops = 0;
   int misses_inflight = 0;
   std::map<uint64_t, uint64_t> pushout_histo;
-  
+  int64_t mem_reply_cycle = -1L;
   try {
     po::options_description desc("Options");
     desc.add_options() 
@@ -172,7 +173,9 @@ int main(int argc, char **argv) {
   uint64_t last_retire = 0, last_check = 0, last_restart = 0;
   uint64_t last_retired_pc = 0, last_retired_fp_pc = 0;
   uint64_t mismatches = 0;
-  uint64_t insns_retired = 0, n_mispredicts = 0, n_checks = 0;
+  uint64_t stores_not_hor = 0;
+  uint64_t insns_allocated = 0, insns_decoded = 0, insns_fetched = 0,
+    insns_retired = 0, n_mispredicts = 0, n_checks = 0;
   uint64_t n_iside_tlb_misses = 0, n_dside_tlb_misses = 0;
   bool got_mem_req = false, got_mem_rsp = false, got_monitor = false;
   //assert reset
@@ -286,10 +289,10 @@ int main(int argc, char **argv) {
     }
     last_retire++;
     
-    if(last_retire > (20*mem_lat)) {
-      std::cerr << "DEAD = " << static_cast<int>(tb->got_ud) << "\n";
-      exit(-1);
-    }
+    //if(last_retire > (20*mem_lat)) {
+    //std::cerr << "DEAD = " << static_cast<int>(tb->got_ud) << "\n";
+    // exit(-1);
+    //}
   }
 
   if(use_checkpoint) {
@@ -339,8 +342,13 @@ int main(int argc, char **argv) {
     
     if(tb->monitor_req_valid) {
       bool handled = false;
-      // std::cerr << "got monitor reason " <<
-      // 	(int)tb->monitor_req_reason << "\n";
+      
+      //std::cerr << "got monitor reason "
+      //<< static_cast<int>(tb->monitor_req_reason)
+      //<< " with "
+      //<< touched_lines.count()
+      //<< " touched cachelines in the machine\n";
+
       
       switch(tb->monitor_req_reason)
 	{
@@ -367,15 +375,6 @@ int main(int argc, char **argv) {
 		    << tb->monitor_rsp_data
 		    << "\n";
 #endif
-	  // std::cout << "read starts at address "
-	  // 	    << std::hex
-	  // 	    << s->gpr[R_a1]
-	  // 	    << std::dec
-	  // 	    << " and is "
-	  // 	    << nr
-	  // 	    << " bytes long\n";
-	  // std::cout << "first page = " << ((s->gpr[R_a1]) >> 12) << "\n";
-	  // std::cout << "last  page = " << ((s->gpr[R_a1]+nr-1) >> 12) << "\n";
 	  tb->monitor_rsp_data_valid = 1;
 	  handled = true;
 	  break;
@@ -478,6 +477,7 @@ int main(int argc, char **argv) {
 	  break;
 	}
 
+      touched_lines.reset();
       if(!handled) {
 	std::cout << "didn't handled monitor reason " << tb->monitor_req_reason << "\n";
 	exit(-1);
@@ -531,7 +531,7 @@ int main(int argc, char **argv) {
 	  uint64_t ux = to_uint64(x);
 	  uint64_t uxx = to_uint64(xx);
 	  
-	  if((e > 1.1) && (ux != 0) && (uxx != 0)) {
+	  if(true || (e > 1.1) && (ux != 0) && (uxx != 0)) {
 	    std::cout << std::hex
 		      << tb->retire_pc
 		      << "("
@@ -556,6 +556,15 @@ int main(int argc, char **argv) {
 	    double _ft = *reinterpret_cast<double*>(s->cpr1+((r_inst>>16)&31));  
 	    std::cout << "fs = " << _fs << "," << std::hex << *reinterpret_cast<uint64_t*>(&_fs) <<std::dec << "\n";
 	    std::cout << "ft = " << _ft << "," << std::hex << *reinterpret_cast<uint64_t*>(&_ft) <<std::dec << "\n";
+
+	    double_ dfs(*reinterpret_cast<uint64_t*>(&_fs));
+	    double_ dft(*reinterpret_cast<uint64_t*>(&_ft));
+	    std::cout << dfs.dd.e << "\n";
+	    std::cout << dfs.dd.f << "\n";
+	    
+	    std::cout << dft.dd.e << "\n";	    
+	    std::cout << dft.dd.f << "\n";
+	    
 	    std::cout << "rtl = " << xx << "," << std::hex << *reinterpret_cast<uint64_t*>(&xx) <<std::dec << "\n";
 	    std::cout << "sw  = " << x << "\n";
 
@@ -573,6 +582,7 @@ int main(int argc, char **argv) {
 	}
       }
       *reinterpret_cast<uint64_t*>(s->cpr1+tb->retire_reg_ptr) = tb->retire_reg_data;
+      //std::cerr << std::hex << tb->retire_pc << std::dec << " writing fp reg " << static_cast<int>(tb->retire_reg_ptr) << "\n";
       last_retired_fp_pc = tb->retire_pc;
     }
     
@@ -584,6 +594,18 @@ int main(int argc, char **argv) {
       ++n_mispredicts;
     }
 #endif
+    if(tb->store_not_hor) {
+      ++stores_not_hor;
+    }
+    if(tb->fetched_insn) {
+      ++insns_fetched;
+    }
+    if(tb->decoded_insn) {
+      ++insns_decoded;
+    }
+    if(tb->allocated_insn) {
+      ++insns_allocated;
+    }
     
     if(tb->retire_valid) {
       ++insns_retired;
@@ -595,7 +617,8 @@ int main(int argc, char **argv) {
       assert(last_retired_pc != tb->retire_pc);
       last_retired_pc = tb->retire_pc;
 
-
+      //if(insns_retired > 13631488)
+      //globals::trace_retirement = true;
       
       if(((insns_retired % heartbeat) == 0) or globals::trace_retirement ) {
 	uint32_t r_inst = *reinterpret_cast<uint32_t*>(s->mem[tb->retire_pc]);
@@ -654,7 +677,7 @@ int main(int argc, char **argv) {
       if( enable_checker) {
 	//std::cout << std::hex << tb->retire_pc << "," << ss->pc << std::dec << "\n";	  	
 	if(tb->retire_pc == ss->pc) {
-	  
+	  //std::cout << std::hex << tb->retire_pc << "," << ss->pc << std::dec << "\n";	  	
 	  execMips(ss);
 	  // if(static_cast<uint32_t>(ss->mem.at(0x4cadc)) == 3) {
 	  //   std::cout << "changed memory at " << std::hex << ss->pc << std::dec << "\n";
@@ -664,7 +687,7 @@ int main(int argc, char **argv) {
 	  bool diverged = false;
 	  if(ss->pc == (tb->retire_pc + 4)) {
 	    for(int i = 0; i < 32; i++) {
-	      if((ss->gpr[i] != s->gpr[i])) {
+	      if((ss->gpr[i] != s->gpr[i]) and false) {
 		int wrong_bits = __builtin_popcount(ss->gpr[i] ^ s->gpr[i]);
 		++mismatches;
 		std::cout << "register " << getGPRName(i)
@@ -678,7 +701,7 @@ int main(int argc, char **argv) {
 			  << wrong_bits
 			  << "\n";
 		//globals::trace_retirement |= (wrong_bits != 0);
-		//diverged = true;//(wrong_bits > 16);
+		diverged = true;//(wrong_bits > 16);
 	      }
 	    }
 	    for(int i = 0; i < 32; i+=2) {
@@ -688,43 +711,47 @@ int main(int argc, char **argv) {
 		int wrong_bits = __builtin_popcount(rtl ^ sim);
 		bool is_sp = ss->cpr1_state[i] == fp_reg_state::sp;
 		bool is_dp = ss->cpr1_state[i] == fp_reg_state::dp;
-		
-		std::cout << "FP REGISTER DIVERGENCE for $f"
-			  << i
-			  << " with "
-			  << wrong_bits
-			  << " differing bits "
-			  << " for last FP PC "
-			  << std::hex
-			  << last_retired_fp_pc
-			  << " : "
-			  << getAsmString(get_insn(last_retired_fp_pc, ss), last_retired_fp_pc)
-			  << " "
-			  << std::dec
-			  << " is_sp = "
-			  << is_sp
-			  << " is_dp = "
-			  << is_dp
-			  << "\n";
-
-		
-		std::cout << "RTL = " << std::hex << rtl << std::dec << "\n";
-		std::cout << "SIM = " << std::hex << sim << std::dec << "\n";
-		float rtl_flt = *reinterpret_cast<float*>(&s->cpr1[i]);
-		float sim_flt = *reinterpret_cast<float*>(&ss->cpr1[i]);
 		float rtl_dbl = *reinterpret_cast<double*>(&s->cpr1[i]);
 		float sim_dbl = *reinterpret_cast<double*>(&ss->cpr1[i]);
-		
-		std::cout << "RTL SP = " << rtl_flt << "\n";
-		std::cout << "SIM SP = " << sim_flt << "\n";
-		std::cout << "RTL DP = " << rtl_dbl << "\n";
-		std::cout << "SIM DP = " << sim_dbl << "\n";
 		double dp_err = std::abs(rtl_dbl-sim_dbl);
-		double sp_err = std::abs(rtl_flt-sim_flt);
-		std::cout << "dp_err = " << dp_err
-			  << " sp_err = " << sp_err
-			  << "\n";
-		diverged = true;
+		if(dp_err > 1e-6) {
+		  std::cout << "FP REGISTER DIVERGENCE for $f"
+			    << i
+			    << " with "
+			    << wrong_bits
+			    << " differing bits "
+			    << " for last FP PC "
+			    << std::hex
+			    << tb->retire_pc + 4
+			    << " and "
+			    << ss->pc
+			    << " : "
+			    << getAsmString(get_insn(ss->pc, ss), ss->pc)
+			    << " "
+			    << std::dec
+			    << " is_sp = "
+			    << is_sp
+			    << " is_dp = "
+			    << is_dp
+			    << "\n";
+		  
+		  
+		  std::cout << "RTL = " << std::hex << rtl << std::dec << "\n";
+		  std::cout << "SIM = " << std::hex << sim << std::dec << "\n";
+		  //float rtl_flt = *reinterpret_cast<float*>(&s->cpr1[i]);
+		  //float sim_flt = *reinterpret_cast<float*>(&ss->cpr1[i]);
+		  
+		  //std::cout << "RTL SP = " << rtl_flt << "\n";
+		  //std::cout << "SIM SP = " << sim_flt << "\n";
+		  std::cout << "RTL DP = " << rtl_dbl << "\n";
+		  std::cout << "SIM DP = " << sim_dbl << "\n";
+		  
+		  //double sp_err = std::abs(rtl_flt-sim_flt);
+		  std::cout << "dp_err = " << dp_err
+		    //<< " sp_err = " << sp_err
+			    << "\n";
+		  diverged = (dp_err > 1e-6);
+		}
 	      }
 	    }
 	    
@@ -843,24 +870,27 @@ int main(int argc, char **argv) {
       ++n_dside_tlb_misses;      
     //negedge
     tb->mem_rsp_valid = 0;
+
+    if(tb->mem_req_valid && (mem_reply_cycle == -1)) {
+
+      mem_reply_cycle = globals::cycle + (tb->mem_req_insn ? 0 : mem_lat);
+      
+    }
     
-    if(tb->mem_req_valid) {
+    if(/*tb->mem_req_valid*/mem_reply_cycle ==globals::cycle) {
       //std::cout << "got memory request for address "
-      //		<< std::hex << tb->mem_req_addr << std::dec <<"\n";
+      //<< std::hex << tb->mem_req_addr << std::dec <<"\n";
       last_retire = 0;
-      if((last_addr+16) == tb->mem_req_addr ||
-	 (last_addr - 16) == tb->mem_req_addr) {
-	++seq_mem_ops;
-      }
-      else {
-	++non_seq_mem_ops;
-      }
+      mem_reply_cycle = -1;
+      assert(tb->mem_req_valid);
       
       if(tb->mem_req_opcode == 4) {/*load word */
 	for(int i = 0; i < 4; i++) {
 	  tb->mem_rsp_load_data[i] = *reinterpret_cast<uint32_t*>(s->mem[tb->mem_req_addr + 4*i]);
 	}
 	last_load_addr = tb->mem_req_addr;
+	assert((tb->mem_req_addr & 0xf) == 0);
+	touched_lines[(tb->mem_req_addr & ((1UL<<32) - 1))>>4] = 1;
       }
       else if(tb->mem_req_opcode == 7) { /* store word */
 	for(int i = 0; i < 4; i++) {
@@ -910,12 +940,24 @@ int main(int argc, char **argv) {
     //printf("inflight[%d] = %lu\n", i, inflight[i]);
   }
   avg_inflight /= sum;
+  std::cout << insns_fetched << " insns fetched\n";
+  std::cout << insns_decoded << " insns decoded\n";
+  std::cout << insns_allocated << " insns allocated\n";
+  std::cout << insns_retired << " insns retired\n";
+  std::cout << stores_not_hor << " stores blocked by not being head of rob\n";
+  std::cout << static_cast<double>(insns_retired)/insns_allocated
+	    << " retire to alloc ratio\n";
+  std::cout << static_cast<double>(insns_retired)/insns_fetched
+	    << " retire to fetch ratio\n";
+
+  
   std::cout << "avg insns in ROB = " << avg_inflight
 	    << ", max inflight = " << max_inflight << "\n";
   
 #ifdef CACHE_STATS
   std::cout << "l1d cache hits = " << tb->l1d_cache_hits << "\n";
   std::cout << "l1d cache accesses = " << tb->l1d_cache_accesses << "\n";
+  std::cout << "l1d cache hit under miss = " << tb->l1d_cache_hits_under_miss << "\n";
   std::cout << "l1d hit rate = "
 	    << 100.0 *(static_cast<double>(tb->l1d_cache_hits) / tb->l1d_cache_accesses)
 	    << "\n";
@@ -927,8 +969,6 @@ int main(int argc, char **argv) {
 #endif
   std::cout << "iside tlb misses = " << n_iside_tlb_misses << "\n";
   std::cout << "dside tlb misses = " << n_dside_tlb_misses << "\n";
-  std::cout << "sequental cache miss memory accesses = " << seq_mem_ops << "\n";
-  std::cout << "non sequental cache miss memory accesses = " << non_seq_mem_ops << "\n";
 
 
   dump_histo("branch_info.txt", mispredicts, s);

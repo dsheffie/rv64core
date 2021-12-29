@@ -5,6 +5,7 @@
 
 module l1i(clk,
 	   reset,
+	   fetched_insn,
 	   flush_req,
 	   flush_complete,
 	   restart_pc,
@@ -48,6 +49,7 @@ module l1i(clk,
 
    input logic clk;
    input logic reset;
+   output logic fetched_insn;
    input logic 	      flush_req;
    output logic       flush_complete;
    //restart signals
@@ -196,6 +198,10 @@ function jump_t select_pd(jump_t [WORDS_PER_CL-1:0] cl, logic[LG_WORDS_PER_CL-1:
    return j;
 endfunction
 
+function logic is_nop(logic [31:0] insn);
+   return (insn == 32'd0);
+endfunction // is_nop
+      
    
 function jump_t predecode(logic [31:0] insn);
    jump_t j = NOT_CFLOW;
@@ -355,7 +361,7 @@ endfunction
    jump_t t_pd;
 
    
-   logic [31:0] 	  r_cycle;
+   logic [63:0] 	  r_cycle;
    always_ff@(posedge clk)
      begin
 	r_cycle <= reset ? 'd0 : r_cycle + 'd1;
@@ -389,7 +395,7 @@ endfunction
 	// 	 t_insn.pc,
 	// 	 fq_full,		 
 	// 	 t_insn.data[31:26] == 6'd5,
-	// 	 insn_ack,
+	// 	 insn_ac,
 	// 	 insn.pc,
 	// 	 insn.data[31:26] == 6'd5,
 	// 	 r_cache_pc,
@@ -412,6 +418,18 @@ endfunction
      begin
 	if(fq_full && t_push_insn) $stop();
 	if(fq_empty && insn_ack) $stop();
+     end
+   
+   always_ff@(posedge clk)
+     begin
+	if(reset)
+	  begin
+	     fetched_insn <= 1'b0;
+	  end
+	else
+	  begin
+	     fetched_insn <= t_push_insn;
+	  end
      end
 
    always_comb
@@ -467,7 +485,44 @@ endfunction
      begin
 	r_btb_pc <= reset ? 'd0 : r_btb[n_cache_pc[(`LG_BTB_SZ+1):2]];;
      end
-   
+
+   logic r_dead_flush;
+   logic [31:0] r_dead_count;
+   always_ff@(posedge clk)
+     begin
+	if(reset)
+	  begin
+	     r_dead_flush <= 1'b0;
+	     r_dead_count <= 'd0;
+	  end
+	else
+	  begin
+	     if(r_dead_flush)
+	       begin
+		  //$display("in dead flush mode, %d cycles in", r_dead_count);
+		  r_dead_count <=  flush_complete ? 'd0 : r_dead_count + 'd1;
+	       end
+	     
+	     if(r_dead_flush && flush_complete)
+	       begin
+		  r_dead_flush <= 1'b0;
+	       end
+	     else if(flush_req)
+	       begin
+		  r_dead_flush <= 1'b1;
+	       end
+	  end
+     end // always_ff@ (posedge clk)
+
+   always_ff@(negedge clk)
+     begin
+	if(r_dead_count > 'd16384)
+	  begin
+	     $display("no fe flush in %d cycles!, r_state = %d, fq_full = %b", 
+		      r_dead_count, r_state, fq_full);
+	     $stop();
+	  end
+     end   
   
    always_comb
      begin
@@ -659,20 +714,31 @@ endfunction
 	    begin
 	       t_cache_idx = r_miss_pc[IDX_STOP-1:IDX_START];
 	       t_cache_tag = r_miss_pc[(`M_WIDTH-1):IDX_STOP];
-	       if(!fq_full)
+	       if(n_flush_req)
 		 begin
-		    //$display("==> cycle %d : r_miss_pc = %x, r_pc = %x, rr_pc = %x, r_delay_slot = %b, full %b",
-		    //	     r_cycle, r_miss_pc, r_pc, rr_pc, r_delay_slot, fq_full);
-		    //if(r_miss_pc == 32'h0002a280) $stop();
+		    n_flush_req = 1'b0;
+		    t_clear_fq = 1'b1;
+		    n_state = FLUSH_CACHE;
+		    t_cache_idx = 0;
+		 end
+	       else if(n_restart_req)
+		 begin
+		    n_restart_ack = 1'b1;
+		    n_restart_req = 1'b0;
+		    n_delay_slot = 1'b0;
+		    n_pc = restart_pc;
+		    nn_pc = 'd0;
+		    n_req = 1'b0;
+		    n_state = ACTIVE;
+		    t_clear_fq = 1'b1;
+		 end // if (n_restart_req)
+	       else if(!fq_full)
+		 begin
 		    /* accessed with this address */
 		    n_cache_pc = r_miss_pc;
 		    n_req = 1'b1;
 		    n_state = ACTIVE;
 		 end
-	       //begin
-	       //$display("stalled on full queue at cycle %d in reload for %x", 
-		//	    r_cycle, r_miss_pc);
-	       //end
 	    end
 	  FLUSH_CACHE:
 	    begin
@@ -743,6 +809,9 @@ endfunction
 	t_insn.pred_target = n_pc;
 	t_insn.pred = t_take_br;
 	t_insn.pht_idx = r_pht_idx;
+`ifdef	ENABLE_CYCLE_ACCOUNTING
+	t_insn.fetch_cycle = r_cycle;
+`endif	
      end
    
    logic t_wr_valid_ram_en = mem_rsp_valid || r_state == FLUSH_CACHE;

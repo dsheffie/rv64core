@@ -41,7 +41,9 @@ module core(clk,
 	    retire_reg_two_ptr,
 	    retire_reg_two_data,
 	    retire_reg_two_valid,
-	    
+	    store_not_hor,
+	    decode_valid,
+	    alloc_valid,
 	    retire_valid,
 	    retire_two_valid,
 	    retire_delay_slot,
@@ -105,7 +107,9 @@ module core(clk,
    output logic [(`M_WIDTH-1):0] 	  retire_reg_two_data;
    output logic 			  retire_reg_two_valid;
 
-   
+   output logic 			  store_not_hor;
+   output logic 			  alloc_valid;
+   output logic 			  decode_valid;
    output logic 			  retire_valid;
    output logic 			  retire_two_valid;
    
@@ -321,8 +325,8 @@ module core(clk,
 			     } state_t;
    
    state_t r_state, n_state;
+   logic [9:0] 	r_restart_cycles, n_restart_cycles;
    
-
    always_comb
      begin
 	core_mem_req_valid = 1'b0;
@@ -341,6 +345,7 @@ module core(clk,
 		    begin
 
 		       core_mem_req.op = (t_mem_req.op == MEM_SC) ? MEM_DEAD_SC :  MEM_DEAD_ST;
+		       core_mem_req.is_store = 1'b0;
 		       core_mem_req_valid = 1'b1;
 		    end
 		  else
@@ -398,38 +403,13 @@ module core(clk,
    assign took_branch = r_took_branch;
    
    
-   logic [31:0] r_cycle;
+   logic [63:0] r_cycle;
    always_ff@(posedge clk)
      begin
 	r_cycle <= reset ? 'd0 : r_cycle + 'd1;
 
      end
    
-   // logic [31:0] r_last_retire_cycle;
-   // always_ff@(posedge clk)
-   //   begin
-   // 	r_last_retire_cycle <= reset ? 'd0  : (t_retire ? r_cycle : r_last_retire_cycle);
-   //   end
-   // logic [31:0] t_last_cycle;
-   // always_ff@(negedge clk)
-   //   begin
-   // 	t_last_cycle = (r_cycle - r_last_retire_cycle);
-   // 	if(t_last_cycle > 'd10000)
-   // 	  begin
-   // 	     $display("no retire in %d cycles! rob_head_ptr %d, pc at head %x, insns in rob %d", 
-   // 		      (r_cycle - r_last_retire_cycle),
-   // 		      r_rob_head_ptr,
-   // 		      t_rob_head.pc,
-   // 		      r_insns_in_rob_cnt
-   // 		      );
-
-   // 	  end
-   // 	if(t_last_cycle > 'd15000)
-   // 	  begin
-   // 	     $stop();
-   // 	  end
-   //   end
-
    
    always_ff@(posedge clk)
      begin
@@ -491,7 +471,6 @@ module core(clk,
 	  end
      end // always_ff@ (posedge clk)
 
-//`define DEBUG
 `ifdef DEBUG
    logic [4:0] total_inflight;   
    always_comb
@@ -547,6 +526,7 @@ module core(clk,
 	if(reset)
 	  begin
 	     r_state <= HALT;
+	     r_restart_cycles <= 'd0;
 	     r_machine_clr <= 1'b0;
 	     r_delayslot_rob_ptr <= 'd0;
 	     r_got_restart_ack <= 1'b0;
@@ -555,6 +535,7 @@ module core(clk,
 	else
 	  begin
 	     r_state <= n_state;
+	     r_restart_cycles <= n_restart_cycles;
 	     r_machine_clr <= n_machine_clr;
 	     r_delayslot_rob_ptr <= n_delayslot_rob_ptr;
 	     r_got_restart_ack <= n_got_restart_ack;
@@ -584,7 +565,10 @@ module core(clk,
 	     retire_reg_fp_valid <= 1'b0;
    	     retire_reg_two_ptr <= 'd0;
    	     retire_reg_two_data <= 'd0;
-   	     retire_reg_two_valid <= 1'b0;	     
+   	     retire_reg_two_valid <= 1'b0;
+	     store_not_hor <= 1'b0;
+	     alloc_valid <= 1'b0;
+	     decode_valid <= 1'b0;
    	     retire_valid <= 1'b0;
 	     retire_two_valid <= 1'b0;
 	     
@@ -603,7 +587,13 @@ module core(clk,
 	     retire_reg_fp_valid <= t_rob_head.valid_fp_dst && t_retire;
    	     retire_reg_two_ptr <= t_rob_next_head.ldst;
    	     retire_reg_two_data <= t_rob_next_head.data;
-   	     retire_reg_two_valid <= t_rob_next_head.valid_dst && t_retire_two;	     
+   	     retire_reg_two_valid <= t_rob_next_head.valid_dst && t_retire_two;
+	     store_not_hor <= t_mem_req_valid && t_mem_req.is_store &&
+			      !core_mem_req_valid;
+	     
+	     alloc_valid <= t_alloc;
+	     decode_valid <= insn_valid && !t_dq_full;
+	     
    	     retire_valid <= t_retire;
 	     retire_two_valid <= t_retire_two;
    	     retire_pc <= t_rob_head.pc;
@@ -614,9 +604,36 @@ module core(clk,
 	     r_monitor_reason <= n_monitor_reason;
    	  end
      end
-
+`ifdef ENABLE_CYCLE_ACCOUNTING
+   always_ff@(negedge clk)
+     begin
+   	if(t_retire)
+   	  begin
+   	     $display("%x,%d,%d,%d,%d,%d",
+		      t_rob_head.pc,
+   		      r_cycle - t_rob_head.fetch_cycle,
+   		      t_rob_head.fetch_cycle,
+   		      t_rob_head.alloc_cycle,
+   		      t_rob_head.complete_cycle,
+   		      r_cycle);
+   	  end
+   	if(t_retire_two)
+   	  begin
+	     $display("%x,%d,%d,%d,%d,%d",
+		      t_rob_next_head.pc,
+   		      r_cycle - t_rob_next_head.fetch_cycle,
+   		      t_rob_next_head.fetch_cycle,
+   		      t_rob_next_head.alloc_cycle,
+   		      t_rob_next_head.complete_cycle,
+   		      r_cycle);
+   	  end
+     end // always_ff@ (negedge clk)
+`endif
+   
+   
 //`define DEBUG
 //`define DUMP_ROB
+   
 `ifdef DUMP_ROB
    always_ff@(negedge clk)
      begin
@@ -640,6 +657,9 @@ module core(clk,
 	  end
      end // always_ff@ (negedge clk)
 `endif
+
+
+
    
    always_comb
      begin
@@ -658,6 +678,7 @@ module core(clk,
 	t_clr_rob = 1'b0;
 	t_clr_dq = 1'b0;
 	n_state = r_state;
+	n_restart_cycles = r_restart_cycles + 'd1;
 	n_restart_pc = r_restart_pc;
 	n_restart_src_pc = r_restart_src_pc;
 	n_restart_src_is_indirect = r_restart_src_is_indirect;
@@ -776,6 +797,7 @@ module core(clk,
 			 else
 			   begin
 			      n_state = DRAIN;
+			      n_restart_cycles = 'd0;
 			   end // else: !if(t_rob_head.is_ii)
 			 n_machine_clr = 1'b1;
 			 n_delayslot_rob_ptr = r_rob_next_head_ptr[`LG_ROB_ENTRIES-1:0];
@@ -928,7 +950,8 @@ module core(clk,
 	       t_clr_dq = 1'b1;
 	       if(n_got_restart_ack)
 		 begin
-		    //$display("RESTART PIPELINE AT %d", r_cycle);
+		    //$display("%d : pipeline clear took  %d cycles", 
+		    //r_cycle, r_restart_cycles);
 		    n_state = ACTIVE;
 		 end
 	       n_machine_clr = 1'b0;
@@ -1373,6 +1396,11 @@ module core(clk,
 	     t_rob_tail.is_break  = (t_alloc_uop.op == BREAK);
 	     t_rob_tail.is_eret = 1'b0;
 	     t_rob_tail.is_indirect = t_alloc_uop.op == JALR || t_alloc_uop.op == JR;
+`ifdef ENABLE_CYCLE_ACCOUNTING
+	     t_rob_tail.fetch_cycle = t_alloc_uop.fetch_cycle;
+	     t_rob_tail.alloc_cycle = r_cycle;
+	     t_rob_tail.complete_cycle = 'd0;
+`endif	     
 	     if(t_uop.dst_valid)
 	       begin
 		  t_rob_tail.valid_dst = 1'b1;
@@ -1404,6 +1432,9 @@ module core(clk,
 	     if(t_fold_uop)
 	       begin
 		  t_rob_tail.complete  = 1'b1;
+`ifdef ENABLE_CYCLE_ACCOUNTING
+		  t_rob_tail.complete_cycle = r_cycle;
+`endif		  
 		  if(t_uop.op == II)
 		    begin
 		       t_rob_tail.faulted = 1'b1;
@@ -1431,6 +1462,9 @@ module core(clk,
 	     n_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].take_trap = t_complete_bundle_1.take_trap;	     
 	     n_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].take_br = t_complete_bundle_1.take_br;
 	     n_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].data = t_complete_bundle_1.data;
+`ifdef ENABLE_CYCLE_ACCOUNTING
+	     n_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].complete_cycle = r_cycle;
+`endif	    
 	  end
 	if(t_complete_valid_2)
 	  begin
@@ -1446,6 +1480,9 @@ module core(clk,
 	     n_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].take_br = t_complete_bundle_2.take_br;
 	     n_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].take_trap = t_complete_bundle_2.take_trap;	     
 	     n_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].data = t_complete_bundle_2.data;
+`ifdef ENABLE_CYCLE_ACCOUNTING
+	     n_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].complete_cycle = r_cycle;
+`endif	    	     
 	  end
 	if(core_mem_rsp_valid)
 	  begin
@@ -1455,7 +1492,9 @@ module core(clk,
 	     n_rob[core_mem_rsp.rob_ptr].exception_tlb_refill = core_mem_rsp.exception_tlb_refill;
 	     n_rob[core_mem_rsp.rob_ptr].exception_tlb_modified = core_mem_rsp.exception_tlb_modified;
 	     n_rob[core_mem_rsp.rob_ptr].exception_tlb_invalid = core_mem_rsp.exception_tlb_invalid;
-	     
+`ifdef ENABLE_CYCLE_ACCOUNTING
+	     n_rob[core_mem_rsp.rob_ptr].complete_cycle = r_cycle;
+`endif	    	     	     
 	  end
      end // always_comb
    
@@ -1725,9 +1764,11 @@ module core(clk,
 		      .insn(insn.data), .pc(insn.pc), 
 		      .insn_pred(insn.pred), .pht_idx(insn.pht_idx),
 		      .insn_pred_target(insn.pred_target),
+`ifdef ENABLE_CYCLE_ACCOUNTING
+		      .fetch_cycle(insn.fetch_cycle),
+`endif		      
 		      .uop(t_dec_uop));
    
-
    always_comb
      begin
 	t_any_complete = t_complete_valid_1 | t_complete_valid_2 | core_mem_rsp_valid;

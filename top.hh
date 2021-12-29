@@ -8,8 +8,10 @@
 #include <tuple>
 #include <map>
 #include <cfenv>
+
 #include <sys/time.h>
 #include <boost/program_options.hpp>
+#include <boost/dynamic_bitset.hpp>
 
 #include <sys/mman.h>
 #include <unistd.h>
@@ -19,7 +21,6 @@
 #include <fenv.h>
 #include <verilated.h>
 #include "Vcore_l1d_l1i.h"
-#include "sim_queue.hh"
 #include "loadelf.hh"
 #include "helper.hh"
 #include "interpret.hh"
@@ -83,6 +84,10 @@ union double_ {
   };
 };
 
+template <typename T>
+static inline T round_to_alignment(T x, T m) {
+  return ((x+m-1) / m) * m;
+}
 
 static inline uint32_t get_insn(uint32_t pc, const state_t *s) {
   return bswap<false>(*reinterpret_cast<uint32_t*>(s->mem + pc));

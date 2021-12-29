@@ -3,7 +3,11 @@
 `include "uop.vh"
 
 module decode_mips32(in_64b_fpreg_mode, insn, 
-		     pc, insn_pred, pht_idx, insn_pred_target, uop);
+		     pc, insn_pred, pht_idx, insn_pred_target,
+`ifdef ENABLE_CYCLE_ACCOUNTING   		     
+		     fetch_cycle,
+`endif
+		     uop);
    input logic in_64b_fpreg_mode;
    
    input logic [31:0] insn;
@@ -11,6 +15,9 @@ module decode_mips32(in_64b_fpreg_mode, insn,
    input logic 	      insn_pred;
    input logic [`LG_PHT_SZ-1:0] pht_idx;
    input logic [`M_WIDTH-1:0] 	insn_pred_target;
+`ifdef ENABLE_CYCLE_ACCOUNTING   
+   input logic [63:0] 		fetch_cycle;
+`endif
    output 	uop_t uop;
 
    logic [5:0] 	opcode = insn[31:26];
@@ -69,7 +76,9 @@ module decode_mips32(in_64b_fpreg_mode, insn,
 	uop.is_fp = 1'b0;
 	uop.is_int = 1'b0;
 	uop.is_store = 1'b0;
-	
+`ifdef ENABLE_CYCLE_ACCOUNTING
+	uop.fetch_cycle = fetch_cycle;
+`endif
 	case(opcode)
 	  6'd0: /* rtype */
 	    begin
@@ -865,6 +874,7 @@ module decode_mips32(in_64b_fpreg_mode, insn,
 		 end // if ((insn[25:21]==5'd4) && (insn[10:0] == 11'd0))
 	       else
 		 begin
+`ifdef ENABLE_FPU
 		    case(insn[5:0])
 		      6'd0:
 			begin /* ADD.fmt */
@@ -1206,7 +1216,9 @@ module decode_mips32(in_64b_fpreg_mode, insn,
 			begin
 			end
 		    endcase // case (insn[5:0])
-		 end
+`else
+`endif		    
+		 end // else: !if((insn[25:21]==5'd4) && (insn[10:0] == 11'd0))
 	    end // case: 6'd17
 	  6'd20: /* BEQL */
 	    begin

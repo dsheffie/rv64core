@@ -50,17 +50,14 @@ typedef enum logic [7:0]
    MTC0,
    MFC1,
    MTC1,
-
    LW,
    LB,
    LBU,
    LH,
    LHU,
-
    SB,
    SH,
    SW,
-   
    BEQL,
    BNEL, 
    BLTZ, 
@@ -85,7 +82,6 @@ typedef enum logic [7:0]
    SWR,
    SEB,
    SEH,
-   
    DADDU,
    DADDIU,
    DSUBU,
@@ -117,7 +113,6 @@ typedef enum logic [7:0]
    LWC1,
    LWC1_MERGE,
    SWC1_MERGE,
-   
    SP_ABS,
    DP_ABS,
    SP_NEG,
@@ -137,19 +132,16 @@ typedef enum logic [7:0]
    SP_DIV,
    DP_DIV,
    FP_MOV,
-
    BC1TL,
    BC1T,
    BC1FL,
    BC1F,
-   
    SP_CMP_LT,
    DP_CMP_LT,
    SP_CMP_EQ,
    DP_CMP_EQ,
    SP_CMP_LE,
    DP_CMP_LE,
-   
    TRUNC_DP_W,
    TRUNC_SP_W,
    CVT_W_DP,
@@ -162,8 +154,6 @@ typedef enum logic [7:0]
    FP_MOVZ,
    FP_MOVF,
    FP_MOVT,
-   
-   
    ERET,
    MTC1_MERGE,
    MFC1_MERGE,
@@ -214,6 +204,9 @@ typedef struct packed {
    logic 		       is_fp;
    logic 		       is_store;
    logic [`LG_PHT_SZ-1:0]      pht_idx;
+`ifdef ENABLE_CYCLE_ACCOUNTING
+   logic [63:0] 	    fetch_cycle;
+`endif   
 } uop_t;
 
 

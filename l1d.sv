@@ -34,7 +34,8 @@ module l1d(clk,
 	   tlb_rsp_valid,
 	   tlb_rsp,
 	   cache_accesses,
-	   cache_hits
+	   cache_hits,
+	   cache_hits_under_miss
 	   );
 
    localparam L1D_NUM_SETS = 1 << `LG_L1D_NUM_SETS;
@@ -76,6 +77,8 @@ module l1d(clk,
    
    output logic [63:0] 			 cache_accesses;
    output logic [63:0] 			 cache_hits;
+   output logic [63:0] 			 cache_hits_under_miss;
+   
          
    localparam LG_WORDS_PER_CL = `LG_L1D_CL_LEN - 2;
    localparam LG_DWORDS_PER_CL = `LG_L1D_CL_LEN - 3;
@@ -147,10 +150,31 @@ function logic [63:0] select_cl64(logic [L1D_CL_LEN_BITS-1:0] cl, logic pos);
    return w64;
 endfunction
    
+
+   function logic non_mem_op(mem_op_t op);
+      logic 				 x;
+      case(op)
+	MEM_DEAD_ST:
+	  x = 1'b1;
+	MEM_DEAD_LD:
+	  x = 1'b1;
+	MEM_DEAD_SC:
+	  x = 1'b1;
+	MEM_MTC1_MERGE:
+	  x = 1'b1;
+	MEM_MFC1_MERGE:
+	  x = 1'b1;
+	default:
+	  x = 1'b0;
+      endcase // case (op)
+      return x;
+   endfunction
    
    logic 				  r_got_req, r_last_wr, n_last_wr;
    logic 				  r_last_rd, n_last_rd;
    logic [`LG_L1D_NUM_SETS-1:0] 	  t_cache_idx, r_cache_idx;
+   logic [`LG_L1D_NUM_SETS-1:0] 	  t_miss_idx, r_miss_idx;
+   logic [`M_WIDTH-1:0] 		  t_miss_addr, r_miss_addr;
    
    logic [`LG_L1D_NUM_SETS-1:0] 	  t_array_wr_addr;
    logic [L1D_CL_LEN_BITS-1:0] 		  t_array_wr_data;
@@ -169,11 +193,20 @@ endfunction
       
    logic 				  t_mark_invalid;
    logic 				  t_wr_array;
+   logic 				  t_hit_cache;
+   logic 				  t_rsp_dst_valid;
+   logic 				  t_rsp_fp_dst_valid;
+   logic [63:0] 			  t_rsp_data;
+   
    logic [L1D_CL_LEN_BITS-1:0] 		  t_array_data;
    
    logic [`M_WIDTH-1:0] 		  t_addr;
    logic 				  t_got_req;
    logic 				  t_got_miss;
+
+   logic 				  n_inhibit_write, r_inhibit_write;
+   logic 				  t_got_non_mem, r_got_non_mem;
+   
    
    logic 				  n_core_mem_rsp_valid, r_core_mem_rsp_valid;
    mem_rsp_t n_core_mem_rsp, r_core_mem_rsp;
@@ -189,23 +222,19 @@ endfunction
    mem_req_t t_mem_tail, t_mem_head;
    logic 	mem_q_full, mem_q_empty, mem_q_almost_full;
    
-`define WRITEBACK_TIMER 1
-`ifdef WRITEBACK_TIMER
-   logic [7:0] 	r_wb_timer, n_wb_timer;
-`endif
    
    typedef enum logic [2:0] {ACTIVE = 'd0,
                             INJECT_RELOAD = 'd1,
-                            INJECT_WRITEBACK = 'd2,
-                            FLUSH_CACHE = 'd3,
-			    FLUSH_CACHE_WAIT = 'd4,
-			    FLUSH_CL = 'd5,
-			    FLUSH_CL_WAIT = 'd6,
-			    RELOAD_UTLB = 'd7
+                            FLUSH_CACHE = 'd2,
+			    FLUSH_CACHE_WAIT = 'd3,
+			    FLUSH_CL = 'd4,
+			    FLUSH_CL_WAIT = 'd5,
+			    RELOAD_UTLB = 'd6
 			    } state_t;
 
    state_t r_state, n_state;
-   logic       t_pop_mq, t_non_speculative;
+   logic 	t_pop_mq;
+   
    
    logic r_mem_req_valid, n_mem_req_valid;
    logic [(`M_WIDTH-1):0] r_mem_req_addr, n_mem_req_addr;
@@ -214,7 +243,10 @@ endfunction
    logic [4:0] r_mem_req_opcode, n_mem_req_opcode;
    logic [63:0] 			 n_cache_accesses, r_cache_accesses;
    logic [63:0] 			 n_cache_hits, r_cache_hits;
-
+   logic [63:0] 			 n_cache_hits_under_miss, r_cache_hits_under_miss;
+      
+   logic [63:0] 			 r_store_stalls, n_store_stalls;
+   
    logic 				 t_utlb_hit;
    utlb_entry_t t_utlb_hit_entry;
    logic 				 n_utlb_miss_req, r_utlb_miss_req;
@@ -227,19 +259,16 @@ endfunction
    assign mem_req_opcode = r_mem_req_opcode;
    assign mem_req_valid = r_mem_req_valid;
 
-   //assign core_mem_rsp_valid = r_core_mem_rsp_valid;
-   //assign core_mem_rsp = r_core_mem_rsp;
-
    assign core_mem_rsp_valid = n_core_mem_rsp_valid;
    assign core_mem_rsp = n_core_mem_rsp;
    
    assign cache_accesses = r_cache_accesses;
    assign cache_hits = r_cache_hits;
-
+   assign cache_hits_under_miss = r_cache_hits_under_miss;
    assign utlb_miss_req = r_utlb_miss_req;
    assign utlb_miss_paddr = r_utlb_miss_paddr;
   
-//   assign 
+
 
    utlb utlb0 (
 	       .clk(clk),
@@ -319,7 +348,10 @@ endfunction
 	     r_flush_cl_req <= 1'b0;
 	     r_cache_idx <= 'd0;
 	     r_cache_tag <= 'd0;
+	     r_miss_addr <= 'd0;
+	     r_miss_idx <= 'd0;
 	     r_got_req <= 1'b0;
+	     r_got_non_mem <= 1'b0;
 	     r_last_wr <= 1'b0;
 	     r_last_rd <= 1'b0;
 	     r_state <= ACTIVE;
@@ -330,8 +362,11 @@ endfunction
 	     r_core_mem_rsp_valid <= 1'b0;
 	     r_cache_hits <= 'd0;
 	     r_cache_accesses <= 'd0;
+	     r_cache_hits_under_miss <= 'd0;
+	     r_store_stalls <= 'd0;
 	     r_utlb_miss_req <= 1'b0;
 	     r_utlb_miss_paddr <= 'd0;
+	     r_inhibit_write <= 1'b0;
 	  end
 	else
 	  begin
@@ -340,7 +375,10 @@ endfunction
 	     r_flush_cl_req <= n_flush_cl_req;
 	     r_cache_idx <= t_cache_idx;
 	     r_cache_tag <= t_cache_tag;
+	     r_miss_idx <= t_miss_idx;
+	     r_miss_addr <= t_miss_addr;
 	     r_got_req <= t_got_req;
+	     r_got_non_mem <= t_got_non_mem;
 	     r_last_wr <= n_last_wr;
 	     r_last_rd <= n_last_rd;
 	     r_state <= n_state;
@@ -351,8 +389,11 @@ endfunction
 	     r_core_mem_rsp_valid <= n_core_mem_rsp_valid;
 	     r_cache_hits <= n_cache_hits;
 	     r_cache_accesses <= n_cache_accesses;
+	     r_cache_hits_under_miss <= n_cache_hits_under_miss;
+	     r_store_stalls <= n_store_stalls;
 	     r_utlb_miss_req <= n_utlb_miss_req;
 	     r_utlb_miss_paddr <= n_utlb_miss_paddr;
+	     r_inhibit_write <= n_inhibit_write;
 	  end
      end // always_ff@ (posedge clk)
    
@@ -438,7 +479,7 @@ endfunction
 	else if(mem_rsp_valid)
 	  begin
 	     t_valid_wr_addr = r_mem_req_addr[IDX_STOP-1:IDX_START];
-	     t_valid_value = !((r_state == FLUSH_CACHE_WAIT) || (r_state == FLUSH_CL_WAIT));
+	     t_valid_value = !r_inhibit_write;
 	     t_write_valid_en = 1'b1;
 	  end
      end // always_comb
@@ -462,6 +503,7 @@ endfunction
 	   assign t_array_out_b32[i] = bswap32(r_array_out[((i+1)*32)-1:i*32]);
 	end
    endgenerate
+
 `ifdef DEBUG
    always_ff@(negedge clk)
      begin
@@ -477,33 +519,272 @@ endfunction
    		 );
      end
 `endif
-`ifdef WRITEBACK_TIMER
-   always_ff@(posedge clk)
-     begin
-	r_wb_timer <= reset ? 'd0 : n_wb_timer;
-     end
-`endif
 
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if(core_mem_req_valid)
-   // 	  begin
-   // 	     $display("cycle %d : core_mem_req.dst_ptr = %d, core_mem_req.op = %d, core_mem_req_ack = %b",
-   // 		      r_cycle, core_mem_req.dst_ptr, core_mem_req.op, core_mem_req_ack);
-	     
-   // 	  end
-   // 	if(r_got_req)
-   // 	  begin
-   // 	     $display("cycle %d : r_req.dst_ptr = %d, r_req.op = %d, r_state = %d, hit %b",
-   // 		      r_cycle, r_req.dst_ptr, r_req.op, r_state, r_valid_out && (r_tag_out == r_cache_tag));
-   // 	  end
-   //   end
+
    
    always_comb
      begin
+	t_w32 = (select_cl32(r_array_out, r_req.addr[WORD_STOP-1:WORD_START]));
+	t_w64 = select_cl64(r_array_out, r_req.addr[DWORD_START]);
+	t_bswap_w32 = bswap32(t_w32);
+	t_bswap_w64 = bswap64(t_w64);
+	t_hit_cache = r_valid_out && (r_tag_out == r_cache_tag) && r_got_req && 
+		      (r_state == ACTIVE || r_state == INJECT_RELOAD);
+	t_array_data = 'd0;
+	t_wr_array = 1'b0;
+	t_rsp_dst_valid = 1'b0;
+	t_rsp_fp_dst_valid = 1'b0;
+	t_rsp_data = 'd0;
+	
+	case(r_req.op)
+	  MEM_LB:
+	    begin
+	       case(r_req.addr[1:0])
+		 2'd0:
+		   begin
+		      t_rsp_data = {{56{t_w32[7]}}, t_w32[7:0]};
+		   end
+		 2'd1:
+		   begin
+		      t_rsp_data = {{56{t_w32[15]}}, t_w32[15:8]};
+		   end
+		 2'd2:
+		   begin
+		      t_rsp_data = {{56{t_w32[23]}}, t_w32[23:16]};
+		   end
+		 2'd3:
+		   begin
+		      t_rsp_data = {{56{t_w32[31]}}, t_w32[31:24]};
+		   end
+	       endcase
+	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
+	    end
+	  MEM_LBU:
+	    begin
+	       case(r_req.addr[1:0])
+		 2'd0:
+		   begin
+		      t_rsp_data = {56'd0, t_w32[7:0]};
+		   end
+		 2'd1:
+		   begin
+		      t_rsp_data = {56'd0, t_w32[15:8]};
+		   end
+		 2'd2:
+		   begin
+		      t_rsp_data = {56'd0, t_w32[23:16]};
+		   end
+		 2'd3:
+		   begin
+		      t_rsp_data = {56'd0, t_w32[31:24]};
+		   end
+	       endcase // case (r_req.addr[1:0])
+	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;	       
+	    end
+	  MEM_LH:
+	    begin
+	       case(r_req.addr[1])
+		 1'b0:
+		   begin
+		      t_rsp_data = {{48{t_w32[7]}}, bswap16(t_w32[15:0])};
+		   end
+		 1'b1:
+		   begin
+		      t_rsp_data = {{48{t_w32[23]}}, bswap16(t_w32[31:16])};	     
+		   end
+	       endcase // case (r_req.addr[1])
+	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
+	    end
+	  MEM_LHU:
+	    begin
+	       t_rsp_data = {48'd0, bswap16(r_req.addr[1] ? t_w32[31:16] : t_w32[15:0])};
+	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;	       
+	    end
+	  MEM_LW:
+	    begin
+	       t_rsp_data = {{32{t_bswap_w32[31]}}, t_bswap_w32};
+	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
+	    end
+	  MEM_LWC1_MERGE:
+	    begin
+	       if(r_req.lwc1_lo)
+		 begin
+		    t_rsp_data = {t_bswap_w32, r_req.data[31:0]};
+		 end
+	       else
+		 begin
+		    t_rsp_data = {r_req.data[63:32], t_bswap_w32};
+		 end
+	       t_rsp_fp_dst_valid = r_req.dst_valid & t_hit_cache; 
+	    end 
+	  MEM_LDC1:
+	    begin
+	       t_rsp_data = t_bswap_w64;
+	       t_rsp_fp_dst_valid = r_req.dst_valid;
+	    end
+	  MEM_LWR:
+	    begin
+	       case(r_req.addr[1:0])
+		 2'd0:
+		   begin
+		      t_rsp_data = {{32{r_req.data[31]}}, r_req.data[31:8], t_bswap_w32[31:24]};
+		   end
+		 2'd1:
+		   begin
+		      t_rsp_data = {{32{r_req.data[31]}}, r_req.data[31:16], t_bswap_w32[31:16]};
+		   end
+		 2'd2:
+		   begin
+		      t_rsp_data = {{32{r_req.data[31]}}, r_req.data[31:24], t_bswap_w32[31:8]};				       
+		   end
+		 2'd3:
+		   begin
+		      t_rsp_data = {{32{t_bswap_w32[31]}}, t_bswap_w32};
+		   end
+	       endcase // case (r_req.addr[1:0])
+	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
+	    end
+	  MEM_LWL:
+	    begin
+	       case(r_req.addr[1:0])
+		 2'd0:
+		   begin
+		      t_rsp_data = {{32{t_bswap_w32[31]}}, t_bswap_w32};
+		   end
+		 2'd1:
+		   begin
+		      t_rsp_data = {{32{t_bswap_w32[23]}}, t_bswap_w32[23:0], r_req.data[7:0]};
+		   end
+		 2'd2:
+		   begin
+		      t_rsp_data = {{32{t_bswap_w32[15]}}, t_bswap_w32[15:0], r_req.data[15:0]};
+		   end
+		 2'd3:
+		   begin
+		      t_rsp_data = {{32{t_bswap_w32[7]}}, t_bswap_w32[7:0], r_req.data[23:0]};
+		   end
+	       endcase // case (r_req.addr[1:0])
+	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;	       
+	    end // case: MEM_LWL
+	  MEM_SB:
+	    begin
+	       case(r_req.addr[1:0])
+		 2'd0:
+		   begin
+		      t_array_data = merge_cl32(r_array_out, {t_w32[31:8], r_req.data[7:0]}, r_req.addr[WORD_STOP-1:WORD_START]);
+		   end
+		 2'd1:
+		   begin
+		      t_array_data = merge_cl32(r_array_out, {t_w32[31:16], r_req.data[7:0], t_w32[7:0]}, r_req.addr[WORD_STOP-1:WORD_START]);				     				     
+		   end
+		 2'd2:
+		   begin
+		      t_array_data = merge_cl32(r_array_out, {t_w32[31:24], r_req.data[7:0], t_w32[15:0]}, r_req.addr[WORD_STOP-1:WORD_START]);				     
+		   end
+		 2'd3:
+		   begin
+		      t_array_data = merge_cl32(r_array_out, {r_req.data[7:0], t_w32[23:0]}, r_req.addr[WORD_STOP-1:WORD_START]);
+		   end
+	       endcase // case (r_req.addr[1:0])
+	       t_wr_array = t_hit_cache;
+	    end
+	  MEM_SH:
+	    begin
+	       case(r_req.addr[1])
+		 1'b0:
+		   begin
+		      t_array_data = merge_cl32(r_array_out, {t_w32[31:16], bswap16(r_req.data[15:0])}, r_req.addr[WORD_STOP-1:WORD_START]);
+		   end
+		 1'b1:
+		   begin
+		      t_array_data = merge_cl32(r_array_out, {bswap16(r_req.data[15:0]), t_w32[15:0]}, r_req.addr[WORD_STOP-1:WORD_START]);				     
+		   end
+	       endcase
+	       t_wr_array = t_hit_cache;
+	    end
+	  MEM_SW:
+	    begin
+	       t_array_data = merge_cl32(r_array_out, bswap32(r_req.data[31:0]), r_req.addr[WORD_STOP-1:WORD_START]);
+	       t_wr_array = t_hit_cache;	       
+	    end
+	  MEM_SWC1_MERGE:
+	    begin
+	       t_array_data = merge_cl32(r_array_out, bswap32(r_req.lwc1_lo ? r_req.data[63:32] : r_req.data[31:0]), r_req.addr[WORD_STOP-1:WORD_START]);
+	       t_wr_array = t_hit_cache;
+	    end
+	  MEM_SDC1:
+	    begin
+	       //$display("SDC for rob slot %d", n_core_mem_rsp.rob_ptr);
+	       t_array_data = merge_cl64(r_array_out, bswap64(r_req.data[63:0]), r_req.addr[DWORD_START]);
+	       t_wr_array = t_hit_cache;
+	    end
+	  MEM_SC:
+	    begin
+	       t_array_data = merge_cl32(r_array_out, bswap32(r_req.data[31:0]), r_req.addr[WORD_STOP-1:WORD_START]);
+	       t_rsp_data = 64'd1;
+	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
+	       t_wr_array = t_hit_cache;
+	    end
+	  MEM_SWR:
+	    begin
+	       case(r_req.addr[1:0])
+		 2'd0:
+		   begin
+		      t_array_data = merge_cl32(r_array_out, bswap32({r_req.data[7:0], t_bswap_w32[23:0]}), r_req.addr[WORD_STOP-1:WORD_START]);
+		   end
+		 2'd1:
+		   begin
+		      t_array_data = merge_cl32(r_array_out, bswap32({r_req.data[15:0], t_bswap_w32[15:0]}), r_req.addr[WORD_STOP-1:WORD_START]);
+		   end
+		 2'd2:
+		   begin
+		      t_array_data = merge_cl32(r_array_out, bswap32({r_req.data[23:0], t_bswap_w32[7:0]}), r_req.addr[WORD_STOP-1:WORD_START]);
+		   end
+		 2'd3:
+		   begin
+		      t_array_data = merge_cl32(r_array_out, bswap32(r_req.data[31:0]), r_req.addr[WORD_STOP-1:WORD_START]);
+		   end
+	       endcase // case (r_req.addr[1:0])
+	       t_wr_array = t_hit_cache;
+	    end
+	  MEM_SWL:
+	    begin
+	       case(r_req.addr[1:0])
+		 2'd0:
+		   begin
+		      t_array_data = merge_cl32(r_array_out, t_bswap_w32, r_req.addr[WORD_STOP-1:WORD_START]);
+		   end
+		 2'd1:
+		   begin
+		      t_array_data = merge_cl32(r_array_out, bswap32({t_bswap_w32[31:24], r_req.data[31:8]}), r_req.addr[WORD_STOP-1:WORD_START]);
+		   end
+		 2'd2:
+		   begin
+		      t_array_data = merge_cl32(r_array_out, bswap32({t_bswap_w32[31:16], r_req.data[31:16]}), r_req.addr[WORD_STOP-1:WORD_START]);
+		   end
+		 2'd3:
+		   begin
+		      t_array_data = merge_cl32(r_array_out, bswap32({t_bswap_w32[31:8], r_req.data[31:24]}), r_req.addr[WORD_STOP-1:WORD_START]);
+		   end
+	       endcase // case (r_req.addr[1:0])
+	       t_wr_array = t_hit_cache;
+	    end
+	  default:
+	    begin
+	    end
+	endcase // case r_req.op
+     end
+
+   
+   always_comb
+     begin
+	n_state = r_state;
+	t_miss_idx = r_miss_idx;
+	t_miss_addr = r_miss_addr;
 	t_cache_idx = 'd0;
 	t_cache_tag = 'd0;
 	t_got_req = 1'b0;
+	t_got_non_mem = 1'b0;
 	n_last_wr = 1'b0;
 	n_last_rd = 1'b0;
 	t_got_miss = 1'b0;
@@ -511,7 +792,7 @@ endfunction
 	n_utlb_miss_paddr = r_utlb_miss_paddr;	
 	n_req = r_req;
 	core_mem_req_ack = 1'b0;
-	n_state = r_state;
+
 	n_mem_req_valid = 1'b0;
 	n_mem_req_addr = r_mem_req_addr;
 	n_mem_req_store_data = r_mem_req_store_data;
@@ -528,34 +809,26 @@ endfunction
 	n_core_mem_rsp.exception_tlb_modified = 1'b0;
 	n_core_mem_rsp.exception_tlb_invalid = 1'b0;
 	n_core_mem_rsp.faulted = 1'b0;
-	
-`ifdef WRITEBACK_TIMER
-	n_wb_timer = r_wb_timer;
-`endif
 	n_cache_accesses = r_cache_accesses;
 	n_cache_hits = r_cache_hits;
+	n_cache_hits_under_miss = r_cache_hits_under_miss;
+	
+	n_store_stalls = r_store_stalls;
 	
 	n_flush_req = r_flush_req | flush_req;
 	n_flush_cl_req = r_flush_cl_req | flush_cl_req;
 	n_flush_complete = 1'b0;
 	t_addr = 'd0;
-	t_wr_array = 1'b0;
-	t_array_data = 'd0;
-	t_mark_invalid = 1'b0;
 	
-	t_non_speculative = (core_mem_req.op == MEM_DEAD_LD || core_mem_req.op == MEM_DEAD_ST) ? 1'b1 : (core_mem_req.rob_ptr == head_of_rob_ptr);
-		  
-	t_w32 = (select_cl32(r_array_out, r_req.addr[WORD_STOP-1:WORD_START]));
-	t_w64 = select_cl64(r_array_out, r_req.addr[DWORD_START]);
-	t_bswap_w32 = bswap32(t_w32);
-	t_bswap_w64 = bswap64(t_w64);
+	n_inhibit_write = r_inhibit_write;
+	
+	t_mark_invalid = 1'b0;
 	
 	case(r_state)
 	  ACTIVE:
 	    begin
 	       if(r_got_req)
 		 begin
-		    
 		    if(r_req.op == MEM_DEAD_ST)
 		      begin /* dead op */
 			 n_core_mem_rsp_valid = 1'b1;
@@ -572,35 +845,17 @@ endfunction
 		      end
 		    else if(r_req.op == MEM_MTC1_MERGE)
 		      begin
-			 if(r_req.lwc1_lo)
-			   begin
-			      n_core_mem_rsp.data = {r_req.addr[31:0], r_req.data[31:0]};
-			   end
-			 else
-			   begin
-			      n_core_mem_rsp.data = {r_req.data[63:32], r_req.addr[31:0]};
-			   end
-			 //$display("writing lo %x, hi %x for dst prf %d, old %x, gpr %x, sel %b", 
-			 //n_core_mem_rsp.data[31:0], 
-			 //n_core_mem_rsp.data[63:32], 
-			 //r_req.dst_ptr, r_req.data, 
-			 //	  r_req.addr[31:0], 
-			 //	  r_req.lwc1_lo);
+			 n_core_mem_rsp.data = r_req.lwc1_lo ? 
+					       {r_req.addr[31:0], r_req.data[31:0]} : 
+					       {r_req.data[63:32], r_req.addr[31:0]};
 			 n_core_mem_rsp.fp_dst_valid = r_req.dst_valid;
 			 n_core_mem_rsp_valid = 1'b1;			 
 		      end // if (r_req.op == MEM_MTC1_MERGE)
 		    else if(r_req.op == MEM_MFC1_MERGE)
 		      begin
-			 //$display("source fp lo reg %x, hi reg %x, select %b", 
-			 //r_req.data[31:0], r_req.data[63:32], r_req.lwc1_lo);
-			 if(r_req.lwc1_lo)
-			   begin
-			      n_core_mem_rsp.data = {32'd0, r_req.data[63:32]};
-			   end
-			 else
-			   begin
-			      n_core_mem_rsp.data = {32'd0, r_req.data[31:0]};			      
-			   end
+			 n_core_mem_rsp.data = r_req.lwc1_lo ? 
+					       {32'd0, r_req.data[63:32]} :
+					       {32'd0, r_req.data[31:0]};
 			 n_core_mem_rsp.dst_valid = r_req.dst_valid;
 			 n_core_mem_rsp_valid = 1'b1;
 		      end // if (r_req.op == MEM_MFC1_MERGE)
@@ -620,297 +875,44 @@ endfunction
 			 n_state = RELOAD_UTLB;
 		      end
 		    else if(r_valid_out && (r_tag_out == r_cache_tag))
-		      begin /* valid cacheline */
+		      begin /* valid cacheline - hit in cache */
+			 n_core_mem_rsp.data = t_rsp_data;
+			 n_core_mem_rsp.dst_valid = t_rsp_dst_valid;
+			 n_core_mem_rsp.fp_dst_valid = t_rsp_fp_dst_valid;
 			 n_cache_hits = r_cache_hits + 'd1;
-			 //$display("hit on %x, victory : out %x, opcode %d", 
-			 //r_req.addr, r_array_out, r_req.op);
-			 case(r_req.op)
-			   MEM_LB:
-			     begin
-				case(r_req.addr[1:0])
-				  2'd0:
-				    begin
-				       n_core_mem_rsp.data = {{56{t_w32[7]}}, t_w32[7:0]};
-				    end
-				  2'd1:
-				    begin
-				       n_core_mem_rsp.data = {{56{t_w32[15]}}, t_w32[15:8]};
-				    end
-				  2'd2:
-				    begin
-				       n_core_mem_rsp.data = {{56{t_w32[23]}}, t_w32[23:16]};
-				  end
-				  2'd3:
-				    begin
-				       n_core_mem_rsp.data = {{56{t_w32[31]}}, t_w32[31:24]};
-				    end
-				endcase
-				n_core_mem_rsp.dst_valid = r_req.dst_valid;
-			     end
-			   MEM_LBU:
-			     begin
-				case(r_req.addr[1:0])
-				  2'd0:
-				    begin
-				       n_core_mem_rsp.data = {56'd0, t_w32[7:0]};
-				    end
-				  2'd1:
-				    begin
-				       n_core_mem_rsp.data = {56'd0, t_w32[15:8]};
-				    end
-				  2'd2:
-				    begin
-				       n_core_mem_rsp.data = {56'd0, t_w32[23:16]};
-				  end
-				  2'd3:
-				    begin
-				       n_core_mem_rsp.data = {56'd0, t_w32[31:24]};
-				    end
-				endcase
-				n_core_mem_rsp.dst_valid = r_req.dst_valid;
-			   end
-			 MEM_LH:
-			   begin
-			      case(r_req.addr[1])
-			      	1'b0:
-			      	  begin
-			      	     n_core_mem_rsp.data = {{48{t_w32[7]}}, bswap16(t_w32[15:0])};
-			      	  end
-			      	1'b1:
-			      	  begin
-			      	     n_core_mem_rsp.data = {{48{t_w32[23]}}, bswap16(t_w32[31:16])};				     
-			      	  end
-			      	endcase
-			      n_core_mem_rsp.dst_valid = r_req.dst_valid;
-			   end
-			 MEM_LHU:
-			   begin
-			      n_core_mem_rsp.data = {48'd0, bswap16(r_req.addr[1] ? t_w32[31:16] : t_w32[15:0])};
-			      n_core_mem_rsp.dst_valid = r_req.dst_valid;
-			   end
-			   MEM_LW:
-			     begin
-				n_core_mem_rsp.data = {{32{t_bswap_w32[31]}}, t_bswap_w32};
-				//$display("cl out = %x, sel %d, selected word = %x", 
-				//r_array_out, 
-				//r_req.addr[WORD_STOP-1:WORD_START], 
-				//n_core_mem_rsp.data);
-				//$stop();
-				n_core_mem_rsp.dst_valid = r_req.dst_valid;
-			     end
-			   MEM_LWC1_MERGE:
-			      begin
-			    	if(r_req.lwc1_lo)
-			    	  begin
-			   	     n_core_mem_rsp.data = {t_bswap_w32, r_req.data[31:0]};
-			   	  end
-			   	else
-			   	  begin
-				     n_core_mem_rsp.data = {r_req.data[63:32], t_bswap_w32};
-			   	  end
-				 // $display("lwc1 data %x for prf %d at cycle %d",
-				 // 	  n_core_mem_rsp.data,
-				 // 	  n_core_mem_rsp.dst_ptr, 
-				 // 	  r_cycle);
-			   	 n_core_mem_rsp.fp_dst_valid = r_req.dst_valid;
-			      end 
-			 MEM_LDC1:
-			   begin
-			      n_core_mem_rsp.data = t_bswap_w64;
-			      n_core_mem_rsp.fp_dst_valid = r_req.dst_valid;
-			      //$display("LSU : LDC1 for rob slot %d, prf %d at cycle %d, dst_valid %b", r_req.rob_ptr, r_req.dst_ptr, 
-			      //r_cycle, n_core_mem_rsp.fp_dst_valid);			      
-			   end
-			 MEM_SB:
-			   begin
-			      case(r_req.addr[1:0])
-			      	2'd0:
-			      	  begin
-				     t_array_data = merge_cl32(r_array_out, {t_w32[31:8], r_req.data[7:0]}, r_req.addr[WORD_STOP-1:WORD_START]);
-				  end
-			      	2'd1:
-				  begin
-				     t_array_data = merge_cl32(r_array_out, {t_w32[31:16], r_req.data[7:0], t_w32[7:0]}, r_req.addr[WORD_STOP-1:WORD_START]);				     				     
-			      	  end
-				2'd2:
-			      	  begin
-				     t_array_data = merge_cl32(r_array_out, {t_w32[31:24], r_req.data[7:0], t_w32[15:0]}, r_req.addr[WORD_STOP-1:WORD_START]);				     
-				  end
-				2'd3:
-				  begin
-				     t_array_data = merge_cl32(r_array_out, {r_req.data[7:0], t_w32[23:0]}, r_req.addr[WORD_STOP-1:WORD_START]);
-				  end
-			      endcase // case (r_req.addr[1:0])
-
-			      t_wr_array = 1'b1;			      
-			   end
-			 MEM_SH:
-			   begin
-			      case(r_req.addr[1])
-			      	1'b0:
-			      	  begin
-			      	     t_array_data = merge_cl32(r_array_out, {t_w32[31:16], bswap16(r_req.data[15:0])}, r_req.addr[WORD_STOP-1:WORD_START]);
-			      	  end
-			      	1'b1:
-			      	  begin
-			      	     t_array_data = merge_cl32(r_array_out, {bswap16(r_req.data[15:0]), t_w32[15:0]}, r_req.addr[WORD_STOP-1:WORD_START]);				     
-			      	  end
-			      endcase
-			      t_wr_array = 1'b1;			      
-			   end
-			 MEM_SW:
-			   begin
-			      t_array_data = merge_cl32(r_array_out, bswap32(r_req.data[31:0]), r_req.addr[WORD_STOP-1:WORD_START]);
-			      //t_array_data[32*(r_req.addr[WORD_STOP-1:WORD_START]-1)-1:32*r_req.addr[WORD_STOP-1:WORD_START]] = bswap32(r_req.data);
-			      //;
-			      //$display("word select = %d, addr = %x, write data %x, write cache line %x", 
-			      //r_req.addr[WORD_STOP-1:WORD_START], r_req.addr, r_req.data, t_array_data);
-			      //$stop();
-			      t_wr_array = 1'b1;
-			   end
-			 MEM_SWC1_MERGE:
-			   begin
-			      t_array_data = merge_cl32(r_array_out, bswap32(r_req.lwc1_lo ? r_req.data[63:32] : r_req.data[31:0]), r_req.addr[WORD_STOP-1:WORD_START]);
-			      //$display("swc1 data %x for prf %d at cycle %d", r_req.data, n_core_mem_rsp.dst_ptr, r_cycle);
-			      t_wr_array = 1'b1;
-			   end
-			 MEM_SDC1:
-			   begin
-			      //$display("SDC for rob slot %d", n_core_mem_rsp.rob_ptr);
-			      t_array_data = merge_cl64(r_array_out, bswap64(r_req.data[63:0]), r_req.addr[DWORD_START]);
-			      t_wr_array = 1'b1;
-			   end
-			 MEM_SC:
-			   begin
-			      t_array_data = merge_cl32(r_array_out, bswap32(r_req.data[31:0]), r_req.addr[WORD_STOP-1:WORD_START]);
-			      n_core_mem_rsp.data = 64'd1;
-			      n_core_mem_rsp.dst_valid = r_req.dst_valid;
-			      t_wr_array = 1'b1;
-			   end
-			   MEM_SWR:
-			     begin
-				case(r_req.addr[1:0])
-				  2'd0:
-				    begin
-				       t_array_data = merge_cl32(r_array_out, bswap32({r_req.data[7:0], t_bswap_w32[23:0]}), r_req.addr[WORD_STOP-1:WORD_START]);
-				    end
-				  2'd1:
-				    begin
-				       t_array_data = merge_cl32(r_array_out, bswap32({r_req.data[15:0], t_bswap_w32[15:0]}), r_req.addr[WORD_STOP-1:WORD_START]);
-				    end
-				  2'd2:
-				    begin
-				       t_array_data = merge_cl32(r_array_out, bswap32({r_req.data[23:0], t_bswap_w32[7:0]}), r_req.addr[WORD_STOP-1:WORD_START]);
-				    end
-				  2'd3:
-				    begin
-				       t_array_data = merge_cl32(r_array_out, bswap32(r_req.data[31:0]), r_req.addr[WORD_STOP-1:WORD_START]);
-				    end
-				endcase // case (r_req.addr[1:0])
-				t_wr_array = 1'b1;
-			     end
-			   MEM_SWL:
-			     begin
-				case(r_req.addr[1:0])
-				  2'd0:
-				    begin
-				       t_array_data = merge_cl32(r_array_out, t_bswap_w32, r_req.addr[WORD_STOP-1:WORD_START]);
-				    end
-				  2'd1:
-				    begin
-				       t_array_data = merge_cl32(r_array_out, bswap32({t_bswap_w32[31:24], r_req.data[31:8]}), r_req.addr[WORD_STOP-1:WORD_START]);
-				    end
-				  2'd2:
-				    begin
-				       t_array_data = merge_cl32(r_array_out, bswap32({t_bswap_w32[31:16], r_req.data[31:16]}), r_req.addr[WORD_STOP-1:WORD_START]);
-				    end
-				  2'd3:
-				    begin
-				       t_array_data = merge_cl32(r_array_out, bswap32({t_bswap_w32[31:8], r_req.data[31:24]}), r_req.addr[WORD_STOP-1:WORD_START]);
-				    end
-				endcase // case (r_req.addr[1:0])
-				t_wr_array = 1'b1;
-			     end
-			   MEM_LWR:
-			     begin
-				case(r_req.addr[1:0])
-				  2'd0:
-				    begin
-				       n_core_mem_rsp.data = {{32{r_req.data[31]}}, r_req.data[31:8], t_bswap_w32[31:24]};
-				    end
-				  2'd1:
-				    begin
-				       n_core_mem_rsp.data = {{32{r_req.data[31]}}, r_req.data[31:16], t_bswap_w32[31:16]};
-				    end
-				  2'd2:
-				    begin
-				       n_core_mem_rsp.data = {{32{r_req.data[31]}}, r_req.data[31:24], t_bswap_w32[31:8]};				       
-				    end
-				  2'd3:
-				    begin
-				       n_core_mem_rsp.data = {{32{t_bswap_w32[31]}}, t_bswap_w32};
-				    end
-				endcase // case (r_req.addr[1:0])
-				//$display("lwr case %d", r_req.addr[1:0]);
-				n_core_mem_rsp.dst_valid = r_req.dst_valid;
-			     end
-			   MEM_LWL:
-			     begin
-				//_core_mem_rsp.data = t_bswap_w32;
-				case(r_req.addr[1:0])
-				  2'd0:
-				    begin
-				       n_core_mem_rsp.data = {{32{t_bswap_w32[31]}}, t_bswap_w32};
-				    end
-				  2'd1:
-				    begin
-				       n_core_mem_rsp.data = {{32{t_bswap_w32[23]}}, t_bswap_w32[23:0], r_req.data[7:0]};
-				    end
-				  2'd2:
-				    begin
-				       n_core_mem_rsp.data = {{32{t_bswap_w32[15]}}, t_bswap_w32[15:0], r_req.data[15:0]};
-				    end
-				  2'd3:
-				    begin
-				       n_core_mem_rsp.data = {{32{t_bswap_w32[7]}}, t_bswap_w32[7:0], r_req.data[23:0]};
-				    end
-				endcase // case (r_req.addr[1:0])
-				n_core_mem_rsp.dst_valid = r_req.dst_valid;				
-			     end // case: MEM_LWL
-			 default:
-			   begin
-			      $stop();
-			   end
-		       endcase // case r_req.op
-		       n_core_mem_rsp_valid = 1'b1;
+			 n_core_mem_rsp_valid = 1'b1;
 		      end // if (r_valid_out && (r_tag_out == r_cache_tag))
-		  else if(r_valid_out && r_dirty_out && (r_tag_out != r_cache_tag))
+		    else if(r_valid_out && r_dirty_out && (r_tag_out != r_cache_tag))
 		    begin
 		       t_got_miss = 1'b1;
 		       n_mem_req_addr = {r_tag_out,r_cache_idx,{`LG_L1D_CL_LEN{1'b0}}};
-		       //$display("%x conflicts with %x", r_req.addr, n_mem_req_addr);
+		       //$display("%d: %x conflicts with %x for line %d", r_cycle, r_req.addr, n_mem_req_addr, r_cache_idx);
 		       //r_req.addr;
 		       n_mem_req_opcode = MEM_SW;
 		       n_mem_req_store_data = r_array_out;
-		       n_state = INJECT_WRITEBACK;
-`ifdef WRITEBACK_TIMER
-		       n_wb_timer = 'd0;
-`endif		       
+		       n_state = INJECT_RELOAD;
+		       n_inhibit_write = 1'b1;
+		       t_miss_idx = r_cache_idx;
+		       t_miss_addr = r_req.addr;
 		       n_mem_req_valid = 1'b1;	       
 
 		    end
 		  else
 		    begin
 		       //$display("invalid line miss at cycle %d for %x (line %d), valid = %b, read tag = %x, expected tag = %x",
-		       //		r_cycle, r_req.addr, r_cache_idx, r_valid_out, r_cache_tag, r_tag_out);
+		       //r_cycle, r_req.addr, r_cache_idx, r_valid_out, r_cache_tag, r_tag_out);
 		       t_got_miss = 1'b1;
 		       /* todo : make parameterized */
 		       n_mem_req_addr = {r_req.addr[`M_WIDTH-1:`LG_L1D_CL_LEN], {`LG_L1D_CL_LEN{1'b0}}};
 		       n_mem_req_opcode = MEM_LW;
 		       n_state = INJECT_RELOAD;
+		       t_miss_idx = r_cache_idx;
+		       t_miss_addr = r_req.addr;		       
 		       n_mem_req_valid = 1'b1;	       
 		    end
 	       end // if (r_got_req)
+
+	       //handle next request 
 	     if(!mem_q_empty)
 	       begin
 		  if(!(r_got_req && (r_cache_idx == t_mem_head.addr[IDX_STOP-1:IDX_START])))
@@ -928,7 +930,7 @@ endfunction
 		       //	t_mem_head.addr, r_cycle);
 		    end
 	       end
-	     else if(core_mem_req_valid && !t_got_miss && !mem_q_almost_full /*&& t_non_speculative*/)
+	     else if(core_mem_req_valid && !t_got_miss && !mem_q_almost_full)
 	       begin
 		  if(!(r_got_req && r_last_wr && (r_cache_idx == core_mem_req.addr[IDX_STOP-1:IDX_START])))
 		    begin
@@ -942,11 +944,6 @@ endfunction
 		       n_last_rd = !core_mem_req.is_store;
 		       n_cache_accesses = r_cache_accesses + 'd1;
 		    end
-		  //else
-		  //begin
-		       //$display("blocked on back to back write on cycle %d, r_last_rd = %b, r_last_wr = %b, r_cache_idx = %d, addr %x", 
-		       //r_cycle, r_last_rd, r_last_wr,r_cache_idx,core_mem_req.addr);
-		    //end
 	       end // if (core_mem_req_valid && !t_got_miss && !mem_q_almost_full)
 	     else if(r_flush_req)
 	       begin
@@ -969,45 +966,88 @@ endfunction
 	       	if(mem_rsp_valid)
 		  begin
 		     n_state = ACTIVE;
+		     n_inhibit_write = 1'b0;
 		  end
-	    end
-	  INJECT_WRITEBACK:
-	    begin
-`ifdef WRITEBACK_TIMER
-	       n_wb_timer = r_wb_timer + 'd1;
-	       if(r_wb_timer == 'd255)
-		 begin
-		    $display("hit max writeback wait time");
-		    $stop();
-		 end
-`endif
-	       	if(mem_rsp_valid)
-		  begin		     
-		     n_state = ACTIVE;
+		else if(r_got_non_mem)
+		  begin
+		     case(r_req.op)
+		       MEM_DEAD_ST:
+			 begin
+			 end
+		       MEM_DEAD_LD:
+			 begin
+			    n_core_mem_rsp.dst_valid = r_req.dst_valid;
+			 end
+		       MEM_DEAD_SC:
+			 begin
+			    n_core_mem_rsp.dst_valid = r_req.dst_valid;
+			 end
+		       MEM_MTC1_MERGE:
+			 begin
+			    n_core_mem_rsp.data = r_req.lwc1_lo ? 
+						  {r_req.addr[31:0], r_req.data[31:0]} : 
+						  {r_req.data[63:32], r_req.addr[31:0]};
+			    n_core_mem_rsp.fp_dst_valid = r_req.dst_valid;
+			 end 
+		       MEM_MFC1_MERGE:
+			 begin
+			    n_core_mem_rsp.data = r_req.lwc1_lo ? 
+						  {32'd0, r_req.data[63:32]} :
+						  {32'd0, r_req.data[31:0]};
+			    n_core_mem_rsp.dst_valid = r_req.dst_valid;
+			 end
+		       default:
+			 $stop();
+		     endcase // case (r_req.op)
+		     n_core_mem_rsp_valid = 1'b1;
+		     core_mem_req_ack = 1'b1;
+		  end
+		else if(r_got_req && r_valid_out && (r_tag_out == r_cache_tag))
+		  begin
+		     n_core_mem_rsp.data = t_rsp_data;
+		     n_core_mem_rsp.dst_valid = t_rsp_dst_valid;
+		     n_core_mem_rsp.fp_dst_valid = t_rsp_fp_dst_valid;
+		     n_cache_hits = r_cache_hits + 'd1;
+		     n_cache_accesses = r_cache_accesses + 'd1;
+		     n_cache_hits_under_miss = r_cache_hits_under_miss + 'd1;
+		     n_core_mem_rsp_valid = 1'b1;
+		     core_mem_req_ack = 1'b1;
+		  end
+		else if((core_mem_req.addr[IDX_STOP-1:IDX_START] != r_miss_idx) && 
+			core_mem_req_valid )
+		  begin
+		     t_cache_idx = core_mem_req.addr[IDX_STOP-1:IDX_START];
+		     t_cache_tag = core_mem_req.addr[`M_WIDTH-1:IDX_STOP];
+		     t_addr = t_mem_head.addr;
+		     t_got_req = !core_mem_req.is_store;
+		     t_got_non_mem = non_mem_op(core_mem_req.op);
+		     n_req = core_mem_req;	
 		  end
 	    end
 	  FLUSH_CL:
 	    begin
-	       if(!r_dirty_out)
-		 begin
-		    n_state = ACTIVE;
-		    t_mark_invalid = 1'b1;
-		    n_flush_complete = 1'b1;
-		 end
-	       else
+	       if(r_dirty_out)
 		 begin
 		    n_mem_req_addr = {r_tag_out,r_cache_idx,{`LG_L1D_CL_LEN{1'b0}}};
 	            n_mem_req_opcode = MEM_SW;
 	            n_mem_req_store_data = r_array_out;
 	            n_state = FLUSH_CL_WAIT;
+	       n_inhibit_write = 1'b1;
 	            n_mem_req_valid = 1'b1;	       
+		 end
+	       else
+		 begin
+		    n_state = ACTIVE;
+		    t_mark_invalid = 1'b1;
+		    n_flush_complete = 1'b1;
 		 end
 	    end // case: FLUSH_CL
 	  FLUSH_CL_WAIT:
 	    begin
 	       	if(mem_rsp_valid)
 		  begin
-		     n_state = ACTIVE;		     
+		     n_state = ACTIVE;
+		     n_inhibit_write = 1'b0;
 		     n_flush_complete = 1'b1;
 		  end	       
 	    end
@@ -1035,6 +1075,7 @@ endfunction
 	            n_mem_req_opcode = MEM_SW;
 	            n_mem_req_store_data = r_array_out;
 	            n_state = FLUSH_CACHE_WAIT;
+		    n_inhibit_write = 1'b1;
 	            n_mem_req_valid = 1'b1;	       
 		 end // else: !if(r_valid_out && !r_dirty_out)
 		 end // else: !if(r_cache_idx == (L1D_NUM_SETS-1))
@@ -1046,6 +1087,7 @@ endfunction
 	       	if(mem_rsp_valid)
 		  begin
 		     n_state = FLUSH_CACHE;
+		     n_inhibit_write = 1'b0;
 		  end
 	    end
 	  RELOAD_UTLB:

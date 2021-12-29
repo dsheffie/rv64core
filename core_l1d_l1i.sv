@@ -12,7 +12,8 @@ module core_l1d_l1i(clk,
 		    mem_req_ack,
 		    mem_req_valid, 
 		    mem_req_addr, 
-		    mem_req_store_data, 
+		    mem_req_store_data,
+		    mem_req_insn,
 		    mem_req_tag,
 		    mem_req_opcode,
 		    mem_rsp_valid,
@@ -26,7 +27,10 @@ module core_l1d_l1i(clk,
 		    retire_reg_two_ptr,
 		    retire_reg_two_data,
 		    retire_reg_two_valid,
-		    
+		    store_not_hor,
+		    fetched_insn,
+		    decoded_insn,
+		    allocated_insn,
 		    retire_valid,
 		    retire_two_valid,
 		    retire_pc,
@@ -46,6 +50,7 @@ module core_l1d_l1i(clk,
 		    l1i_cache_hits,
 		    l1d_cache_accesses,
 		    l1d_cache_hits,
+		    l1d_cache_hits_under_miss,
 `endif
 		    got_break,
 		    got_syscall,
@@ -91,6 +96,7 @@ module core_l1d_l1i(clk,
    output logic [63:0] 			l1i_cache_hits;
    output logic [63:0] 			l1d_cache_accesses;
    output logic [63:0] 			l1d_cache_hits;
+   output logic [63:0] 			l1d_cache_hits_under_miss;
 `endif
    
    /* mem port */
@@ -99,6 +105,7 @@ module core_l1d_l1i(clk,
    output logic [`M_WIDTH-1:0] 	 mem_req_addr;
    output logic [L1D_CL_LEN_BITS-1:0] mem_req_store_data;
    output logic [`LG_MEM_TAG_ENTRIES-1:0] mem_req_tag;
+   output logic 			  mem_req_insn;
    output logic [4:0] 			  mem_req_opcode;
    
    input logic  			  mem_rsp_valid;
@@ -116,6 +123,10 @@ module core_l1d_l1i(clk,
    output logic [(`M_WIDTH-1):0] 	  retire_reg_two_data;
    output logic 			  retire_reg_two_valid;
    
+   output logic 			  store_not_hor;
+   output logic 			  fetched_insn;
+   output logic 			  decoded_insn;
+   output logic 			  allocated_insn;
    output logic 			  retire_valid;
    output logic 			  retire_two_valid;
    output logic [(`M_WIDTH-1):0] 	  retire_pc;
@@ -138,8 +149,10 @@ module core_l1d_l1i(clk,
    
    logic [63:0] 			  t_l1d_cache_accesses;
    logic [63:0] 			  t_l1d_cache_hits;
+   logic [63:0] 			  t_l1d_cache_hits_under_miss;
    logic [63:0] 			  t_l1i_cache_accesses;
    logic [63:0] 			  t_l1i_cache_hits;
+
    
    logic [`LG_ROB_ENTRIES-1:0] 		  head_of_rob_ptr;   
    logic 				  flush_req;
@@ -164,6 +177,7 @@ module core_l1d_l1i(clk,
 `ifdef CACHE_STATS
    assign l1d_cache_accesses = t_l1d_cache_accesses;
    assign l1d_cache_hits = t_l1d_cache_hits;
+   assign l1d_cache_hits_under_miss = t_l1d_cache_hits_under_miss;
    assign l1i_cache_accesses = t_l1i_cache_accesses;
    assign l1i_cache_hits = t_l1i_cache_hits;
 `endif
@@ -215,7 +229,7 @@ module core_l1d_l1i(clk,
 	mem_req_store_data = l1d_mem_req_store_data;
 	mem_req_tag = (r_state == GNT_L1I) ? l1i_mem_req_tag : l1d_mem_req_tag;
 	mem_req_opcode = (r_state == GNT_L1I) ? l1i_mem_req_opcode : l1d_mem_req_opcode;
-	
+	mem_req_insn = (r_state == GNT_L1I);
 	l1d_mem_rsp_valid = 1'b0;
 	l1i_mem_rsp_valid = 1'b0;
 	
@@ -329,12 +343,14 @@ module core_l1d_l1i(clk,
 	       .tlb_rsp_valid(t_l1d_tlb_rsp_valid),
 	       .tlb_rsp(t_tlb_rsp),	       
 	       .cache_accesses(t_l1d_cache_accesses),
-	       .cache_hits(t_l1d_cache_hits)
+	       .cache_hits(t_l1d_cache_hits),
+	       .cache_hits_under_miss(t_l1d_cache_hits_under_miss)
 	       );
 
    l1i icache(
 	      .clk(clk),
 	      .reset(reset),
+	      .fetched_insn(fetched_insn),
 	      .flush_req(flush_req),
 	      .flush_complete(l1i_flush_complete),
 	      .restart_pc(restart_pc),
@@ -429,7 +445,9 @@ module core_l1d_l1i(clk,
 	     .retire_reg_two_ptr(retire_reg_two_ptr),
 	     .retire_reg_two_data(retire_reg_two_data),
 	     .retire_reg_two_valid(retire_reg_two_valid),
-	     
+	     .store_not_hor(store_not_hor),
+	     .decode_valid(decoded_insn),
+	     .alloc_valid(allocated_insn),
 	     .retire_valid(retire_valid),
 	     .retire_two_valid(retire_two_valid),
 	     .retire_delay_slot(t_retire_delay_slot),

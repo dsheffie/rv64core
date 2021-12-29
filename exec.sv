@@ -77,7 +77,7 @@ module exec(clk,
    logic [(`M_WIDTH-1):0] r_cpr0 [31:0];
    
    localparam FP_ZP = (`LG_PRF_ENTRIES-5);
-      
+   localparam Z_BITS = 64-`M_WIDTH;      
    
    logic [N_INT_PRF_ENTRIES-1:0]  r_prf_inflight, n_prf_inflight;
    logic [N_FP_PRF_ENTRIES-1:0]   r_fp_prf_inflight, n_fp_prf_inflight;
@@ -116,14 +116,12 @@ module exec(clk,
    logic 	t_got_syscall;
    /* yet another hack for linux syscall emulation */
    logic 	t_set_thread_area;
-   
-   
+      
    mem_req_t r_mem_q[N_MQ_ENTRIES-1:0];
-   mem_req_t n_mem_q[N_MQ_ENTRIES-1:0];
    logic [`LG_MQ_ENTRIES:0] r_mq_head_ptr, n_mq_head_ptr;
    logic [`LG_MQ_ENTRIES:0] r_mq_tail_ptr, n_mq_tail_ptr;
    mem_req_t t_mem_tail, t_mem_head;
-   logic 	mem_q_full, mem_q_empty;
+   logic 		    mem_q_full, mem_q_empty;
    
 
    logic 	t_pop_uq,t_pop_mem_uq,t_pop_fp_uq;
@@ -194,7 +192,6 @@ module exec(clk,
    
    /* non mem uop queue */
    uop_t r_uq[N_UQ_ENTRIES];
-   uop_t n_uq[N_UQ_ENTRIES];
    uop_t uq;
    logic 	      t_uq_read, t_uq_empty, t_uq_full;
    logic [`LG_UQ_ENTRIES:0]  r_uq_head_ptr, n_uq_head_ptr;
@@ -202,7 +199,6 @@ module exec(clk,
 
    /* mem uop queue */
    uop_t r_mem_uq[N_MEM_UQ_ENTRIES];
-   uop_t n_mem_uq[N_MEM_UQ_ENTRIES];
    uop_t mem_uq;
    logic 	      t_mem_uq_read, t_mem_uq_empty, t_mem_uq_full;
    logic [`LG_MEM_UQ_ENTRIES:0]  r_mem_uq_head_ptr, n_mem_uq_head_ptr;
@@ -210,7 +206,6 @@ module exec(clk,
 
    /* fp uop queue */
    uop_t r_fp_uq[N_FP_UQ_ENTRIES];
-   uop_t n_fp_uq[N_FP_UQ_ENTRIES];
    uop_t fp_uq;
    logic 	      t_fp_uq_read, t_fp_uq_empty, t_fp_uq_full;
    logic [`LG_FP_UQ_ENTRIES:0]  r_fp_uq_head_ptr, n_fp_uq_head_ptr;
@@ -237,49 +232,6 @@ module exec(clk,
 	     r_in_32fp_reg_mode <= n_in_32fp_reg_mode;
 	  end
      end	
-
-
-   always_ff@(posedge clk)
-     begin
-	if(reset)
-	  begin
-	     for(integer i = 0; i < N_UQ_ENTRIES; i = i + 1)
-	       begin
-		  r_uq[i].srcA_valid <= 1'b0;
-		  r_uq[i].srcB_valid <= 1'b0;
-		  r_uq[i].srcC_valid <= 1'b0;
-		  r_uq[i].dst_valid <= 1'b0;
-	       end
-	  end
-	else
-	  begin
-	     r_uq <= n_uq;
-	  end
-     end // always_ff@ (posedge clk)
-
-   always_ff@(posedge clk)
-     begin
-	if(reset)
-	  begin
-	     for(integer i = 0; i < N_MEM_UQ_ENTRIES; i = i + 1)
-	       begin
-		  r_mem_uq[i].srcA_valid <= 1'b0;
-		  r_mem_uq[i].srcB_valid <= 1'b0;
-		  r_mem_uq[i].srcC_valid <= 1'b0;
-		  r_mem_uq[i].dst_valid <= 1'b0;
-	       end
-	  end
-	else
-	  begin
-	     r_mem_uq <= n_mem_uq;
-	  end
-     end // always_ff@ (posedge clk)
-
-
-   always_ff@(posedge clk)
-     begin
-	r_fp_uq <= n_fp_uq;
-     end
       
    always_ff@(posedge clk)
      begin
@@ -311,8 +263,6 @@ module exec(clk,
 
    always_comb
      begin
-	n_mem_uq = r_mem_uq;
-	
 	n_mem_uq_head_ptr = r_mem_uq_head_ptr;
 	n_mem_uq_tail_ptr = r_mem_uq_tail_ptr;
 	t_mem_uq_empty = (r_mem_uq_head_ptr == r_mem_uq_tail_ptr);
@@ -323,7 +273,6 @@ module exec(clk,
 	/* these need work */
 	if(uq_push && uq_uop.is_mem)
 	  begin
-	     n_mem_uq[n_mem_uq_tail_ptr[`LG_MEM_UQ_ENTRIES-1:0]] = uq_uop;
 	     n_mem_uq_tail_ptr = r_mem_uq_tail_ptr + 'd1;
 	  end
 	
@@ -333,6 +282,16 @@ module exec(clk,
 	  end
      end // always_comb
 
+
+   always_ff@(posedge clk)
+     begin
+	if(uq_push && uq_uop.is_mem)
+	  begin
+	     r_mem_uq[r_mem_uq_tail_ptr[`LG_MEM_UQ_ENTRIES-1:0]] <= uq_uop;
+	  end
+     end // always_ff@ (posedge clk)
+
+   
    always_ff@(posedge clk)
      begin
 	if(reset)
@@ -349,8 +308,6 @@ module exec(clk,
    
    always_comb
      begin
-	n_fp_uq = r_fp_uq;
-	
 	n_fp_uq_head_ptr = r_fp_uq_head_ptr;
 	n_fp_uq_tail_ptr = r_fp_uq_tail_ptr;
 	t_fp_uq_empty = (r_fp_uq_head_ptr == r_fp_uq_tail_ptr);
@@ -358,11 +315,8 @@ module exec(clk,
 	
 	fp_uq = r_fp_uq[r_fp_uq_head_ptr[`LG_FP_UQ_ENTRIES-1:0]];
 
-	/* these need work */
 	if(uq_push && uq_uop.is_fp)
 	  begin
-	     //$display("pushing uop of type %d to at cycle %d", uq_uop.op, r_cycle);
-	     n_fp_uq[n_fp_uq_tail_ptr[`LG_FP_UQ_ENTRIES-1:0]] = uq_uop;
 	     n_fp_uq_tail_ptr = r_fp_uq_tail_ptr + 'd1;
 	  end
 	
@@ -372,29 +326,26 @@ module exec(clk,
 	  end
      end // always_comb
 
-	      
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if(!t_fp_uq_empty && t_pop_fp_uq)
-   // 	  begin
-   // 	     $display("fp operation with rob pointer %d, dest %d, pc %x, op type %d",
-   // 		      fp_uq.rob_ptr, fp_uq.dst, fp_uq.pc, fp_uq.op);
-   // 	  end
-   //   end
 
+   always_ff@(posedge clk)
+     begin
+	if(uq_push && uq_uop.is_fp)
+	  begin
+	     r_fp_uq[r_fp_uq_tail_ptr[`LG_FP_UQ_ENTRIES-1:0]] <= uq_uop;
+	  end
+     end
    
    always_comb
      begin
-	n_uq = r_uq;
 	n_uq_head_ptr = r_uq_head_ptr;
 	n_uq_tail_ptr = r_uq_tail_ptr;
 	t_uq_empty = (r_uq_head_ptr == r_uq_tail_ptr);
-	t_uq_full = (r_uq_head_ptr != r_uq_tail_ptr) && (r_uq_head_ptr[`LG_UQ_ENTRIES-1:0] == r_uq_tail_ptr[`LG_UQ_ENTRIES-1:0]);
+	t_uq_full = (r_uq_head_ptr != r_uq_tail_ptr) && 
+		    (r_uq_head_ptr[`LG_UQ_ENTRIES-1:0] == r_uq_tail_ptr[`LG_UQ_ENTRIES-1:0]);
 	uq = r_uq[r_uq_head_ptr[`LG_UQ_ENTRIES-1:0]];
 	
 	if(uq_push && uq_uop.is_int)
-	  begin
-	     n_uq[n_uq_tail_ptr[`LG_UQ_ENTRIES-1:0]] = uq_uop;
+	  begin	     
 	     n_uq_tail_ptr = r_uq_tail_ptr + 'd1;
 	  end
 	if(t_pop_uq)
@@ -403,15 +354,13 @@ module exec(clk,
 	  end
      end // always_comb
 
-   
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if(uq.op == JR && t_pop_uq)
-   // 	  begin
-   // 	     $display("predicted JR @ %x : target %x, mispredicted = %b",
-   // 		      uq.pc, {uq.jmp_imm, uq.imm}, t_mispred_br);
-   // 	  end
-   //   end
+   always_ff@(posedge clk)
+     begin
+	if(uq_push && uq_uop.is_int)
+	  begin
+	     r_uq[r_uq_tail_ptr[`LG_UQ_ENTRIES-1:0]] <= uq_uop;
+	  end
+     end // always_ff@ (posedge clk)
    
    logic [31:0]        r_cycle;
    always_ff@(posedge clk)
@@ -421,14 +370,6 @@ module exec(clk,
    
    always_ff@(negedge clk)
      begin
-	// if((uq.op == MUL || uq.op == MULT || uq.op == MULTU)&&t_start_mul&&t_pop_uq)
-	//   begin
-	//      $display("starting multiply for pc %x at cycle %d", uq.pc, r_cycle);
-	//   end
-	// if(t_mul_complete)
-	//   begin
-	//      $display("multiplier completes at cycle %d", r_cycle);
-	//   end
 	if((t_pop_uq && t_alu_valid) && t_mul_complete)
 	  begin
 	     $display("complete conflict!!!\n");
@@ -444,26 +385,11 @@ module exec(clk,
 	     $display("bitvec = %b", r_wb_bitvec);
 	     $finish();
 	  end
-	// if(t_start_div)
-	//   begin
-	//      $display("divide begins at cycle %d for %x", r_cycle, uq.pc);
-	//   end
-	// if(t_div_complete)
-	//   begin
-	//      $display("divide complete at cycle %d, rob ptr %d", r_cycle, t_div_rob_ptr_out);
-	//   end
-	
 	if((t_pop_uq && t_alu_valid) && t_div_complete)
 	  begin
 	     $display("complete conflict!!!\n");
 	     $finish();
 	  end
-	// if(!t_uq_empty && uq.rob_ptr == 'd14)
-	//   begin
-	//      $display("trying to write back to rob entry %d at cycle %d for pc %x, mul %b, div %b",
-	// 	      uq.rob_ptr, r_cycle, uq.pc, t_mul_complete,  t_div_complete);
-	     
-	//   end
      end
 
 
@@ -518,10 +444,11 @@ module exec(clk,
 	t_mem_srcA = r_int_prf[mem_uq.srcA];
 	t_mem_srcB = r_int_prf[mem_uq.srcB];
 	t_mem_fp_srcB = r_fp_prf[mem_uq.srcB];
+`ifdef ENABLE_FPU
 	t_fp_srcA = r_fp_prf[fp_uq.srcA];
 	t_fp_srcB = r_fp_prf[fp_uq.srcB];
-	t_fp_srcC = r_fp_prf[fp_uq.srcC];	
-	//t_mem_fp_srcC = r_fp_prf[mem_uq.srcC];
+	t_fp_srcC = r_fp_prf[fp_uq.srcC];
+`endif
 	//non-renamed
 	t_cpr0_srcA = r_cpr0[uq.srcA[4:0]];
      end
@@ -574,12 +501,9 @@ module exec(clk,
      begin
 	n_mq_head_ptr = r_mq_head_ptr;
 	n_mq_tail_ptr = r_mq_tail_ptr;
-	n_mem_q = r_mem_q;
-	
 	if(t_push_mq)
 	  begin
 	     n_mq_tail_ptr = r_mq_tail_ptr + 'd1;
-	     n_mem_q[r_mq_tail_ptr[`LG_MQ_ENTRIES-1:0]] = t_mem_tail;
 	  end
 	if(mem_req_ack)
 	  begin
@@ -595,25 +519,14 @@ module exec(clk,
 	
      end // always_comb
 
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if(t_push_mq)
-   // 	  begin
-   // 	     $display("cycle %d : placing mem req for dst %d at entry %d of the memory queue",
-   // 		      r_cycle,
-   // 		      t_mem_tail.dst_ptr,
-   // 		      r_mq_tail_ptr[`LG_MQ_ENTRIES-1:0]);
-   // 	  end
-   // 	if(!mem_q_empty)
-   // 	  begin
-   // 	     $display("cycle %d : head of mem q dst %d at entry %d, opcode %d of the memory queue",
-   // 		      r_cycle,
-   // 		      t_mem_head.dst_ptr,
-   // 		      r_mq_head_ptr[`LG_MQ_ENTRIES-1:0],
-   // 		      t_mem_head.op
-   // 		      );
-   // 	  end
-   //   end
+   always_ff@(posedge clk)
+     begin
+	if(t_push_mq)
+	  begin
+	     r_mem_q[r_mq_tail_ptr[`LG_MQ_ENTRIES-1:0]] = t_mem_tail;
+	  end
+     end
+
 
    
    //always_ff@(negedge clk)
@@ -621,10 +534,6 @@ module exec(clk,
    //$display("mem_q_head_ptr = %d, mem_q_tail_ptr = %d", r_mq_head_ptr, r_mq_tail_ptr);
     // end
    
-   always_ff@(posedge clk)
-     begin
-	r_mem_q <= n_mem_q;
-     end
 
    //always_ff@(negedge clk)
    //begin
@@ -1442,42 +1351,8 @@ module exec(clk,
 	     
      end // always_comb
 
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if(fp_uq.op == FP_MOVT && t_fp_srcs_rdy && fp_uq.pc == 'h20bf8)
-   // 	  begin
-   // 	     $display("==> fp movt @ uq.pc = %x, prf %d, fcc%d, select = %b, bit %b", 
-   // 		      fp_uq.pc,
-   // 		      uq.hilo_src,
-   // 		      fp_uq.srcC[2:0],
-   // 		      r_fcr_prf[fp_uq.hilo_src],
-   // 		      r_fcr_prf[fp_uq.hilo_src][fp_uq.srcC[2:0]]
-   // 		      );
-   // 	  end
-   //   end
-   
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if(uq.op ==BC1TL && t_srcs_rdy)
-   // 	  begin
-   // 	     $display("BC1TL @ %x with fcc%d branch %b", uq.pc, uq.srcC[2:0], t_take_br);
-   // 	  end
-   // 	if(uq.op ==BC1F && t_srcs_rdy)
-   // 	  begin
-   // 	     $display("BC1F @ %x with fcc%d branch %b", uq.pc, uq.srcC[2:0], t_take_br);
-   // 	  end
-   // 	if(uq.op ==BC1FL && t_srcs_rdy)
-   // 	  begin
-   // 	     $display("BC1FL @ %x with fcc%d branch %b, bits %b", uq.pc, uq.srcC[2:0], t_take_br, r_fcr_prf[uq.hilo_src]);
-   // 	  end
-   // 	if(uq.op ==BC1T && t_srcs_rdy)
-   // 	  begin
-   // 	     $display("BC1T @ %x with fcc%d branch %b", uq.pc, uq.srcC[2:0], t_take_br);
-   // 	  end
-   //   end
 
-   localparam Z_BITS = 64-`M_WIDTH;
-
+`ifdef ENABLE_FPU
    logic [31:0] t_sp_trunc, t_w_sp_cvt;
    logic [63:0] t_dp_trunc, t_w_dp_cvt;
 
@@ -1497,15 +1372,6 @@ module exec(clk,
      begin
 	t_fp_div_active = t_fp_div_sp_active|t_fp_div_dp_active|t_sp_div_valid|t_dp_div_valid;
      end
-     
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if(t_fp_div_dp_active)
-   // 	  begin
-   // 	     $display("at cycle %d, fp dividers %b %b %b are active\n", 
-   // 		      r_cycle, t_fp_div_dp_active, t_fp_div_sp_active, t_fp_div_active);
-   // 	  end
-   //   end
 
    
    fp_div #(.LG_PRF_WIDTH(`LG_PRF_ENTRIES), 
@@ -1551,20 +1417,6 @@ module exec(clk,
 	t_cvt_dp_sp = {t_fp_srcA[63], t_cvt_dp_sp_exp[7:0], t_fp_srcA[51:29]};
      end
    
-
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if(!t_fp_uq_empty)
-   // 	  begin
-   // 	     $display("trying to execute fp op %d pc %x dest %d", 
-   // 		      fp_uq.op, fp_uq.pc, fp_uq.dst);
-   // 	  end
-   // 	if(!t_mem_uq_empty)
-   // 	  begin
-   // 	     $display("trying to execute mem op %d, pc %x", 
-   // 		      mem_uq.op, mem_uq.pc);
-   // 	  end
-   //   end
    fpu #(.LG_PRF_WIDTH(`LG_PRF_ENTRIES), 
 	 .LG_ROB_WIDTH(`LG_ROB_ENTRIES),
 	 .LG_FCR_WIDTH(`LG_FCR_PRF_ENTRIES),
@@ -1591,33 +1443,6 @@ module exec(clk,
 	.fcr_sel(fp_uq.imm[2:0])
 	);
 
-   always_ff@(negedge clk)
-     begin
-	if(!t_fp_uq_empty)
-	  begin
-	     if(fp_uq.is_fp && fp_uq.jmp_imm[0] /* 32b fp */)
-	       begin
-		  if(fp_uq.fp_srcA_valid && fp_uq.jmp_imm[1])
-		    begin
-		       $display("%x reads srcA fp reg %d",
-				fp_uq.pc,fp_uq.srcA[4:0]);
-		       $stop();
-		    end
-		  if(fp_uq.fp_srcB_valid && fp_uq.jmp_imm[2])
-		    begin
-		       $display("%x reads srcB fp reg %d",
-				fp_uq.pc,fp_uq.srcB[4:0]);
-		       $stop();
-		    end
-		  if(fp_uq.fp_dst_valid && fp_uq.jmp_imm[3] /* dst*/)
-		    begin
-		       $display("%x writes fp reg %d", 
-				fp_uq.pc,fp_uq.dst[4:0]);
-		       $stop();
-		    end
-	       end
-	  end
-     end // always_ff@ (negedge clk)
    
    always_comb
      begin
@@ -1906,6 +1731,16 @@ module exec(clk,
 	endcase // case (fp_uq.op)
 	t_pop_fp_uq = t_fp_uq_empty ? 1'b0 : t_fp_srcs_rdy && (!t_fp_div_active);
      end
+`else
+   always_comb
+     begin
+	t_start_fpu = 1'b0;
+	t_fp_wr_prf = 1'b0;
+	t_pop_fp_uq = 1'b0;
+	t_fp_srcs_rdy = 1'b0;
+	t_fp_result = 64'd0;
+     end
+`endif // !`ifdef ENABLE_FPU
    
    always_comb
      begin

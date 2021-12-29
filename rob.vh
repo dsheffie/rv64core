@@ -35,6 +35,13 @@ typedef struct packed {
    logic 			 is_syscall;
    logic [(`M_WIDTH-1):0] 	 data;
    logic [`LG_PHT_SZ-1:0] 	 pht_idx;
+
+`ifdef ENABLE_CYCLE_ACCOUNTING
+   logic [63:0] 	    fetch_cycle;
+   logic [63:0] 	    alloc_cycle;
+   logic [63:0] 	    complete_cycle;
+`endif
+   
 } rob_entry_t;
 
 typedef struct packed {
@@ -53,7 +60,10 @@ typedef struct packed {
    logic [(`M_WIDTH-1):0] pc;
    logic [(`M_WIDTH-1):0] pred_target;
    logic 		  pred;
-   logic [(`LG_PHT_SZ-1):0] pht_idx; 
+   logic [(`LG_PHT_SZ-1):0] pht_idx;
+`ifdef ENABLE_CYCLE_ACCOUNTING
+   logic [63:0] 	    fetch_cycle;
+`endif
 } insn_fetch_t;
 
 typedef struct packed {
