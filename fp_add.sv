@@ -1,3 +1,21 @@
+`ifdef DEBUG_FPU
+import "DPI-C" function int fp32_add(input int a, input int b);
+import "DPI-C" function longint fp64_add(input longint a, input longint b);
+
+module bogo_fp32_add(input logic [31:0] a, input logic [31:0] b, output logic [31:0] y);
+   always_comb
+     begin
+	y = fp32_add(a,b);
+     end
+endmodule
+
+module bogo_fp64_add(input logic [63:0] a, input logic [63:0] b, output logic [63:0] y);
+   always_comb
+     begin
+	y = fp64_add(a,b);
+     end
+endmodule
+`endif
 
 module zero_detector(
    // Outputs
@@ -47,8 +65,9 @@ module fp_add(/*AUTOARG*/
    localparam EW = (W==32) ? 8 : 11;
    
    wire 	 w_sign_toggle_b = sub ? ~b[W-1] : b[W-1];
-   wire [W-1:0] 	 w_b = {w_sign_toggle_b, b[W-2:0]};
-
+   wire [W-1:0]  w_b = {w_sign_toggle_b, b[W-2:0]};
+   wire 	 w_a_is_zero = (a[W-2:0] == 'd0);
+   wire 	 w_b_is_zero = (b[W-2:0] == 'd0);
 
    // wire 		 a_is_nan, a_is_inf, a_is_denorm, a_is_zero;
    // wire 		 b_is_nan, b_is_inf, b_is_denorm, b_is_zero;
@@ -167,9 +186,7 @@ module fp_add(/*AUTOARG*/
      (.distance(w_shft_lft_dist), .a(t_add_mant));
    
    wire [EW:0] 	    w_shift_dist = {{ZP{1'b0}}, w_shft_lft_dist};   
-   
-   
-   
+      
    always_comb
      begin
 	t_norm1_add_mant = t_add_mant;
@@ -227,43 +244,82 @@ module fp_add(/*AUTOARG*/
 	t_round_add_mant = t_norm2_add_mant;
 	t_round_add_exp = t_norm2_add_exp;
 	if (t_norm2_guard && (t_norm2_round | t_norm2_sticky | t_norm2_add_mant[0])) 
-	  begin
-	     t_round_add_mant = t_norm2_add_mant + 'd1;
+	  begin	     
+	     if(t_norm2_add_mant == {FW+1{1'b1}})
+	       begin
+		  t_round_add_exp = t_norm2_add_exp + 'd1;
+		  t_round_add_mant = {1'b1, {{FW{1'b0}}}};
+	       end
+	     else
+	       begin
+		  t_round_add_mant = t_norm2_add_mant + 'd1;
+	       end
 	  end
      end
 
    wire w_is_zero = (a[W-1] ^ w_b[W-1]) & (t_round_add_mant=='d0);
-   wire [W-1:0] w_y = w_is_zero ? 'd0 : {t_align_sign, t_round_add_exp[EW-1:0], t_round_add_mant[FW-1:0]};
+   //wire w_is_zero = 1'b0;
+   
+   wire [W-1:0] w_y = w_is_zero ? 'd0 :
+		w_a_is_zero ? w_b :
+		w_b_is_zero ? a :
+		{t_align_sign, t_round_add_exp[EW-1:0], t_round_add_mant[FW-1:0]};
+
+
+
+`ifdef DEBUG_FPU
+   logic [W-1:0] t_dpi;
+   generate
+      if(W == 32)
+	begin
+	   bogo_fp32_add bfp32(a,w_b,t_dpi);
+	end
+      else
+	begin
+	   bogo_fp64_add bfp64(a,w_b,t_dpi);
+	end
+   endgenerate
    
    always_ff@(negedge clk)
      begin
-   	if(0 && en && (FW == 52))
-   	  begin
-    	     $display("IN : a sign %b exp = %d, a frac = %x", 
-   		      a[W-1], a[W-2:FW], a[FW-1:0]);
-   	     $display("IN : b sign %b exp = %d, b frac = %x", 
-   		      w_b[W-1], b[W-2:FW], b[FW-1:0]);
+	if(en && (t_dpi != w_y) && (t_dpi[W-2:FW] != w_y[W-2:FW]) && 1'b0)
+	  begin
+    	     //$display("IN : a sign %b exp = %d, a frac = %x", 
+   	     //a[W-1], a[W-2:FW], a[FW-1:0]);
+   	     //$display("IN : b sign %b exp = %d, b frac = %x", 
+   	     //w_b[W-1], b[W-2:FW], b[FW-1:0]);
+	     $display("DPI = %x, RTL = %x : a = %x, w_b = %x", 
+		      t_dpi, w_y, a, w_b);
+	     $display("DPI exp = %x, RTL exp = %x", 
+		      t_dpi[W-2:FW], w_y[W-2:FW]);
+	     $display("DPI frac = %x, RTL frac = %x", 
+		      t_dpi[FW-1:0], w_y[FW-1:0]);	     
+	     $display("w_is_zero = %b, w_a_is_zero = %b, w_b_is_zero = %b",
+		      w_is_zero, w_a_is_zero, w_b_is_zero);
+	     $display("t_a_align_mant = %b, t_b_align_mant = %b", t_a_align_mant,t_b_align_mant);
+	     $display("t_dist_a = %d, t_dist_b = %d", t_dist_a, t_dist_b);
 	     
-   	     $display("t_a_align_mant = %x", t_a_align_mant);
-   	     $display("t_b_align_mant = %x", t_b_align_mant);
-	     
+	     $display("t_add_exp = %x, t_align_sum[FW+4] = %b", t_add_exp, t_align_sum[FW+4]);
    	     $display("t_add_mant = %b, dist = %d", 
-		      t_add_mant, w_shft_lft_dist);
-		      
+	      	      t_add_mant, w_shft_lft_dist);
+	     
+	     $display("t_norm2_add_mant = %b", t_norm2_add_mant);
+	     
    	     $display("\tnorm2 = sign %b exp %d, frac %x (t_dist_a = %d, t_dist_b = %d)",
-   		      t_align_sign,
-   		      t_norm2_add_exp[EW-1:0],
-   		      t_norm2_add_mant[FW-1:0],
-   		      t_dist_a,
-   		      t_dist_b);
+   		       t_align_sign,
+   	      	       t_norm2_add_exp[EW-1:0],
+   		       t_norm2_add_mant[FW-1:0],
+   		       t_dist_a,
+   		       t_dist_b);
 
 	     $display("\ta_shifted %b, b_shifted %b", a_shifted, b_shifted);
-   	     $display("\trounded frac %x", t_round_add_mant[FW-1:0]);	     
-   	  end
+   	     $display("\trounded frac %x", t_round_add_mant[FW-1:0]);	     	     
+	  end
      end
-   
-   
+   shiftreg #(.W(W), .D(ADD_LAT)) sr0 (.clk(clk), .in(t_dpi), .out(y));
+`else
    shiftreg #(.W(W), .D(ADD_LAT)) sr0 (.clk(clk), .in(w_y), .out(y));
+`endif
    
      
 endmodule // sp_add

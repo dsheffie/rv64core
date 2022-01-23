@@ -2,6 +2,22 @@
 `include "rob.vh"
 `include "uop.vh"
 
+`ifdef VERILATOR
+import "DPI-C" function void record_alloc(input int alloc_one, 
+					  input int alloc_two,
+					  input int one_insn_avail,
+					  input int two_insn_avail);
+
+import "DPI-C" function void record_retirement(input longint pc,
+					       input longint fetch_cycle,
+					       input longint alloc_cycle,
+					       input longint complete_cycle,
+					       input longint retire_cycle,
+					       input int     fault,
+					       input int     is_mem,
+					       input int     missed_l1d);
+`endif
+
 module core(clk, 
 	    reset,
 	    head_of_rob_ptr,
@@ -16,6 +32,9 @@ module core(clk,
 	    insn, 
 	    insn_valid,
 	    insn_ack,
+	    insn_two, 
+	    insn_valid_two,
+	    insn_ack_two,	    
 	    branch_pc,
 	    branch_pc_valid,
 	    branch_fault,
@@ -42,8 +61,6 @@ module core(clk,
 	    retire_reg_two_data,
 	    retire_reg_two_valid,
 	    store_not_hor,
-	    decode_valid,
-	    alloc_valid,
 	    retire_valid,
 	    retire_two_valid,
 	    retire_delay_slot,
@@ -73,10 +90,14 @@ module core(clk,
    input logic 	l1i_flush_complete;
    
    input 	insn_fetch_t insn;
-      
-   input logic 			insn_valid;
+   input logic 	insn_valid;
+   output logic insn_ack;
+
+   input 	insn_fetch_t insn_two;
+   input logic 	insn_valid_two;
+   output logic insn_ack_two;
    
-   output logic 		insn_ack;
+   
    output logic [(`M_WIDTH-1):0] restart_pc;
    output logic [(`M_WIDTH-1):0] restart_src_pc;
    output logic 		 restart_src_is_indirect;
@@ -108,8 +129,6 @@ module core(clk,
    output logic 			  retire_reg_two_valid;
 
    output logic 			  store_not_hor;
-   output logic 			  alloc_valid;
-   output logic 			  decode_valid;
    output logic 			  retire_valid;
    output logic 			  retire_two_valid;
    
@@ -148,19 +167,25 @@ module core(clk,
    logic [15:0] 			  r_monitor_reason, n_monitor_reason;
    
    logic [`LG_DQ_ENTRIES:0] 		  r_dq_head_ptr, n_dq_head_ptr;
+   logic [`LG_DQ_ENTRIES:0] 		  r_dq_next_head_ptr, n_dq_next_head_ptr;
+   logic [`LG_DQ_ENTRIES:0] 		  r_dq_next_tail_ptr, n_dq_next_tail_ptr;
+   
+   logic [`LG_DQ_ENTRIES:0] 		  r_dq_cnt, n_dq_cnt;
+   
    logic [`LG_DQ_ENTRIES:0] 		  r_dq_tail_ptr, n_dq_tail_ptr;
-   logic 				  t_dq_empty, t_dq_full;
+   logic 				  t_dq_empty, t_dq_full, t_dq_next_empty, t_dq_next_full;
+   
    logic 				  r_got_restart_ack, n_got_restart_ack;
    
    rob_entry_t r_rob[N_ROB_ENTRIES-1:0];
-   rob_entry_t n_rob[N_ROB_ENTRIES-1:0];
-   rob_entry_t t_rob_head;
-   rob_entry_t t_rob_next_head;
-   rob_entry_t t_rob_tail;
+   logic [N_ROB_ENTRIES-1:0] 		  r_rob_inflight, n_rob_inflight;
+   
+   rob_entry_t t_rob_head, t_rob_next_head, t_rob_tail, t_rob_next_tail;
 
-   logic [N_PRF_ENTRIES-1:0] n_prf_free, r_prf_free;   
+   logic [N_PRF_ENTRIES-1:0] n_prf_free, r_prf_free, t_prf_free;   
    logic [N_PRF_ENTRIES-1:0] n_retire_prf_free, r_retire_prf_free;
-
+   logic [`LG_PRF_ENTRIES:0] t_prf_free_cnt;
+   
    logic [N_PRF_ENTRIES-1:0] n_fp_prf_free, r_fp_prf_free;   
    logic [N_PRF_ENTRIES-1:0] n_retire_fp_prf_free, r_retire_fp_prf_free;
    
@@ -174,17 +199,17 @@ module core(clk,
    logic [`LG_FCR_PRF_ENTRIES-1:0] n_fcr_prf_entry;
    logic [`LG_FCR_PRF_ENTRIES:0]   t_fcr_prf_idx;
    
-   logic [`LG_PRF_ENTRIES-1:0]  n_prf_entry;
+   logic [`LG_PRF_ENTRIES-1:0]  n_prf_entry, n_prf_entry2;
    logic [`LG_PRF_ENTRIES-1:0] 	n_fp_prf_entry;
 
    logic [`LG_ROB_ENTRIES:0] r_rob_head_ptr, n_rob_head_ptr;
    logic [`LG_ROB_ENTRIES:0] r_rob_next_head_ptr, n_rob_next_head_ptr;
    
    logic [`LG_ROB_ENTRIES:0] r_rob_tail_ptr, n_rob_tail_ptr;
+   logic [`LG_ROB_ENTRIES:0] r_rob_next_tail_ptr, n_rob_next_tail_ptr;
    
 
    logic [`LG_ROB_ENTRIES:0] r_inflight, n_inflight;
-   logic [`LG_ROB_ENTRIES:0] r_insns_in_rob_cnt, n_insns_in_rob_cnt;
       
    logic [`LG_PRF_ENTRIES-1:0] r_alloc_rat[31:0];
    logic [`LG_PRF_ENTRIES-1:0] n_alloc_rat[31:0];
@@ -208,15 +233,21 @@ module core(clk,
    logic [`LG_FCR_PRF_ENTRIES-1:0] n_fcr_retire_rat;
 
    
-   logic 		     t_rob_empty, t_rob_full;
-   logic 		     t_alloc, t_retire, t_retire_two, t_rat_copy, t_clr_rob;
-   logic 		     t_fold_uop;
+   logic 		     t_rob_empty, t_rob_full, t_rob_next_full, t_rob_next_empty;
+   logic 		     t_alloc, t_alloc_two, t_retire, t_retire_two,
+			     t_rat_copy, t_clr_rob;
+   
+   logic 		     t_fold_uop, t_fold_uop2;
    
    logic 		     n_in_delay_slot, r_in_delay_slot;
    
    logic 		     t_clr_dq;
    logic 		     t_enough_iprfs, t_enough_hlprfs, t_enough_fprfs, 
 			     t_enough_fcrprfs;
+
+   logic 		     t_enough_next_iprfs, t_enough_next_hlprfs, t_enough_next_fprfs, 
+			     t_enough_next_fcrprfs;
+
    
    logic 		     t_bump_rob_head;
    
@@ -276,13 +307,15 @@ module core(clk,
    logic [`LG_FCR_PRF_ENTRIES:0]    t_fcr_ffs;
    logic [`LG_PRF_ENTRIES:0] 	    t_fp_ffs;
    logic [`LG_PRF_ENTRIES:0] 	    t_gpr_ffs;
+   logic [`LG_PRF_ENTRIES:0] 	    t_gpr_ffs2;
 
    uop_t r_uq[N_UQ_ENTRIES];
    uop_t n_uq[N_UQ_ENTRIES];
    
    logic [`LG_UQ_ENTRIES:0]  r_uq_head_ptr, n_uq_head_ptr;
    logic [`LG_UQ_ENTRIES:0]  r_uq_tail_ptr, n_uq_tail_ptr;
-   logic 		     t_uq_full, t_uq_empty;
+   logic 		     t_uq_full, t_uq_empty, t_uq_next_full;
+   
    logic 		     t_uq_read;
    logic 		     n_ready_for_resume, r_ready_for_resume;
    
@@ -382,11 +415,21 @@ module core(clk,
    assign got_break = r_got_break;
    assign got_syscall = r_got_syscall;
    assign got_ud = r_got_ud;
-   assign inflight = r_insns_in_rob_cnt;
+   
+
+   popcount #(`LG_ROB_ENTRIES) inflight0 (.in(r_rob_inflight), 
+					  .out(inflight));
+
    
    uop_t t_uop, t_dec_uop, t_alloc_uop;
+   uop_t t_uop2, t_dec_uop2, t_alloc_uop2;
       
    assign insn_ack = !t_dq_full && insn_valid;
+   assign insn_ack_two = !t_dq_full && 
+			 insn_valid && 
+			 !t_dq_next_full && 
+			 insn_valid_two;
+   
    assign restart_pc = r_restart_pc;
    assign restart_src_pc = r_restart_src_pc;
    assign restart_src_is_indirect = r_restart_src_is_indirect;
@@ -471,6 +514,7 @@ module core(clk,
 	  end
      end // always_ff@ (posedge clk)
 
+//`define DEBUG
 `ifdef DEBUG
    logic [4:0] total_inflight;   
    always_comb
@@ -500,6 +544,10 @@ module core(clk,
 	  begin
 	     n_inflight = n_inflight + 'd1;
 	     //$display("incr inflight due to alloc");
+	  end
+	if(t_alloc_two && !t_fold_uop2)
+	  begin
+	     n_inflight = n_inflight + 'd1;
 	  end
 	if(t_complete_valid_1)
 	  begin
@@ -567,8 +615,6 @@ module core(clk,
    	     retire_reg_two_data <= 'd0;
    	     retire_reg_two_valid <= 1'b0;
 	     store_not_hor <= 1'b0;
-	     alloc_valid <= 1'b0;
-	     decode_valid <= 1'b0;
    	     retire_valid <= 1'b0;
 	     retire_two_valid <= 1'b0;
 	     
@@ -591,8 +637,6 @@ module core(clk,
 	     store_not_hor <= t_mem_req_valid && t_mem_req.is_store &&
 			      !core_mem_req_valid;
 	     
-	     alloc_valid <= t_alloc;
-	     decode_valid <= insn_valid && !t_dq_full;
 	     
    	     retire_valid <= t_retire;
 	     retire_two_valid <= t_retire_two;
@@ -607,25 +651,32 @@ module core(clk,
 `ifdef ENABLE_CYCLE_ACCOUNTING
    always_ff@(negedge clk)
      begin
+	record_alloc(t_push_1 ? 32'd1 : 32'd0,
+		     t_push_2 ? 32'd1 : 32'd0,
+		     t_dq_empty ? 32'd0 : 32'd1,
+		     !t_dq_next_empty && !t_dq_empty ? 32'd1 : 32'd0);
+			    
    	if(t_retire)
    	  begin
-   	     $display("%x,%d,%d,%d,%d,%d",
-		      t_rob_head.pc,
-   		      r_cycle - t_rob_head.fetch_cycle,
-   		      t_rob_head.fetch_cycle,
-   		      t_rob_head.alloc_cycle,
-   		      t_rob_head.complete_cycle,
-   		      r_cycle);
+	     record_retirement(t_rob_head.pc, 
+   			       t_rob_head.fetch_cycle,
+   			       t_rob_head.alloc_cycle,
+   			       t_rob_head.complete_cycle,
+   			       r_cycle,
+			       t_rob_head.faulted ? 32'd1 : 32'd0,
+			       t_rob_head.is_mem ? 32'd1 : 32'd0,
+			       t_rob_head.missed_l1d ? 32'd1 : 32'd0);
    	  end
    	if(t_retire_two)
    	  begin
-	     $display("%x,%d,%d,%d,%d,%d",
-		      t_rob_next_head.pc,
-   		      r_cycle - t_rob_next_head.fetch_cycle,
-   		      t_rob_next_head.fetch_cycle,
-   		      t_rob_next_head.alloc_cycle,
-   		      t_rob_next_head.complete_cycle,
-   		      r_cycle);
+	     record_retirement(t_rob_next_head.pc, 
+   			       t_rob_next_head.fetch_cycle,
+   			       t_rob_next_head.alloc_cycle,
+   			       t_rob_next_head.complete_cycle,
+   			       r_cycle,
+			       t_rob_next_head.faulted ? 32'd1 : 32'd0,
+			       t_rob_next_head.is_mem ? 32'd1 : 32'd0,
+			       t_rob_next_head.missed_l1d ? 32'd1 : 32'd0);	     
    	  end
      end // always_ff@ (negedge clk)
 `endif
@@ -633,7 +684,6 @@ module core(clk,
    
 //`define DEBUG
 //`define DUMP_ROB
-   
 `ifdef DUMP_ROB
    always_ff@(negedge clk)
      begin
@@ -671,6 +721,8 @@ module core(clk,
 	n_machine_clr = r_machine_clr;
 	n_delayslot_rob_ptr = r_delayslot_rob_ptr;
 	t_alloc = 1'b0;
+	t_alloc_two = 1'b0;
+	
 	n_in_delay_slot = r_in_delay_slot;
 	t_retire = 1'b0;
 	t_retire_two = 1'b0;
@@ -690,14 +742,30 @@ module core(clk,
 	t_monitor_req_valid = 1'b0;
 	n_monitor_rsp_data = r_monitor_rsp_data;
 	n_monitor_rsp_data_valid = r_monitor_rsp_data_valid;
+	
 	t_enough_iprfs = !((t_uop.dst_valid) && (r_prf_free == 'd0));
 	t_enough_hlprfs = !((t_uop.hilo_dst_valid) && (r_hilo_prf_free == 'd0));
 	t_enough_fprfs = !((t_uop.fp_dst_valid) && (r_fp_prf_free == 'd0));
 	t_enough_fcrprfs = !((t_uop.fcr_dst_valid) && (r_fcr_prf_free == 'd0));
+
+	t_enough_next_iprfs = !((t_uop2.dst_valid) && (t_prf_free_cnt == 'd1));
+	t_enough_next_hlprfs = !((t_uop2.hilo_dst_valid) /*&& (r_hilo_prf_free == 'd0)*/);
+	t_enough_next_fprfs = !((t_uop2.fp_dst_valid) /*&& (r_fp_prf_free == 'd0)*/);
+	t_enough_next_fcrprfs = !((t_uop2.fcr_dst_valid) /*&& (r_fcr_prf_free == 'd0)*/);
+
+
+	
 	t_fold_uop = (t_uop.op == NOP || 
 		      t_uop.op == J  ||
 		      t_uop.op == II || 
 		      t_uop.op == ERET);
+
+	t_fold_uop2 = (t_uop2.op == NOP || 
+		       t_uop2.op == J  ||
+		       t_uop2.op == II || 
+		       t_uop2.op == ERET);
+
+	
 	n_flush_req = 1'b0;
 	n_flush_cl_req = 1'b0;
 	n_flush_cl_addr = r_flush_cl_addr;
@@ -724,7 +792,7 @@ module core(clk,
 	
 	if(t_rob_head.complete && !t_rob_empty)
 	  begin
-	     t_can_retire_rob_head = (t_rob_head.has_delay_slot || t_rob_head.has_nullifying_delay_slot) ? (r_insns_in_rob_cnt > 'd1) : 1'b1;
+	     t_can_retire_rob_head = (t_rob_head.has_delay_slot || t_rob_head.has_nullifying_delay_slot) && t_rob_head.faulted ? !t_rob_next_empty : 1'b1;
 	  end
 
 	//if(
@@ -741,12 +809,18 @@ module core(clk,
 		 begin
 		    if(t_rob_head.faulted)
 		      begin
-			 //$display("cycle %d : got fault for %x, t_insns_in_rob = %d, eret %b, break %d, ii %d, trap %d, tlb %b",
-			 //r_cycle, t_rob_head.pc, r_insns_in_rob_cnt,
-			 //t_rob_head.is_eret, t_rob_head.is_break,
-			 //t_rob_head.is_ii,t_rob_head.take_trap,
-			 //t_rob_head.exception_tlb_refill
-			 //	  );
+`ifdef NOT_DEF
+			  $display("cycle %d : got fault for %x, eret %b, break %d, ii %d, trap %d, tlb %b, rob_ptr %d",
+				   r_cycle, 
+				   t_rob_head.pc, 
+				   t_rob_head.is_eret, 
+				   t_rob_head.is_break,
+				   t_rob_head.is_ii,
+				   t_rob_head.take_trap,
+				   t_rob_head.exception_tlb_refill,
+				   r_rob_head_ptr[`LG_ROB_ENTRIES-1:0]
+				   );
+`endif
 			 if(t_rob_head.is_eret)
 			   begin
 			      $stop();
@@ -798,14 +872,17 @@ module core(clk,
 			   begin
 			      n_state = DRAIN;
 			      n_restart_cycles = 'd0;
+			      if(t_rob_head.has_delay_slot && t_rob_next_empty)
+				begin
+				   $display("branch delay insn hasn't been alloc!");
+				   $stop();
+				end
 			   end // else: !if(t_rob_head.is_ii)
 			 n_machine_clr = 1'b1;
 			 n_delayslot_rob_ptr = r_rob_next_head_ptr[`LG_ROB_ENTRIES-1:0];
 			 n_restart_pc = t_rob_head.target_pc;
 			 n_restart_src_pc = t_rob_head.pc;
 			 n_restart_src_is_indirect = t_rob_head.is_indirect && !t_rob_head.is_ret;
-			 //if(n_restart_src_is_indirect)
-			 //$display("mispredict for pc %x->%x", t_rob_head.pc, t_rob_head.target_pc);
 			 
 			 n_has_delay_slot = t_rob_head.has_delay_slot;
 			 n_has_nullifying_delay_slot = t_rob_head.has_nullifying_delay_slot;
@@ -831,22 +908,31 @@ module core(clk,
 					&& t_enough_fprfs
 					&& t_enough_fcrprfs
 					&& !t_dq_empty;
-			   end
+			      
+			      t_alloc_two = t_alloc
+					    && !t_dq_next_empty 
+					    && !t_rob_next_full
+					    && !t_uq_next_full
+					    && t_enough_next_iprfs
+					    && t_enough_next_hlprfs
+					    && t_enough_next_fprfs
+					    && t_enough_next_fcrprfs
+					    ;
+			      //&& (t_uop2.op == NOP || t_uop2.op == J);
+			   end // else: !if(t_uop.serializing_op && !t_dq_empty)
 		      end // else: !if(t_rob_head.faulted)
 		    t_retire = t_rob_head.complete;
-`ifdef RETIRE_TWO
-		    t_retire_two = ((r_insns_in_rob_cnt > 'd1) 
-		    		    && !t_rob_head.faulted
-		    		    && !t_rob_next_head.faulted 				    
-		    		    && t_rob_head.complete
-		    		    && t_rob_next_head.complete				    
-				    && !t_rob_head.is_br
-				    && !t_rob_next_head.is_ret
-				    && !t_rob_next_head.is_call
-				    && !t_rob_next_head.valid_fp_dst
-				    && !t_rob_next_head.valid_fcr_dst
-		    		    && !t_rob_next_head.valid_hilo_dst);
-`endif
+		    t_retire_two = !t_rob_next_empty
+		    		   && !t_rob_head.faulted
+		    		   && !t_rob_next_head.faulted 				    
+		    		   && t_rob_head.complete
+		    		   && t_rob_next_head.complete				    
+				   && !t_rob_head.is_br
+				   && !t_rob_next_head.is_ret
+				   && !t_rob_next_head.is_call
+				   && !t_rob_next_head.valid_fp_dst
+				   && !t_rob_next_head.valid_fcr_dst
+		    		   && !t_rob_next_head.valid_hilo_dst;;
 		 end // if (t_rob_head.complete)
 	       else if(!t_dq_empty)
 		 begin
@@ -898,6 +984,17 @@ module core(clk,
 				   && t_enough_fprfs
 				   && t_enough_fcrprfs
 				   && !t_dq_empty;
+
+			 t_alloc_two = t_alloc
+				       && !t_dq_next_empty 
+				       && !t_rob_next_full
+				       && !t_uq_next_full
+				       && t_enough_next_iprfs
+				       && t_enough_next_hlprfs
+				       && t_enough_next_fprfs
+				       && t_enough_next_fcrprfs
+				       ;
+			 //&& (t_uop2.op == NOP || t_uop2.op == J);
 		      end
 		 end
 	    end // case: ACTIVE
@@ -912,7 +1009,7 @@ module core(clk,
 	    end
 	  DRAIN:	    
 	    begin
-	       if(r_inflight == 'd0)
+	       if(r_rob_inflight == 'd0)
 		 begin
 		    if(r_has_nullifying_delay_slot)
 		      begin
@@ -989,10 +1086,6 @@ module core(clk,
 	    end
 	  MONITOR_FLUSH_CACHE:
 	    begin
-`ifdef DEBUG
-	       $display("r_cycle = %d, n_l1i_flush_complete = %b, n_l1d_flush_complete = %b", 
-			r_cycle, n_l1i_flush_complete, n_l1d_flush_complete);
-`endif
 	       if(n_l1i_flush_complete && n_l1d_flush_complete)
 		 begin
 		    n_state = HANDLE_MONITOR;
@@ -1098,8 +1191,10 @@ module core(clk,
 
 	if(t_alloc)
 	  begin
-	     n_in_delay_slot = t_uop.has_delay_slot;
+	     n_in_delay_slot = t_alloc_two ? t_uop2.has_delay_slot
+			       : t_uop.has_delay_slot;
 	  end
+	
 	else if(t_clr_dq || t_clr_rob)
 	  begin
 	     n_in_delay_slot = 1'b0;
@@ -1151,14 +1246,14 @@ module core(clk,
 	     r_rob_head_ptr <= 'd0;
 	     r_rob_tail_ptr <= 'd0;
 	     r_rob_next_head_ptr <= 'd1;
-	     r_insns_in_rob_cnt <= 'd0;
+	     r_rob_next_tail_ptr <= 'd1;
 	  end
 	else
 	  begin
 	     r_rob_head_ptr <= n_rob_head_ptr;
 	     r_rob_tail_ptr <= n_rob_tail_ptr;
 	     r_rob_next_head_ptr <= n_rob_next_head_ptr;
-	     r_insns_in_rob_cnt <= n_insns_in_rob_cnt;
+	     r_rob_next_tail_ptr <= n_rob_next_tail_ptr;
 	  end
      end // always_ff@ (posedge clk)
 
@@ -1211,7 +1306,9 @@ module core(clk,
 	n_fcr_alloc_rat = r_fcr_alloc_rat;
 	
 	t_alloc_uop = t_uop;
+	t_alloc_uop2 = t_uop2;
 
+	
 	if(t_uop.srcA_valid || t_uop.fp_srcA_valid)
 	  begin
 	     t_alloc_uop.srcA = t_uop.fp_srcA_valid ?
@@ -1240,7 +1337,44 @@ module core(clk,
 	     t_alloc_uop.hilo_src = r_fcr_alloc_rat;
 	  end
 	
+	//2nd uop begins here
+	if(t_uop2.srcA_valid || t_uop2.fp_srcA_valid)
+	  begin
+	     t_alloc_uop2.srcA = t_uop2.fp_srcA_valid ?
+				 (t_uop.fp_dst_valid && (t_uop2.srcA[4:0] == t_uop.dst[4:0]) ?
+				  n_fp_prf_entry : r_fp_alloc_rat[t_uop2.srcA[4:0]]) :
+				 (t_uop.dst_valid && (t_uop2.srcA[4:0] == t_uop.dst[4:0]) ?
+				  n_prf_entry :  r_alloc_rat[t_uop2.srcA[4:0]]);	     
+	  end
+	if(t_uop2.srcB_valid || t_uop2.fp_srcB_valid)
+	  begin
+	     t_alloc_uop2.srcB = t_uop2.fp_srcB_valid ?
+				 (t_uop.fp_dst_valid && (t_uop2.srcB[4:0] == t_uop.dst[4:0]) ?
+				  n_fp_prf_entry : r_fp_alloc_rat[t_uop2.srcB[4:0]]) :
+				 (t_uop.dst_valid && (t_uop2.srcB[4:0] == t_uop.dst[4:0]) ?
+				  n_prf_entry :  r_alloc_rat[t_uop2.srcB[4:0]]);	     	     
+	  end
+	if(t_uop2.srcC_valid || t_uop2.fp_srcC_valid)
+	  begin
+	     t_alloc_uop2.srcC = t_uop2.fp_srcC_valid ?
+				 (t_uop.fp_dst_valid && (t_uop2.srcC[4:0] == t_uop.dst[4:0]) ?
+				  n_fp_prf_entry : r_fp_alloc_rat[t_uop2.srcC[4:0]]) :
+				 (t_uop.dst_valid && (t_uop2.srcC[4:0] == t_uop.dst[4:0]) ?
+				  n_prf_entry :  r_alloc_rat[t_uop2.srcC[4:0]]);	     
+	  end
 	
+	if(t_uop2.hilo_src_valid)
+	  begin
+	     t_alloc_uop2.hilo_src = t_uop.hilo_dst_valid ? n_hilo_prf_entry : 
+				     r_hilo_alloc_rat;
+	  end
+	else if(t_uop2.fcr_src_valid)
+	  begin
+	     t_alloc_uop2.hilo_src = t_uop.fcr_dst_valid ? n_fcr_prf_entry :
+				     r_fcr_alloc_rat;
+	  end
+	
+
 	if(t_alloc)
 	  begin
 	     if(t_uop.dst_valid)
@@ -1263,8 +1397,39 @@ module core(clk,
 		  n_fp_alloc_rat[t_uop.dst[4:0]] = n_fp_prf_entry;
 		  t_alloc_uop.dst = n_fp_prf_entry;
 	       end
+	     
 	     t_alloc_uop.rob_ptr = r_rob_tail_ptr[`LG_ROB_ENTRIES-1:0];
 	  end // if (t_alloc)
+
+	if(t_alloc_two)
+	  begin
+	     if(t_uop2.dst_valid)
+	       begin
+		  n_alloc_rat[t_uop2.dst[4:0]] = n_prf_entry2;
+		  t_alloc_uop2.dst = n_prf_entry2;
+	       end
+	     else if(t_uop2.hilo_dst_valid)
+	       begin
+		  //n_hilo_alloc_rat = n_hilo_prf_entry;
+		  //t_alloc_uop2.hilo_dst = n_hilo_prf_entry;
+		  $stop();
+	       end
+	     else if(t_uop2.fcr_dst_valid)
+	       begin
+		  //n_fcr_alloc_rat = n_fcr_prf_entry;
+		  //t_alloc_uop2.hilo_dst = n_fcr_prf_entry;
+		  $stop();
+	       end	     
+	     else if(t_uop2.fp_dst_valid)
+	       begin
+		  //n_fp_alloc_rat[t_uop2.dst[4:0]] = n_fp_prf_entry;
+		  //t_alloc_uop2.dst = n_fp_prf_entry;
+		  $stop();
+	       end
+	     
+	     t_alloc_uop2.rob_ptr = r_rob_next_tail_ptr[`LG_ROB_ENTRIES-1:0];
+	  end
+	
      end // always_comb
 
 
@@ -1352,7 +1517,6 @@ module core(clk,
    
    always_comb
      begin
-	n_rob = r_rob;
 	t_rob_tail.complete  = 1'b0;
 	t_rob_tail.faulted  = 1'b0;
 	t_rob_tail.valid_dst  = 1'b0;
@@ -1380,6 +1544,36 @@ module core(clk,
 	t_rob_tail.in_delay_slot = r_in_delay_slot;
 	t_rob_tail.data = {`M_WIDTH{1'b0}};
 	t_rob_tail.pht_idx = 'd0;
+
+
+	t_rob_next_tail.complete  = 1'b0;
+	t_rob_next_tail.faulted  = 1'b0;
+	t_rob_next_tail.valid_dst  = 1'b0;
+	t_rob_next_tail.valid_hilo_dst = 1'b0;
+	t_rob_next_tail.valid_fcr_dst = 1'b0;
+	t_rob_next_tail.valid_fp_dst = 1'b0;
+	t_rob_next_tail.ldst  = 'd0;
+	t_rob_next_tail.pdst  = 'd0;
+	t_rob_next_tail.old_pdst  = 'd0;
+	t_rob_next_tail.pc = 'd0;
+	t_rob_next_tail.target_pc = 'd0;
+	t_rob_next_tail.is_ii = 1'b0;
+	t_rob_next_tail.take_trap = 1'b0;
+	t_rob_next_tail.exception_tlb_refill = 1'b0;
+	t_rob_next_tail.exception_tlb_modified = 1'b0;
+	t_rob_next_tail.exception_tlb_invalid = 1'b0;
+	t_rob_next_tail.is_store = 1'b0;
+	t_rob_next_tail.is_call = 1'b0;
+	t_rob_next_tail.is_ret = 1'b0;
+	t_rob_next_tail.is_break = 1'b0;
+	t_rob_next_tail.is_syscall = 1'b0;
+	t_rob_next_tail.take_br = 1'b0;
+	t_rob_next_tail.is_br = 1'b0;
+	t_rob_next_tail.is_indirect = 1'b0;
+	t_rob_next_tail.in_delay_slot = r_in_delay_slot;
+	t_rob_next_tail.data = {`M_WIDTH{1'b0}};
+	t_rob_next_tail.pht_idx = 'd0;
+
 	
 	if(t_alloc)
 	  begin
@@ -1397,6 +1591,8 @@ module core(clk,
 	     t_rob_tail.is_eret = 1'b0;
 	     t_rob_tail.is_indirect = t_alloc_uop.op == JALR || t_alloc_uop.op == JR;
 `ifdef ENABLE_CYCLE_ACCOUNTING
+	     t_rob_tail.missed_l1d = 1'b0;
+	     t_rob_tail.is_mem = 1'b0;
 	     t_rob_tail.fetch_cycle = t_alloc_uop.fetch_cycle;
 	     t_rob_tail.alloc_cycle = r_cycle;
 	     t_rob_tail.complete_cycle = 'd0;
@@ -1451,86 +1647,171 @@ module core(clk,
 		    end
 	       end
 	     
-	     n_rob[r_rob_tail_ptr[`LG_ROB_ENTRIES-1:0]] = t_rob_tail;
 	  end // if (t_alloc)
-	if(t_complete_valid_1)
+
+
+	if(t_alloc_two)
 	  begin
-	     n_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].complete = t_complete_bundle_1.complete;
-	     n_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].faulted = t_complete_bundle_1.faulted;
-	     n_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].target_pc = t_complete_bundle_1.restart_pc;
-	     n_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].is_ii = t_complete_bundle_1.is_ii;
-	     n_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].take_trap = t_complete_bundle_1.take_trap;	     
-	     n_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].take_br = t_complete_bundle_1.take_br;
-	     n_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].data = t_complete_bundle_1.data;
+	     t_rob_next_tail.pc = t_alloc_uop2.pc;
+	     t_rob_next_tail.is_br = t_alloc_uop2.is_br;
+	     t_rob_next_tail.has_delay_slot = t_uop2.has_delay_slot;
+	     t_rob_next_tail.has_nullifying_delay_slot = t_uop2.has_nullifying_delay_slot;
+	     t_rob_next_tail.pht_idx = t_alloc_uop2.pht_idx;
+	     t_rob_next_tail.is_store = t_alloc_uop2.is_store;
+
+	     t_rob_next_tail.is_call = t_alloc_uop2.op == JAL || t_alloc_uop2.op == JALR || t_alloc_uop2.op == BAL;
+	     t_rob_next_tail.is_ret = (t_alloc_uop2.op == JR) && (t_uop.srcA == 'd31);
+	     t_rob_next_tail.is_syscall = (t_alloc_uop2.op == SYSCALL);
+	     t_rob_next_tail.is_break  = (t_alloc_uop2.op == BREAK);
+	     t_rob_next_tail.is_eret = 1'b0;
+	     t_rob_next_tail.is_indirect = t_alloc_uop2.op == JALR || t_alloc_uop2.op == JR;
+	     
 `ifdef ENABLE_CYCLE_ACCOUNTING
-	     n_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].complete_cycle = r_cycle;
-`endif	    
-	  end
-	if(t_complete_valid_2)
-	  begin
-	     //if(r_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].complete)
-	     //begin
-	     //$display("ROB entry %d is already complete!", t_complete_bundle_2.rob_ptr);
-	     //$stop();
-	     //end
-	     n_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].complete = t_complete_bundle_2.complete;
-	     n_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].faulted = t_complete_bundle_2.faulted;
-	     n_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].target_pc = t_complete_bundle_2.restart_pc;
-	     n_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].is_ii = t_complete_bundle_2.is_ii;
-	     n_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].take_br = t_complete_bundle_2.take_br;
-	     n_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].take_trap = t_complete_bundle_2.take_trap;	     
-	     n_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].data = t_complete_bundle_2.data;
+	     t_rob_next_tail.missed_l1d = 1'b0;
+	     t_rob_next_tail.is_mem = 1'b0;
+	     t_rob_next_tail.fetch_cycle = t_alloc_uop2.fetch_cycle;
+	     t_rob_next_tail.alloc_cycle = r_cycle;
+	     t_rob_next_tail.complete_cycle = 'd0;
+`endif
+	     //t_uop.has_delay_slot
+	     t_rob_next_tail.in_delay_slot = t_uop.has_delay_slot;
+
+	     if(t_uop2.dst_valid)
+	       begin
+		  t_rob_next_tail.valid_dst = 1'b1;
+		  /* this is correct, we do not want the renamed version */
+		  t_rob_next_tail.ldst = t_uop2.dst[4:0];
+		  t_rob_next_tail.pdst = n_prf_entry2;
+		  t_rob_next_tail.old_pdst = (t_uop.dst_valid && (t_uop.dst == t_uop2.dst)) ?
+					     t_rob_tail.pdst : r_alloc_rat[t_uop2.dst[4:0]];
+	       end
+
+
+	     if(t_fold_uop2)
+	       begin
+		  t_rob_next_tail.complete  = 1'b1;
 `ifdef ENABLE_CYCLE_ACCOUNTING
-	     n_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].complete_cycle = r_cycle;
-`endif	    	     
-	  end
-	if(core_mem_rsp_valid)
-	  begin
-	     n_rob[core_mem_rsp.rob_ptr].complete = 1'b1;
-	     n_rob[core_mem_rsp.rob_ptr].data = core_mem_rsp.data[`M_WIDTH-1:0];
-	     n_rob[core_mem_rsp.rob_ptr].faulted = core_mem_rsp.faulted;
-	     n_rob[core_mem_rsp.rob_ptr].exception_tlb_refill = core_mem_rsp.exception_tlb_refill;
-	     n_rob[core_mem_rsp.rob_ptr].exception_tlb_modified = core_mem_rsp.exception_tlb_modified;
-	     n_rob[core_mem_rsp.rob_ptr].exception_tlb_invalid = core_mem_rsp.exception_tlb_invalid;
-`ifdef ENABLE_CYCLE_ACCOUNTING
-	     n_rob[core_mem_rsp.rob_ptr].complete_cycle = r_cycle;
-`endif	    	     	     
-	  end
+		  t_rob_next_tail.complete_cycle = r_cycle;
+`endif		  
+		  if(t_uop2.op == II)
+		    begin
+		       t_rob_next_tail.faulted = 1'b1;
+		       t_rob_next_tail.is_ii = 1'b1;
+		    end
+		  else if(t_uop2.op == ERET)
+		    begin
+		       t_rob_next_tail.faulted = 1'b1;
+		       t_rob_next_tail.is_eret = 1'b1;
+		    end
+		  else if(t_uop2.op == J)
+		    begin
+		       t_rob_next_tail.take_br = 1'b1;
+		    end
+	       end // if (t_fold_uop2)
+	  end // if (t_alloc_two)
+	
+	
+
+	
+
      end // always_comb
    
 
 
    always_ff@(posedge clk)
      begin
-	if(reset)
+	if(reset || t_clr_rob)
 	  begin
 	     for(integer i = 0; i < N_ROB_ENTRIES; i=i+1)
 	       begin
 		  r_rob[i].complete <= 1'b0;
 		  r_rob[i].faulted <= 1'b0;
-		  r_rob[i].valid_dst <= 1'b0;
-		  r_rob[i].ldst <= 'd0;
-		  r_rob[i].pdst <= 'd0;
-		  r_rob[i].old_pdst <= 'd0;
 	       end
 	  end
 	else
 	  begin
-	     if(t_clr_rob)
+	     if(t_alloc)
 	       begin
-		  for(integer i = 0; i < N_ROB_ENTRIES; i=i+1)
-		    begin
-		       r_rob[i].complete <= 1'b0;
-		       r_rob[i].faulted <= 1'b0;
-		    end
+		  r_rob[r_rob_tail_ptr[`LG_ROB_ENTRIES-1:0]] <= t_rob_tail;
 	       end
-	     else
+	     if(t_alloc_two)
 	       begin
-		  r_rob <= n_rob;
+		  r_rob[r_rob_next_tail_ptr[`LG_ROB_ENTRIES-1:0]] <= t_rob_next_tail;
+	       end
+	     if(t_complete_valid_1)
+	       begin
+		  r_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].complete <= t_complete_bundle_1.complete;
+		  r_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].faulted <= t_complete_bundle_1.faulted;
+		  r_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].target_pc <= t_complete_bundle_1.restart_pc;
+		  r_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].is_ii <= t_complete_bundle_1.is_ii;
+		  r_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].take_trap <= t_complete_bundle_1.take_trap;	     
+		  r_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].take_br <= t_complete_bundle_1.take_br;
+		  r_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].data <= t_complete_bundle_1.data;
+`ifdef ENABLE_CYCLE_ACCOUNTING
+		  r_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].complete_cycle <= r_cycle;
+`endif	    
+	       end
+	     if(t_complete_valid_2)
+	       begin
+		  r_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].complete <= t_complete_bundle_2.complete;
+		  r_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].faulted <= t_complete_bundle_2.faulted;
+		  r_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].target_pc <= t_complete_bundle_2.restart_pc;
+		  r_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].is_ii <= t_complete_bundle_2.is_ii;
+		  r_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].take_br <= t_complete_bundle_2.take_br;
+		  r_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].take_trap <= t_complete_bundle_2.take_trap;	     
+		  r_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].data <= t_complete_bundle_2.data;
+`ifdef ENABLE_CYCLE_ACCOUNTING
+		  r_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].complete_cycle <= r_cycle;
+`endif	    	     
+	       end
+	     if(core_mem_rsp_valid)
+	       begin
+		  r_rob[core_mem_rsp.rob_ptr].complete <= 1'b1;
+		  r_rob[core_mem_rsp.rob_ptr].data <= core_mem_rsp.data[`M_WIDTH-1:0];
+		  r_rob[core_mem_rsp.rob_ptr].faulted <= core_mem_rsp.faulted;
+		  r_rob[core_mem_rsp.rob_ptr].exception_tlb_refill <= core_mem_rsp.exception_tlb_refill;
+		  r_rob[core_mem_rsp.rob_ptr].exception_tlb_modified <= core_mem_rsp.exception_tlb_modified;
+		  r_rob[core_mem_rsp.rob_ptr].exception_tlb_invalid <= core_mem_rsp.exception_tlb_invalid;
+`ifdef ENABLE_CYCLE_ACCOUNTING
+		  r_rob[core_mem_rsp.rob_ptr].complete_cycle <= r_cycle;
+		  r_rob[core_mem_rsp.rob_ptr].is_mem <= core_mem_rsp.was_mem;
+		  r_rob[core_mem_rsp.rob_ptr].missed_l1d <= core_mem_rsp.missed_l1d;
+`endif	    	     	     
 	       end
 	  end
      end
 
+   always_ff@(posedge clk)
+     begin
+	if(reset)
+	  begin
+	     r_rob_inflight <= 'd0;
+	  end
+	else
+	  begin
+	     if(t_complete_valid_1)
+	       begin
+		  r_rob_inflight[t_complete_bundle_1.rob_ptr] <= 1'b0;		  
+	       end
+	     if(t_complete_valid_2)
+	       begin
+		  r_rob_inflight[t_complete_bundle_2.rob_ptr] <= 1'b0;
+	       end
+	     if(core_mem_rsp_valid)
+	       begin
+		  r_rob_inflight[core_mem_rsp.rob_ptr] <= 1'b0;
+	       end
+	     if(t_alloc && !t_fold_uop)
+	       begin
+		  r_rob_inflight[r_rob_tail_ptr[`LG_ROB_ENTRIES-1:0]] <= 1'b1;		  
+	       end
+	     if(t_alloc_two && !t_fold_uop2)
+	       begin
+		  r_rob_inflight[r_rob_next_tail_ptr[`LG_ROB_ENTRIES-1:0]] <= 1'b1;		  
+	       end
+	  end // else: !if(reset)
+     end // always_ff@ (posedge clk)
+	      
 
    //always_ff@(negedge clk)
    //begin
@@ -1548,22 +1829,30 @@ module core(clk,
 	n_rob_head_ptr = r_rob_head_ptr;
 	n_rob_tail_ptr = r_rob_tail_ptr;
 	n_rob_next_head_ptr = r_rob_next_head_ptr;
+	n_rob_next_tail_ptr = r_rob_next_tail_ptr;
 	
-	n_insns_in_rob_cnt = r_insns_in_rob_cnt;
 	
 	if(t_clr_rob)
 	  begin
 	     n_rob_head_ptr = 'd0;
 	     n_rob_tail_ptr = 'd0;
 	     n_rob_next_head_ptr = 'd1;
-	     n_insns_in_rob_cnt = 'd0;
+	     n_rob_next_tail_ptr = 'd1;
 	  end
 	else
 	  begin
-	     if(t_alloc)
+	     if(t_alloc && !t_alloc_two)
 	       begin
 		  n_rob_tail_ptr = r_rob_tail_ptr + 'd1;
+		  n_rob_next_tail_ptr = r_rob_next_tail_ptr + 'd1;
 	       end
+	     else if(t_alloc && t_alloc_two)
+	       begin
+		  n_rob_tail_ptr = r_rob_tail_ptr + 'd2;
+		  n_rob_next_tail_ptr = r_rob_next_tail_ptr + 'd2;
+	       end
+
+	     
 	     if(t_retire || t_bump_rob_head)
 	       begin
 		  n_rob_head_ptr = t_retire_two ? r_rob_head_ptr + 'd2 : 
@@ -1571,32 +1860,13 @@ module core(clk,
 		  n_rob_next_head_ptr = t_retire_two ? r_rob_next_head_ptr + 'd2 : 
 					r_rob_next_head_ptr + 'd1;
 	       end
-	     
-	     if(t_retire_two)
-	       begin
-		  if(t_alloc)
-		    begin
-		       n_insns_in_rob_cnt = r_insns_in_rob_cnt - 'd1;		  
-		    end
-		  else
-		    begin
-		       n_insns_in_rob_cnt = r_insns_in_rob_cnt - 'd2;
-		    end
-	       end
-	     else
-	       begin
-		  if(t_alloc && !(t_retire || t_bump_rob_head))
-		    begin
-		       n_insns_in_rob_cnt = r_insns_in_rob_cnt + 'd1;
-		    end
-		  else if(!t_alloc && (t_retire || t_bump_rob_head))
-		    begin
-		       n_insns_in_rob_cnt = r_insns_in_rob_cnt - 'd1;		  
-		    end
-	       end // else: !if(t_retire_two)
-	  end
+	  end // else: !if(t_clr_rob)
+	
 	t_rob_empty = (r_rob_head_ptr == r_rob_tail_ptr);
+	t_rob_next_empty = (r_rob_next_head_ptr == r_rob_tail_ptr);
+	
 	t_rob_full = (r_rob_head_ptr[`LG_ROB_ENTRIES-1:0] == r_rob_tail_ptr[`LG_ROB_ENTRIES-1:0]) && (r_rob_head_ptr != r_rob_tail_ptr);
+	t_rob_next_full = (r_rob_head_ptr[`LG_ROB_ENTRIES-1:0] == r_rob_next_tail_ptr[`LG_ROB_ENTRIES-1:0]) && (r_rob_head_ptr != r_rob_next_tail_ptr);
      end // always_comb
 
 
@@ -1735,19 +2005,41 @@ module core(clk,
 	     n_fp_prf_free[t_free_fp_reg_ptr] = 1'b1;
 	  end
      end   
+
+
+   popcount #(`LG_PRF_ENTRIES) cnt_gpr (.in(r_prf_free), .out(t_prf_free_cnt));
+   
+   //always_ff@(negedge clk)
+   //begin
+   //$display("%d free gpr prf entries", t_prf_free_cnt);
+   //end
    
    find_first_set#(`LG_PRF_ENTRIES) ffs_gpr(.in(r_prf_free),
 					    .y(t_gpr_ffs));
+
+   always_comb
+     begin
+	t_prf_free = r_prf_free;
+	t_prf_free[t_gpr_ffs[`LG_PRF_ENTRIES-1:0]] = 1'b0;
+     end
+   
+   find_first_set#(`LG_PRF_ENTRIES) ffs_gpr2(.in(t_prf_free),
+					     .y(t_gpr_ffs2));
 
    
    always_comb
      begin
 	n_prf_free = r_prf_free;
 	n_prf_entry = t_gpr_ffs[`LG_PRF_ENTRIES-1:0];
+	n_prf_entry2 = t_gpr_ffs2[`LG_PRF_ENTRIES-1:0];
 	
 	if(t_alloc & t_uop.dst_valid)
 	  begin
 	     n_prf_free[n_prf_entry] = 1'b0;
+	  end
+	if(t_alloc_two && t_uop2.dst_valid)
+	  begin
+	     n_prf_free[n_prf_entry2] = 1'b0;
 	  end
 	if(t_free_reg)
 	  begin
@@ -1760,20 +2052,66 @@ module core(clk,
      end // always_comb
 
    
-   decode_mips32 dec (.in_64b_fpreg_mode(t_in_32fp_reg_mode),
-		      .insn(insn.data), .pc(insn.pc), 
-		      .insn_pred(insn.pred), .pht_idx(insn.pht_idx),
+   decode_mips32 dec0 (.in_64b_fpreg_mode(t_in_32fp_reg_mode),
+		      .insn(insn.data), 
+		      .pc(insn.pc), 
+		      .insn_pred(insn.pred), 
+		      .pht_idx(insn.pht_idx),
 		      .insn_pred_target(insn.pred_target),
 `ifdef ENABLE_CYCLE_ACCOUNTING
 		      .fetch_cycle(insn.fetch_cycle),
 `endif		      
 		      .uop(t_dec_uop));
+
+   decode_mips32 dec1 (.in_64b_fpreg_mode(t_in_32fp_reg_mode),
+		      .insn(insn_two.data), 
+		      .pc(insn_two.pc), 
+		      .insn_pred(insn_two.pred), 
+		      .pht_idx(insn_two.pht_idx),
+		      .insn_pred_target(insn_two.pred_target),
+`ifdef ENABLE_CYCLE_ACCOUNTING
+		      .fetch_cycle(insn_two.fetch_cycle),
+`endif		      
+		      .uop(t_dec_uop2));
+
+
+   always_ff@(negedge clk)
+     begin
+	if(insn_ack)
+	  begin
+	     if(t_dec_uop.op == II)
+	       $stop();
+	  end
+	if(insn_ack_two)
+	  begin
+	     if(t_dec_uop2.op == II)
+	       $stop();
+	  end
+     end
+
+   logic t_push_1, t_push_2;
    
    always_comb
      begin
 	t_any_complete = t_complete_valid_1 | t_complete_valid_2 | core_mem_rsp_valid;
+	t_push_1 = t_alloc && !t_fold_uop;
+	t_push_2 = t_alloc_two && !t_fold_uop2;
      end
+
+   //always_ff@(negedge clk)
+   //begin
+        //$display("t_alloc = %b, %x t_alloc_two = %b, %x, t_push_1 = %b, t_push_2 = %b, inflight = %b",
+        //t_alloc, t_uop.pc, t_alloc_two, t_uop2.pc, 
+	//t_push_1, t_push_2, r_rob_inflight);
 	
+        //if(t_push_1 && t_push_2 && t_uop.pc == 'h20078)
+        //begin
+	//
+        //$stop();
+        //end
+     //end
+
+   
    exec e (
 	   .clk(clk), 
 	   .reset(reset),
@@ -1781,9 +2119,13 @@ module core(clk,
 	   .delayslot_rob_ptr(r_delayslot_rob_ptr),
 	   .in_32fp_reg_mode(t_in_32fp_reg_mode),
 	   .uq_empty(t_uq_empty),
-	   .uq_full(t_uq_full),	   
-	   .uq_uop(t_alloc_uop),
-	   .uq_push(t_alloc && !t_fold_uop),
+	   .uq_full(t_uq_full),
+	   .uq_next_full(t_uq_next_full),
+	   .uq_uop(t_push_1 ? t_alloc_uop : t_alloc_uop2),
+	   .uq_uop_two(t_alloc_uop2),	   
+	   .uq_push(t_push_1 || (!t_push_1 && t_push_2)),
+	   .uq_push_two(t_push_2 && t_push_1),
+	   	   
 	   .complete_bundle_1(t_complete_bundle_1),
 	   .complete_valid_1(t_complete_valid_1),
 	   .complete_bundle_2(t_complete_bundle_2),
@@ -1808,12 +2150,18 @@ module core(clk,
 	if(reset)
 	  begin
 	     r_dq_head_ptr <= 'd0;
+	     r_dq_next_head_ptr <= 'd1;
+	     r_dq_next_tail_ptr <= 'd1;
 	     r_dq_tail_ptr <= 'd0;
+	     r_dq_cnt <= 'd0;
 	  end
 	else
 	  begin
 	     r_dq_head_ptr <= t_clr_rob ? 'd0 :n_dq_head_ptr;
-	     r_dq_tail_ptr <= t_clr_rob ? 'd0 :n_dq_tail_ptr;
+	     r_dq_tail_ptr <= t_clr_rob ? 'd0 :n_dq_tail_ptr;	     
+	     r_dq_next_head_ptr <= t_clr_rob ? 'd1 : n_dq_next_head_ptr;
+	     r_dq_next_tail_ptr <= t_clr_rob ? 'd1 : n_dq_next_tail_ptr;
+	     r_dq_cnt <= t_clr_rob ? 'd0 : n_dq_cnt;
 	  end
      end // always_ff@ (posedge clk)
 
@@ -1822,66 +2170,179 @@ module core(clk,
 	r_dq <= n_dq;
      end
 
+   always_ff@(negedge clk)
+     begin
+    	if(insn_ack && insn_ack_two && 1'b0)
+    	  begin
+    	     $display("ack two insns in cycle %d, valid %b, %b, pc %x %x", 
+    		      r_cycle, insn_valid, insn_valid_two,
+   		      insn.pc, insn_two.pc);
+    	  end
+    	else if(insn_ack && !insn_ack_two && 1'b0)
+    	  begin
+    	     $display("ack one insn in cycle %d, valid %b, pc %x ", 
+    		      r_cycle, insn_valid, 
+    		      insn.pc);
+    	  end
+     end
    
    always_comb
      begin
 	n_dq = r_dq;
 	n_dq_tail_ptr = r_dq_tail_ptr;
 	n_dq_head_ptr = r_dq_head_ptr;
-	t_dq_empty = (r_dq_tail_ptr == r_dq_head_ptr);
-	t_dq_full = (r_dq_tail_ptr[`LG_DQ_ENTRIES-1:0] == r_dq_head_ptr[`LG_DQ_ENTRIES-1:0]) && (r_dq_tail_ptr != r_dq_head_ptr);
+	n_dq_next_head_ptr = r_dq_next_head_ptr;
+	n_dq_next_tail_ptr = r_dq_next_tail_ptr;
 	
+	t_dq_empty = (r_dq_tail_ptr == r_dq_head_ptr);
+	t_dq_next_empty = (r_dq_tail_ptr == r_dq_next_head_ptr);
+	
+	t_dq_full = (r_dq_tail_ptr[`LG_DQ_ENTRIES-1:0] == r_dq_head_ptr[`LG_DQ_ENTRIES-1:0]) && (r_dq_tail_ptr != r_dq_head_ptr);
+
+	t_dq_next_full = (r_dq_next_tail_ptr[`LG_DQ_ENTRIES-1:0] == r_dq_head_ptr[`LG_DQ_ENTRIES-1:0]) && (r_dq_next_tail_ptr != r_dq_head_ptr);
+	
+	n_dq_cnt = r_dq_cnt;
+		
 	t_uop = r_dq[r_dq_head_ptr[`LG_DQ_ENTRIES-1:0]];
+	t_uop2 = r_dq[r_dq_next_head_ptr[`LG_DQ_ENTRIES-1:0]];
+	
 	if(t_clr_dq)
 	  begin
 	     n_dq_tail_ptr = 'd0;
 	     n_dq_head_ptr = 'd0;
+	     n_dq_next_head_ptr = 'd1;
+	     n_dq_next_tail_ptr = 'd1;
+	     n_dq_cnt = 'd0;
 	  end
 	else
 	  begin
-	     if(insn_valid && !t_dq_full)
+	     if(insn_valid && !t_dq_full && !(!t_dq_next_full && insn_valid_two))
 	       begin
+		  //push one instruction		  
 		  n_dq[r_dq_tail_ptr[`LG_DQ_ENTRIES-1:0]] = t_dec_uop;
 		  n_dq_tail_ptr = r_dq_tail_ptr + 'd1;
+		  n_dq_next_tail_ptr = r_dq_next_tail_ptr + 'd1;
+		  n_dq_cnt = n_dq_cnt + 'd1;
 	       end
-	     if(t_alloc)
+	     else if(insn_valid && !t_dq_full && !t_dq_next_full && insn_valid_two)
+	       begin
+		  //push two instructions
+		  n_dq[r_dq_tail_ptr[`LG_DQ_ENTRIES-1:0]] = t_dec_uop;
+		  n_dq[r_dq_next_tail_ptr[`LG_DQ_ENTRIES-1:0]] = t_dec_uop2;
+		  n_dq_tail_ptr = r_dq_tail_ptr + 'd2;
+		  n_dq_next_tail_ptr = r_dq_next_tail_ptr + 'd2;
+		  n_dq_cnt = n_dq_cnt + 'd2;
+	       end
+	     
+	     if(t_alloc && !t_alloc_two)
 	       begin
 		  n_dq_head_ptr = r_dq_head_ptr + 'd1;
+		  n_dq_next_head_ptr = r_dq_next_head_ptr + 'd1;
+		  n_dq_cnt = n_dq_cnt - 'd1;
+	       end
+	     else if(t_alloc && t_alloc_two)
+	       begin
+		  n_dq_head_ptr = r_dq_head_ptr + 'd2;
+		  n_dq_next_head_ptr = r_dq_next_head_ptr + 'd2;
+		  n_dq_cnt = n_dq_cnt - 'd2;
 	       end
 	  end
      end // always_comb
 
+//`define DEBUG_BAD_RETIRE
+`ifdef DEBUG_BAD_RETIRE
+   logic [63:0] r_max_alloc;
+   always_ff@(posedge clk)
+     begin
+	if(reset)
+	  begin
+	     r_max_alloc <= 'd0;
+	  end
+	else
+	  begin
+	     if(t_retire)
+	       begin
+		  r_max_alloc <= t_rob_head.alloc_cycle;
+	       end
+	     else if(t_retire_two)
+	       begin
+		  r_max_alloc <= t_rob_next_head.alloc_cycle;
+	       end
+	  end
+     end // always_ff@ (posedge clk)
 
-   //always_ff@(negedge clk)
-   //begin
-   //if(t_alloc)
-   //$display("allocating opcode %d for pc %x\n", t_uop.op, t_uop.pc);
-   //end
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if(t_clr_dq)
-   // 	  begin
-   // 	     $display("clearing dq at cycle %d\n", r_cycle);
-   // 	  end
-   // 	if(t_dq_empty)
-   // 	  begin
-   // 	     $display("dq empty at cycle %d\n", r_cycle);
-   // 	  end
-   //   end // always_ff@ (negedge clk)
-   
-    // always_ff@(negedge clk)
-    //   begin
-    // 	 $display("n_dq_head_ptr = %d, n_dq_tail_ptr = %d, full = %b, empty = %b, t_alloc = %b, t_clr_dq = %b, alloc pc %x, cycle %d\n",
-    // 		  n_dq_head_ptr, n_dq_tail_ptr, t_dq_full, t_dq_empty, t_alloc, t_clr_dq, t_uop.pc, r_cycle);
-    //   end
-   
+   always_ff@(negedge clk)
+     begin
+	if(t_retire_two && (t_rob_next_head.alloc_cycle < r_max_alloc))
+	  begin
+	     $display("rob empty %b, next empty %b", 
+		      t_rob_empty, t_rob_next_empty);
+	     
+	     $display("head of rob pointer %d, pc %x", 
+		      r_rob_head_ptr[`LG_ROB_ENTRIES-1:0],
+		      t_rob_head.pc);
+	     $display("r_rob_inflight = %b", 
+		      r_rob_inflight[r_rob_head_ptr[`LG_ROB_ENTRIES-1:0]]);
+	     
+	     $display("head of rob pointer %d, pc %x", 
+		      r_rob_next_head_ptr[`LG_ROB_ENTRIES-1:0],
+		      t_rob_next_head.pc);
+	     
+	     $display("r_rob_inflight = %b", 
+		      r_rob_inflight[r_rob_next_head_ptr[`LG_ROB_ENTRIES-1:0]]);
+	     $stop();
+	  end
+	if(t_retire && (t_rob_head.alloc_cycle < r_max_alloc))
+	  begin
+	     $display("head of rob pointer %d", r_rob_head_ptr[`LG_ROB_ENTRIES-1:0]);
+	     $display("rob empty %b, next empty %b", 
+		      t_rob_empty, t_rob_next_empty);
+	     $display("r_rob_inflight = %b", 
+		      r_rob_inflight);
+	     $display("t_can_retire_rob_head = %b", t_can_retire_rob_head);
+	     $display("r_state = %d", r_state);
+	       
+	     $stop();
+	  end
+     end
 
-
    
-   // initial
-   //   begin
-   // 	$dumpfile("mips32.vcd");
-   // 	$dumpvars();
-   //   end
+    always_ff@(negedge clk)
+      begin
+	 if(t_clr_rob)
+	   begin
+	      $display("clearing rob at cycle %d", r_cycle);
+	   end
+	 
+	 if(t_retire)
+	   begin
+	      $display("retiring one insns in cycle %d, pc %x, fetched at %d, allocd at %d", r_cycle,
+		       t_rob_head.pc, t_rob_head.fetch_cycle, t_rob_head.alloc_cycle);
+	   end
+	 else if(t_retire_two)
+	   begin
+	      $display("retiring two insns in cycle %d, pcs %x and %x", r_cycle, t_rob_head.pc, t_rob_next_head.pc);
+	   end
+       if(t_alloc_two && 1'b1)
+    	begin
+    	   $display("allocating two insns in cycle %d, pcs %x and %x, rob entries %d %d, prf %d %d", 
+    		    r_cycle, t_uop.pc, t_uop2.pc, 
+    		    r_rob_tail_ptr[`LG_ROB_ENTRIES-1:0],
+    		    r_rob_next_tail_ptr[`LG_ROB_ENTRIES-1:0],
+		    n_prf_entry,
+		    n_prf_entry2
+    		    );
+    	end
+       else if(t_alloc && 1'b1)
+	   begin
+	      $display("allocating one insn in cycle %d, pcs %x, rob entries %d, prf %d", 
+    		       r_cycle, t_uop.pc, 
+    		       r_rob_tail_ptr[`LG_ROB_ENTRIES-1:0],
+		       n_prf_entry
+    		       );
+
+	   end
+      end // always_ff@ (negedge clk)
+`endif
    
 endmodule

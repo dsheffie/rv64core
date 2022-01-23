@@ -122,7 +122,8 @@ module fpu(clk,
    sp_cmp(.clk(clk),
 	  .pc(pc),
 	  .a(src_a[31:0]),
-	  .b(src_b[31:0]), 
+	  .b(src_b[31:0]),
+	  .start(start && (t_sp_cmp_type != CMP_NONE)),
 	  .cmp_type(t_sp_cmp_type), 
 	  .y(w_sp_cmp));
 
@@ -130,7 +131,8 @@ module fpu(clk,
    dp_cmp(.clk(clk),
 	  .pc(pc),
 	  .a(src_a), 
-	  .b(src_b), 
+	  .b(src_b),
+	  .start(start && (t_dp_cmp_type != CMP_NONE)),
 	  .cmp_type(t_dp_cmp_type), 
 	  .y(w_dp_cmp));
 
@@ -287,7 +289,7 @@ module fpu(clk,
        .sub(opcode == SP_SUB),
        .a(src_a[31:0]),
        .b(src_b[31:0]),
-       .en(1'b1),
+       .en(opcode == SP_ADD || opcode == SP_SUB),
        .y(t_sp_adder_result)
        );
    
@@ -296,7 +298,7 @@ module fpu(clk,
        .sub(opcode == DP_SUB),
        .a(src_a),
        .b(src_b),
-       .en(opcode == DP_SUB),
+       .en(opcode == DP_ADD || opcode == DP_SUB),
        .y(t_dp_adder_result)
        );
    

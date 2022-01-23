@@ -1,3 +1,21 @@
+`ifdef DEBUG_FPU
+import "DPI-C" function int fp32_mul(input int a, input int b);
+import "DPI-C" function longint fp64_mul(input longint a, input longint b);
+
+module bogo_fp32_mul(input logic [31:0] a, input logic [31:0] b, output logic [31:0] y);
+   always_comb
+     begin
+	y = fp32_mul(a,b);
+     end
+endmodule
+
+module bogo_fp64_mul(input logic [63:0] a, input logic [63:0] b, output logic [63:0] y);
+   always_comb
+     begin
+	y = fp64_mul(a,b);
+     end
+endmodule
+`endif
 
 
 module dff(q,d,clk);
@@ -256,14 +274,35 @@ module fp_mul(
 	     t_mant = 'd0;
 	  end
      end // always_comb
-   
+
+
+`ifdef DEBUG_FPU
+   logic [W-1:0] t_dpi;
+   generate
+      if(W == 32)
+	begin
+	   bogo_fp32_mul bfp32(a,b,t_dpi);
+	end
+      else
+	begin
+	   bogo_fp64_mul bfp64(a,b,t_dpi);
+	end
+   endgenerate
+   shiftreg #(.W(W), .D(MUL_LAT)) 
+   sr0 (
+	.clk(clk),
+	.in(t_dpi), 
+	.out(y)
+	);         
+`else   
    shiftreg #(.W(W), .D(MUL_LAT)) 
    sr0 (
 	.clk(clk),
 	.in({t_sign, t_exp, t_mant}), 
 	.out(y)
 	);      
-
+`endif
+   
 endmodule // sp_mul
 
 

@@ -1,5 +1,40 @@
-
 `include "rob.vh"
+
+`ifdef DEBUG_FPU
+import "DPI-C" function int fp32_div(input int a, input int b);
+import "DPI-C" function longint fp64_div(input longint a, input longint b);
+import "DPI-C" function int fp32_sqrt(input int a);
+import "DPI-C" function longint fp64_sqrt(input longint a);
+
+module bogo_fp32_div(input logic [31:0] a, input logic [31:0] b, output logic [31:0] y);
+   always_comb
+     begin
+	y = fp32_div(a,b);
+     end
+endmodule
+
+module bogo_fp64_div(input logic [63:0] a, input logic [63:0] b, output logic [63:0] y);
+   always_comb
+     begin
+	y = fp64_div(a,b);
+     end
+endmodule // bogo_fp64_div
+
+module bogo_fp32_sqrt(input logic [31:0] a, output logic [31:0] y);
+   always_comb
+     begin
+	y = fp32_sqrt(a);
+     end
+endmodule
+
+module bogo_fp64_sqrt(input logic [63:0] a, output logic [63:0] y);
+   always_comb
+     begin
+	y = fp64_sqrt(a);
+     end
+endmodule
+`endif
+
 
 module fp_div(
 	      // Outputs
@@ -13,7 +48,8 @@ module fp_div(
 	      reset, 
 	      a, 
 	      b, 
-	      start, 	  
+	      start, 	 
+	      is_sqrt,
 	      rob_ptr_in,
 	      dst_ptr_in
 	      );
@@ -30,6 +66,7 @@ module fp_div(
    input logic [W-1:0] a;
    input logic [W-1:0] b;
    input logic 	       start;
+   input logic 	       is_sqrt;
    input logic [LG_ROB_WIDTH-1:0] rob_ptr_in;
    input logic [LG_PRF_WIDTH-1:0] dst_ptr_in;
    
@@ -50,7 +87,7 @@ module fp_div(
    //logic [EW:0]     r_rnd_exp_in;
    logic 			   t_div_complete;
    
-   logic 	 n_valid, r_valid;
+   logic 	 n_valid, r_valid, n_sqrt, r_sqrt;
    
    logic [DW-2:0] y_div;
 
@@ -94,6 +131,22 @@ module fp_div(
 	//      $stop();
 	//   end
      end
+
+`ifdef DEBUG_FPU
+   logic [W-1:0] t_dpi, t_dpi_sqrt, n_dpi, r_dpi;
+   generate
+      if(W == 32)
+	begin
+	   bogo_fp32_div bd32(.a(a), .b(b), .y(t_dpi));
+	   bogo_fp32_sqrt bs32(.a(a), .y(t_dpi_sqrt));
+	end
+      else
+	begin
+	   bogo_fp64_div bd64(.a(a), .b(b), .y(t_dpi));
+	   bogo_fp64_sqrt bs64(.a(a), .y(t_dpi_sqrt));	   
+	end
+   endgenerate
+`endif
    
    always_ff@(posedge clk)
      begin
@@ -101,6 +154,7 @@ module fp_div(
 	  begin
 	     r_state <= IDLE;
 	     r_valid <= 1'b0;
+	     r_sqrt <= 1'b0;
 	     r_y <= 'd0;
 	     r_rob_ptr <= 'd0;
 	     r_dst_ptr <= 'd0;
@@ -110,11 +164,15 @@ module fp_div(
 	     r_sign <= 1'b0;
 	     r_div_mant <= 'd0;
 	     r_active <= 1'b0;
+`ifdef DEBUG_FPU
+	       r_dpi <= 'd0;
+`endif	     
 	  end
 	else
 	  begin
 	     r_state <= n_state;
 	     r_valid <= n_valid;
+	     r_sqrt <= n_sqrt;
 	     r_y <= n_y;
 	     r_rob_ptr <= n_rob_ptr;
 	     r_dst_ptr <= n_dst_ptr;
@@ -124,6 +182,9 @@ module fp_div(
 	     r_sign <= n_sign;
 	     r_div_mant <= n_div_mant;
 	     r_active <= n_active;
+`ifdef DEBUG_FPU
+	       r_dpi <= n_dpi;
+`endif	     	     
 	  end
      end // always_ff@ (posedge clk)
 
@@ -141,6 +202,10 @@ module fp_div(
 	n_div_mant = r_div_mant;
 	n_active = r_active;
 	t_start_div = 1'b0;
+	n_sqrt = r_sqrt;
+`ifdef DEBUG_FPU
+	n_dpi = r_dpi;
+`endif	
 	case(r_state)
 	  IDLE:
 	    begin
@@ -149,7 +214,11 @@ module fp_div(
 		    t_start_div = 1'b1;
 		    n_dst_ptr = dst_ptr_in;
 		    n_rob_ptr = rob_ptr_in;
-		    n_state = COMPUTE_EXP;
+`ifdef DEBUG_FPU		    
+		    n_state = ROUND;
+`else
+		    n_state = COMPUTE_EXP;		    
+`endif
 		    n_active = 1'b1;
 		    // $display("%d : fp divider for rob ptr %d, dest %d starts", 
 		    // 	     r_cycle, rob_ptr_in, dst_ptr_in);		    
@@ -157,6 +226,10 @@ module fp_div(
 	       n_exp_a = {1'b0, a[W-2:FW]};
 	       n_exp_b = {1'b0, b[W-2:FW]};
 	       n_sign = a[W-1] ^ b[W-1];
+	       n_sqrt = is_sqrt;
+`ifdef DEBUG_FPU
+	       n_dpi = is_sqrt ? t_dpi_sqrt : t_dpi;
+`endif
 	    end // case: IDLE
 	  COMPUTE_EXP:
 	    begin
@@ -164,7 +237,7 @@ module fp_div(
 	       n_state = WAIT_FOR_DIVIDE;
 	    end
 	  WAIT_FOR_DIVIDE:
-	    begin
+	    begin	       
 	       if(t_div_complete)
 		 begin
 		    n_div_mant = y_div;
@@ -183,6 +256,9 @@ module fp_div(
 	    begin
 	       n_state = DONE;
 	       n_y = {r_sign, r_exp[EW-1:0], r_div_mant[FW-1:0]};
+`ifdef DEBUG_FPU
+	       n_y = r_dpi;
+`endif
 	       n_valid = 1'b1;
 	       //$display("exp = %d, frac = %b", r_exp[EW-1:0], r_div_mant[FW-1:0]);
 	    end

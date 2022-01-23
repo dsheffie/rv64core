@@ -6,6 +6,7 @@
 `define CACHE_STATS 1
 module core_l1d_l1i(clk, 
 		    reset,
+		    in_flush_mode,
 		    resume,
 		    resume_pc,
 		    ready_for_resume,
@@ -28,9 +29,6 @@ module core_l1d_l1i(clk,
 		    retire_reg_two_data,
 		    retire_reg_two_valid,
 		    store_not_hor,
-		    fetched_insn,
-		    decoded_insn,
-		    allocated_insn,
 		    retire_valid,
 		    retire_two_valid,
 		    retire_pc,
@@ -42,7 +40,7 @@ module core_l1d_l1i(clk,
 		    monitor_rsp_data,
 `ifdef BRANCH_DEBUG
 		    branch_pc,
-		    branch_pc_valid,
+		    branch_pc_valid,		    
 		    branch_fault,
 `endif
 `ifdef CACHE_STATS
@@ -66,6 +64,7 @@ module core_l1d_l1i(clk,
    input logic reset;
    input logic resume;
    input logic [(`M_WIDTH-1):0] resume_pc;
+   output logic 		in_flush_mode;
    output logic 		ready_for_resume;
    
 
@@ -87,7 +86,7 @@ module core_l1d_l1i(clk,
    output logic 		 branch_pc_valid;
    output logic 		 branch_fault;
    assign branch_pc = t_branch_pc;
-   assign branch_pc_valid = t_branch_pc_valid;
+   assign branch_pc_valid = t_branch_pc_valid;   
    assign branch_fault = t_branch_fault;
 `endif
 
@@ -124,9 +123,6 @@ module core_l1d_l1i(clk,
    output logic 			  retire_reg_two_valid;
    
    output logic 			  store_not_hor;
-   output logic 			  fetched_insn;
-   output logic 			  decoded_insn;
-   output logic 			  allocated_insn;
    output logic 			  retire_valid;
    output logic 			  retire_two_valid;
    output logic [(`M_WIDTH-1):0] 	  retire_pc;
@@ -168,6 +164,77 @@ module core_l1d_l1i(clk,
    logic 				  core_mem_req_ack;
    logic 				  core_mem_rsp_valid;
 
+   typedef enum logic [1:0] {
+			     FLUSH_IDLE = 'd0,
+			     WAIT_FOR_L1D_L1I = 'd1,
+			     GOT_L1D = 'd2,
+			     GOT_L1I = 'd3
+   } flush_state_t;
+   flush_state_t n_flush_state, r_flush_state;
+   logic 	r_flush, n_flush;
+   assign in_flush_mode = r_flush;
+ 
+   always_ff@(posedge clk)
+     begin
+	if(reset)
+	  begin
+	     r_flush_state <= FLUSH_IDLE;
+	     r_flush <= 1'b0;
+	  end
+	else
+	  begin
+	     r_flush_state <= n_flush_state;
+	     r_flush <= n_flush;
+	  end
+     end // always_ff@ (posedge clk)
+   always_comb
+     begin
+	n_flush_state = r_flush_state;
+	n_flush = r_flush;
+	case(r_flush_state)
+	  FLUSH_IDLE:
+	    begin
+	       if(flush_req)
+		 begin
+		    n_flush_state = WAIT_FOR_L1D_L1I;
+		    n_flush = 1'b1;
+		 end 
+	    end
+	  WAIT_FOR_L1D_L1I:
+	    begin
+	       if(l1d_flush_complete && !l1i_flush_complete)
+		 begin
+		    n_flush_state = GOT_L1D;		    
+		 end
+	       else if(!l1d_flush_complete && l1i_flush_complete)
+		 begin
+		    n_flush_state = GOT_L1I;
+		 end
+	       else if(l1d_flush_complete && l1i_flush_complete)
+		 begin
+		    n_flush_state = FLUSH_IDLE;
+		    n_flush = 1'b0;
+		 end
+	    end
+	  GOT_L1D:
+	    begin
+	       if(l1i_flush_complete)
+		 begin
+		    n_flush_state = FLUSH_IDLE;
+		    n_flush = 1'b0;
+		 end
+	    end
+	  GOT_L1I:
+	    begin
+	       if(l1d_flush_complete)
+		 begin
+		    n_flush_state = FLUSH_IDLE;
+		    n_flush = 1'b0;
+		 end
+	    end
+	endcase // case (r_flush_state)
+     end // always_comb
+   
    typedef enum logic [1:0] {
       IDLE = 'd0,
       GNT_L1D = 'd1,
@@ -212,9 +279,11 @@ module core_l1d_l1i(clk,
    logic 				  r_last_gnt, n_last_gnt;
    logic 				  n_req, r_req;
 
-   logic 				  insn_valid;
-   logic 				  insn_ack;
-   insn_fetch_t insn;
+   logic 				  insn_valid,insn_valid2;
+   logic 				  insn_ack, insn_ack2;
+   insn_fetch_t insn, insn2;
+
+
    
    always_comb
      begin
@@ -350,7 +419,6 @@ module core_l1d_l1i(clk,
    l1i icache(
 	      .clk(clk),
 	      .reset(reset),
-	      .fetched_insn(fetched_insn),
 	      .flush_req(flush_req),
 	      .flush_complete(l1i_flush_complete),
 	      .restart_pc(restart_pc),
@@ -370,6 +438,9 @@ module core_l1d_l1i(clk,
 	      .insn(insn),
 	      .insn_valid(insn_valid),
 	      .insn_ack(insn_ack),
+	      .insn_two(insn2),
+	      .insn_valid_two(insn_valid2),
+	      .insn_ack_two(insn_ack2),
 	      .mem_req_ack(l1i_mem_req_ack),
 	      .mem_req_valid(l1i_mem_req_valid),
 	      .mem_req_addr(l1i_mem_req_addr),
@@ -420,6 +491,9 @@ module core_l1d_l1i(clk,
 	     .insn(insn),
 	     .insn_valid(insn_valid),
 	     .insn_ack(insn_ack),
+	     .insn_two(insn2),
+	     .insn_valid_two(insn_valid2),
+	     .insn_ack_two(insn_ack2),
 	     .branch_pc(t_branch_pc),
 	     .branch_pc_valid(t_branch_pc_valid),
 	     .branch_fault(t_branch_fault),
@@ -446,8 +520,6 @@ module core_l1d_l1i(clk,
 	     .retire_reg_two_data(retire_reg_two_data),
 	     .retire_reg_two_valid(retire_reg_two_valid),
 	     .store_not_hor(store_not_hor),
-	     .decode_valid(decoded_insn),
-	     .alloc_valid(allocated_insn),
 	     .retire_valid(retire_valid),
 	     .retire_two_valid(retire_two_valid),
 	     .retire_delay_slot(t_retire_delay_slot),

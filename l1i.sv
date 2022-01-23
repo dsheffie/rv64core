@@ -2,10 +2,14 @@
 `include "rob.vh"
 `include "uop.vh"
 
+`ifdef VERILATOR
+import "DPI-C" function void record_fetch(int push1, int push2, int push3, int push4);
+
+`endif
+
 
 module l1i(clk,
 	   reset,
-	   fetched_insn,
 	   flush_req,
 	   flush_complete,
 	   restart_pc,
@@ -22,9 +26,14 @@ module l1i(clk,
 	   branch_pc_valid,
 	   took_branch,
 	   branch_pht_idx,
+	   
 	   insn,
 	   insn_valid,
 	   insn_ack,
+	   
+	   insn_two,
+	   insn_valid_two,
+	   insn_ack_two,
 	   
 	   //output to the memory system
 	   mem_req_ack,
@@ -49,7 +58,6 @@ module l1i(clk,
 
    input logic clk;
    input logic reset;
-   output logic fetched_insn;
    input logic 	      flush_req;
    output logic       flush_complete;
    //restart signals
@@ -79,6 +87,10 @@ module l1i(clk,
    output insn_fetch_t insn;
    output logic insn_valid;
    input logic 	insn_ack;
+   
+   output 	insn_fetch_t insn_two;
+   output logic insn_valid_two;
+   input logic 	insn_ack_two;
 
    input logic 	mem_req_ack;
    output logic mem_req_valid;
@@ -138,20 +150,26 @@ module l1i(clk,
    logic [($bits(jump_t)*WORDS_PER_CL)-1:0] r_jump_out;
    
    logic [`LG_L1D_NUM_SETS-1:0] 	    t_cache_idx, r_cache_idx;   
-   logic [L1I_CL_LEN_BITS-1:0] 		  r_array_out;   
-   logic 				  r_mem_req_valid, n_mem_req_valid;
-   logic [(`M_WIDTH-1):0] 		  r_mem_req_addr, n_mem_req_addr;
+   logic [L1I_CL_LEN_BITS-1:0] 		    r_array_out;   
+   logic 				    r_mem_req_valid, n_mem_req_valid;
+   logic [(`M_WIDTH-1):0] 		    r_mem_req_addr, n_mem_req_addr;
    
 
    insn_fetch_t r_fq[N_FQ_ENTRIES-1:0];
-   insn_fetch_t n_fq[N_FQ_ENTRIES-1:0];
    
    logic [`LG_FQ_ENTRIES:0] r_fq_head_ptr, n_fq_head_ptr;
-   logic [`LG_FQ_ENTRIES:0] r_fq_tail_ptr, n_fq_tail_ptr;
+   logic [`LG_FQ_ENTRIES:0] r_fq_next_head_ptr, n_fq_next_head_ptr;
+   logic [`LG_FQ_ENTRIES:0] r_fq_next_tail_ptr, n_fq_next_tail_ptr;
+   logic [`LG_FQ_ENTRIES:0] r_fq_next3_tail_ptr, n_fq_next3_tail_ptr;
+   logic [`LG_FQ_ENTRIES:0] r_fq_next4_tail_ptr, n_fq_next4_tail_ptr;
    
-   insn_fetch_t t_fq_head;
-   logic 		    fq_full, fq_empty;
-
+   logic [`LG_FQ_ENTRIES:0] r_fq_tail_ptr, n_fq_tail_ptr;
+   logic 		    r_resteer_bubble, n_resteer_bubble;
+   
+   
+   logic 		    fq_full, fq_next_empty, fq_empty;
+   logic 		    fq_full2, fq_full3, fq_full4;
+   
    
    logic [(`M_WIDTH-1):0]   r_spec_return_stack [RETURN_STACK_ENTRIES-1:0];
    logic [(`M_WIDTH-1):0]   r_arch_return_stack [RETURN_STACK_ENTRIES-1:0];
@@ -161,6 +179,10 @@ module l1i(clk,
    logic [`GBL_HIST_LEN-1:0] 	     n_arch_gbl_hist, r_arch_gbl_hist;
    logic [`GBL_HIST_LEN-1:0] 	     n_spec_gbl_hist, r_spec_gbl_hist;
    logic [`GBL_HIST_LEN-1:0] 	     t_xor_pc_hist;
+
+
+   logic [LG_WORDS_PER_CL-1:0] 	     t_insn_idx;
+   
    
    logic 			     n_utlb_miss_req, r_utlb_miss_req;
    logic [`M_WIDTH-`LG_PG_SZ-1:0]    n_utlb_miss_paddr, r_utlb_miss_paddr;
@@ -332,7 +354,7 @@ endfunction
 			     RELOAD_UTLB = 'd6
 			    } state_t;
    
-   logic [(`M_WIDTH-1):0] rr_pc, r_pc, n_pc, nn_pc, r_miss_pc, n_miss_pc;
+   logic [(`M_WIDTH-1):0] r_pc, n_pc, r_miss_pc, n_miss_pc;
    logic [(`M_WIDTH-1):0] r_cache_pc, n_cache_pc;
    logic [(`M_WIDTH-1):0] r_btb_pc;
    
@@ -343,21 +365,25 @@ endfunction
    logic 		  r_req, n_req;
    logic 		  r_valid_out;
    logic 		  t_miss, t_hit;
-   logic 		  t_push_insn;
+   logic 		  t_push_insn, t_push_insn2,
+			  t_push_insn3, t_push_insn4;
+   
    logic 		  t_clear_fq;
    logic 		  r_flush_req, n_flush_req;
    logic 		  r_flush_complete, n_flush_complete;
    logic 		  n_delay_slot, r_delay_slot;
    logic 		  t_take_br, t_is_cflow;
-   logic [31:0] 	  t_insn_data;
+   logic [31:0] 	  t_insn_data, t_insn_data2, t_insn_data3, t_insn_data4;
    logic [`M_WIDTH-1:0]   t_simm;
    logic 		  t_is_call, t_is_ret;
    logic 		  t_utlb_hit;
+   logic [3:0] 		  t_branch_locs;
+   
    utlb_entry_t t_utlb_hit_entry;
    
    
    localparam SEXT = `M_WIDTH-16;
-   insn_fetch_t t_insn;
+   insn_fetch_t t_insn, t_insn2, t_insn3, t_insn4;
    jump_t t_pd;
 
    
@@ -370,6 +396,9 @@ endfunction
    assign flush_complete = r_flush_complete;
    
    assign insn_valid = !fq_empty;
+   assign insn_valid_two = !(fq_next_empty || fq_empty);
+
+   
    assign restart_ack = r_restart_ack;
 
    assign mem_req_valid = r_mem_req_valid;
@@ -384,25 +413,6 @@ endfunction
    
    always_ff@(posedge clk)
      begin
-	
-	// $display("now cycle %d, hit %b, miss %b, state %d : pushing valid %b, bits %x, ip %x, full %b monitor %b, popping %b, ip %x, monitor %b, fetching %x, tag %d, r_pc %x, rr_pc %x", 
-	// 	 r_cycle, 
-	// 	 t_hit,
-	// 	 t_miss, 
-	// 	 r_state,
-	// 	 t_push_insn,
-	// 	 t_insn.data,
-	// 	 t_insn.pc,
-	// 	 fq_full,		 
-	// 	 t_insn.data[31:26] == 6'd5,
-	// 	 insn_ac,
-	// 	 insn.pc,
-	// 	 insn.data[31:26] == 6'd5,
-	// 	 r_cache_pc,
-	// 	 r_cycle[15:0],
-	// 	 r_pc,
-	// 	 rr_pc);
-
 	$display("now cycle %d, popping %b, ip %x, data %x, tag %d, monitor %b",
 		 r_cycle, 
 		 insn_ack,
@@ -417,43 +427,158 @@ endfunction
    always_ff@(negedge clk)
      begin
 	if(fq_full && t_push_insn) $stop();
+	//if(fq_full4 && t_push_insn) $stop();
+	if(fq_full4 && t_push_insn4) $stop();
 	if(fq_empty && insn_ack) $stop();
      end
    
-   always_ff@(posedge clk)
-     begin
-	if(reset)
-	  begin
-	     fetched_insn <= 1'b0;
-	  end
-	else
-	  begin
-	     fetched_insn <= t_push_insn;
-	  end
-     end
+   ///always_ff@(negedge clk)
+   //begin
+   //if(insn_ack)
+   //$display("INSN PC %x ACK'd, entry %d", 
+   //insn.pc, r_fq_head_ptr[`LG_FQ_ENTRIES-1:0]);
+   //if(insn_ack_two)
+   //$display("INSN TWO PC %x ACK'd, entry %d", 
+   //insn_two.pc, r_fq_next_head_ptr[`LG_FQ_ENTRIES-1:0]);
+   //end
+   
 
    always_comb
      begin
-	n_fq = r_fq;
 	n_fq_tail_ptr = r_fq_tail_ptr;
 	n_fq_head_ptr = r_fq_head_ptr;
+	n_fq_next_head_ptr = r_fq_next_head_ptr;
+	n_fq_next_tail_ptr = r_fq_next_tail_ptr;
+	n_fq_next3_tail_ptr = r_fq_next3_tail_ptr;
+	n_fq_next4_tail_ptr = r_fq_next4_tail_ptr;
+	
 	fq_empty = (r_fq_head_ptr == r_fq_tail_ptr);
+	fq_next_empty = (r_fq_next_head_ptr == r_fq_tail_ptr);
+	
 	fq_full = (r_fq_head_ptr != r_fq_tail_ptr) &&
 		  (r_fq_head_ptr[`LG_FQ_ENTRIES-1:0] == r_fq_tail_ptr[`LG_FQ_ENTRIES-1:0]);
+	
+	fq_full2 = (r_fq_head_ptr != r_fq_next_tail_ptr) &&
+		   (r_fq_head_ptr[`LG_FQ_ENTRIES-1:0] == r_fq_next_tail_ptr[`LG_FQ_ENTRIES-1:0]) || fq_full;
+	
+	fq_full3 = (r_fq_head_ptr != r_fq_next3_tail_ptr) &&
+		   (r_fq_head_ptr[`LG_FQ_ENTRIES-1:0] == r_fq_next3_tail_ptr[`LG_FQ_ENTRIES-1:0]) || fq_full2;
+	
+	fq_full4 = (r_fq_head_ptr != r_fq_next4_tail_ptr) &&
+		   (r_fq_head_ptr[`LG_FQ_ENTRIES-1:0] == r_fq_next4_tail_ptr[`LG_FQ_ENTRIES-1:0]) || fq_full3;
+	
 	insn = r_fq[r_fq_head_ptr[`LG_FQ_ENTRIES-1:0]];
-		
+	insn_two = r_fq[r_fq_next_head_ptr[`LG_FQ_ENTRIES-1:0]];
+	
 	if(t_push_insn)
 	  begin
-	     n_fq[r_fq_tail_ptr[`LG_FQ_ENTRIES-1:0]] = t_insn;
 	     n_fq_tail_ptr = r_fq_tail_ptr + 'd1;
+	     n_fq_next_tail_ptr = r_fq_next_tail_ptr + 'd1;
+	     n_fq_next3_tail_ptr = r_fq_next3_tail_ptr + 'd1;
+	     n_fq_next4_tail_ptr = r_fq_next4_tail_ptr + 'd1;
 	  end
-	if(insn_ack)
+	else if(t_push_insn2)
 	  begin
-	     n_fq_head_ptr = r_fq_head_ptr + 'd1;
+	     n_fq_tail_ptr = r_fq_tail_ptr + 'd2;
+	     n_fq_next_tail_ptr = r_fq_next_tail_ptr + 'd2;
+	     n_fq_next3_tail_ptr = r_fq_next3_tail_ptr + 'd2;
+	     n_fq_next4_tail_ptr = r_fq_next4_tail_ptr + 'd2;
+	  end
+	else if(t_push_insn3)
+	  begin
+	     n_fq_tail_ptr = r_fq_tail_ptr + 'd3;
+	     n_fq_next_tail_ptr = r_fq_next_tail_ptr + 'd3;
+	     n_fq_next3_tail_ptr = r_fq_next3_tail_ptr + 'd3;
+	     n_fq_next4_tail_ptr = r_fq_next4_tail_ptr + 'd3;
+	  end
+	else if(t_push_insn4)
+	  begin
+	     n_fq_tail_ptr = r_fq_tail_ptr + 'd4;
+	     n_fq_next_tail_ptr = r_fq_next_tail_ptr + 'd4;
+	     n_fq_next3_tail_ptr = r_fq_next3_tail_ptr + 'd4;
+	     n_fq_next4_tail_ptr = r_fq_next4_tail_ptr + 'd4;
 	  end
 	
-     end
+	if(insn_ack && !insn_ack_two)
+	  begin
+	     n_fq_head_ptr = r_fq_head_ptr + 'd1;
+	     n_fq_next_head_ptr = r_fq_next_head_ptr + 'd1;
+	  end
+	else if(insn_ack && insn_ack_two)
+	  begin
+	     n_fq_head_ptr = r_fq_head_ptr + 'd2;
+	     n_fq_next_head_ptr = r_fq_next_head_ptr + 'd2;
+	  end
+     end // always_comb
 
+   always_ff@(posedge clk)
+     begin
+	if(t_push_insn)
+	  begin
+	     r_fq[r_fq_tail_ptr[`LG_FQ_ENTRIES-1:0]] <= t_insn;
+	  end
+	else if(t_push_insn2)
+	  begin
+	     r_fq[r_fq_tail_ptr[`LG_FQ_ENTRIES-1:0]] <= t_insn;
+	     r_fq[r_fq_next_tail_ptr[`LG_FQ_ENTRIES-1:0]] <= t_insn2;	     
+	  end
+	else if(t_push_insn3)
+	  begin
+	     r_fq[r_fq_tail_ptr[`LG_FQ_ENTRIES-1:0]] <= t_insn;
+	     r_fq[r_fq_next_tail_ptr[`LG_FQ_ENTRIES-1:0]] <= t_insn2;
+	     r_fq[r_fq_next3_tail_ptr[`LG_FQ_ENTRIES-1:0]] <= t_insn3;	  	     
+	  end
+	else if(t_push_insn4)
+	  begin
+	     r_fq[r_fq_tail_ptr[`LG_FQ_ENTRIES-1:0]] <= t_insn;
+	     r_fq[r_fq_next_tail_ptr[`LG_FQ_ENTRIES-1:0]] <= t_insn2;
+	     r_fq[r_fq_next3_tail_ptr[`LG_FQ_ENTRIES-1:0]] <= t_insn3;
+	     r_fq[r_fq_next4_tail_ptr[`LG_FQ_ENTRIES-1:0]] <= t_insn4;	  	     	     
+	  end
+     end // always_ff@ (posedge clk)
+
+`ifdef FOOOOOO
+   logic r_last_bubble;
+   always_ff@(posedge clk)
+     begin
+	r_last_bubble <= reset ? 1'b0 : r_resteer_bubble;
+     end
+   
+   always_ff@(negedge clk)
+     begin
+	if(t_clear_fq)
+	  begin
+	     $display("CLEARING FQ at cycle %d", r_cycle);
+	  end
+	if(t_push_insn4)
+	  begin
+	     $display("full %b %b %b %b", fq_full, fq_full2, fq_full3, fq_full4);
+	     $display("4) insn 1 pc = %x, entry %d, tail %d", t_insn.pc,  r_fq_tail_ptr[`LG_FQ_ENTRIES-1:0],  r_fq_head_ptr[`LG_FQ_ENTRIES-1:0]);
+	     $display("4) insn 2 pc = %x, entry %d, tail %d", t_insn2.pc, r_fq_next_tail_ptr[`LG_FQ_ENTRIES-1:0], r_fq_head_ptr[`LG_FQ_ENTRIES-1:0]);
+	     $display("4) insn 3 pc = %x, entry %d, tail %d", t_insn3.pc, r_fq_next3_tail_ptr[`LG_FQ_ENTRIES-1:0], r_fq_head_ptr[`LG_FQ_ENTRIES-1:0]);
+	     $display("4) insn 4 pc = %x, entry %d, tail %d", t_insn4.pc, r_fq_next4_tail_ptr[`LG_FQ_ENTRIES-1:0], r_fq_head_ptr[`LG_FQ_ENTRIES-1:0]);
+	     //if(r_fq_tail_ptr[`LG_FQ_ENTRIES-1:0] ==  r_fq_head_ptr[`LG_FQ_ENTRIES-1:0]) $stop();
+	     //if(r_fq_next_tail_ptr[`LG_FQ_ENTRIES-1:0] ==  r_fq_head_ptr[`LG_FQ_ENTRIES-1:0]) $stop();
+	     //if(r_fq_next3_tail_ptr[`LG_FQ_ENTRIES-1:0] ==  r_fq_head_ptr[`LG_FQ_ENTRIES-1:0]) $stop();
+	     //if(r_fq_next4_tail_ptr[`LG_FQ_ENTRIES-1:0] ==  r_fq_head_ptr[`LG_FQ_ENTRIES-1:0]) $stop();
+	     
+	  end
+	if(t_push_insn)
+	  begin
+	     $display("1) insn 1 pc = %x, entry %d, tail %d", t_insn.pc, 
+		      r_fq_tail_ptr[`LG_FQ_ENTRIES-1:0],  r_fq_head_ptr[`LG_FQ_ENTRIES-1:0]);
+	  end
+	if(r_resteer_bubble)
+	  begin
+	     $display("resteer bubble : r_cache_pc = %x", r_cache_pc);	
+	  end
+	if(r_last_bubble)
+	  begin
+	     $display("cleered bubble : r_cache_pc = %x", r_cache_pc);	
+	     //$stop();
+	  end
+     end
+`endif
 
    utlb #(1) utlb0 (
 		    .clk(clk),
@@ -516,7 +641,7 @@ endfunction
 
    always_ff@(negedge clk)
      begin
-	if(r_dead_count > 'd16384)
+	if(r_dead_count > 32'd16777216)
 	  begin
 	     $display("no fe flush in %d cycles!, r_state = %d, fq_full = %b", 
 		      r_dead_count, r_state, fq_full);
@@ -529,7 +654,6 @@ endfunction
 	n_utlb_miss_req = 1'b0;
 	n_utlb_miss_paddr = r_utlb_miss_paddr;
 	n_pc = r_pc;
-	nn_pc = rr_pc;
 	n_miss_pc = r_miss_pc;
 	n_cache_pc = 'd0;
 	n_state = r_state;
@@ -542,14 +666,34 @@ endfunction
 	n_req = 1'b0;
 	n_mem_req_valid = 1'b0;
 	n_mem_req_addr = r_mem_req_addr;
+	n_resteer_bubble = 1'b0;
+	
 	n_restart_req = restart_valid | r_restart_req;
 	t_miss = r_req && !(r_valid_out && (r_tag_out == r_cache_tag));
 	t_hit = r_req && (r_valid_out && (r_tag_out == r_cache_tag));
-	t_pd = select_pd(r_jump_out, rr_pc[WORD_STOP-1:WORD_START]);
-	t_insn_data = select_cl32(r_array_out, rr_pc[WORD_STOP-1:WORD_START]);
+
+	t_insn_idx = r_cache_pc[WORD_STOP-1:WORD_START];
+	
+	t_pd = select_pd(r_jump_out, t_insn_idx);
+
+	t_insn_data  = select_cl32(r_array_out, t_insn_idx);
+	t_insn_data2 = select_cl32(r_array_out, t_insn_idx + 2'd1);
+	t_insn_data3 = select_cl32(r_array_out, t_insn_idx + 2'd2);
+	t_insn_data4 = select_cl32(r_array_out, t_insn_idx + 2'd3);
+
+
+	t_branch_locs = {select_pd(r_jump_out, t_insn_idx + 2'd3) != NOT_CFLOW,
+			 select_pd(r_jump_out, t_insn_idx + 2'd2) != NOT_CFLOW,
+			 select_pd(r_jump_out, t_insn_idx + 2'd1) != NOT_CFLOW,			 
+			 select_pd(r_jump_out, t_insn_idx) != NOT_CFLOW
+                         };
+		
 	t_simm = {{SEXT{t_insn_data[15]}},t_insn_data[15:0]};
 	t_clear_fq = 1'b0;
 	t_push_insn = 1'b0;
+	t_push_insn2 = 1'b0;
+	t_push_insn3 = 1'b0;
+	t_push_insn4 = 1'b0;
 	t_take_br = 1'b0;
 	t_is_cflow = 1'b0;	
 	t_is_call = 1'b0;
@@ -575,17 +719,17 @@ endfunction
 	       n_cache_pc = r_pc;
 	       n_req = 1'b1;
 	       n_pc = r_pc + 'd4;
-	       nn_pc = r_pc;
-	       //$display("r_pc = %x, rr_pc = %x", r_pc, rr_pc);
-	       
-	       if(n_flush_req)
+	       if(r_resteer_bubble)
 		 begin
-		    //$display("REQ FLUSHING VALID BITS at %d", r_cycle);
+		    //do nothing?
+		 end
+	       else if(n_flush_req)
+		 begin
 		    n_flush_req = 1'b0;
-		    //n_flush_complete = 1'b1;
 		    t_clear_fq = 1'b1;
 		    n_state = FLUSH_CACHE;
 		    t_cache_idx = 0;
+		    if(r_resteer_bubble) $stop();
 		 end
 	       else if(n_restart_req)
 		 begin
@@ -593,31 +737,28 @@ endfunction
 		    n_restart_req = 1'b0;
 		    n_delay_slot = 1'b0;
 		    n_pc = restart_pc;
-		    nn_pc = 'd0;
 		    n_req = 1'b0;
-		    //$display("restart to %x at %d", n_pc, r_cycle);
 		    n_state = ACTIVE;
 		    t_clear_fq = 1'b1;
+		    if(r_resteer_bubble) $stop();		    
 		 end // if (n_restart_req)
 	       else if(!t_utlb_hit && (t_miss || t_hit))
 		 begin
-		    //$display("cycle %d : i-side utlb miss for %x, t_miss = %b, t_hit = %b", 
-		    //r_cycle, rr_pc, t_miss, t_hit);
-		    n_miss_pc = rr_pc;
-		    n_utlb_miss_req = 1'b1;
-		    n_utlb_miss_paddr = rr_pc[`M_WIDTH-1:`LG_PG_SZ];
+		    n_miss_pc = r_cache_pc;
 		    n_pc = r_pc;
-		    nn_pc = rr_pc;
+		    n_utlb_miss_req = 1'b1;
+		    n_utlb_miss_paddr = r_cache_pc[`M_WIDTH-1:`LG_PG_SZ];
 		    n_state = RELOAD_UTLB;
+		    if(r_resteer_bubble) $stop();		    
 		 end
 	       else if(t_miss)
 		 begin
 		    n_state = INJECT_RELOAD;
-		    n_mem_req_addr = {rr_pc[`M_WIDTH-1:`LG_L1D_CL_LEN], {`LG_L1D_CL_LEN{1'b0}}};
+		    n_mem_req_addr = {r_cache_pc[`M_WIDTH-1:`LG_L1D_CL_LEN], {`LG_L1D_CL_LEN{1'b0}}};
 		    n_mem_req_valid = 1'b1;
-		    n_miss_pc = rr_pc;
+		    n_miss_pc = r_cache_pc;
 		    n_pc = r_pc;
-		    nn_pc = rr_pc;
+		    if(r_resteer_bubble) $stop();		    
 		 end
 	       else if(t_hit && !fq_full)
 		 begin
@@ -691,15 +832,64 @@ endfunction
 		      begin
 			 n_delay_slot = 1'b0;
 		      end
-		    t_push_insn = 1'b1;
+		    
+		    //initial push multiple logic
+		    if(!(t_is_cflow || r_delay_slot))
+		      begin
+			 if(t_insn_idx == 'd0 && !fq_full4)
+			   begin
+			     if(t_branch_locs == 4'b0000)
+			       begin
+				  t_push_insn4 = 1'b1;
+				  n_pc = r_cache_pc + 'd16;
+				  n_resteer_bubble = 1'b1;
+			       end
+			     else if(t_branch_locs == 4'b0100)
+			       begin
+				  t_push_insn2 = 1'b1;
+				  n_pc = r_cache_pc + 'd12;
+				  n_cache_pc = r_cache_pc + 'd8;
+				  //n_resteer_bubble = 1'b1;
+			       end
+			     else
+			       begin
+				  //$display("%b %b %b %b", 
+				  //t_branch_locs[3],
+				  //t_branch_locs[2],
+				  //t_branch_locs[1],
+				  //t_branch_locs[0]);
+				  t_push_insn = 1'b1;
+			       end
+			   end
+			 else if(t_insn_idx == 'd1 && t_branch_locs[3:1] == 'd0 && !fq_full3 && 1'b0)
+			   begin
+			      t_push_insn3 = 1'b1;
+			      n_pc = r_cache_pc + 'd12;
+			      n_resteer_bubble = 1'b1;
+			   end
+			 else if(t_insn_idx == 'd2 && t_branch_locs[3:2] == 'd0 && !fq_full2 && 1'b0)
+			   begin
+			      t_push_insn2 = 1'b1;
+			      n_pc = r_cache_pc + 'd8;
+			      n_resteer_bubble = 1'b1;
+			   end
+			 else
+			   begin
+			      t_push_insn = 1'b1;
+			   end
+		      end
+		    else
+		      begin
+			 t_push_insn = 1'b1;
+		      end
 		 end // if (t_hit && !fq_full)
 	       else if(t_hit && fq_full)
 		 begin
 		    //$display("full insn queue at cycle %d", r_cycle);
 		    n_pc = r_pc;
-		    nn_pc = rr_pc;
 		    n_miss_pc = r_cache_pc;
 		    n_state = WAIT_FOR_NOT_FULL;
+		    if(r_resteer_bubble) $stop();		    
 		 end
 	    end
 	  INJECT_RELOAD:
@@ -727,7 +917,6 @@ endfunction
 		    n_restart_req = 1'b0;
 		    n_delay_slot = 1'b0;
 		    n_pc = restart_pc;
-		    nn_pc = 'd0;
 		    n_req = 1'b0;
 		    n_state = ACTIVE;
 		    t_clear_fq = 1'b1;
@@ -811,8 +1000,32 @@ endfunction
 	t_insn.pht_idx = r_pht_idx;
 `ifdef	ENABLE_CYCLE_ACCOUNTING
 	t_insn.fetch_cycle = r_cycle;
-`endif	
-     end
+`endif
+	t_insn2.data = t_insn_data2;
+	t_insn2.pc = r_cache_pc + 'd4;
+	t_insn2.pred_target = 'd0;
+	t_insn2.pred = 1'b0;
+	t_insn2.pht_idx = 'd0;
+`ifdef	ENABLE_CYCLE_ACCOUNTING
+	t_insn2.fetch_cycle = r_cycle;
+`endif
+	t_insn3.data = t_insn_data3;
+	t_insn3.pc = r_cache_pc + 'd8;
+	t_insn3.pred_target = 'd0;
+	t_insn3.pred = 1'b0;
+	t_insn3.pht_idx = 'd0;
+`ifdef	ENABLE_CYCLE_ACCOUNTING
+	t_insn3.fetch_cycle = r_cycle;
+`endif
+	t_insn4.data = t_insn_data4;
+	t_insn4.pc = r_cache_pc + 'd12;
+	t_insn4.pred_target = 'd0;
+	t_insn4.pred = 1'b0;
+	t_insn4.pht_idx = 'd0;
+`ifdef	ENABLE_CYCLE_ACCOUNTING
+	t_insn4.fetch_cycle = r_cycle;
+`endif
+     end // always_comb
    
    logic t_wr_valid_ram_en = mem_rsp_valid || r_state == FLUSH_CACHE;
    logic t_valid_ram_value = (r_state != FLUSH_CACHE);
@@ -821,8 +1034,7 @@ endfunction
 
    always_comb
      begin
-	//t_xor_pc_hist = n_cache_pc[`GBL_HIST_LEN+1:2] ^ r_spec_gbl_hist;
-	t_xor_pc_hist = n_cache_pc[`GBL_HIST_LEN+1:2] ^ r_arch_gbl_hist;	
+	t_xor_pc_hist = {n_cache_pc[`GBL_HIST_LEN-7:2], 8'd0} ^ r_spec_gbl_hist;	
 	n_pht_idx = t_xor_pc_hist[`LG_PHT_SZ-1:0];
 	
 	t_pht_val = r_pht_update_out;
@@ -880,6 +1092,16 @@ endfunction
 	  end
      end // always_ff@
 
+`ifdef VERILATOR
+   always_ff@(negedge clk)
+     begin
+	//$display("%b %b %b %b", t_push_insn, t_push_insn2, t_push_insn3, t_push_insn4);
+	record_fetch(t_push_insn ? 32'd1 : 32'd0,
+		     t_push_insn2 ? 32'd1 : 32'd0,
+		     t_push_insn3 ? 32'd1 : 32'd0,
+		     t_push_insn4 ? 32'd1 : 32'd0);
+     end
+`endif
    //always_ff@(negedge clk)
      //begin
      //if(r_cache_pc == 'h21e74)
@@ -1025,20 +1247,6 @@ endfunction
 	  end
      end
    
-	      
-   // always@(posedge clk)
-   //   begin
-   // 	r_tag_out <= r_tag[t_cache_idx];
-   // 	if(mem_rsp_valid)
-   // 	  begin
-   // 	     r_tag[r_mem_req_addr[IDX_STOP-1:IDX_START]] <= r_mem_req_addr[`M_WIDTH-1:IDX_STOP]; 
-   // 	  end
-   //   end   
-
-   always_ff@(posedge clk)
-     begin
-	r_fq <= n_fq;
-     end
    
    always_ff@(posedge clk)
      begin
@@ -1046,7 +1254,6 @@ endfunction
 	  begin
 	     r_state <= IDLE;
 	     r_pc <= 'd0;
-	     rr_pc <= 'd0;
 	     r_miss_pc <= 'd0;
 	     r_cache_pc <= 'd0;
 	     r_restart_ack <= 1'b0;
@@ -1056,6 +1263,10 @@ endfunction
 	     r_mem_req_valid <= 1'b0;
 	     r_mem_req_addr <= 'd0;
 	     r_fq_head_ptr <= 'd0;
+	     r_fq_next_head_ptr <= 'd1;
+	     r_fq_next_tail_ptr <= 'd1;
+	     r_fq_next3_tail_ptr <= 'd1;
+	     r_fq_next4_tail_ptr <= 'd1;
 	     r_fq_tail_ptr <= 'd0;
 	     r_restart_req <= 1'b0;
 	     r_flush_req <= 1'b0;
@@ -1068,13 +1279,13 @@ endfunction
 	     r_utlb_miss_req <= 1'b0;
 	     r_utlb_miss_paddr <= 'd0;	     
 	     r_cache_hits <= 'd0;
-	     r_cache_accesses <= 'd0;	     
+	     r_cache_accesses <= 'd0;
+	     r_resteer_bubble <= 1'b0;
 	  end
 	else
 	  begin
 	     r_state <= n_state;
 	     r_pc <= n_pc;
-	     rr_pc <= nn_pc;
 	     r_miss_pc <= n_miss_pc;
 	     r_cache_pc <= n_cache_pc;
 	     r_restart_ack <= n_restart_ack;
@@ -1084,6 +1295,10 @@ endfunction
 	     r_mem_req_valid <= n_mem_req_valid;
 	     r_mem_req_addr <= n_mem_req_addr;
 	     r_fq_head_ptr <= t_clear_fq ? 'd0 : n_fq_head_ptr;
+	     r_fq_next_head_ptr <= t_clear_fq ? 'd1 : n_fq_next_head_ptr;
+	     r_fq_next_tail_ptr <= t_clear_fq ? 'd1 : n_fq_next_tail_ptr;
+	     r_fq_next3_tail_ptr <= t_clear_fq ? 'd2 : n_fq_next3_tail_ptr;
+	     r_fq_next4_tail_ptr <= t_clear_fq ? 'd3 : n_fq_next4_tail_ptr;
 	     r_fq_tail_ptr <= t_clear_fq ? 'd0 : n_fq_tail_ptr;
 	     r_restart_req <= n_restart_req;
 	     r_flush_req <= n_flush_req;
@@ -1096,7 +1311,8 @@ endfunction
 	     r_utlb_miss_req <= n_utlb_miss_req;
 	     r_utlb_miss_paddr <= n_utlb_miss_paddr;	     
 	     r_cache_hits <= n_cache_hits;
-	     r_cache_accesses <= n_cache_accesses;	     
+	     r_cache_accesses <= n_cache_accesses;
+	     r_resteer_bubble <= n_resteer_bubble;	     
 	  end
      end
    

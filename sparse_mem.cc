@@ -11,12 +11,14 @@
 
 
 #define PROT (PROT_READ | PROT_WRITE)
-#define MAP (MAP_ANONYMOUS|MAP_PRIVATE)
+#define MAP (MAP_ANONYMOUS|MAP_PRIVATE|MAP_NORESERVE)
 
 sparse_mem::sparse_mem() {
-  mem = reinterpret_cast<uint8_t*>(mmap(nullptr, sparse_mem::sz, PROT, MAP, -1, 0));
+  void* mempt = mmap(nullptr, sparse_mem::sz, PROT, MAP, -1, 0);
+  mem = reinterpret_cast<uint8_t*>(mempt);
+  assert(madvise(mem, 1UL<<32, MADV_DONTNEED)==0);
   assert(mem != reinterpret_cast<uint8_t*>(~0UL));
-  memset(mem, 0, sparse_mem::sz);
+  //memset(mem, 0, sparse_mem::sz);
 }
 
 sparse_mem::~sparse_mem() {

@@ -1,11 +1,17 @@
 `ifndef __machine_hdr__
 `define __machine_hdr__
 
-//`define ENABLE_CYCLE_ACCOUNTING 1
+`ifdef VERILATOR
+`define DEBUG_FPU 1
+`define ENABLE_CYCLE_ACCOUNTING 1
+`endif
 
-//`define ENABLE_FPU 1
+`define ENABLE_FPU 1
+
+//`define ENABLE_64BITS
 
 `define LG_M_WIDTH 6
+
 
 //gshare branch predictor
 `define LG_PHT_SZ 16
@@ -24,13 +30,13 @@
 `define LG_FCR_PRF_ENTRIES 2
 
 //queue between decode and alloc
-`define LG_DQ_ENTRIES 1
+`define LG_DQ_ENTRIES 2
 
 //queue between fetch and decode
-`define LG_FQ_ENTRIES 2
+`define LG_FQ_ENTRIES 3
 
 //rob size
-`define LG_ROB_ENTRIES 4
+`define LG_ROB_ENTRIES 5
 
 `define LG_RET_STACK_ENTRIES 2
 
@@ -58,7 +64,9 @@
 
 `define FP_MAX_LAT (`FP_MACC_LAT)
 
-//cacheline length (in bytes)
+//lg2 
+
+// cacheline length (in bytes)
 `define LG_L1D_CL_LEN 4
 
 //number of sets in direct mapped cache
@@ -70,8 +78,6 @@
 `define M_WIDTH (1 << `LG_M_WIDTH)
 
 `define LG_BTB_SZ 7
-
-`define RETIRE_TWO 0
 
 typedef enum logic [4:0] {
    MEM_LB  = 5'd0,

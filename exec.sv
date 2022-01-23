@@ -1,5 +1,10 @@
 `include "uop.vh"
 
+`ifdef DEBUG_FPU
+import "DPI-C" function int fp64_to_fp32(input longint a);
+import "DPI-C" function longint fp32_to_fp64(input int a);
+`endif
+
 module exec(clk, 
 	    reset,
 	    machine_clr,
@@ -7,8 +12,11 @@ module exec(clk,
 	    in_32fp_reg_mode,	    
 	    uq_empty,
 	    uq_full,
+	    uq_next_full,
 	    uq_uop,
-	    uq_push, 
+	    uq_uop_two,
+	    uq_push,
+	    uq_push_two,
 	    complete_bundle_1,
 	    complete_valid_1,
 	    complete_bundle_2,
@@ -33,9 +41,13 @@ module exec(clk,
    output logic 		     in_32fp_reg_mode;
    output logic 		     uq_empty;
    output logic 			     uq_full;
+   output logic 			     uq_next_full;
    
    input 				     uop_t uq_uop;
+   input 				     uop_t uq_uop_two;
+   
    input logic 				     uq_push;
+   input logic 				     uq_push_two;
    
    output 	complete_t complete_bundle_1;
    output logic complete_valid_1;
@@ -193,28 +205,41 @@ module exec(clk,
    /* non mem uop queue */
    uop_t r_uq[N_UQ_ENTRIES];
    uop_t uq;
-   logic 	      t_uq_read, t_uq_empty, t_uq_full;
-   logic [`LG_UQ_ENTRIES:0]  r_uq_head_ptr, n_uq_head_ptr;
-   logic [`LG_UQ_ENTRIES:0]  r_uq_tail_ptr, n_uq_tail_ptr;
+   
+   logic 			    t_uq_read, t_uq_empty, t_uq_full, t_uq_next_full;
+   logic [`LG_UQ_ENTRIES:0] 	    r_uq_head_ptr, n_uq_head_ptr;
+   logic [`LG_UQ_ENTRIES:0] 	    r_uq_tail_ptr, n_uq_tail_ptr;
+   logic [`LG_UQ_ENTRIES:0] 	    r_uq_next_head_ptr, n_uq_next_head_ptr;
+   logic [`LG_UQ_ENTRIES:0] 	    r_uq_next_tail_ptr, n_uq_next_tail_ptr;
 
    /* mem uop queue */
    uop_t r_mem_uq[N_MEM_UQ_ENTRIES];
    uop_t mem_uq;
-   logic 	      t_mem_uq_read, t_mem_uq_empty, t_mem_uq_full;
+   logic 	      t_mem_uq_read, t_mem_uq_empty, t_mem_uq_full,
+		      t_mem_uq_next_full;
    logic [`LG_MEM_UQ_ENTRIES:0]  r_mem_uq_head_ptr, n_mem_uq_head_ptr;
    logic [`LG_MEM_UQ_ENTRIES:0]  r_mem_uq_tail_ptr, n_mem_uq_tail_ptr;
+   logic [`LG_MEM_UQ_ENTRIES:0] r_mem_uq_next_head_ptr, n_mem_uq_next_head_ptr;
+   logic [`LG_MEM_UQ_ENTRIES:0] r_mem_uq_next_tail_ptr, n_mem_uq_next_tail_ptr;
 
    /* fp uop queue */
    uop_t r_fp_uq[N_FP_UQ_ENTRIES];
    uop_t fp_uq;
-   logic 	      t_fp_uq_read, t_fp_uq_empty, t_fp_uq_full;
+   logic 	      t_fp_uq_read, t_fp_uq_empty, t_fp_uq_full, 
+		      t_fp_uq_next_full;
+   logic 	      t_push_two_mem, t_push_two_fp, t_push_two_int;
+   logic 	      t_push_one_mem, t_push_one_fp, t_push_one_int;
+   
    logic [`LG_FP_UQ_ENTRIES:0]  r_fp_uq_head_ptr, n_fp_uq_head_ptr;
    logic [`LG_FP_UQ_ENTRIES:0]  r_fp_uq_tail_ptr, n_fp_uq_tail_ptr;
+   logic [`LG_FP_UQ_ENTRIES:0]  r_fp_uq_next_head_ptr, n_fp_uq_next_head_ptr;
+   logic [`LG_FP_UQ_ENTRIES:0]  r_fp_uq_next_tail_ptr, n_fp_uq_next_tail_ptr;
    
 
    always_comb
      begin
 	uq_full = t_uq_full || t_mem_uq_full || t_fp_uq_full;
+	uq_next_full = t_uq_next_full || t_mem_uq_next_full || t_fp_uq_next_full;
 	uq_empty = t_uq_empty;
      end
 
@@ -228,7 +253,11 @@ module exec(clk,
 	  end
 	else
 	  begin
+`ifdef ENABLE_64BITS 
 	     r_in_32b_mode <= n_in_32b_mode;
+`else
+	     r_in_32b_mode <= 1'b1;
+`endif
 	     r_in_32fp_reg_mode <= n_in_32fp_reg_mode;
 	  end
      end	
@@ -239,11 +268,15 @@ module exec(clk,
 	  begin
 	     r_uq_head_ptr <= 'd0;
 	     r_uq_tail_ptr <= 'd0;
+	     r_uq_next_head_ptr <= 'd1;
+	     r_uq_next_tail_ptr <= 'd1;	     
 	  end
 	else
 	  begin
 	     r_uq_head_ptr <= n_uq_head_ptr;
 	     r_uq_tail_ptr <= n_uq_tail_ptr;
+	     r_uq_next_head_ptr <= n_uq_next_head_ptr;
+	     r_uq_next_tail_ptr <= n_uq_next_tail_ptr;	     
 	  end
      end // always_ff@ (posedge clk)
 
@@ -253,27 +286,49 @@ module exec(clk,
 	  begin
 	     r_mem_uq_head_ptr <= 'd0;
 	     r_mem_uq_tail_ptr <= 'd0;
+	     r_mem_uq_next_head_ptr <= 'd1;
+	     r_mem_uq_next_tail_ptr <= 'd1;
+	     
 	  end
 	else
 	  begin
 	     r_mem_uq_head_ptr <= n_mem_uq_head_ptr;
 	     r_mem_uq_tail_ptr <= n_mem_uq_tail_ptr;
+	     r_mem_uq_next_head_ptr <= n_mem_uq_next_head_ptr;
+	     r_mem_uq_next_tail_ptr <= n_mem_uq_next_tail_ptr;
 	  end
-     end // always_ff@ (posedge clk)
+     end // always_ff@ (posedge clk// )
+
 
    always_comb
      begin
 	n_mem_uq_head_ptr = r_mem_uq_head_ptr;
 	n_mem_uq_tail_ptr = r_mem_uq_tail_ptr;
+	n_mem_uq_next_head_ptr = r_mem_uq_next_head_ptr;
+	n_mem_uq_next_tail_ptr = r_mem_uq_next_tail_ptr;
+	
 	t_mem_uq_empty = (r_mem_uq_head_ptr == r_mem_uq_tail_ptr);
 	t_mem_uq_full = (r_mem_uq_head_ptr != r_mem_uq_tail_ptr) && (r_mem_uq_head_ptr[`LG_MEM_UQ_ENTRIES-1:0] == r_mem_uq_tail_ptr[`LG_MEM_UQ_ENTRIES-1:0]);
+
+	t_mem_uq_next_full = (r_mem_uq_head_ptr != r_mem_uq_next_tail_ptr) && 
+			     (r_mem_uq_head_ptr[`LG_MEM_UQ_ENTRIES-1:0] == r_mem_uq_next_tail_ptr[`LG_MEM_UQ_ENTRIES-1:0]);
+
 	
 	mem_uq = r_mem_uq[r_mem_uq_head_ptr[`LG_MEM_UQ_ENTRIES-1:0]];
 
+	t_push_two_mem = uq_push && uq_push_two && uq_uop.is_mem && uq_uop_two.is_mem;
+	t_push_one_mem = ((uq_push && uq_uop.is_mem) || (uq_push_two && uq_uop_two.is_mem)) && !t_push_two_mem;
+	
 	/* these need work */
-	if(uq_push && uq_uop.is_mem)
+	if(t_push_two_mem)
+	  begin
+	     n_mem_uq_tail_ptr = r_mem_uq_tail_ptr + 'd2;
+	     n_mem_uq_next_tail_ptr = r_mem_uq_next_tail_ptr + 'd2;
+	  end
+	else if(uq_push_two && uq_uop_two.is_mem || uq_push && uq_uop.is_mem)
 	  begin
 	     n_mem_uq_tail_ptr = r_mem_uq_tail_ptr + 'd1;
+	     n_mem_uq_next_tail_ptr = r_mem_uq_next_tail_ptr + 'd1;
 	  end
 	
 	if(t_pop_mem_uq)
@@ -285,10 +340,15 @@ module exec(clk,
 
    always_ff@(posedge clk)
      begin
-	if(uq_push && uq_uop.is_mem)
+	if(t_push_two_mem)
 	  begin
+	     r_mem_uq[r_mem_uq_next_tail_ptr[`LG_MEM_UQ_ENTRIES-1:0]] <= uq_uop_two;
 	     r_mem_uq[r_mem_uq_tail_ptr[`LG_MEM_UQ_ENTRIES-1:0]] <= uq_uop;
 	  end
+	else if(t_push_one_mem)
+	  begin
+	     r_mem_uq[r_mem_uq_tail_ptr[`LG_MEM_UQ_ENTRIES-1:0]] <= uq_uop.is_mem ? uq_uop : uq_uop_two;
+	  end	
      end // always_ff@ (posedge clk)
 
    
@@ -298,11 +358,16 @@ module exec(clk,
 	  begin
 	     r_fp_uq_head_ptr <= 'd0;
 	     r_fp_uq_tail_ptr <= 'd0;
+	     r_fp_uq_next_head_ptr <= 'd1;
+	     r_fp_uq_next_tail_ptr <= 'd1;
+	     
 	  end
 	else
 	  begin
 	     r_fp_uq_head_ptr <= n_fp_uq_head_ptr;
 	     r_fp_uq_tail_ptr <= n_fp_uq_tail_ptr;
+	     r_fp_uq_next_head_ptr <= n_fp_uq_next_head_ptr;
+	     r_fp_uq_next_tail_ptr <= n_fp_uq_next_tail_ptr;
 	  end
      end
    
@@ -310,14 +375,28 @@ module exec(clk,
      begin
 	n_fp_uq_head_ptr = r_fp_uq_head_ptr;
 	n_fp_uq_tail_ptr = r_fp_uq_tail_ptr;
+	n_fp_uq_next_head_ptr = r_fp_uq_next_head_ptr;
+	n_fp_uq_next_tail_ptr = r_fp_uq_next_tail_ptr;
+	
 	t_fp_uq_empty = (r_fp_uq_head_ptr == r_fp_uq_tail_ptr);
 	t_fp_uq_full = (r_fp_uq_head_ptr != r_fp_uq_tail_ptr) && (r_fp_uq_head_ptr[`LG_FP_UQ_ENTRIES-1:0] == r_fp_uq_tail_ptr[`LG_FP_UQ_ENTRIES-1:0]);
+	t_fp_uq_next_full = (r_fp_uq_head_ptr != r_fp_uq_next_tail_ptr) && 
+			    (r_fp_uq_head_ptr[`LG_FP_UQ_ENTRIES-1:0] == r_fp_uq_next_tail_ptr[`LG_FP_UQ_ENTRIES-1:0]);
 	
 	fp_uq = r_fp_uq[r_fp_uq_head_ptr[`LG_FP_UQ_ENTRIES-1:0]];
 
-	if(uq_push && uq_uop.is_fp)
+	t_push_two_fp = uq_push && uq_push_two && uq_uop.is_fp && uq_uop_two.is_fp;
+	t_push_one_fp = ((uq_push && uq_uop.is_fp) || (uq_push_two && uq_uop_two.is_fp)) && !t_push_two_fp;
+	
+	if(t_push_two_fp)
+	  begin
+	     n_fp_uq_tail_ptr = r_fp_uq_tail_ptr + 'd2;
+	     n_fp_uq_next_tail_ptr = r_fp_uq_next_tail_ptr + 'd2;
+	  end
+	else if(uq_push_two && uq_uop_two.is_fp || uq_push && uq_uop.is_fp)
 	  begin
 	     n_fp_uq_tail_ptr = r_fp_uq_tail_ptr + 'd1;
+	     n_fp_uq_next_tail_ptr = r_fp_uq_next_tail_ptr + 'd1;
 	  end
 	
 	if(t_pop_fp_uq)
@@ -329,25 +408,50 @@ module exec(clk,
 
    always_ff@(posedge clk)
      begin
-	if(uq_push && uq_uop.is_fp)
+	if(t_push_two_fp)
 	  begin
 	     r_fp_uq[r_fp_uq_tail_ptr[`LG_FP_UQ_ENTRIES-1:0]] <= uq_uop;
+	     r_fp_uq[r_fp_uq_next_tail_ptr[`LG_FP_UQ_ENTRIES-1:0]] <= uq_uop_two;
 	  end
+	else if(t_push_one_fp)
+	  begin
+	     r_fp_uq[r_fp_uq_tail_ptr[`LG_FP_UQ_ENTRIES-1:0]] <= uq_uop.is_fp ? uq_uop : uq_uop_two;	     
+	  end
+	
      end
    
    always_comb
      begin
 	n_uq_head_ptr = r_uq_head_ptr;
 	n_uq_tail_ptr = r_uq_tail_ptr;
+	n_uq_next_head_ptr = r_uq_next_head_ptr;
+	n_uq_next_tail_ptr = r_uq_next_tail_ptr;
+	
+	
 	t_uq_empty = (r_uq_head_ptr == r_uq_tail_ptr);
 	t_uq_full = (r_uq_head_ptr != r_uq_tail_ptr) && 
 		    (r_uq_head_ptr[`LG_UQ_ENTRIES-1:0] == r_uq_tail_ptr[`LG_UQ_ENTRIES-1:0]);
+	
+	t_uq_next_full = (r_uq_head_ptr != r_uq_next_tail_ptr) && 
+			 (r_uq_head_ptr[`LG_UQ_ENTRIES-1:0] == r_uq_next_tail_ptr[`LG_UQ_ENTRIES-1:0]);
+
+	t_push_two_int = uq_push && uq_push_two && uq_uop.is_int && uq_uop_two.is_int;
+	t_push_one_int = ((uq_push && uq_uop.is_int) || (uq_push_two && uq_uop_two.is_int)) && !t_push_two_int;
+	
 	uq = r_uq[r_uq_head_ptr[`LG_UQ_ENTRIES-1:0]];
 	
-	if(uq_push && uq_uop.is_int)
+	if(t_push_two_int)
+	  begin	     
+	     n_uq_tail_ptr = r_uq_tail_ptr + 'd2;
+	     n_uq_next_tail_ptr = r_uq_next_tail_ptr + 'd2;
+	  end
+	else if(uq_push_two && uq_uop_two.is_int || uq_push && uq_uop.is_int)
 	  begin	     
 	     n_uq_tail_ptr = r_uq_tail_ptr + 'd1;
+	     n_uq_next_tail_ptr = r_uq_next_tail_ptr + 'd1;
 	  end
+
+	
 	if(t_pop_uq)
 	  begin
 	     n_uq_head_ptr = r_uq_head_ptr + 'd1;
@@ -356,10 +460,16 @@ module exec(clk,
 
    always_ff@(posedge clk)
      begin
-	if(uq_push && uq_uop.is_int)
+	if(t_push_two_int)
 	  begin
 	     r_uq[r_uq_tail_ptr[`LG_UQ_ENTRIES-1:0]] <= uq_uop;
+	     r_uq[r_uq_next_tail_ptr[`LG_UQ_ENTRIES-1:0]] <= uq_uop_two;	     
 	  end
+	else if(t_push_one_int)
+	  begin
+	     r_uq[r_uq_tail_ptr[`LG_UQ_ENTRIES-1:0]] <= uq_uop.is_int ? uq_uop : uq_uop_two;
+	  end
+	
      end // always_ff@ (posedge clk)
    
    logic [31:0]        r_cycle;
@@ -581,7 +691,6 @@ module exec(clk,
 	  end
      end // always_ff@ (posedge clk)
 
-
    always_comb
      begin
 	n_prf_inflight = r_prf_inflight;
@@ -591,6 +700,11 @@ module exec(clk,
 	  begin
 	     n_prf_inflight[uq_uop.dst] = 1'b1;
 	  end
+	if(uq_push_two && uq_uop_two.dst_valid)
+	  begin
+	     n_prf_inflight[uq_uop_two.dst] = 1'b1;
+	  end
+	
 	if(uq_push && uq_uop.hilo_dst_valid)
 	  begin
 	     n_hilo_inflight[uq_uop.hilo_dst] = 1'b1;
@@ -685,6 +799,7 @@ module exec(clk,
 	     r_fcr_prf[t_fpu_fcr_ptr] <= t_fpu_result[7:0];
 	  end
      end
+
       
    always_comb
      begin
@@ -1350,7 +1465,7 @@ module exec(clk,
 		   1'b1;
 	     
      end // always_comb
-
+   
 
 `ifdef ENABLE_FPU
    logic [31:0] t_sp_trunc, t_w_sp_cvt;
@@ -1358,15 +1473,25 @@ module exec(clk,
 
    logic 	t_fp_div_sp_active, t_fp_div_dp_active,t_fp_div_active;
 
-   logic 	t_start_dp_div, t_start_sp_div;
+   logic 	t_start_dp_div, t_start_sp_div, t_is_fp_sqrt;
    
-   fp_trunc #(.W(32)) sp_trunc (.in(t_fp_srcA[31:0]), .out(t_sp_trunc));
-   fp_trunc #(.W(64)) dp_trunc (.in(t_fp_srcA), .out(t_dp_trunc));
+   fp_trunc_to_int32 #(.W(32)) sp_trunc (.clk(clk),
+				.in(t_fp_srcA[31:0]),
+				.en((fp_uq.op == TRUNC_SP_W) && t_fp_srcs_rdy),
+				.out(t_sp_trunc));
    
-   fp_convert #(.W(32)) int_sp_convert (.in(t_fp_srcA[31:0]), 
-					.out(t_w_sp_cvt));
+   fp_trunc_to_int32 #(.W(64)) dp_trunc (.clk(clk),
+				.in(t_fp_srcA),
+				.en((fp_uq.op == TRUNC_DP_W) && t_fp_srcs_rdy),
+				.out(t_dp_trunc));
    
-   fp_convert #(.W(64)) int_dp_convert (.in({{32{t_fp_srcA[31]}},t_fp_srcA[31:0]}), .out(t_w_dp_cvt));
+   fp_convert #(.W(32)) int_sp_convert (.clk(clk),
+					.in(t_fp_srcA[31:0]),
+					.en((fp_uq.op == CVT_W_SP) && t_fp_srcs_rdy),					.out(t_w_sp_cvt));
+   
+   fp_convert #(.W(64)) int_dp_convert (.clk(clk),
+					.in({{32{t_fp_srcA[31]}},t_fp_srcA[31:0]}),
+					.en((fp_uq.op == CVT_W_DP) && t_fp_srcs_rdy),					.out(t_w_dp_cvt));
 
    always_comb
      begin
@@ -1381,7 +1506,8 @@ module exec(clk,
 			       .valid(t_sp_div_valid),
 			       .dst_ptr_out(t_sp_div_dst_ptr),
 			       .rob_ptr_out(t_sp_div_rob_ptr),
-			       .active(t_fp_div_sp_active), 
+			       .active(t_fp_div_sp_active),
+			       .is_sqrt(t_is_fp_sqrt),
 			       .clk(clk), 
 			       .reset(reset), 
 			       .a(t_fp_srcA[31:0]), 
@@ -1398,7 +1524,8 @@ module exec(clk,
 			       .valid(t_dp_div_valid),
 			       .dst_ptr_out(t_dp_div_dst_ptr),
 			       .rob_ptr_out(t_dp_div_rob_ptr),
-			       .active(t_fp_div_dp_active), 
+			       .active(t_fp_div_dp_active),
+			       .is_sqrt(t_is_fp_sqrt),
 			       .clk(clk), 
 			       .reset(reset), 
 			       .a(t_fp_srcA), 
@@ -1413,8 +1540,12 @@ module exec(clk,
    logic [10:0] t_cvt_dp_sp_exp;
    always_comb
      begin
+ `ifdef DEBUG_FPU
+	t_cvt_dp_sp = fp64_to_fp32(t_fp_srcA);
+ `else
 	t_cvt_dp_sp_exp = t_fp_srcA[62:52] - 11'd896;
 	t_cvt_dp_sp = {t_fp_srcA[63], t_cvt_dp_sp_exp[7:0], t_fp_srcA[51:29]};
+ `endif
      end
    
    fpu #(.LG_PRF_WIDTH(`LG_PRF_ENTRIES), 
@@ -1449,6 +1580,7 @@ module exec(clk,
 	t_start_fpu = 1'b0;
 	t_start_dp_div = 1'b0;
 	t_start_sp_div = 1'b0;
+	t_is_fp_sqrt = 1'b0;
 	t_fp_wr_prf = 1'b0;
 	t_pop_fp_uq = 1'b0;
 	t_fp_srcs_rdy = 1'b0;
@@ -1549,11 +1681,15 @@ module exec(clk,
 			       && !r_fp_wb_bitvec[0];
 	       t_fp_wr_prf = t_fp_srcs_rdy; 
 	    end
-
+	  
 	  CVT_SP_DP:
 	    begin
+ `ifdef DEBUG_FPU
+	       t_fp_result = fp32_to_fp64(t_fp_srcA[31:0]);
+ `else
 	       t_fp_result = {t_fp_srcA[31], (11'd896 + {3'd0, t_fp_srcA[30:23]}),
 			      t_fp_srcA[22:0], 29'd0};
+ `endif
 	       t_fp_srcs_rdy = !r_fp_prf_inflight[fp_uq.srcA] 
 			       && !t_fp_uq_empty
 			       && !t_fp_div_active
@@ -1648,11 +1784,7 @@ module exec(clk,
 				&& !t_fp_div_active
 				&& !t_fp_uq_empty;
 	       
-	       // $display("%d divide at pc %x with rob %d, dst %d, can start %b, divider active %b", 
-	       // 		r_cycle, fp_uq.pc, fp_uq.rob_ptr, fp_uq.dst, 
-	       // 		t_start_dp_div, t_fp_div_active);
 	    end
-
 	  SP_DIV:
 	    begin
 	       t_fp_srcs_rdy = (!(r_fp_prf_inflight[fp_uq.srcA] ||
@@ -1663,6 +1795,28 @@ module exec(clk,
 				&& (r_fp_wb_bitvec == 'd0)
 				  && !t_fp_div_active
 				&& !t_fp_uq_empty;
+	    end
+
+	  DP_SQRT:
+	    begin
+	       t_fp_srcs_rdy = !r_fp_prf_inflight[fp_uq.srcA]
+			       && (r_fp_wb_bitvec == 'd0);
+
+	       t_start_dp_div = t_fp_srcs_rdy
+				&& (r_fp_wb_bitvec == 'd0)
+				&& !t_fp_div_active
+				&& !t_fp_uq_empty;
+	       t_is_fp_sqrt = 1'b1;
+	    end
+	  SP_SQRT:
+	    begin
+	       t_fp_srcs_rdy = !r_fp_prf_inflight[fp_uq.srcA]
+			       && (r_fp_wb_bitvec == 'd0);				   
+	       t_start_sp_div = t_fp_srcs_rdy
+				&& (r_fp_wb_bitvec == 'd0)
+				  && !t_fp_div_active
+				&& !t_fp_uq_empty;
+	       t_is_fp_sqrt = 1'b1;				   
 	    end
 	  
 	  DP_CMP_LT:

@@ -207,6 +207,7 @@ endfunction
    logic 				  n_inhibit_write, r_inhibit_write;
    logic 				  t_got_non_mem, r_got_non_mem;
    
+   logic 				  n_is_retry, r_is_retry;
    
    logic 				  n_core_mem_rsp_valid, r_core_mem_rsp_valid;
    mem_rsp_t n_core_mem_rsp, r_core_mem_rsp;
@@ -343,6 +344,7 @@ endfunction
      begin
 	if(reset)
 	  begin
+	     r_is_retry <= 1'b0;
 	     r_flush_complete <= 1'b0;
 	     r_flush_req <= 1'b0;
 	     r_flush_cl_req <= 1'b0;
@@ -370,6 +372,7 @@ endfunction
 	  end
 	else
 	  begin
+	     r_is_retry <= n_is_retry;
 	     r_flush_complete <= n_flush_complete;
 	     r_flush_req <= n_flush_req;
 	     r_flush_cl_req <= n_flush_cl_req;
@@ -809,6 +812,9 @@ endfunction
 	n_core_mem_rsp.exception_tlb_modified = 1'b0;
 	n_core_mem_rsp.exception_tlb_invalid = 1'b0;
 	n_core_mem_rsp.faulted = 1'b0;
+	n_core_mem_rsp.missed_l1d = 1'b0;
+	n_core_mem_rsp.was_mem = !non_mem_op(r_req.op);
+
 	n_cache_accesses = r_cache_accesses;
 	n_cache_hits = r_cache_hits;
 	n_cache_hits_under_miss = r_cache_hits_under_miss;
@@ -823,6 +829,7 @@ endfunction
 	n_inhibit_write = r_inhibit_write;
 	
 	t_mark_invalid = 1'b0;
+	n_is_retry = 1'b0;
 	
 	case(r_state)
 	  ACTIVE:
@@ -879,6 +886,8 @@ endfunction
 			 n_core_mem_rsp.data = t_rsp_data;
 			 n_core_mem_rsp.dst_valid = t_rsp_dst_valid;
 			 n_core_mem_rsp.fp_dst_valid = t_rsp_fp_dst_valid;
+			 n_core_mem_rsp.missed_l1d = r_is_retry;
+
 			 n_cache_hits = r_cache_hits + 'd1;
 			 n_core_mem_rsp_valid = 1'b1;
 		      end // if (r_valid_out && (r_tag_out == r_cache_tag))
@@ -895,7 +904,6 @@ endfunction
 		       t_miss_idx = r_cache_idx;
 		       t_miss_addr = r_req.addr;
 		       n_mem_req_valid = 1'b1;	       
-
 		    end
 		  else
 		    begin
@@ -923,7 +931,8 @@ endfunction
 		       t_cache_tag = t_mem_head.addr[`M_WIDTH-1:IDX_STOP];
 		       t_addr = t_mem_head.addr;
 		       t_got_req = 1'b1;
-		       n_cache_accesses = r_cache_accesses + 'd1;
+		       n_is_retry = 1'b1;
+		       //n_cache_accesses = r_cache_accesses + 'd1;
 		       n_last_wr = t_mem_head.is_store;
 		       n_last_rd = !t_mem_head.is_store;
 		       //$display("retry reload for address %x @ cycle %d", 
@@ -942,7 +951,8 @@ endfunction
 		       t_got_req = 1'b1;
 		       n_last_wr = core_mem_req.is_store;
 		       n_last_rd = !core_mem_req.is_store;
-		       n_cache_accesses = r_cache_accesses + 'd1;
+		       n_cache_accesses = non_mem_op(core_mem_req.op) ? r_cache_accesses : 
+					  r_cache_accesses + 'd1;
 		    end
 	       end // if (core_mem_req_valid && !t_got_miss && !mem_q_almost_full)
 	     else if(r_flush_req)
@@ -1007,8 +1017,10 @@ endfunction
 		     n_core_mem_rsp.data = t_rsp_data;
 		     n_core_mem_rsp.dst_valid = t_rsp_dst_valid;
 		     n_core_mem_rsp.fp_dst_valid = t_rsp_fp_dst_valid;
-		     n_cache_hits = r_cache_hits + 'd1;
-		     n_cache_accesses = r_cache_accesses + 'd1;
+		     
+		     //n_cache_hits = r_cache_hits + 'd1;
+		     //n_cache_accesses = r_cache_accesses + 'd1;
+		     
 		     n_cache_hits_under_miss = r_cache_hits_under_miss + 'd1;
 		     n_core_mem_rsp_valid = 1'b1;
 		     core_mem_req_ack = 1'b1;

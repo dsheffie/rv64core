@@ -37,6 +37,8 @@ typedef struct packed {
    logic [`LG_PHT_SZ-1:0] 	 pht_idx;
 
 `ifdef ENABLE_CYCLE_ACCOUNTING
+   logic 			 missed_l1d;
+   logic 			 is_mem;
    logic [63:0] 	    fetch_cycle;
    logic [63:0] 	    alloc_cycle;
    logic [63:0] 	    complete_cycle;
@@ -90,7 +92,9 @@ typedef struct packed {
    logic 		       exception_tlb_refill;
    logic 		       exception_tlb_modified;
    logic 		       exception_tlb_invalid;
-
+   logic 		       was_mem;
+   logic 		       missed_l1d;
+   
 } mem_rsp_t;
 
 typedef struct packed {

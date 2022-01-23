@@ -14,8 +14,80 @@ bool globals::trace_fp = false;
 static state_t *s = nullptr;
 static state_t *ss = nullptr;
 
-
 static boost::dynamic_bitset<> touched_lines(1UL<<28);
+
+static pipeline_logger *pl = nullptr;
+
+static uint64_t l1d_misses = 0, l1d_insns = 0;
+
+static uint64_t last_retire_cycle = 0, last_retire_pc  = 0;
+
+static std::map<uint64_t, uint64_t> retire_map;
+
+static uint64_t n_fetch[5] = {0};
+static uint64_t n_uq_full[3] = {0};
+static uint64_t n_rdy[3] = {0};
+void record_alloc(int a1, int a2, int r1, int r2) {
+  if(a2)
+    ++n_uq_full[2];
+  else if(a1)
+    ++n_uq_full[1];
+  else
+    ++n_uq_full[0];
+
+  if(r2)
+    ++n_rdy[2];
+  else if(r1)
+    ++n_rdy[1];
+  else
+    ++n_rdy[0];
+  
+}
+void record_fetch(int p1, int p2, int p3, int p4) {
+  if(p1)
+    ++n_fetch[1];
+  else if(p2)
+    ++n_fetch[2];
+  else if(p3)
+    ++n_fetch[3];
+  else if(p4)
+    ++n_fetch[4];
+  else
+    ++n_fetch[0];
+}
+  
+
+void record_retirement(long long pc, long long fetch_cycle, long long alloc_cycle, long long complete_cycle, long long retire_cycle,
+		       int faulted , int is_mem, int missed_l1d) {
+
+  //if(pc == 0x2046c || pc == 0x20464) {
+  //std::cout << std::hex << pc << std::dec << " : " << alloc_cycle << "," << complete_cycle << "," << retire_cycle << "," << faulted << "\n";
+  //}
+  uint64_t delta = retire_cycle - last_retire_cycle;
+
+  //if(delta == 3) {
+  //std::cout << "curr = " << std::hex << pc << std::dec << " : " << getAsmString(get_insn(pc, s), pc) << "\n";
+  //std::cout << "last = " << std::hex << last_retire_pc << std::dec << " : " << getAsmString(get_insn(last_retire_pc, s), last_retire_pc) << "\n";
+  //}
+  //std::cout << "delta = " << delta << "\n";
+  retire_map[delta]++;
+  
+  last_retire_cycle = retire_cycle;
+  last_retire_pc = pc;
+  
+  if(missed_l1d) {
+    //std::cout << "pc = " << std::hex << pc << " missed cache " << std::dec
+    //<< " : " << getAsmString(get_insn(pc, s), pc)
+    //<< "\n";
+    ++l1d_misses;
+  }
+  l1d_insns += is_mem;
+  
+  if(pl == nullptr) {
+    return;
+  }
+  pl->append(pc, fetch_cycle, alloc_cycle, complete_cycle, retire_cycle, faulted);
+}
 
 
 static int buildArgcArgv(const char *filename, const char *sysArgs, char ***argv) {
@@ -57,7 +129,7 @@ int main(int argc, char **argv) {
   namespace po = boost::program_options; 
   // Initialize Verilators variables
   bool enable_checker = true;
-  std::string sysArgs;
+  std::string sysArgs, pipelog;
   std::string mips_binary = "dhrystone3";
   bool use_checkpoint = false, use_checker_only = false;
   uint64_t heartbeat = 1UL<<36;
@@ -76,7 +148,8 @@ int main(int argc, char **argv) {
       ("file,f", po::value<std::string>(&mips_binary), "mips binary")
       ("heartbeat,h", po::value<uint64_t>(&heartbeat)->default_value(1<<24), "heartbeat for stats")
       ("memlat,m", po::value<uint64_t>(&mem_lat)->default_value(4), "memory latency")
-      ("maxcycle", po::value<uint64_t>(&max_cycle)->default_value(1UL<<32), "maximum cycles")
+      ("pipelog,p", po::value<std::string>(&pipelog), "log for pipeline tracing")
+      ("maxcycle", po::value<uint64_t>(&max_cycle)->default_value(1UL<<34), "maximum cycles")
       ("maxicnt", po::value<uint64_t>(&max_icnt)->default_value(1UL<<50), "maximum icnt")
       ("tracefp", po::value<bool>(&globals::trace_fp)->default_value(false), "trace fp instructions")
       ("trace,t", po::value<bool>(&globals::trace_retirement)->default_value(false), "trace retired instruction stream")
@@ -172,10 +245,9 @@ int main(int argc, char **argv) {
   uint32_t last_match_pc = 0;
   uint64_t last_retire = 0, last_check = 0, last_restart = 0;
   uint64_t last_retired_pc = 0, last_retired_fp_pc = 0;
-  uint64_t mismatches = 0;
+  uint64_t mismatches = 0, n_stores = 0, n_loads = 0;
   uint64_t stores_not_hor = 0;
-  uint64_t insns_allocated = 0, insns_decoded = 0, insns_fetched = 0,
-    insns_retired = 0, n_mispredicts = 0, n_checks = 0;
+  uint64_t insns_retired = 0, n_branches = 0, n_mispredicts = 0, n_checks = 0, n_flush_cycles = 0;
   uint64_t n_iside_tlb_misses = 0, n_dside_tlb_misses = 0;
   bool got_mem_req = false, got_mem_rsp = false, got_monitor = false;
   //assert reset
@@ -263,8 +335,9 @@ int main(int argc, char **argv) {
 
   
   while(true) {
+    bool should_break = false;
     if(tb->got_break) {
-      break;
+      should_break = true;
     }
     
     tb->mem_rsp_valid = 0;
@@ -279,9 +352,15 @@ int main(int argc, char **argv) {
     tb->eval();
     tb->clk = 1;
     tb->eval();
+    if(should_break)
+      break;
     
     if(tb->retire_reg_valid) {
       s->gpr[tb->retire_reg_ptr] = tb->retire_reg_data;
+      //if(tb->retire_reg_ptr == R_a0) {
+      //std::cout << std::hex << "insn with pc " << tb->retire_pc << " updates a0 \n"
+      //<< std::dec;
+      //}
     }
     if(tb->retire_valid) {
       last_retire = 0;
@@ -295,6 +374,22 @@ int main(int argc, char **argv) {
     //}
   }
 
+  for(int c = 0; c < 128; c++) {
+    tb->mem_rsp_valid = 0;
+    if(tb->mem_req_valid) {
+      for(int i = 0; i < 4; i++) {
+	tb->mem_rsp_load_data[i] = *reinterpret_cast<uint32_t*>(s->mem[tb->mem_req_addr + 4*i]);
+      }
+      tb->mem_rsp_valid = 1;
+    }
+    tb->clk = 0;
+    tb->eval();
+    tb->clk = 1;
+    tb->eval();
+  }
+  //std::cout << "made it through init\n";
+  //exit(-1);
+
   if(use_checkpoint) {
     loadState(*s, mips_binary.c_str());
   }
@@ -302,6 +397,11 @@ int main(int argc, char **argv) {
     load_elf(mips_binary.c_str(), s);
     mkMonitorVectors(s);
   }
+
+  if(not(pipelog.empty())) {
+    pl = new pipeline_logger(pipelog);
+  }
+  
   s->pc = ss->pc;
   while(!tb->ready_for_resume) {
     ++globals::cycle;  
@@ -495,6 +595,10 @@ int main(int argc, char **argv) {
     
     if(tb->retire_reg_valid) {
       s->gpr[tb->retire_reg_ptr] = tb->retire_reg_data;
+      //if(tb->retire_reg_ptr == R_a0) {
+      //std::cout << std::hex << "insn with pc " << tb->retire_pc << " updates a0 \n"
+      //<< std::dec;
+      //}      
     }
 
     // if(tb->retire_valid) {
@@ -517,76 +621,17 @@ int main(int argc, char **argv) {
 		  << "\n";
 
       }
-      //assert((tb->retire_reg_ptr & 1) == 0);
-      
-      if(globals::trace_fp) {
-	uint32_t r_inst = get_insn(tb->retire_pc, s);
-	fpOperation op = decode_fp(r_inst);
-	if(op != fpOperation::unknown) {
-	  uint32_t fmt=(r_inst >> 21) & 31;	  
-	  double x = compute_fp_insn<double>(r_inst,op,s);
 
-	  double xx = *reinterpret_cast<double*>(&(tb->retire_reg_data));
-	  double e = std::max(xx/x, x/xx);
-	  uint64_t ux = to_uint64(x);
-	  uint64_t uxx = to_uint64(xx);
-	  
-	  if(true || (e > 1.1) && (ux != 0) && (uxx != 0)) {
-	    std::cout << std::hex
-		      << tb->retire_pc
-		      << "("
-		      << r_inst
-		      << ")"
-		      << std::dec
-		      << " : " << getAsmString(r_inst, tb->retire_pc)
-		      << std::hex
-		      << " = "
-		      << tb->retire_reg_data
-		      << std::dec
-		      << " ( "
-		      << xx
-		      << " "
-		      << x
-		      << " "
-		      << e
-		      << " ) "
-		      << "\n";
-
-	    double _fs = *reinterpret_cast<double*>(s->cpr1+((r_inst>>11)&31));
-	    double _ft = *reinterpret_cast<double*>(s->cpr1+((r_inst>>16)&31));  
-	    std::cout << "fs = " << _fs << "," << std::hex << *reinterpret_cast<uint64_t*>(&_fs) <<std::dec << "\n";
-	    std::cout << "ft = " << _ft << "," << std::hex << *reinterpret_cast<uint64_t*>(&_ft) <<std::dec << "\n";
-
-	    double_ dfs(*reinterpret_cast<uint64_t*>(&_fs));
-	    double_ dft(*reinterpret_cast<uint64_t*>(&_ft));
-	    std::cout << dfs.dd.e << "\n";
-	    std::cout << dfs.dd.f << "\n";
-	    
-	    std::cout << dft.dd.e << "\n";	    
-	    std::cout << dft.dd.f << "\n";
-	    
-	    std::cout << "rtl = " << xx << "," << std::hex << *reinterpret_cast<uint64_t*>(&xx) <<std::dec << "\n";
-	    std::cout << "sw  = " << x << "\n";
-
-	    double_ dd_(xx);
-	    double_ cc_(x);
-	    
-	    std::cout << std::hex << "rtl frac = " << dd_.dd.f << std::dec << "\n";
-	    std::cout << std::hex << "rtl exp  = " << dd_.dd.e << std::dec << "\n";
-	    std::cout << std::hex << "sw  frac = " << cc_.dd.f << std::dec << "\n";
-	    std::cout << std::hex << "sw  exp  = " << cc_.dd.e << std::dec << "\n";
-	    
-	    //exit(-1);
-	  }
-	  
-	}
-      }
       *reinterpret_cast<uint64_t*>(s->cpr1+tb->retire_reg_ptr) = tb->retire_reg_data;
-      //std::cerr << std::hex << tb->retire_pc << std::dec << " writing fp reg " << static_cast<int>(tb->retire_reg_ptr) << "\n";
+      //std::cerr << std::hex << tb->retire_pc << std::dec << " writing fp reg " << static_cast<int>(tb->retire_reg_ptr)
+      //<< std::hex << " with data " << tb->retire_reg_data << std::dec << "\n";
       last_retired_fp_pc = tb->retire_pc;
     }
     
 #ifdef BRANCH_DEBUG
+    if(tb->branch_pc_valid) {
+      ++n_branches;
+    }
     if(tb->branch_fault) {
       mispredicts[tb->branch_pc]++; 
     }
@@ -597,14 +642,8 @@ int main(int argc, char **argv) {
     if(tb->store_not_hor) {
       ++stores_not_hor;
     }
-    if(tb->fetched_insn) {
-      ++insns_fetched;
-    }
-    if(tb->decoded_insn) {
-      ++insns_decoded;
-    }
-    if(tb->allocated_insn) {
-      ++insns_allocated;
+    if(tb->in_flush_mode) {
+      ++n_flush_cycles;
     }
     
     if(tb->retire_valid) {
@@ -613,8 +652,9 @@ int main(int argc, char **argv) {
 	pushout_histo[tb->retire_pc]++;
       }
       last_retire = 0;
-      
-      assert(last_retired_pc != tb->retire_pc);
+
+      bool retired_same_pc = last_retired_pc == tb->retire_pc;
+
       last_retired_pc = tb->retire_pc;
 
       //if(insns_retired > 13631488)
@@ -643,8 +683,8 @@ int main(int argc, char **argv) {
 		  << ", " << static_cast<double>(insns_retired) / globals::cycle << " IPC "
 		  << ", insns_retired "
 		  << insns_retired
-		  << ", n_restarts "
-		  << n_mispredicts
+		  << ", mispredict rate "
+		  << ((static_cast<double>(n_mispredicts)/n_branches)*100.0)
 		  << ", mispredict pki "
 		  << (static_cast<double>(n_mispredicts) / insns_retired) * 1000.0
 		  <<" \n";
@@ -673,7 +713,8 @@ int main(int argc, char **argv) {
 		    <<" \n";
 	}
       }
-
+      assert(!retired_same_pc);
+      
       if( enable_checker) {
 	//std::cout << std::hex << tb->retire_pc << "," << ss->pc << std::dec << "\n";	  	
 	if(tb->retire_pc == ss->pc) {
@@ -687,7 +728,7 @@ int main(int argc, char **argv) {
 	  bool diverged = false;
 	  if(ss->pc == (tb->retire_pc + 4)) {
 	    for(int i = 0; i < 32; i++) {
-	      if((ss->gpr[i] != s->gpr[i]) and false) {
+	      if((ss->gpr[i] != s->gpr[i])) {
 		int wrong_bits = __builtin_popcount(ss->gpr[i] ^ s->gpr[i]);
 		++mismatches;
 		std::cout << "register " << getGPRName(i)
@@ -708,50 +749,8 @@ int main(int argc, char **argv) {
 	      uint64_t rtl = *reinterpret_cast<uint64_t*>(&s->cpr1[i]);
 	      uint64_t sim = *reinterpret_cast<uint64_t*>(&ss->cpr1[i]);
 	      if(rtl != sim) {
-		int wrong_bits = __builtin_popcount(rtl ^ sim);
-		bool is_sp = ss->cpr1_state[i] == fp_reg_state::sp;
-		bool is_dp = ss->cpr1_state[i] == fp_reg_state::dp;
-		float rtl_dbl = *reinterpret_cast<double*>(&s->cpr1[i]);
-		float sim_dbl = *reinterpret_cast<double*>(&ss->cpr1[i]);
-		double dp_err = std::abs(rtl_dbl-sim_dbl);
-		if(dp_err > 1e-6) {
-		  std::cout << "FP REGISTER DIVERGENCE for $f"
-			    << i
-			    << " with "
-			    << wrong_bits
-			    << " differing bits "
-			    << " for last FP PC "
-			    << std::hex
-			    << tb->retire_pc + 4
-			    << " and "
-			    << ss->pc
-			    << " : "
-			    << getAsmString(get_insn(ss->pc, ss), ss->pc)
-			    << " "
-			    << std::dec
-			    << " is_sp = "
-			    << is_sp
-			    << " is_dp = "
-			    << is_dp
-			    << "\n";
-		  
-		  
-		  std::cout << "RTL = " << std::hex << rtl << std::dec << "\n";
-		  std::cout << "SIM = " << std::hex << sim << std::dec << "\n";
-		  //float rtl_flt = *reinterpret_cast<float*>(&s->cpr1[i]);
-		  //float sim_flt = *reinterpret_cast<float*>(&ss->cpr1[i]);
-		  
-		  //std::cout << "RTL SP = " << rtl_flt << "\n";
-		  //std::cout << "SIM SP = " << sim_flt << "\n";
-		  std::cout << "RTL DP = " << rtl_dbl << "\n";
-		  std::cout << "SIM DP = " << sim_dbl << "\n";
-		  
-		  //double sp_err = std::abs(rtl_flt-sim_flt);
-		  std::cout << "dp_err = " << dp_err
-		    //<< " sp_err = " << sp_err
-			    << "\n";
-		  diverged = (dp_err > 1e-6);
-		}
+		diverged = true;
+		std::cout << "fp reg " << i <<" : rtl = " << std::hex << rtl << ", sim = " << sim << std::dec << "\n";
 	      }
 	    }
 	    
@@ -818,6 +817,10 @@ int main(int argc, char **argv) {
     
     if(tb->retire_reg_two_valid) {
       s->gpr[tb->retire_reg_two_ptr] = tb->retire_reg_two_data;
+      //if(tb->retire_reg_two_ptr == R_a0) {
+      //std::cout << std::hex << "insn two with pc " << tb->retire_two_pc << " updates a0 \n"
+      //<< std::dec;
+      //}
     }
 
     if(enable_checker && tb->retire_two_valid) {
@@ -891,12 +894,14 @@ int main(int argc, char **argv) {
 	last_load_addr = tb->mem_req_addr;
 	assert((tb->mem_req_addr & 0xf) == 0);
 	touched_lines[(tb->mem_req_addr & ((1UL<<32) - 1))>>4] = 1;
+	++n_loads;
       }
       else if(tb->mem_req_opcode == 7) { /* store word */
 	for(int i = 0; i < 4; i++) {
 	  *reinterpret_cast<uint32_t*>(s->mem[tb->mem_req_addr + 4*i]) = tb->mem_req_store_data[i];
 	}
 	last_store_addr = tb->mem_req_addr;
+	++n_stores;
       }
       last_addr = tb->mem_req_addr;
       tb->mem_rsp_valid = 1;
@@ -940,15 +945,7 @@ int main(int argc, char **argv) {
     //printf("inflight[%d] = %lu\n", i, inflight[i]);
   }
   avg_inflight /= sum;
-  std::cout << insns_fetched << " insns fetched\n";
-  std::cout << insns_decoded << " insns decoded\n";
-  std::cout << insns_allocated << " insns allocated\n";
   std::cout << insns_retired << " insns retired\n";
-  std::cout << stores_not_hor << " stores blocked by not being head of rob\n";
-  std::cout << static_cast<double>(insns_retired)/insns_allocated
-	    << " retire to alloc ratio\n";
-  std::cout << static_cast<double>(insns_retired)/insns_fetched
-	    << " retire to fetch ratio\n";
 
   
   std::cout << "avg insns in ROB = " << avg_inflight
@@ -970,32 +967,61 @@ int main(int argc, char **argv) {
   std::cout << "iside tlb misses = " << n_iside_tlb_misses << "\n";
   std::cout << "dside tlb misses = " << n_dside_tlb_misses << "\n";
 
+  std::cout << "branch mispredict rate = "
+	    << (static_cast<double>(n_mispredicts)/n_branches)*100.0
+	    << "\n";
 
+  std::cout << "mispredicts per kiloinsn = "
+	    << (static_cast<double>(n_mispredicts) / insns_retired) * 1000.0
+	    << "\n";
+  std::cout << n_flush_cycles << " cycles spent flushing caches\n";
+  std::cout << n_loads << " cache line loads\n";
+  std::cout << n_stores << " cache line stores\n";
+  std::cout << l1d_misses << " l1d misses\n";
+  std::cout << l1d_insns << " insns access the l1d\n";
+
+  uint64_t total_fetch = 0, total_fetch_cycles = 0;
+  for(int i = 0; i < 5; i++) {
+    std::cout << "n_fetch[" << i << "] = " << n_fetch[i] << "\n";
+    total_fetch_cycles += n_fetch[i];
+    total_fetch += n_fetch[i] * i;
+  }
+  std::cout << "avg fetch = " << static_cast<double>(total_fetch) / total_fetch_cycles << "\n";
+  
+  for(int i = 0; i < 3; i++) {
+    std::cout << "uq_full[" << i << "] = " << n_uq_full[i] << "\n";
+  }
+
+  for(int i = 0; i < 3; i++) {
+    std::cout << "insn ready " << i
+	      << " "
+	      << n_rdy[i] << "\n";
+  }
+  
   dump_histo("branch_info.txt", mispredicts, s);
   dump_histo("pushout.txt", pushout_histo, s);
-  // std::ofstream branch_info("branch_info.txt");  
-  // std::vector<std::pair<uint64_t, uint64_t>> sorted_mispredicts;
-  // for(auto &p : mispredicts) {
-  //   sorted_mispredicts.emplace_back(p.second, p.first);
-  // }
-  // std::sort(sorted_mispredicts.begin(), sorted_mispredicts.end());
-  
-  // for(auto it = sorted_mispredicts.rbegin(), e = sorted_mispredicts.rend(); it != e; ++it) {
-  //   uint32_t r_inst = *reinterpret_cast<uint32_t*>(s->mem[it->second]);
-  //   r_inst = bswap<false>(r_inst);	
-  //   auto s = getAsmString(r_inst, it->second);
-  //   branch_info << std::hex << it->second << ":"
-  // 	      << s << ","
-  // 	      << std::dec << it->first << "\n";
-  // }
-  // branch_info.close();
 
-  
+  std::ofstream branch_info("retire_info.csv");
+  uint64_t total_retire = 0, total_cycle = 0;
+  for(auto &p : retire_map) {
+    total_retire += p.second;
+  }
+  for(auto &p : retire_map) {
+    branch_info << p.first << "," << p.second << "," << static_cast<double>(p.second) / total_retire << "\n";
+    total_cycle += (p.first * p.second);
+  }
+  branch_info.close();
+  std::cout << "total_retire = " << total_retire << "\n";
+  std::cout << "total_cycle  = " << total_cycle << "\n";
+  std::cout << "total ipc    = " << static_cast<double>(total_retire) / total_cycle << "\n";
 
   std::cout << "simulation took " << t0 << " seconds, " << (insns_retired/t0) << " insns per second\n";
   delete s;
   delete ss;
   delete [] insns_delivered;
+  if(pl) {
+    delete pl;
+  }
   //delete tb;
   stopCapstone();
   exit(EXIT_SUCCESS);

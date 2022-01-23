@@ -971,6 +971,28 @@ module decode_mips32(in_64b_fpreg_mode, insn,
 			     default:
 			       uop.op = II;
 			   endcase // case (insn[25:21])
+			end // case: 6'd3
+		      6'd4: /* sqrt.fmt */
+			begin
+			   uop.srcA = fs;
+			   uop.fp_srcA_valid = 1'b1;
+			   uop.dst = fd;
+			   uop.fp_dst_valid = 1'b1;
+			   uop.is_fp = 1'b1;
+			   case(insn[25:21])
+			     5'd16: /* flt */
+			       begin
+				  uop.op = SP_SQRT;
+				  uop.jmp_imm[0] = 1'b1;
+				  uop.jmp_imm[1] = !in_64b_fpreg_mode & fs[0];
+				  uop.jmp_imm[2] = 1'b0;
+				  uop.jmp_imm[3] = !in_64b_fpreg_mode & fd[0];
+			       end
+			     5'd17: /* dbl */
+			       uop.op = DP_SQRT;
+			     default:
+			       uop.op = II;
+			   endcase // case (insn[25:21])
 			end
 		      6'd6: /* MOV.fmt */
 			begin

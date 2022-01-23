@@ -13,17 +13,13 @@
 #include <sys/stat.h>
 #include <sys/uio.h>
 #include <sys/utsname.h>
-
+#include <linux/utsname.h>
 
 #include "interpret.hh"
 #include "disassemble.hh"
 #include "helper.hh"
 #include "globals.hh"
-
-#ifdef __linux__
-#include <linux/utsname.h>
 #include "linux_o32_syscall.hh"
-#endif
 
 static fpMode currFpMode = fpMode::mipsii;
 
@@ -1062,6 +1058,11 @@ static void _movcd(uint32_t inst, state_t *s) {
     }
   }
   else {
+    // std::cout << std::hex << s->pc << std::dec << " fp cond mov with " << fd << " and " << fs
+    // 	      << " select is " << getConditionCode(s,cc)
+    // 	      << " old fd = " << *reinterpret_cast<double*>(s->cpr1+fd)
+    //   	      << " old fs = " << *reinterpret_cast<double*>(s->cpr1+fs)
+    // 	      << "\n";
     if(getConditionCode(s,cc)==1) {
       s->cpr1[fd+0] = s->cpr1[fs+0];
       s->cpr1[fd+1] = s->cpr1[fs+1];
@@ -1113,6 +1114,9 @@ static void _cvts(uint32_t inst, state_t *s) {
     {
     case FMT_D:
       *((float*)(s->cpr1 + fd)) = (float)(*((double*)(s->cpr1 + fs)));
+      if(currFpMode != fpMode::mips32) {
+	s->cpr1[fd+1] = 0;
+      }
       s->cpr1_state[fd] = fp_reg_state::sp;      
       break;
     case FMT_W:
@@ -1226,10 +1230,12 @@ static void fpCmp(uint32_t inst, state_t *s) {
       break;
     case COND_LT:
       v = (Tfs < Tft);
+      //std::cout << std::hex << s->pc << " : " << Tfs << " LT " << Tft << " = " << v << "\n";
       s->fcr1[CP1_CR25] = setBit(s->fcr1[CP1_CR25],v,cc);
       break;
     case COND_LE:
       v = (Tfs <= Tft);
+      //std::cout << std::hex << s->pc << " : " << Tfs << " LE " << Tft << " = " << v << "\n";
       s->fcr1[CP1_CR25] = setBit(s->fcr1[CP1_CR25],v,cc);
       break;
     default:
@@ -1243,7 +1249,9 @@ static void fpCmp(uint32_t inst, state_t *s) {
 	      << std::dec
 	      << " c. "
 	      << Tfs
-	      << " , "
+	      << " "
+	      << getCondName(cond)
+	      << " "
 	      << Tft
 	      << " = "
 	      << v
