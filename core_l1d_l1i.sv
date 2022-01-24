@@ -28,6 +28,7 @@ module core_l1d_l1i(clk,
 		    retire_reg_two_ptr,
 		    retire_reg_two_data,
 		    retire_reg_two_valid,
+		    retire_reg_fp_two_valid,
 		    store_not_hor,
 		    retire_valid,
 		    retire_two_valid,
@@ -121,6 +122,7 @@ module core_l1d_l1i(clk,
    output logic [4:0] 			  retire_reg_two_ptr;
    output logic [(`M_WIDTH-1):0] 	  retire_reg_two_data;
    output logic 			  retire_reg_two_valid;
+   output logic 			  retire_reg_fp_two_valid;
    
    output logic 			  store_not_hor;
    output logic 			  retire_valid;
@@ -519,6 +521,7 @@ module core_l1d_l1i(clk,
 	     .retire_reg_two_ptr(retire_reg_two_ptr),
 	     .retire_reg_two_data(retire_reg_two_data),
 	     .retire_reg_two_valid(retire_reg_two_valid),
+	     .retire_reg_fp_two_valid(retire_reg_fp_two_valid),
 	     .store_not_hor(store_not_hor),
 	     .retire_valid(retire_valid),
 	     .retire_two_valid(retire_two_valid),

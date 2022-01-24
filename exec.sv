@@ -761,6 +761,11 @@ module exec(clk,
 	     //$display("pc %x marks fp %d inflight", uq_uop.pc, uq_uop.dst);
 	     n_fp_prf_inflight[uq_uop.dst] = 1'b1;
 	  end
+
+	if(uq_push_two && uq_uop_two.fp_dst_valid)
+	  begin
+	     n_fp_prf_inflight[uq_uop_two.dst] = 1'b1;
+	  end
 	
 	if(mem_rsp_fp_dst_valid)
 	  begin

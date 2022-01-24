@@ -41,11 +41,11 @@
 `define LG_RET_STACK_ENTRIES 2
 
 /* non-uop queue */
-`define LG_UQ_ENTRIES 2
+`define LG_UQ_ENTRIES 4
 /* mem uop queue */
-`define LG_MEM_UQ_ENTRIES 2
+`define LG_MEM_UQ_ENTRIES 4
 /* fp uop queue */
-`define LG_FP_UQ_ENTRIES 2
+`define LG_FP_UQ_ENTRIES 4
 
 /* mem queue */
 `define LG_MQ_ENTRIES 2

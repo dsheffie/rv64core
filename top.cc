@@ -25,16 +25,27 @@ static uint64_t last_retire_cycle = 0, last_retire_pc  = 0;
 static std::map<uint64_t, uint64_t> retire_map;
 
 static uint64_t n_fetch[5] = {0};
+static uint64_t n_resteer_bubble = 0;
+static uint64_t n_fq_full = 0;
+
 static uint64_t n_uq_full[3] = {0};
+static uint64_t n_alloc[3] = {0};
 static uint64_t n_rdy[3] = {0};
-void record_alloc(int a1, int a2, int r1, int r2) {
+void record_alloc(int a1, int a2, int f1, int f2, int r1, int r2) {
   if(a2)
-    ++n_uq_full[2];
+    ++n_alloc[2];
   else if(a1)
+    ++n_alloc[1];
+  else
+    ++n_alloc[0];
+
+  if(f2)
+    ++n_uq_full[2];
+  else if(f1)
     ++n_uq_full[1];
   else
     ++n_uq_full[0];
-
+  
   if(r2)
     ++n_rdy[2];
   else if(r1)
@@ -43,7 +54,10 @@ void record_alloc(int a1, int a2, int r1, int r2) {
     ++n_rdy[0];
   
 }
-void record_fetch(int p1, int p2, int p3, int p4) {
+void record_fetch(int p1, int p2, int p3, int p4, int bubble, int fq_full) {
+  n_resteer_bubble += bubble;
+  n_fq_full += fq_full;
+  
   if(p1)
     ++n_fetch[1];
   else if(p2)
@@ -627,6 +641,7 @@ int main(int argc, char **argv) {
       //<< std::hex << " with data " << tb->retire_reg_data << std::dec << "\n";
       last_retired_fp_pc = tb->retire_pc;
     }
+
     
 #ifdef BRANCH_DEBUG
     if(tb->branch_pc_valid) {
@@ -822,6 +837,11 @@ int main(int argc, char **argv) {
       //<< std::dec;
       //}
     }
+    if(tb->retire_reg_fp_two_valid) {
+      assert((tb->retire_reg_two_ptr & 1) == 0);
+      *reinterpret_cast<uint64_t*>(s->cpr1+tb->retire_reg_two_ptr) = tb->retire_reg_two_data;      
+    }
+    
 
     if(enable_checker && tb->retire_two_valid) {
       if(tb->retire_two_pc == ss->pc) {
@@ -987,11 +1007,17 @@ int main(int argc, char **argv) {
     total_fetch += n_fetch[i] * i;
   }
   std::cout << "avg fetch = " << static_cast<double>(total_fetch) / total_fetch_cycles << "\n";
+  std::cout << "resteer bubble = " << n_resteer_bubble << "\n";
+  std::cout << "front-end queues full = " << n_fq_full << "\n";
   
   for(int i = 0; i < 3; i++) {
     std::cout << "uq_full[" << i << "] = " << n_uq_full[i] << "\n";
   }
+  for(int i = 0; i < 3; i++) {
+    std::cout << "alloc[" << i << "] = " << n_alloc[i] << "\n";
+  }
 
+  
   for(int i = 0; i < 3; i++) {
     std::cout << "insn ready " << i
 	      << " "

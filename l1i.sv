@@ -3,7 +3,7 @@
 `include "uop.vh"
 
 `ifdef VERILATOR
-import "DPI-C" function void record_fetch(int push1, int push2, int push3, int push4);
+import "DPI-C" function void record_fetch(int push1, int push2, int push3, int push4, int bubble, int fq_full);
 
 `endif
 
@@ -378,6 +378,14 @@ endfunction
    logic 		  t_is_call, t_is_ret;
    logic 		  t_utlb_hit;
    logic [3:0] 		  t_branch_locs;
+   logic [4:0] 		  t_branch_marker;
+   logic [2:0] 		  t_first_branch;
+   
+   //always_ff@(negedge clk)
+   //begin
+   //$display("r_cache_pc = %x, t_branch_locs = %b, t_insn_idx = %d, t_branch_marker = %b, first_branch = %d",
+   //r_cache_pc,t_branch_locs, t_insn_idx, t_branch_marker, t_first_branch);
+   //end
    
    utlb_entry_t t_utlb_hit_entry;
    
@@ -520,7 +528,7 @@ endfunction
 	else if(t_push_insn2)
 	  begin
 	     r_fq[r_fq_tail_ptr[`LG_FQ_ENTRIES-1:0]] <= t_insn;
-	     r_fq[r_fq_next_tail_ptr[`LG_FQ_ENTRIES-1:0]] <= t_insn2;	     
+	     r_fq[r_fq_next_tail_ptr[`LG_FQ_ENTRIES-1:0]] <= t_insn2;
 	  end
 	else if(t_push_insn3)
 	  begin
@@ -537,6 +545,7 @@ endfunction
 	  end
      end // always_ff@ (posedge clk)
 
+//`define FOOOOOO
 `ifdef FOOOOOO
    logic r_last_bubble;
    always_ff@(posedge clk)
@@ -546,22 +555,26 @@ endfunction
    
    always_ff@(negedge clk)
      begin
-	if(t_clear_fq)
-	  begin
-	     $display("CLEARING FQ at cycle %d", r_cycle);
-	  end
 	if(t_push_insn4)
 	  begin
-	     $display("full %b %b %b %b", fq_full, fq_full2, fq_full3, fq_full4);
+	     $display("cycle %d full %b %b %b %b", r_cycle, fq_full, fq_full2, fq_full3, fq_full4);
 	     $display("4) insn 1 pc = %x, entry %d, tail %d", t_insn.pc,  r_fq_tail_ptr[`LG_FQ_ENTRIES-1:0],  r_fq_head_ptr[`LG_FQ_ENTRIES-1:0]);
 	     $display("4) insn 2 pc = %x, entry %d, tail %d", t_insn2.pc, r_fq_next_tail_ptr[`LG_FQ_ENTRIES-1:0], r_fq_head_ptr[`LG_FQ_ENTRIES-1:0]);
 	     $display("4) insn 3 pc = %x, entry %d, tail %d", t_insn3.pc, r_fq_next3_tail_ptr[`LG_FQ_ENTRIES-1:0], r_fq_head_ptr[`LG_FQ_ENTRIES-1:0]);
 	     $display("4) insn 4 pc = %x, entry %d, tail %d", t_insn4.pc, r_fq_next4_tail_ptr[`LG_FQ_ENTRIES-1:0], r_fq_head_ptr[`LG_FQ_ENTRIES-1:0]);
-	     //if(r_fq_tail_ptr[`LG_FQ_ENTRIES-1:0] ==  r_fq_head_ptr[`LG_FQ_ENTRIES-1:0]) $stop();
-	     //if(r_fq_next_tail_ptr[`LG_FQ_ENTRIES-1:0] ==  r_fq_head_ptr[`LG_FQ_ENTRIES-1:0]) $stop();
-	     //if(r_fq_next3_tail_ptr[`LG_FQ_ENTRIES-1:0] ==  r_fq_head_ptr[`LG_FQ_ENTRIES-1:0]) $stop();
-	     //if(r_fq_next4_tail_ptr[`LG_FQ_ENTRIES-1:0] ==  r_fq_head_ptr[`LG_FQ_ENTRIES-1:0]) $stop();
-	     
+	  end
+	if(t_push_insn3)
+	  begin
+	     $display("cycle %d full %b %b %b", r_cycle, fq_full, fq_full2, fq_full3);
+	     $display("3) insn 1 pc = %x, entry %d, tail %d", t_insn.pc,  r_fq_tail_ptr[`LG_FQ_ENTRIES-1:0],  r_fq_head_ptr[`LG_FQ_ENTRIES-1:0]);
+	     $display("3) insn 2 pc = %x, entry %d, tail %d", t_insn2.pc, r_fq_next_tail_ptr[`LG_FQ_ENTRIES-1:0], r_fq_head_ptr[`LG_FQ_ENTRIES-1:0]);
+	     $display("3) insn 3 pc = %x, entry %d, tail %d", t_insn3.pc, r_fq_next3_tail_ptr[`LG_FQ_ENTRIES-1:0], r_fq_head_ptr[`LG_FQ_ENTRIES-1:0]);
+	  end
+	if(t_push_insn2)
+	  begin
+	     $display("cycle %d full %b %b", r_cycle, fq_full, fq_full2);
+	     $display("2) insn 1 pc = %x, entry %d, tail %d", t_insn.pc,  r_fq_tail_ptr[`LG_FQ_ENTRIES-1:0],  r_fq_head_ptr[`LG_FQ_ENTRIES-1:0]);
+	     $display("2) insn 2 pc = %x, entry %d, tail %d", t_insn2.pc, r_fq_next_tail_ptr[`LG_FQ_ENTRIES-1:0], r_fq_head_ptr[`LG_FQ_ENTRIES-1:0]);
 	  end
 	if(t_push_insn)
 	  begin
@@ -648,7 +661,9 @@ endfunction
 	     $stop();
 	  end
      end   
-  
+
+
+      
    always_comb
      begin
 	n_utlb_miss_req = 1'b0;
@@ -682,11 +697,36 @@ endfunction
 	t_insn_data4 = select_cl32(r_array_out, t_insn_idx + 2'd3);
 
 
-	t_branch_locs = {select_pd(r_jump_out, t_insn_idx + 2'd3) != NOT_CFLOW,
-			 select_pd(r_jump_out, t_insn_idx + 2'd2) != NOT_CFLOW,
-			 select_pd(r_jump_out, t_insn_idx + 2'd1) != NOT_CFLOW,			 
-			 select_pd(r_jump_out, t_insn_idx) != NOT_CFLOW
+	t_branch_marker = {1'b1,
+			   select_pd(r_jump_out, 'd3) != NOT_CFLOW,
+                           select_pd(r_jump_out, 'd2) != NOT_CFLOW,
+                           select_pd(r_jump_out, 'd1) != NOT_CFLOW,
+                           select_pd(r_jump_out, 'd0) != NOT_CFLOW
+                           } >> t_insn_idx;
+	
+	t_first_branch = 'd0;
+	casez(t_branch_marker)
+	  5'b????1:
+	    t_first_branch = 'd0;
+	  5'b???10:
+	    t_first_branch = 'd1;
+	  5'b??100:
+	    t_first_branch = 'd2;
+	  5'b?1000:
+	    t_first_branch = 'd3;
+	  5'b10000:
+	    t_first_branch = 'd4;
+	  default:
+	    t_first_branch = 'd0;
+	endcase
+
+	
+	t_branch_locs = {select_pd(r_jump_out, 'd3) != NOT_CFLOW,
+			 select_pd(r_jump_out, 'd2) != NOT_CFLOW,
+			 select_pd(r_jump_out, 'd1) != NOT_CFLOW,			 
+			 select_pd(r_jump_out, 'd0) != NOT_CFLOW
                          };
+	
 		
 	t_simm = {{SEXT{t_insn_data[15]}},t_insn_data[15:0]};
 	t_clear_fq = 1'b0;
@@ -828,6 +868,7 @@ endfunction
 			 n_pc = r_btb_pc;
 			 //$display("predicted target for %x is %x", r_cache_pc, n_pc);			 
 		      end
+		    
 		    if(r_delay_slot)
 		      begin
 			 n_delay_slot = 1'b0;
@@ -836,48 +877,43 @@ endfunction
 		    //initial push multiple logic
 		    if(!(t_is_cflow || r_delay_slot))
 		      begin
-			 if(t_insn_idx == 'd0 && !fq_full4)
+			 if(t_first_branch == 'd4 && !fq_full4)
 			   begin
-			     if(t_branch_locs == 4'b0000)
-			       begin
-				  t_push_insn4 = 1'b1;
-				  n_pc = r_cache_pc + 'd16;
-				  n_resteer_bubble = 1'b1;
-			       end
-			     else if(t_branch_locs == 4'b0100)
-			       begin
-				  t_push_insn2 = 1'b1;
-				  n_pc = r_cache_pc + 'd12;
-				  n_cache_pc = r_cache_pc + 'd8;
-				  //n_resteer_bubble = 1'b1;
-			       end
-			     else
-			       begin
-				  //$display("%b %b %b %b", 
-				  //t_branch_locs[3],
-				  //t_branch_locs[2],
-				  //t_branch_locs[1],
-				  //t_branch_locs[0]);
-				  t_push_insn = 1'b1;
-			       end
+			      t_push_insn4 = 1'b1;
+			      n_pc = r_cache_pc + 'd16;
+			      n_resteer_bubble = 1'b1;
 			   end
-			 else if(t_insn_idx == 'd1 && t_branch_locs[3:1] == 'd0 && !fq_full3 && 1'b0)
+			 else if(t_first_branch == 'd3 && !fq_full3)
 			   begin
 			      t_push_insn3 = 1'b1;
 			      n_pc = r_cache_pc + 'd12;
 			      n_resteer_bubble = 1'b1;
 			   end
-			 else if(t_insn_idx == 'd2 && t_branch_locs[3:2] == 'd0 && !fq_full2 && 1'b0)
+			 else if(t_first_branch == 'd2 && !fq_full2)
 			   begin
+			      //$display("t_branch_locs = %b", t_branch_locs);
 			      t_push_insn2 = 1'b1;
 			      n_pc = r_cache_pc + 'd8;
-			      n_resteer_bubble = 1'b1;
+			      //guaranteed to end-up on another cacheline
+			      if(t_insn_idx == 2)
+				begin
+				   n_resteer_bubble = 1'b1;
+				end
+			      else
+				begin
+				   n_cache_pc = r_cache_pc + 'd8;
+				   n_pc = r_cache_pc + 'd12;
+				end
 			   end
 			 else
 			   begin
 			      t_push_insn = 1'b1;
-			   end
-		      end
+			   end // else: !if(t_first_branch == 'd2 && !fq_full2)
+		      end // if (!(t_is_cflow || r_delay_slot))
+		    //else if(t_is_cflow && !r_delay_slot && t_insn_idx != 'd3 && !fq_full2)
+		    //begin
+		    //branch delay slot is on the same cacheline
+		    //end
 		    else
 		      begin
 			 t_push_insn = 1'b1;
@@ -1099,21 +1135,11 @@ endfunction
 	record_fetch(t_push_insn ? 32'd1 : 32'd0,
 		     t_push_insn2 ? 32'd1 : 32'd0,
 		     t_push_insn3 ? 32'd1 : 32'd0,
-		     t_push_insn4 ? 32'd1 : 32'd0);
+		     t_push_insn4 ? 32'd1 : 32'd0,
+		     r_resteer_bubble ? 32'd1 : 32'd0,
+		     fq_full ? 32'd1 : 32'd0);
      end
 `endif
-   //always_ff@(negedge clk)
-     //begin
-     //if(r_cache_pc == 'h21e74)
-	  //begin
-	     //$display("%x : %b maps to %d", r_cache_pc, r_arch_gbl_hist, n_pht_idx);
-	     //$display("%x : %b maps to %d", r_cache_pc, r_arch_gbl_hist, n_pht_idx);
-	  //end
-	//if(t_is_cflow)
-	//begin
-	//$display("%b -> %b (take br = %b)",n_spec_gbl_hist, r_spec_gbl_hist, t_take_br);
-	// end
-   //end
 	  
 
    ram2r1w #(.WIDTH(2), .LG_DEPTH(`LG_PHT_SZ) ) pht
