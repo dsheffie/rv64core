@@ -60,7 +60,7 @@
 
 `define FP_MACC_LAT 8
 
-`define FPU_LAT 2
+`define FPU_LAT 4
 
 `define FP_MAX_LAT (`FP_MACC_LAT)
 

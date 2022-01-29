@@ -42,6 +42,21 @@ module fp_compare(clk, pc, a, b, start, cmp_type, y);
    wire 	       w_sign_a = w_a_is_zero ? 1'b0 : a[W-1];
    wire 	       w_sign_b = w_b_is_zero ? 1'b0 : b[W-1];
    wire 	       w_both_neg = w_sign_a &&w_sign_b;
+   wire 	       a_is_nan, a_is_inf, a_is_denorm;
+   wire 	       b_is_nan, b_is_inf, b_is_denorm;
+   
+   fp_special_cases #(.W(W)) fsc (
+				  .in_a(a), 
+				  .in_b(b),
+				  .a_is_nan(a_is_nan), 
+				  .a_is_inf(a_is_inf), 
+				  .a_is_denorm(a_is_denorm), 
+				  .a_is_zero(),
+				  .b_is_nan(b_is_nan), 
+				  .b_is_inf(b_is_inf), 
+				  .b_is_denorm(b_is_denorm), 
+				  .b_is_zero()
+				  );
    
    
    wire [E-1:0] w_exp_a = a[W-2:F];
@@ -75,6 +90,7 @@ module fp_compare(clk, pc, a, b, start, cmp_type, y);
 	bogo_fp64_compare c(a,b,t_dpi);
    endgenerate
 `endif
+
    
    wire w_sign_lt = ((w_sign_a ^ w_sign_b) & w_sign_a);
    wire w_sign_gt = ((w_sign_a ^ w_sign_b) & w_sign_b);
@@ -90,17 +106,20 @@ module fp_compare(clk, pc, a, b, start, cmp_type, y);
    
    wire w_lt = w_both_neg ? w_gt_t : w_lt_t;
    wire w_eq = (a == b);
+
+
    
 `ifdef DEBUG_FPU
    always_comb
      begin
-	if(start && (w_lt != t_dpi[0]))
+	if(start && (w_lt != t_dpi[0]) && !(a_is_nan || b_is_nan))
 	  begin
 	     $display("a = %x, b = %x, w_sign_lt = %b, w_exp_lt = %b, w_mant_lt = %b, dpi %x",
 		      a, b, w_sign_lt, w_exp_lt, w_mant_lt, t_dpi[0]);
 	     $display("a sign = %b, b sign = %b", w_sign_a, w_sign_b);
 	     $display("a_exp = %x, b_exp = %x", w_exp_a, w_exp_b);
 	     $display("a_mant = %x, b_mant = %x, lt %d", w_mant_a, w_mant_b, (w_mant_a < w_mant_b));
+	     $display("a nan = %b, b nan = %b", a_is_nan, b_is_nan);
 	     $stop();
 	  end
      end

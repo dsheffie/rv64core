@@ -31,6 +31,23 @@ static uint64_t n_fq_full = 0;
 static uint64_t n_uq_full[3] = {0};
 static uint64_t n_alloc[3] = {0};
 static uint64_t n_rdy[3] = {0};
+
+static uint64_t n_int_exec[2] = {0};
+static uint64_t n_mem_exec[2] = {0};
+static uint64_t n_fp_exec[2] = {0};
+
+void report_exec(int int_valid, int int_ready,
+		 int mem_valid, int mem_ready,
+		 int fp_valid,  int fp_ready) {
+  n_int_exec[0] += int_valid;
+  n_int_exec[1] += int_ready;
+  n_mem_exec[0] += mem_valid;
+  n_mem_exec[1] += mem_ready;
+  n_fp_exec[0] += fp_valid;
+  n_fp_exec[1] += fp_ready;
+}
+
+
 void record_alloc(int a1, int a2, int f1, int f2, int r1, int r2) {
   if(a2)
     ++n_alloc[2];
@@ -146,7 +163,7 @@ int main(int argc, char **argv) {
   std::string sysArgs, pipelog;
   std::string mips_binary = "dhrystone3";
   bool use_checkpoint = false, use_checker_only = false;
-  uint64_t heartbeat = 1UL<<36;
+  uint64_t heartbeat = 1UL<<36, start_trace_at = ~0UL;
   uint64_t max_cycle = 0, max_icnt = 0, mem_lat = 2;
   uint64_t last_store_addr = 0, last_load_addr = 0, last_addr = 0;
   int misses_inflight = 0;
@@ -167,6 +184,7 @@ int main(int argc, char **argv) {
       ("maxicnt", po::value<uint64_t>(&max_icnt)->default_value(1UL<<50), "maximum icnt")
       ("tracefp", po::value<bool>(&globals::trace_fp)->default_value(false), "trace fp instructions")
       ("trace,t", po::value<bool>(&globals::trace_retirement)->default_value(false), "trace retired instruction stream")
+      ("starttrace,s", po::value<uint64_t>(&start_trace_at)->default_value(~0UL), "start tracing retired instructions")
       ("checkeronly,o", po::value<bool>(&use_checker_only)->default_value(false), "no RTL simulation, just run checker")
       ; 
     po::variables_map vm;
@@ -260,7 +278,6 @@ int main(int argc, char **argv) {
   uint64_t last_retire = 0, last_check = 0, last_restart = 0;
   uint64_t last_retired_pc = 0, last_retired_fp_pc = 0;
   uint64_t mismatches = 0, n_stores = 0, n_loads = 0;
-  uint64_t stores_not_hor = 0;
   uint64_t insns_retired = 0, n_branches = 0, n_mispredicts = 0, n_checks = 0, n_flush_cycles = 0;
   uint64_t n_iside_tlb_misses = 0, n_dside_tlb_misses = 0;
   bool got_mem_req = false, got_mem_rsp = false, got_monitor = false;
@@ -654,9 +671,6 @@ int main(int argc, char **argv) {
       ++n_mispredicts;
     }
 #endif
-    if(tb->store_not_hor) {
-      ++stores_not_hor;
-    }
     if(tb->in_flush_mode) {
       ++n_flush_cycles;
     }
@@ -672,8 +686,8 @@ int main(int argc, char **argv) {
 
       last_retired_pc = tb->retire_pc;
 
-      //if(insns_retired > 13631488)
-      //globals::trace_retirement = true;
+      if(insns_retired >= start_trace_at)
+	globals::trace_retirement = true;
       
       if(((insns_retired % heartbeat) == 0) or globals::trace_retirement ) {
 	uint32_t r_inst = *reinterpret_cast<uint32_t*>(s->mem[tb->retire_pc]);
@@ -854,17 +868,18 @@ int main(int argc, char **argv) {
 
     
     ++last_retire;
-    // if(last_retire > (100*mem_lat)) {
-    //   std::cerr << "no retire in 20 cycle, last retired "
-    // 		<< std::hex
-    // 		<< last_retired_pc + 0
-    // 		<< std::dec
-    // 		<< " "
-    // 		<< getAsmString(get_insn(last_retired_pc+0, s), last_retired_pc+0)
-    // 		<< "\n";
+    if(last_retire > (1000*mem_lat) && not(tb->in_flush_mode)) {
+      std::cout << "in flush mode = " << static_cast<int>(tb->in_flush_mode) << "\n";
+      std::cerr << "no retire in " << 100*mem_lat << " cycles, last retired "
+    		<< std::hex
+    		<< last_retired_pc + 0
+    		<< std::dec
+    		<< " "
+    		<< getAsmString(get_insn(last_retired_pc+0, s), last_retired_pc+0)
+    		<< "\n";
 
-    //   break;
-    // }
+      break;
+    }
     if(tb->got_break) {
       break;
     }
@@ -1016,6 +1031,12 @@ int main(int argc, char **argv) {
   for(int i = 0; i < 3; i++) {
     std::cout << "alloc[" << i << "] = " << n_alloc[i] << "\n";
   }
+  std::cout << n_int_exec[0] << " cycles where int exec queue is not empty\n";
+  std::cout << n_int_exec[1] << " cycles where int exec queue dispatches\n";
+  std::cout << n_mem_exec[0] << " cycles where mem exec queue is not empty\n";
+  std::cout << n_mem_exec[1] << " cycles where mem exec queue dispatches\n";
+  std::cout << n_fp_exec[0] << " cycles where fp exec queue is not empty\n";
+  std::cout << n_fp_exec[1] << " cycles where fp exec queue dispatches\n";
 
   
   for(int i = 0; i < 3; i++) {

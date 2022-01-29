@@ -5,6 +5,16 @@ import "DPI-C" function int fp64_to_fp32(input longint a);
 import "DPI-C" function longint fp32_to_fp64(input int a);
 `endif
 
+`ifdef VERILATOR
+import "DPI-C" function void report_exec(input int int_valid, 
+					 input int int_blocked,
+					 input int mem_valid, 
+					 input int mem_blocked,
+					 input int fp_valid, 
+					 input int fp_blocked
+					 );
+`endif
+
 module exec(clk, 
 	    reset,
 	    machine_clr,
@@ -805,6 +815,19 @@ module exec(clk,
 	  end
      end
 
+
+`ifdef VERILATOR
+   always_ff@(negedge clk)
+     begin
+	report_exec(uq_empty ? 32'd0 : 32'd1,
+		    t_pop_uq ? 32'd1 : 32'd0,
+		    t_mem_uq_empty ? 32'd0 : 32'd1,
+		    t_pop_mem_uq ? 32'd1 : 32'd0,
+		    t_fp_uq_empty ? 32'd0 : 32'd1,
+		    t_pop_fp_uq ? 32'd1 : 32'd0
+		    );
+     end
+`endif
       
    always_comb
      begin
@@ -1911,6 +1934,7 @@ module exec(clk,
 	t_mem_tail.data = 'd0;
 	t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 	t_mem_tail.dst_valid = 1'b0;
+	t_mem_tail.fp_dst_valid = 1'b0;
 	t_mem_tail.dst_ptr = mem_uq.dst;
 	t_mem_tail.is_store = 1'b0;
 	t_mem_tail.lwc1_lo = 1'b0;
@@ -2070,7 +2094,7 @@ module exec(clk,
 		    t_mem_tail.op = MEM_LDC1;
 		    t_mem_tail.addr = t_mem_srcA + t_mem_simm;
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
-		    t_mem_tail.dst_valid = 1'b1;
+		    t_mem_tail.fp_dst_valid = 1'b1;
 		    t_mem_tail.dst_ptr = mem_uq.dst;
 		    t_mem_srcs_rdy = !r_prf_inflight[mem_uq.srcA];
 		    t_push_mq = !t_mem_uq_empty & t_mem_srcs_rdy;
@@ -2086,7 +2110,7 @@ module exec(clk,
 		    t_mem_tail.data = t_mem_fp_srcB;
 		    t_mem_tail.addr = t_mem_srcA + t_mem_simm;
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
-		    t_mem_tail.dst_valid = 1'b1;
+		    t_mem_tail.fp_dst_valid = 1'b1;
 		    t_mem_tail.dst_ptr = mem_uq.dst;
 		    t_mem_srcs_rdy = !(r_prf_inflight[mem_uq.srcA] || r_fp_prf_inflight[mem_uq.srcB]);
 		    t_push_mq = !t_mem_uq_empty & t_mem_srcs_rdy;
@@ -2199,7 +2223,7 @@ module exec(clk,
 		    t_mem_tail.data = t_mem_fp_srcB;
 		    t_mem_tail.addr = t_mem_srcA;
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
-		    t_mem_tail.dst_valid = 1'b1;
+		    t_mem_tail.fp_dst_valid = 1'b1;
 		    t_mem_tail.dst_ptr = mem_uq.dst;
 		    t_mem_srcs_rdy = !(r_prf_inflight[mem_uq.srcA] || r_fp_prf_inflight[mem_uq.srcB]);
 		    t_push_mq = !t_mem_uq_empty & t_mem_srcs_rdy;

@@ -29,7 +29,6 @@ module core_l1d_l1i(clk,
 		    retire_reg_two_data,
 		    retire_reg_two_valid,
 		    retire_reg_fp_two_valid,
-		    store_not_hor,
 		    retire_valid,
 		    retire_two_valid,
 		    retire_pc,
@@ -124,7 +123,6 @@ module core_l1d_l1i(clk,
    output logic 			  retire_reg_two_valid;
    output logic 			  retire_reg_fp_two_valid;
    
-   output logic 			  store_not_hor;
    output logic 			  retire_valid;
    output logic 			  retire_two_valid;
    output logic [(`M_WIDTH-1):0] 	  retire_pc;
@@ -151,8 +149,10 @@ module core_l1d_l1i(clk,
    logic [63:0] 			  t_l1i_cache_accesses;
    logic [63:0] 			  t_l1i_cache_hits;
 
-   
-   logic [`LG_ROB_ENTRIES-1:0] 		  head_of_rob_ptr;   
+
+   logic 				  head_of_rob_ptr_valid;   
+   logic [`LG_ROB_ENTRIES-1:0] 		  head_of_rob_ptr;
+
    logic 				  flush_req;
    logic 				  flush_cl_req;
    logic [`M_WIDTH-1:0] 		  flush_cl_addr;
@@ -385,6 +385,7 @@ module core_l1d_l1i(clk,
    l1d dcache (
 	       .clk(clk),
 	       .reset(reset),
+	       .head_of_rob_ptr_valid(head_of_rob_ptr_valid),
 	       .head_of_rob_ptr(head_of_rob_ptr),
 	       .flush_req(flush_req),
 	       .flush_cl_req(flush_cl_req),
@@ -482,6 +483,7 @@ module core_l1d_l1i(clk,
 	     .clk(clk),
 	     .reset(reset),
 	     .resume(resume),
+	     .head_of_rob_ptr_valid(head_of_rob_ptr_valid),	     
 	     .head_of_rob_ptr(head_of_rob_ptr),
 	     .resume_pc(resume_pc),
 	     .ready_for_resume(ready_for_resume),  
@@ -522,7 +524,6 @@ module core_l1d_l1i(clk,
 	     .retire_reg_two_data(retire_reg_two_data),
 	     .retire_reg_two_valid(retire_reg_two_valid),
 	     .retire_reg_fp_two_valid(retire_reg_fp_two_valid),
-	     .store_not_hor(store_not_hor),
 	     .retire_valid(retire_valid),
 	     .retire_two_valid(retire_two_valid),
 	     .retire_delay_slot(t_retire_delay_slot),

@@ -94,7 +94,7 @@ module fp_trunc_to_int32(clk, in, en, out);
 `ifdef DEBUG_FPU
    always_ff@(negedge clk)
      begin
-	if(en && (t_dpi != t_out))
+	if(en && (t_dpi != t_out) && 1'b0)
 	  begin
 	     $display("trunc %d : in %x : t_dpi = %x, t_out = %x", W, in, t_dpi, t_out);
 	     $display("t_mant_shift = %x, shift distance = %d", t_mant_shift, t_shift_dist);

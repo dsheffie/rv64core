@@ -1645,7 +1645,7 @@ module decode_mips32(in_64b_fpreg_mode, insn,
 	    begin
 	       uop.op = SC;
 	       uop.dst = rt;
-	       uop.dst_valid = 1'b1;;
+	       uop.dst_valid = 1'b1;
 	       uop.srcA = rs;
 	       uop.srcA_valid = 1'b1;
 	       uop.srcB = rt;

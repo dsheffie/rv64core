@@ -22,6 +22,7 @@ import "DPI-C" function void record_retirement(input longint pc,
 
 module core(clk, 
 	    reset,
+	    head_of_rob_ptr_valid,
 	    head_of_rob_ptr,
 	    resume,
 	    resume_pc,
@@ -63,7 +64,6 @@ module core(clk,
 	    retire_reg_two_data,
 	    retire_reg_two_valid,
 	    retire_reg_fp_two_valid,	    
-	    store_not_hor,
 	    retire_valid,
 	    retire_two_valid,
 	    retire_delay_slot,
@@ -82,6 +82,7 @@ module core(clk,
 	    inflight);
    input logic clk;
    input logic reset;
+   output logic head_of_rob_ptr_valid;
    output logic [`LG_ROB_ENTRIES-1:0] head_of_rob_ptr;
    input logic resume;
    input logic [(`M_WIDTH-1):0] resume_pc;
@@ -132,7 +133,6 @@ module core(clk,
    output logic 			  retire_reg_two_valid;
    output logic 			  retire_reg_fp_two_valid;
    
-   output logic 			  store_not_hor;
    output logic 			  retire_valid;
    output logic 			  retire_two_valid;
    
@@ -182,7 +182,7 @@ module core(clk,
    logic 				  r_got_restart_ack, n_got_restart_ack;
    
    rob_entry_t r_rob[N_ROB_ENTRIES-1:0];
-   logic [N_ROB_ENTRIES-1:0] 		  r_rob_inflight, n_rob_inflight;
+   logic [N_ROB_ENTRIES-1:0] 		  r_rob_inflight;
    
    rob_entry_t t_rob_head, t_rob_next_head, t_rob_tail, t_rob_next_tail;
 
@@ -342,76 +342,45 @@ module core(clk,
    logic 		     n_flush_req, r_flush_req;
    logic 		     n_flush_cl_req, r_flush_cl_req;
    logic [(`M_WIDTH-1):0]    n_flush_cl_addr, r_flush_cl_addr;
-
+   logic 		     r_ds_done, n_ds_done;
+   
    logic 		     t_can_retire_rob_head;
    
    logic [`LG_ROB_ENTRIES-1:0] n_delayslot_rob_ptr, r_delayslot_rob_ptr;
-   typedef enum logic [4:0] {HALT = 'd0,
-			     WAIT_FOR_DELAY_SLOT = 'd1,
-			     DRAIN = 'd2, 
-			     RAT = 'd3,
-			     DELAY_SLOT = 'd4,
-			     ALLOC_FOR_SERIALIZE = 'd5,
-			     WAIT_FOR_SERIALIZE = 'd6,
-			     MONITOR_FLUSH_CACHE = 'd7,
-			     HANDLE_MONITOR = 'd8,
-			     ALLOC_FOR_MONITOR = 'd9,
-			     WAIT_FOR_MONITOR= 'd10,
-			     ACTIVE = 'd11,
-			     FLUSH_FOR_HALT = 'd12,
-			     HALT_WAIT_FOR_RESTART = 'd13,
-			     WAIT_FOR_SERIALIZE_AND_RESTART = 'd14,
-			     WRITE_EPC = 'd15,
-			     WRITE_CAUSE = 'd16,
-			     WRITE_BADVADDR = 'd17
+   
+   typedef enum logic [4:0] {
+			     HALT,
+			     DRAIN,
+			     RAT,
+			     DELAY_SLOT,
+			     ALLOC_FOR_SERIALIZE,
+			     WAIT_FOR_SERIALIZE,
+			     MONITOR_FLUSH_CACHE,
+			     HANDLE_MONITOR,
+			     ALLOC_FOR_MONITOR,
+			     WAIT_FOR_MONITOR,
+			     ACTIVE,
+			     FLUSH_FOR_HALT,
+			     HALT_WAIT_FOR_RESTART,
+			     WAIT_FOR_SERIALIZE_AND_RESTART,
+			     WRITE_EPC,
+			     WRITE_CAUSE,
+			     WRITE_BADVADDR
 			     } state_t;
    
    state_t r_state, n_state;
    logic [9:0] 	r_restart_cycles, n_restart_cycles;
    
+   
    always_comb
      begin
-	core_mem_req_valid = 1'b0;
+	core_mem_req_valid = t_mem_req_valid;
 	core_mem_req = t_mem_req;
-	
-	if(t_mem_req_valid)
-	  begin
-	     if(t_mem_req.is_store)
-	       begin
-		  /* head of memory queue */
-		  if((r_state == DRAIN) && (
-					    (t_mem_req.rob_ptr != r_rob_head_ptr[`LG_ROB_ENTRIES-1:0])
-					    || r_has_nullifying_delay_slot
-					    )
-		     )
-		    begin
-
-		       core_mem_req.op = (t_mem_req.op == MEM_SC) ? MEM_DEAD_SC :  MEM_DEAD_ST;
-		       core_mem_req.is_store = 1'b0;
-		       core_mem_req_valid = 1'b1;
-		    end
-		  else
-		    begin
-		       core_mem_req_valid = t_mem_req.rob_ptr == r_rob_head_ptr[`LG_ROB_ENTRIES-1:0];
-		    end
-		  //if(t_mem_req.rob_ptr == r_rob_head_ptr[`LG_ROB_ENTRIES-1:0])
-	       end
-	     else
-	       begin
-		  core_mem_req_valid = 1'b1;
-		  if((r_state == DRAIN) && ((t_mem_req.rob_ptr != r_rob_head_ptr[`LG_ROB_ENTRIES-1:0])
-					    || r_has_nullifying_delay_slot
-					    ) 
-		     && !t_mem_req.is_fp)
-		    begin
-		       //if(t_mem_req.is_fp)
-		       core_mem_req.op = MEM_DEAD_LD;
-		    end
-	       end
-	  end
-     end
+     end // always_comb
+   
 
    assign ready_for_resume = r_ready_for_resume;
+   assign head_of_rob_ptr_valid = (r_state == ACTIVE) || (r_state==DRAIN) && !r_ds_done;
    assign head_of_rob_ptr = r_rob_head_ptr[`LG_ROB_ENTRIES-1:0];
    assign flush_req = r_flush_req;
    assign flush_cl_req = r_flush_cl_req;
@@ -492,6 +461,7 @@ module core(clk,
 	     r_ready_for_resume <= 1'b0;
 	     r_l1i_flush_complete <= 1'b0;
 	     r_l1d_flush_complete <= 1'b0;
+	     r_ds_done <= 1'b0;
 	  end
 	else
 	  begin
@@ -519,7 +489,8 @@ module core(clk,
 	     r_got_ud <= n_got_ud;
 	     r_ready_for_resume <= n_ready_for_resume;
 	     r_l1i_flush_complete <= n_l1i_flush_complete;
-	     r_l1d_flush_complete <= n_l1d_flush_complete;	     
+	     r_l1d_flush_complete <= n_l1d_flush_complete;
+	     r_ds_done <= n_ds_done;
 	  end
      end // always_ff@ (posedge clk)
 
@@ -577,7 +548,6 @@ module core(clk,
 	  end
      end // always_comb
    
-   
    always_ff@(posedge clk)
      begin
 	if(reset)
@@ -623,7 +593,6 @@ module core(clk,
    	     retire_reg_two_ptr <= 'd0;
    	     retire_reg_two_data <= 'd0;
    	     retire_reg_two_valid <= 1'b0;
-	     store_not_hor <= 1'b0;
    	     retire_valid <= 1'b0;
 	     retire_two_valid <= 1'b0;
 	     
@@ -644,10 +613,6 @@ module core(clk,
    	     retire_reg_two_data <= t_rob_next_head.data;
    	     retire_reg_two_valid <= t_rob_next_head.valid_dst && t_retire_two;
 	     retire_reg_fp_two_valid <= t_rob_next_head.valid_fp_dst && t_retire_two;
-	     
-	     store_not_hor <= t_mem_req_valid && t_mem_req.is_store &&
-			      !core_mem_req_valid;
-	     
 	     
    	     retire_valid <= t_retire;
 	     retire_two_valid <= t_retire_two;
@@ -777,8 +742,8 @@ module core(clk,
 		       t_uop2.op == J  ||
 		       t_uop2.op == II || 
 		       t_uop2.op == ERET);
-
 	
+	n_ds_done = r_ds_done;
 	n_flush_req = 1'b0;
 	n_flush_cl_req = 1'b0;
 	n_flush_cl_addr = r_flush_cl_addr;
@@ -822,18 +787,18 @@ module core(clk,
 		 begin
 		    if(t_rob_head.faulted)
 		      begin
-`ifdef NOT_DEF
-			  $display("cycle %d : got fault for %x, eret %b, break %d, ii %d, trap %d, tlb %b, rob_ptr %d",
-				   r_cycle, 
-				   t_rob_head.pc, 
-				   t_rob_head.is_eret, 
-				   t_rob_head.is_break,
-				   t_rob_head.is_ii,
-				   t_rob_head.take_trap,
-				   t_rob_head.exception_tlb_refill,
-				   r_rob_head_ptr[`LG_ROB_ENTRIES-1:0]
-				   );
-`endif
+			  // $display("cycle %d : got fault for %x, eret %b, break %d, ii %d, trap %d, tlb %b, rob head %d, rob tail %d",
+			  // 	   r_cycle, 
+			  // 	   t_rob_head.pc, 
+			  // 	   t_rob_head.is_eret, 
+			  // 	   t_rob_head.is_break,
+			  // 	   t_rob_head.is_ii,
+			  // 	   t_rob_head.take_trap,
+			  // 	   t_rob_head.exception_tlb_refill,
+			  // 	   r_rob_head_ptr[`LG_ROB_ENTRIES-1:0],
+			  // 	   r_rob_tail_ptr[`LG_ROB_ENTRIES-1:0]
+			  // 	   );
+
 			 if(t_rob_head.is_eret)
 			   begin
 			      $stop();
@@ -883,6 +848,7 @@ module core(clk,
 			 //   end
 			 else
 			   begin
+			      n_ds_done = !t_rob_head.has_delay_slot;
 			      n_state = DRAIN;
 			      n_restart_cycles = 'd0;
 			      if(t_rob_head.has_delay_slot && t_rob_next_empty)
@@ -1010,46 +976,22 @@ module core(clk,
 		      end
 		 end
 	    end // case: ACTIVE
-	  WAIT_FOR_DELAY_SLOT:
-	    begin
-	       //$display("waiting for delay slot..");
-	       //if(t_rob_head.complete)
-	       //begin
-	       n_state = RAT;
-	       n_restart_valid = 1'b1;
-	       //end
-	    end
 	  DRAIN:	    
 	    begin
-	       if(r_rob_inflight == 'd0)
+	       if(r_has_nullifying_delay_slot && t_rob_head.complete && !r_ds_done)
 		 begin
-		    if(r_has_nullifying_delay_slot)
-		      begin
-			 if(r_take_br)
-			   begin
-			      /* we predicted not taken, was taken */
-			      t_retire = 1'b1;
-			      n_state = WAIT_FOR_DELAY_SLOT;
-			      //$display("likely branch : predict NT, was T\n");
-			   end
-			 else 
-			   begin
-			      /* we predicted take, was not taken */
-			      //$display("likely branch : predict T, was NT\n");
-			      n_state = RAT;
-			      n_restart_valid = 1'b1;
-			   end
-		      end
-		    else if(r_has_delay_slot)
-		      begin
-			 t_retire = 1'b1;
-			 n_state = WAIT_FOR_DELAY_SLOT;
-		      end
-		    else
-		      begin
-			 n_state = RAT;
-			 n_restart_valid = 1'b1;
-		      end
+		    t_retire = r_take_br;
+		    n_ds_done = 1'b1;
+		 end
+	       else if(r_has_delay_slot && t_rob_head.complete && !r_ds_done)
+		 begin
+		    t_retire = 1'b1;
+		    n_ds_done = 1'b1;
+		 end
+	       if(r_rob_inflight == 'd0 && r_ds_done)
+		 begin
+		    n_state = RAT;
+		    n_restart_valid = 1'b1;
 		 end
 	    end // case: DRAIN
 	  RAT:
@@ -2149,7 +2091,9 @@ module core(clk,
 	if(insn_ack)
 	  begin
 	     if(t_dec_uop.op == II)
-	       $stop();
+	       begin
+		  $stop();
+	       end
 	  end
 	if(insn_ack_two)
 	  begin
