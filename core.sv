@@ -661,6 +661,7 @@ module core(clk,
    
    
 //`define DEBUG
+
 //`define DUMP_ROB
 `ifdef DUMP_ROB
    always_ff@(negedge clk)
@@ -678,15 +679,13 @@ module core(clk,
 		 t_rob_empty, 
 		 t_rob_full);
 	
-	for(logic [4:0] i = r_rob_head_ptr; i != (r_rob_tail_ptr); i=i+1)
+	for(logic [`LG_ROB_ENTRIES:0] i = r_rob_head_ptr; i != (r_rob_tail_ptr); i=i+1)
 	  begin
 	     $display("\trob entry %d, pc %x, complete %b",
-		      i[3:0], r_rob[i[3:0]].pc, r_rob[i[3:0]].complete);
+		      i[`LG_ROB_ENTRIES-1:0], r_rob[i[`LG_ROB_ENTRIES-1:0]].pc, r_rob[i[`LG_ROB_ENTRIES-1:0]].complete);
 	  end
      end // always_ff@ (negedge clk)
 `endif
-
-
 
    
    always_comb
@@ -787,18 +786,19 @@ module core(clk,
 		 begin
 		    if(t_rob_head.faulted)
 		      begin
-			  // $display("cycle %d : got fault for %x, eret %b, break %d, ii %d, trap %d, tlb %b, rob head %d, rob tail %d",
-			  // 	   r_cycle, 
-			  // 	   t_rob_head.pc, 
-			  // 	   t_rob_head.is_eret, 
-			  // 	   t_rob_head.is_break,
-			  // 	   t_rob_head.is_ii,
-			  // 	   t_rob_head.take_trap,
-			  // 	   t_rob_head.exception_tlb_refill,
-			  // 	   r_rob_head_ptr[`LG_ROB_ENTRIES-1:0],
-			  // 	   r_rob_tail_ptr[`LG_ROB_ENTRIES-1:0]
-			  // 	   );
-
+`ifdef REPORT_FAULTS
+			  $display("cycle %d : got fault for %x, eret %b, break %d, ii %d, trap %d, tlb %b, rob head %d, rob tail %d",
+			  	   r_cycle, 
+			  	   t_rob_head.pc, 
+			  	   t_rob_head.is_eret, 
+			  	   t_rob_head.is_break,
+			  	   t_rob_head.is_ii,
+			  	   t_rob_head.take_trap,
+			  	   t_rob_head.exception_tlb_refill,
+			  	   r_rob_head_ptr[`LG_ROB_ENTRIES-1:0],
+			  	   r_rob_tail_ptr[`LG_ROB_ENTRIES-1:0]
+			  	   );
+`endif
 			 if(t_rob_head.is_eret)
 			   begin
 			      $stop();

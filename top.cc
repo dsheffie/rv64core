@@ -868,16 +868,15 @@ int main(int argc, char **argv) {
 
     
     ++last_retire;
-    if(last_retire > (1000*mem_lat) && not(tb->in_flush_mode)) {
+    if(last_retire > (1U<<20) && not(tb->in_flush_mode)) {
       std::cout << "in flush mode = " << static_cast<int>(tb->in_flush_mode) << "\n";
-      std::cerr << "no retire in " << 100*mem_lat << " cycles, last retired "
+      std::cerr << "no retire in " << last_retire << " cycles, last retired "
     		<< std::hex
     		<< last_retired_pc + 0
     		<< std::dec
     		<< " "
     		<< getAsmString(get_insn(last_retired_pc+0, s), last_retired_pc+0)
     		<< "\n";
-
       break;
     }
     if(tb->got_break) {

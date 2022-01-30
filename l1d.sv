@@ -1109,7 +1109,7 @@ endfunction
 			    n_core_mem_rsp.data = r_req.lwc1_lo ? 
 						  {r_req.addr[31:0], r_req.data[31:0]} : 
 						  {r_req.data[63:32], r_req.addr[31:0]};
-			    n_core_mem_rsp.fp_dst_valid = r_req.dst_valid;
+			    n_core_mem_rsp.fp_dst_valid = r_req.fp_dst_valid;
 			 end 
 		       MEM_MFC1_MERGE:
 			 begin
