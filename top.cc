@@ -36,19 +36,55 @@ static uint64_t n_int_exec[2] = {0};
 static uint64_t n_mem_exec[2] = {0};
 static uint64_t n_fp_exec[2] = {0};
 
+static uint64_t q_full[3] = {0};
+static uint64_t dq_empty =  0;
+static uint64_t uq_full = 0;
+static uint64_t n_active = 0;
+static uint64_t rob_full = 0;
+
+static uint64_t l1d_reqs = 0;
+static uint64_t l1d_acks = 0;
+static uint64_t l1d_stores = 0;
+
+static std::map<int,uint64_t> block_distribution;
+
+static uint64_t l1d_stall_reasons[16] = {0};
+
+void record_l1d(int req, int ack, int ack_st, int blocked, int stall_reason) {
+  l1d_reqs += req;
+  l1d_acks += ack;
+  l1d_stores += ack_st;
+  block_distribution[__builtin_popcount(blocked)]++;
+  l1d_stall_reasons[stall_reason&15]++;
+}
+
 void report_exec(int int_valid, int int_ready,
 		 int mem_valid, int mem_ready,
-		 int fp_valid,  int fp_ready) {
+		 int fp_valid,  int fp_ready,
+		 int intq_full, int memq_full,
+		 int fpq_full) {
   n_int_exec[0] += int_valid;
   n_int_exec[1] += int_ready;
   n_mem_exec[0] += mem_valid;
   n_mem_exec[1] += mem_ready;
   n_fp_exec[0] += fp_valid;
   n_fp_exec[1] += fp_ready;
+  q_full[0] += intq_full;
+  q_full[1] += memq_full;
+  q_full[2] += fpq_full;
 }
 
 
-void record_alloc(int a1, int a2, int f1, int f2, int r1, int r2) {
+void record_alloc(int rf,
+		  int a1, int a2, int de,
+		  int f1, int f2,
+		  int r1, int r2, int active) {
+
+  rob_full += rf;
+  dq_empty += de;
+  uq_full += f1;
+  n_active += active;
+  
   if(a2)
     ++n_alloc[2];
   else if(a1)
@@ -71,9 +107,34 @@ void record_alloc(int a1, int a2, int f1, int f2, int r1, int r2) {
     ++n_rdy[0];
   
 }
-void record_fetch(int p1, int p2, int p3, int p4, int bubble, int fq_full) {
+
+
+void record_fetch(int p1, int p2, int p3, int p4, 
+		  long long pc1, long long pc2, long long pc3, long long pc4,
+		  int bubble, int fq_full) {
   n_resteer_bubble += bubble;
   n_fq_full += fq_full;
+
+#if 0
+  if(p1 || p2 || p3 || p4)
+    std::cout << std::hex << pc1 << std::dec << " "
+	      << getAsmString(get_insn(pc1, s), pc1) << "\n";
+  if(p2 || p3 || p4)
+    std::cout << std::hex << pc2 << std::dec << " "
+	      << getAsmString(get_insn(pc2, s), pc2) << "\n";
+  if(p3 || p4)
+    std::cout << std::hex << pc3 << std::dec << " "
+	      << getAsmString(get_insn(pc3, s), pc3) << "\n";
+  if(p4)
+    std::cout << std::hex << pc4 << std::dec << " "
+	      << getAsmString(get_insn(pc4, s), pc4) << "\n";
+
+  if(!(p1||p2||p3||p4))
+    std::cout << "no fetch, fq_full = " << fq_full << ", resteer bubble = "
+	      << bubble << "\n";
+  
+  std::cout << "...\n";
+#endif
   
   if(p1)
     ++n_fetch[1];
@@ -91,11 +152,17 @@ void record_fetch(int p1, int p2, int p3, int p4, int bubble, int fq_full) {
 void record_retirement(long long pc, long long fetch_cycle, long long alloc_cycle, long long complete_cycle, long long retire_cycle,
 		       int faulted , int is_mem, int missed_l1d) {
 
-  //if(pc == 0x2046c || pc == 0x20464) {
-  //std::cout << std::hex << pc << std::dec << " : " << alloc_cycle << "," << complete_cycle << "," << retire_cycle << "," << faulted << "\n";
+  //if(pc == 0x2033c || pc == 0x20340 || pc == 0x20344 || pc == 0x20348) {
+  //auto i = getAsmString(get_insn(pc, s), pc);
+  //std::cout << std::hex << pc << std::dec << " " << i << " : " << alloc_cycle << "," << complete_cycle << "," << retire_cycle << "," << faulted << "\n";
   //}
+  //uint32_t insn = get_insn(pc, s);
   uint64_t delta = retire_cycle - last_retire_cycle;
 
+  //if(is_memory(insn)) {
+  //auto i = getAsmString(get_insn(pc, s), pc);
+  //std::cout << std::hex << pc << std::dec << " " << i << " : " << alloc_cycle << "," << complete_cycle << "," << retire_cycle << "," << faulted << "\n";
+  //}
   //if(delta == 3) {
   //std::cout << "curr = " << std::hex << pc << std::dec << " : " << getAsmString(get_insn(pc, s), pc) << "\n";
   //std::cout << "last = " << std::hex << last_retire_pc << std::dec << " : " << getAsmString(get_insn(last_retire_pc, s), last_retire_pc) << "\n";
@@ -162,6 +229,7 @@ int main(int argc, char **argv) {
   bool enable_checker = true;
   std::string sysArgs, pipelog;
   std::string mips_binary = "dhrystone3";
+  std::string log_name = "log.txt";
   bool use_checkpoint = false, use_checker_only = false;
   uint64_t heartbeat = 1UL<<36, start_trace_at = ~0UL;
   uint64_t max_cycle = 0, max_icnt = 0, mem_lat = 2;
@@ -178,6 +246,7 @@ int main(int argc, char **argv) {
       ("isdump,d", po::value<bool>(&use_checkpoint)->default_value(false), "is a dump")
       ("file,f", po::value<std::string>(&mips_binary), "mips binary")
       ("heartbeat,h", po::value<uint64_t>(&heartbeat)->default_value(1<<24), "heartbeat for stats")
+      ("log,l", po::value<std::string>(&log_name), "stats log filename")
       ("memlat,m", po::value<uint64_t>(&mem_lat)->default_value(4), "memory latency")
       ("pipelog,p", po::value<std::string>(&pipelog), "log for pipeline tracing")
       ("maxcycle", po::value<uint64_t>(&max_cycle)->default_value(1UL<<34), "maximum cycles")
@@ -211,10 +280,11 @@ int main(int argc, char **argv) {
   
   uint32_t max_inflight = 0;
 
-  Verilated::commandArgs(argc, argv);
-  
-  const std::unique_ptr<VerilatedContext> contextp{new VerilatedContext};
 
+  const std::unique_ptr<VerilatedContext> contextp{new VerilatedContext};
+  contextp->commandArgs(argc, argv);  
+  //contextp->traceEverOn(true);
+  
   sparse_mem *sm0 = new sparse_mem();
   sparse_mem *sm1 = new sparse_mem();
   s = new state_t(*sm0);
@@ -280,7 +350,7 @@ int main(int argc, char **argv) {
   uint64_t mismatches = 0, n_stores = 0, n_loads = 0;
   uint64_t insns_retired = 0, n_branches = 0, n_mispredicts = 0, n_checks = 0, n_flush_cycles = 0;
   uint64_t n_iside_tlb_misses = 0, n_dside_tlb_misses = 0;
-  bool got_mem_req = false, got_mem_rsp = false, got_monitor = false;
+  bool got_mem_req = false, got_mem_rsp = false, got_monitor = false, incorrect = false;
   //assert reset
   for(globals::cycle = 0; (globals::cycle < 4) && !Verilated::gotFinish(); ++globals::cycle) {
     contextp->timeInc(1);  // 1 timeprecision period passes...
@@ -364,6 +434,12 @@ int main(int argc, char **argv) {
   *reinterpret_cast<uint32_t*>(s->mem[pos]) = bswap<false>(b.u);
   pos += 4;
 
+  //write out a bunch of nops
+  //for(int i = 0; i < 128; i++) {
+  //*reinterpret_cast<uint32_t*>(s->mem[pos]) = 0;
+  //pos += 4;
+  //}
+  //std::cout << "init last instruction at " << std::hex << pos << std::dec << "\n";
   
   while(true) {
     bool should_break = false;
@@ -678,7 +754,7 @@ int main(int argc, char **argv) {
     if(tb->retire_valid) {
       ++insns_retired;
       if(last_retire > 1) {
-	pushout_histo[tb->retire_pc]++;
+	pushout_histo[tb->retire_pc] += last_retire;
       }
       last_retire = 0;
 
@@ -786,6 +862,7 @@ int main(int argc, char **argv) {
 	  }
 	  
 	  if(diverged) {
+	    incorrect = true;
 	    uint32_t r_inst = *reinterpret_cast<uint32_t*>(s->mem[tb->retire_pc]);
 	    r_inst = bswap<false>(r_inst);
 	    std::cout << "incorrect "
@@ -814,7 +891,6 @@ int main(int argc, char **argv) {
 			<< s->gpr[i+3]
 			<< std::dec <<"\n";
 	    }
-   
 	    break;
 	  }
 
@@ -964,104 +1040,138 @@ int main(int argc, char **argv) {
   tb->final();
   t0 = timestamp() - t0;
   
-  
-  std::cout << "n_mispredicts = " << n_mispredicts
-	    <<  ", cycles = " << globals::cycle
-	    << ", insns = " << insns_retired
-	    << ", n_checks = " << n_checks
-	    << "\n";
-  std::cout << static_cast<double>(insns_retired) / globals::cycle << " insn per cycle\n";
-  double avg_inflight = 0, sum = 0;
-  for(int i = 0; i < 32; i++) {
-    if(inflight[i] == 0) continue;
-    avg_inflight += i * inflight[i];
-    sum += inflight[i];
-    //printf("inflight[%d] = %lu\n", i, inflight[i]);
-  }
-  avg_inflight /= sum;
-  std::cout << insns_retired << " insns retired\n";
+  if(!incorrect) {
+    std::ofstream out(log_name);
+    out << "n_mispredicts = " << n_mispredicts
+	<<  ", cycles = " << globals::cycle
+	<< ", insns = " << insns_retired
+	<< ", n_checks = " << n_checks
+	<< "\n";
+    out << static_cast<double>(insns_retired) / globals::cycle << " insn per cycle\n";
+    double avg_inflight = 0, sum = 0;
+    for(int i = 0; i < 32; i++) {
+      if(inflight[i] == 0) continue;
+      avg_inflight += i * inflight[i];
+      sum += inflight[i];
+      //printf("inflight[%d] = %lu\n", i, inflight[i]);
+    }
+    avg_inflight /= sum;
+    out << insns_retired << " insns retired\n";
 
   
-  std::cout << "avg insns in ROB = " << avg_inflight
-	    << ", max inflight = " << max_inflight << "\n";
+    out << "avg insns in ROB = " << avg_inflight
+	      << ", max inflight = " << max_inflight << "\n";
   
 #ifdef CACHE_STATS
-  std::cout << "l1d cache hits = " << tb->l1d_cache_hits << "\n";
-  std::cout << "l1d cache accesses = " << tb->l1d_cache_accesses << "\n";
-  std::cout << "l1d cache hit under miss = " << tb->l1d_cache_hits_under_miss << "\n";
-  std::cout << "l1d hit rate = "
-	    << 100.0 *(static_cast<double>(tb->l1d_cache_hits) / tb->l1d_cache_accesses)
-	    << "\n";
-  std::cout << "l1i cache hits = " << tb->l1i_cache_hits << "\n";
-  std::cout << "l1i cache accesses = " << tb->l1i_cache_accesses << "\n";
-  std::cout << "l1i hit rate = "
-	    << 100.0 *(static_cast<double>(tb->l1i_cache_hits) / tb->l1i_cache_accesses)
-	    << "\n";
+    out << "l1d cache hits = " << tb->l1d_cache_hits << "\n";
+    out << "l1d cache accesses = " << tb->l1d_cache_accesses << "\n";
+    out << "l1d cache hit under miss = " << tb->l1d_cache_hits_under_miss << "\n";
+    out << "l1d hit rate = "
+	      << 100.0 *(static_cast<double>(tb->l1d_cache_hits) / tb->l1d_cache_accesses)
+	      << "\n";
+    out << "l1i cache hits = " << tb->l1i_cache_hits << "\n";
+    out << "l1i cache accesses = " << tb->l1i_cache_accesses << "\n";
+    out << "l1i hit rate = "
+	      << 100.0 *(static_cast<double>(tb->l1i_cache_hits) / tb->l1i_cache_accesses)
+	      << "\n";
 #endif
-  std::cout << "iside tlb misses = " << n_iside_tlb_misses << "\n";
-  std::cout << "dside tlb misses = " << n_dside_tlb_misses << "\n";
+    out << "iside tlb misses = " << n_iside_tlb_misses << "\n";
+    out << "dside tlb misses = " << n_dside_tlb_misses << "\n";
 
-  std::cout << "branch mispredict rate = "
-	    << (static_cast<double>(n_mispredicts)/n_branches)*100.0
-	    << "\n";
+    out << "branch mispredict rate = "
+	      << (static_cast<double>(n_mispredicts)/n_branches)*100.0
+	      << "\n";
 
-  std::cout << "mispredicts per kiloinsn = "
-	    << (static_cast<double>(n_mispredicts) / insns_retired) * 1000.0
-	    << "\n";
-  std::cout << n_flush_cycles << " cycles spent flushing caches\n";
-  std::cout << n_loads << " cache line loads\n";
-  std::cout << n_stores << " cache line stores\n";
-  std::cout << l1d_misses << " l1d misses\n";
-  std::cout << l1d_insns << " insns access the l1d\n";
+    out << "mispredicts per kiloinsn = "
+	      << (static_cast<double>(n_mispredicts) / insns_retired) * 1000.0
+	      << "\n";
+    out << n_flush_cycles << " cycles spent flushing caches\n";
+    out << n_loads << " cache line loads\n";
+    out << n_stores << " cache line stores\n";
+    out << l1d_misses << " l1d misses\n";
+    out << l1d_insns << " insns access the l1d\n";
 
-  uint64_t total_fetch = 0, total_fetch_cycles = 0;
-  for(int i = 0; i < 5; i++) {
-    std::cout << "n_fetch[" << i << "] = " << n_fetch[i] << "\n";
-    total_fetch_cycles += n_fetch[i];
-    total_fetch += n_fetch[i] * i;
-  }
-  std::cout << "avg fetch = " << static_cast<double>(total_fetch) / total_fetch_cycles << "\n";
-  std::cout << "resteer bubble = " << n_resteer_bubble << "\n";
-  std::cout << "front-end queues full = " << n_fq_full << "\n";
-  
-  for(int i = 0; i < 3; i++) {
-    std::cout << "uq_full[" << i << "] = " << n_uq_full[i] << "\n";
-  }
-  for(int i = 0; i < 3; i++) {
-    std::cout << "alloc[" << i << "] = " << n_alloc[i] << "\n";
-  }
-  std::cout << n_int_exec[0] << " cycles where int exec queue is not empty\n";
-  std::cout << n_int_exec[1] << " cycles where int exec queue dispatches\n";
-  std::cout << n_mem_exec[0] << " cycles where mem exec queue is not empty\n";
-  std::cout << n_mem_exec[1] << " cycles where mem exec queue dispatches\n";
-  std::cout << n_fp_exec[0] << " cycles where fp exec queue is not empty\n";
-  std::cout << n_fp_exec[1] << " cycles where fp exec queue dispatches\n";
+    uint64_t total_fetch = 0, total_fetch_cycles = 0;
+    for(int i = 0; i < 5; i++) {
+      out << "n_fetch[" << i << "] = " << n_fetch[i] << "\n";
+      total_fetch_cycles += n_fetch[i];
+      total_fetch += n_fetch[i] * i;
+    }
+    out << "avg fetch = " << static_cast<double>(total_fetch) / total_fetch_cycles << "\n";
+    out << "resteer bubble = " << n_resteer_bubble << "\n";
+    out << "front-end queues full = " << n_fq_full << "\n";
+    double total_fetch_cap = 0.0;
+
 
   
-  for(int i = 0; i < 3; i++) {
-    std::cout << "insn ready " << i
-	      << " "
-	      << n_rdy[i] << "\n";
+  
+    for(int i = 0; i < 3; i++) {
+      out << "uq_full[" << i << "] = " << n_uq_full[i] << "\n";
+    }
+    for(int i = 0; i < 3; i++) {
+      out << "alloc[" << i << "] = " << n_alloc[i] << "\n";
+    }
+    out << n_int_exec[0] << " cycles where int exec queue is not empty\n";
+    out << n_int_exec[1] << " cycles where int exec queue dispatches\n";
+    out << n_mem_exec[0] << " cycles where mem exec queue is not empty\n";
+    out << n_mem_exec[1] << " cycles where mem exec queue dispatches\n";
+    out << n_fp_exec[0] << " cycles where fp exec queue is not empty\n";
+    out << n_fp_exec[1] << " cycles where fp exec queue dispatches\n";
+
+    out << q_full[0] << " cycles with int queue full\n";
+    out << q_full[1] << " cycles with mem queue full\n";
+    out << q_full[2] << " cycles with fp  queue full\n";
+    out << dq_empty  << " cycles with an empty decode queue\n";
+    out << uq_full   << " cycles with a  full uop queue\n";
+    out << n_active << " cycles where the machine is in active state\n";
+    out << rob_full << " cycles where the rob is full\n";
+  
+    for(int i = 0; i < 3; i++) {
+      out << "insn ready " << i
+		<< " "
+		<< n_rdy[i] << "\n";
+    }
+  
+    dump_histo("branch_info.txt", mispredicts, s);
+    uint64_t total_pushout = 0;
+    for(auto &p : pushout_histo) {
+      total_pushout += p.second;
+    }
+    out << total_pushout << " cycles of pushout\n";
+    dump_histo("pushout.txt", pushout_histo, s);
+
+    std::ofstream branch_info("retire_info.csv");
+    uint64_t total_retire = 0, total_cycle = 0;
+    for(auto &p : retire_map) {
+      total_retire += p.second;
+    }
+    for(auto &p : retire_map) {
+      branch_info << p.first << "," << p.second << "," << static_cast<double>(p.second) / total_retire << "\n";
+      total_cycle += (p.first * p.second);
+    }
+    branch_info.close();
+    out << "l1d_reqs = " << l1d_reqs << "\n";
+    out << "l1d_acks = " << l1d_acks << "\n";
+    out << "l1d_stores = " << l1d_stores << "\n";
+    for(auto &p :block_distribution) {
+      out << p.first << "," << p.second << "\n";
+    }
+    for(int i = 0; i < 8; i++) {
+      out << "l1d stall reason " << i << " : " << l1d_stall_reasons[i] << "\n";
+    }
+    std::cout << "total_retire = " << total_retire << "\n";
+    std::cout << "total_cycle  = " << total_cycle << "\n";
+    std::cout << "total ipc    = " << static_cast<double>(total_retire) / total_cycle << "\n";
+    out.close();
+  }
+  else {
+    std::cout << "instructions retired = " << insns_retired << "\n";
   }
   
-  dump_histo("branch_info.txt", mispredicts, s);
-  dump_histo("pushout.txt", pushout_histo, s);
+  std::cout << "simulation took " << t0 << " seconds, " << (insns_retired/t0)
+	    << " insns per second\n";
 
-  std::ofstream branch_info("retire_info.csv");
-  uint64_t total_retire = 0, total_cycle = 0;
-  for(auto &p : retire_map) {
-    total_retire += p.second;
-  }
-  for(auto &p : retire_map) {
-    branch_info << p.first << "," << p.second << "," << static_cast<double>(p.second) / total_retire << "\n";
-    total_cycle += (p.first * p.second);
-  }
-  branch_info.close();
-  std::cout << "total_retire = " << total_retire << "\n";
-  std::cout << "total_cycle  = " << total_cycle << "\n";
-  std::cout << "total ipc    = " << static_cast<double>(total_retire) / total_cycle << "\n";
 
-  std::cout << "simulation took " << t0 << " seconds, " << (insns_retired/t0) << " insns per second\n";
   delete s;
   delete ss;
   delete [] insns_delivered;

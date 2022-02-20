@@ -6,9 +6,10 @@
 `define ENABLE_CYCLE_ACCOUNTING 1
 `endif
 
-`define ENABLE_FPU 1
-
-//`define ENABLE_64BITS
+`ifdef VERILATOR
+ `define ENABLE_FPU 1
+ `define ENABLE_64BITS 1
+`endif
 
 `define LG_M_WIDTH 6
 
@@ -47,8 +48,11 @@
 /* fp uop queue */
 `define LG_FP_UQ_ENTRIES 4
 
-/* mem queue */
-`define LG_MQ_ENTRIES 2
+/* mem uop queue */
+`define LG_MQ_ENTRIES 3
+
+/* mem retry queue */
+`define LG_MRQ_ENTRIES 3
 
 `define MUL_LAT 2
 

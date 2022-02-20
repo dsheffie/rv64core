@@ -458,9 +458,11 @@ void _lw(uint32_t inst, state_t *s) {
   int32_t imm = (int32_t)himm;
   uint32_t ea = (uint32_t)s->gpr[rs] + imm;
   s->gpr[rt] = bswap<EL>(*((int32_t*)(s->mem + ea)));
+  //#define TRACE_MEM
 #ifdef TRACE_MEM
-  printf("_lw from %x = %x\n", ea, s->gpr[rt]);
+  printf("_lw pc %x from ea %x = %x\n", s->pc, ea, s->gpr[rt]);
 #endif
+  //#undef TRACE_MEM
   s->pc += 4;
 }
 
@@ -532,9 +534,11 @@ void _sw(uint32_t inst, state_t *s) {
   int32_t imm = (int32_t)himm;
   uint32_t ea = s->gpr[rs] + imm;
   *((int32_t*)(s->mem + ea)) = bswap<EL>(s->gpr[rt]);
+  //#define TRACE_MEM
 #ifdef TRACE_MEM
   printf("_sw to %x = %x\n", ea, s->gpr[rt]);
 #endif
+#undef TRACE_MEM
   s->pc += 4;
 }
 
@@ -1495,7 +1499,7 @@ template <bool EL>
 void execMips(state_t *s) {
   sparse_mem &mem = s->mem;
   uint32_t inst = bswap<EL>(mem.get32(s->pc));
-  if(globals::trace_retirement) {
+  if(globals::trace_retirement and false) {
     std::cout << std::hex
 	      << "cosim "
 	      << s->pc << ","
@@ -1784,18 +1788,6 @@ void execMips(state_t *s) {
 	break;
       case 0x09: /* addiu */
 	tmp = s->gpr[rs] + simm32;
-	if(globals::trace_retirement) {
-	  std::cout << std::hex
-		    << s->pc
-		    << " addiu "
-		    << s->gpr[rs]
-		    << " , "
-		    << simm32
-		    << " = "
-		    << tmp
-		    << std::dec
-		    << "\n";
-	}
 	s->gpr[rt] = tmp;
 	s->pc+=4;
 	break;

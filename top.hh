@@ -135,6 +135,9 @@ int fp32_to_int32(int a_) {
 int fp32_compare_lt(int a_, int b_) {
   float a = *reinterpret_cast<float*>(&a_);
   float b = *reinterpret_cast<float*>(&b_);
+  //assert(!std::isnan(a));
+  //assert(!std::isnan(b));
+  
   return (a<b);
 }
 

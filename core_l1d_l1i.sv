@@ -130,6 +130,12 @@ module core_l1d_l1i(clk,
 
    logic 				  retired_call;
    logic 				  retired_ret;
+
+   logic 				  retired_rob_ptr_valid;
+   logic 				  retired_rob_ptr_two_valid;
+   logic [`LG_ROB_ENTRIES-1:0] 		  retired_rob_ptr;
+   logic [`LG_ROB_ENTRIES-1:0] 		  retired_rob_ptr_two;
+
    
    output logic [15:0] 			  monitor_req_reason;
    output logic 			  monitor_req_valid;
@@ -174,7 +180,18 @@ module core_l1d_l1i(clk,
    } flush_state_t;
    flush_state_t n_flush_state, r_flush_state;
    logic 	r_flush, n_flush;
+   logic 	memq_empty;   
    assign in_flush_mode = r_flush;
+
+
+// `ifdef VERILATOR
+//    initial 
+//      begin
+// 	$dumpfile("l1d.vcd");
+// 	$dumpvars();
+//      end
+// `endif
+
  
    always_ff@(posedge clk)
      begin
@@ -379,7 +396,9 @@ module core_l1d_l1i(clk,
    logic 			 t_l1d_utlb_miss_req;
    logic 			 t_l1i_utlb_miss_req;   
    logic [`M_WIDTH-`LG_PG_SZ-1:0] t_l1d_utlb_miss_paddr;
-   logic [`M_WIDTH-`LG_PG_SZ-1:0] t_l1i_utlb_miss_paddr;   
+   logic [`M_WIDTH-`LG_PG_SZ-1:0] t_l1i_utlb_miss_paddr;
+   logic 			  drain_ds_complete;
+   logic [(1<<`LG_ROB_ENTRIES)-1:0] dead_rob_mask;
    utlb_entry_t t_tlb_rsp;
    
    l1d dcache (
@@ -387,6 +406,14 @@ module core_l1d_l1i(clk,
 	       .reset(reset),
 	       .head_of_rob_ptr_valid(head_of_rob_ptr_valid),
 	       .head_of_rob_ptr(head_of_rob_ptr),
+	       .retired_rob_ptr_valid(retired_rob_ptr_valid),
+	       .retired_rob_ptr_two_valid(retired_rob_ptr_two_valid),
+	       .retired_rob_ptr(retired_rob_ptr),
+	       .retired_rob_ptr_two(retired_rob_ptr_two),
+	       .restart_valid(restart_valid),
+	       .memq_empty(memq_empty),
+	       .drain_ds_complete(drain_ds_complete),
+	       .dead_rob_mask(dead_rob_mask),
 	       .flush_req(flush_req),
 	       .flush_cl_req(flush_cl_req),
 	       .flush_cl_addr(flush_cl_addr),
@@ -483,6 +510,9 @@ module core_l1d_l1i(clk,
 	     .clk(clk),
 	     .reset(reset),
 	     .resume(resume),
+	     .memq_empty(memq_empty),
+	     .drain_ds_complete(drain_ds_complete),
+	     .dead_rob_mask(dead_rob_mask),	     
 	     .head_of_rob_ptr_valid(head_of_rob_ptr_valid),	     
 	     .head_of_rob_ptr(head_of_rob_ptr),
 	     .resume_pc(resume_pc),
@@ -531,7 +561,10 @@ module core_l1d_l1i(clk,
 	     .retire_two_pc(retire_two_pc),
 	     .retired_call(retired_call),
 	     .retired_ret(retired_ret),
-	     
+	     .retired_rob_ptr_valid(retired_rob_ptr_valid),
+	     .retired_rob_ptr_two_valid(retired_rob_ptr_two_valid),
+	     .retired_rob_ptr(retired_rob_ptr),
+	     .retired_rob_ptr_two(retired_rob_ptr_two),
 	     .monitor_req_reason(monitor_req_reason),
 	     .monitor_req_valid(monitor_req_valid),
 	     .monitor_rsp_valid(monitor_rsp_valid),

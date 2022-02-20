@@ -11,7 +11,10 @@ import "DPI-C" function void report_exec(input int int_valid,
 					 input int mem_valid, 
 					 input int mem_blocked,
 					 input int fp_valid, 
-					 input int fp_blocked
+					 input int fp_blocked,
+					 input int iq_full,
+					 input int mq_full,
+					 input int fq_full
 					 );
 `endif
 
@@ -253,6 +256,15 @@ module exec(clk,
 	uq_empty = t_uq_empty;
      end
 
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if(uq_next_full)
+   // 	  begin
+   // 	     $display("cycle %d : uq %b, mq %b, fp %b",
+   // 		      r_cycle, t_uq_next_full, t_mem_uq_next_full, t_fp_uq_next_full);
+   // 	  end
+   //   end
+   
 
    always_ff@(posedge clk)
      begin
@@ -352,11 +364,13 @@ module exec(clk,
      begin
 	if(t_push_two_mem)
 	  begin
+	     //$display("cycle %d : pushing mem ops for rob slots %d & %d", r_cycle, uq_uop_two.rob_ptr, uq_uop.rob_ptr);
 	     r_mem_uq[r_mem_uq_next_tail_ptr[`LG_MEM_UQ_ENTRIES-1:0]] <= uq_uop_two;
 	     r_mem_uq[r_mem_uq_tail_ptr[`LG_MEM_UQ_ENTRIES-1:0]] <= uq_uop;
 	  end
 	else if(t_push_one_mem)
 	  begin
+	     //$display("cycle %d : pushing mem ops for rob slots %d", r_cycle, uq_uop.rob_ptr);
 	     r_mem_uq[r_mem_uq_tail_ptr[`LG_MEM_UQ_ENTRIES-1:0]] <= uq_uop.is_mem ? uq_uop : uq_uop_two;
 	  end	
      end // always_ff@ (posedge clk)
@@ -824,10 +838,22 @@ module exec(clk,
 		    t_mem_uq_empty ? 32'd0 : 32'd1,
 		    t_pop_mem_uq ? 32'd1 : 32'd0,
 		    t_fp_uq_empty ? 32'd0 : 32'd1,
-		    t_pop_fp_uq ? 32'd1 : 32'd0
+		    t_pop_fp_uq ? 32'd1 : 32'd0,
+		    t_uq_full ? 32'd1 : 32'd0,
+		    t_mem_uq_full ? 32'd1 : 32'd0,
+		    t_fp_uq_full ? 32'd1 : 32'd0
 		    );
      end
-`endif
+`endif //  `ifdef VERILATOR
+
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if(uq.op == JR && t_pop_uq)
+   // 	  begin
+   // 	     $display("cycle %d JR, pc %x, prf entry A =%d, t_srcA = %x", 
+   // 		      r_cycle, uq.pc, uq.srcA, t_srcA);
+   // 	  end
+   //   end
       
    always_comb
      begin
@@ -1066,17 +1092,38 @@ module exec(clk,
 	       t_srcs_rdy = !(r_prf_inflight[uq.srcA] || r_prf_inflight[uq.srcB]) && !t_uq_empty;
 	       t_start_mul = t_srcs_rdy & !t_uq_empty;
 	    end
+`ifdef VERILATOR
+	  DIV:
+	    begin
+	       t_alu_valid = 1'b1;	       
+	       t_srcs_rdy = !(r_prf_inflight[uq.srcA] || r_prf_inflight[uq.srcB]);
+	       t_hilo_result[31:0] = $signed(t_srcA[31:0]) / $signed(t_srcB[31:0]);
+	       t_hilo_result[63:32] = $signed(t_srcA[31:0]) % $signed(t_srcB[31:0]);
+	       t_wr_hilo = 1'b1;
+	       t_alu_valid = 1'b1;
+	    end
+	  DIVU:
+	    begin
+	       t_alu_valid = 1'b1;	       
+	       t_srcs_rdy = !(r_prf_inflight[uq.srcA] || r_prf_inflight[uq.srcB]);
+	       t_hilo_result[31:0] = t_srcA[31:0] / t_srcB[31:0];
+	       t_hilo_result[63:32] = t_srcA[31:0] % t_srcB[31:0];
+	       t_wr_hilo = 1'b1;
+	       t_alu_valid = 1'b1;
+	    end	  
+`else // !`ifdef VERILATOR
 	  DIV:
 	    begin
 	       t_signed_div = 1'b1;
 	       t_srcs_rdy = !(r_prf_inflight[uq.srcA] || r_prf_inflight[uq.srcB]) && !t_uq_empty;
-	       t_start_div32 = t_srcs_rdy & !t_uq_empty;
+	       t_start_div32 = t_srcs_rdy & !t_uq_empty;	       
 	    end
 	  DIVU:
 	    begin
 	       t_srcs_rdy = !(r_prf_inflight[uq.srcA] || r_prf_inflight[uq.srcB]) && !t_uq_empty;
 	       t_start_div32 = t_srcs_rdy & !t_uq_empty;
 	    end
+`endif
 	  EXT:
 	    begin
 	       t_signed_shift = 1'b0;
@@ -1938,7 +1985,10 @@ module exec(clk,
 	t_mem_tail.dst_ptr = mem_uq.dst;
 	t_mem_tail.is_store = 1'b0;
 	t_mem_tail.lwc1_lo = 1'b0;
+	t_mem_tail.in_storebuf = 1'b0;
 	t_mem_tail.is_fp = 1'b0;
+	t_mem_tail.pc = mem_uq.pc;
+	t_mem_tail.uuid = r_cycle;
 	t_mem_srcs_rdy = 1'b0;
 	
 	case(mem_uq.op)
@@ -2006,7 +2056,7 @@ module exec(clk,
 		 begin
 		    t_mem_tail.op = MEM_SWC1_MERGE;
 		    t_mem_tail.is_store = 1'b1;
-		    t_mem_tail.lwc1_lo = mem_uq.srcC[0];		    
+		    t_mem_tail.lwc1_lo = mem_uq.jmp_imm[0];		    
 		    t_mem_tail.addr = t_mem_srcA + t_mem_simm;
 		    t_mem_tail.data = t_mem_fp_srcB; /* needs byte swap */
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
@@ -2081,10 +2131,13 @@ module exec(clk,
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.dst_valid = 1'b1;
 		    t_mem_tail.dst_ptr = mem_uq.dst;
-		    //$display("cycle %d MARKING SCOREBOARD ENTRY %d inflight, srcA ptr = %d, srcA val = %x, A inflight = %b", 
-		    //r_cycle, mem_uq.dst, mem_uq.srcA, t_mem_srcA, r_prf_inflight[mem_uq.srcA]);
 		    t_mem_srcs_rdy = !r_prf_inflight[mem_uq.srcA];
 		    t_push_mq = !t_mem_uq_empty & t_mem_srcs_rdy;
+		    //if(t_push_mq)
+		    //begin
+		    //$display("cycle %d pc %x, MARKING SCOREBOARD ENTRY %d inflight, srcA ptr = %d, srcA val = %x, A inflight = %b", 
+		    //r_cycle, mem_uq.pc, mem_uq.dst, mem_uq.srcA, t_mem_srcA, r_prf_inflight[mem_uq.srcA]);
+		    //end
 		 end
 	    end // case: LW
 	  LDC1:
@@ -2106,7 +2159,7 @@ module exec(clk,
 	       if(!(mem_q_full || r_prf_inflight[mem_uq.srcA] || r_fp_prf_inflight[mem_uq.srcB]))
 		 begin
 		    t_mem_tail.op = MEM_LWC1_MERGE;
-		    t_mem_tail.lwc1_lo = mem_uq.srcC[0];
+		    t_mem_tail.lwc1_lo = mem_uq.jmp_imm[0];
 		    t_mem_tail.data = t_mem_fp_srcB;
 		    t_mem_tail.addr = t_mem_srcA + t_mem_simm;
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
@@ -2204,7 +2257,7 @@ module exec(clk,
 	       if(!(mem_q_full || r_fp_prf_inflight[mem_uq.srcB]))
 		 begin
 		    t_mem_tail.op = MEM_MFC1_MERGE;
-		    t_mem_tail.lwc1_lo = mem_uq.srcC[0];		    
+		    t_mem_tail.lwc1_lo = mem_uq.jmp_imm[0];		    
 		    t_mem_tail.data = t_mem_fp_srcB;
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.dst_valid = 1'b1;
@@ -2219,7 +2272,7 @@ module exec(clk,
 	       if(!(mem_q_full || r_prf_inflight[mem_uq.srcA] || r_fp_prf_inflight[mem_uq.srcB]))
 		 begin
 		    t_mem_tail.op = MEM_MTC1_MERGE;
-		    t_mem_tail.lwc1_lo = mem_uq.srcC[0];
+		    t_mem_tail.lwc1_lo = mem_uq.jmp_imm[0];
 		    t_mem_tail.data = t_mem_fp_srcB;
 		    t_mem_tail.addr = t_mem_srcA;
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
@@ -2234,6 +2287,7 @@ module exec(clk,
 	    begin
 	       if(!t_mem_uq_empty)
 		 begin
+		    $display("wtf is %d, pc %x", mem_uq.op, mem_uq.pc);
 		    $stop();
 		 end
 	    end

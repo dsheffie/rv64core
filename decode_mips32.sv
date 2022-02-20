@@ -846,7 +846,7 @@ module decode_mips32(in_64b_fpreg_mode, insn,
 		      begin
 			 uop.op = MFC1_MERGE;
 			 uop.srcB = {{ZP{1'b0}}, rd[4:1], 1'b0};
-			 uop.srcC = {{ZP{1'b0}}, 4'd0, rd[0]};
+			 uop.jmp_imm = { {(`M_WIDTH-17){1'b0}}, rd[0]};
 		      end
 		    uop.fp_srcB_valid = 1'b1;
 		    uop.is_mem = 1'b1;
@@ -865,7 +865,7 @@ module decode_mips32(in_64b_fpreg_mode, insn,
 			 uop.op = MTC1_MERGE;
 			 uop.dst = {{ZP{1'b0}}, rd[4:1], 1'b0};
 			 uop.srcB = {{ZP{1'b0}}, rd[4:1], 1'b0};
-			 uop.srcC = {{ZP{1'b0}}, 4'd0, rd[0]};
+			 uop.jmp_imm = { {(`M_WIDTH-17){1'b0}}, rd[0]};
 			 uop.fp_srcB_valid = 1;			 
 		      end
 		    uop.fp_dst_valid = 1'b1;
@@ -1609,8 +1609,8 @@ module decode_mips32(in_64b_fpreg_mode, insn,
 		    uop.op = LWC1_MERGE;
 		    uop.dst = {{ZP{1'b0}}, rt[4:1], 1'b0};
 		    uop.srcB = {{ZP{1'b0}}, rt[4:1], 1'b0};
-		    uop.srcC = {{ZP{1'b0}}, 4'd0, rt[0]};
 		    uop.fp_srcB_valid = 1;
+		    uop.jmp_imm = { {(`M_WIDTH-17){1'b0}}, rt[0]};
 		 end
 	       uop.fp_dst_valid = 1'b1;
 	       uop.imm = insn[15:0];
@@ -1641,19 +1641,21 @@ module decode_mips32(in_64b_fpreg_mode, insn,
 	       uop.imm = insn[15:0];
 	       uop.is_mem = 1'b1;
 	    end
-	  6'd56: /* SC */
-	    begin
-	       uop.op = SC;
-	       uop.dst = rt;
-	       uop.dst_valid = 1'b1;
-	       uop.srcA = rs;
-	       uop.srcA_valid = 1'b1;
-	       uop.srcB = rt;
-	       uop.srcB_valid = 1'b1;
-	       uop.imm = insn[15:0];
-	       uop.is_mem = 1'b1;
-	       uop.is_store = 1'b1;
-	    end // case: 6'd56
+	  
+	  // 6'd56: /* SC */
+	  //   begin
+	  //      uop.op = SC;
+	  //      uop.dst = rt;
+	  //      uop.dst_valid = 1'b1;
+	  //      uop.srcA = rs;
+	  //      uop.srcA_valid = 1'b1;
+	  //      uop.srcB = rt;
+	  //      uop.srcB_valid = 1'b1;
+	  //      uop.imm = insn[15:0];
+	  //      uop.is_mem = 1'b1;
+	  //      uop.is_store = 1'b1;
+	  //   end // case: 6'd56
+	  
 	  6'd57: /* SWC1 */
 	    begin
 	       if(in_64b_fpreg_mode)
@@ -1665,7 +1667,7 @@ module decode_mips32(in_64b_fpreg_mode, insn,
 		 begin
 		    uop.op = SWC1_MERGE;
 		    uop.srcB = {{ZP{1'b0}}, rt[4:1], 1'b0};
-		    uop.srcC = {{ZP{1'b0}}, 4'd0, rt[0]};		    
+		    uop.jmp_imm = { {(`M_WIDTH-17){1'b0}}, rt[0]};		    
 		 end
 	       uop.srcA = rs;
 	       uop.srcA_valid = 1'b1;

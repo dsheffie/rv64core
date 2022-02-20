@@ -355,6 +355,33 @@ static inline uint32_t get_jump_target(uint32_t pc, uint32_t inst) {
   return ((pc + 4)&pc_mask) | jaddr;
 }
 
+static inline bool is_memory(uint32_t inst) {
+  uint32_t opcode = inst>>26;
+  switch(opcode)
+    {
+    case 0x20: //_lb(inst, s);
+    case 0x21: //_lh<EL>(inst, s);
+    case 0x22: //_lwl<EL>(inst, s);
+    case 0x23: //_lw<EL>(inst, s);
+    case 0x24: //_lbu(inst, s);
+    case 0x25: //_lhu<EL>(inst, s);
+    case 0x26: //_lwr<EL>(inst, s);
+    case 0x28: //_sb(inst, s);
+    case 0x29: //_sh<EL>(inst, s);
+    case 0x2a: //_swl<EL>(inst, s);
+    case 0x2b: //_sw<EL>(inst, s);
+    case 0x2e: //_swr<EL>(inst, s); 
+    case 0x31: //_lwc1<EL>(inst, s);
+    case 0x35: //_ldc1<EL>(inst, s);
+    case 0x39: //_swc1<EL>(inst, s);
+    case 0x3d: //_sdc1<EL>(inst, s);
+      return true;
+    default:
+      break;
+    }
+  return false;
+}
+
 static inline bool is_branch(uint32_t inst) {
   uint32_t opcode = inst>>26;
   uint32_t rt = ((inst>>16) & 31);

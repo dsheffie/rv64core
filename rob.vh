@@ -70,6 +70,7 @@ typedef struct packed {
 
 typedef struct packed {
    logic [(`M_WIDTH-1):0] addr;
+   logic 		  in_storebuf;
    logic 		  is_store;
    logic 		  is_fp;
    /* for merging */
@@ -80,6 +81,8 @@ typedef struct packed {
    logic [`LG_PRF_ENTRIES-1:0] dst_ptr;
    logic 		       dst_valid;
    logic 		       fp_dst_valid;
+   logic [`M_WIDTH-1:0]        pc;
+   logic [31:0] 	       uuid;
 } mem_req_t;
 
 typedef struct packed {
@@ -95,7 +98,7 @@ typedef struct packed {
    logic 		       exception_tlb_invalid;
    logic 		       was_mem;
    logic 		       missed_l1d;
-   
+   logic [`M_WIDTH-1:0]        pc;
 } mem_rsp_t;
 
 typedef struct packed {
