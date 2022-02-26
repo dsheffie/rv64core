@@ -47,8 +47,31 @@ static uint64_t l1d_acks = 0;
 static uint64_t l1d_stores = 0;
 
 static std::map<int,uint64_t> block_distribution;
+static std::map<int,uint64_t> restart_distribution;
+static std::map<int,uint64_t> restart_ds_distribution;
 
-static uint64_t l1d_stall_reasons[16] = {0};
+static const char* l1d_stall_str[8] =
+  {
+   "no stall", //0
+   "got miss", //1 
+   "full memory queue", //2
+   "not possible", //3
+   "load retry", //4
+   "store to same set", //5
+   "cm block stall", //6
+   "inflight rob ptr", //7
+};
+static uint64_t l1d_stall_reasons[8] = {0};
+
+
+void record_restart(int cycles) {
+  restart_distribution[cycles]++;
+}
+
+void record_ds_restart(int cycles) {
+  restart_ds_distribution[cycles]++;
+}
+
 
 void record_l1d(int req, int ack, int ack_st, int blocked, int stall_reason) {
   l1d_reqs += req;
@@ -396,6 +419,8 @@ int main(int argc, char **argv) {
   //write out initialization instructions for the FP regisers  
   for(int i = 0; i < 32; i++) {
     uint32_t r = *reinterpret_cast<uint32_t*>(&s->cpr1[i]);
+    if(r == 0)
+      continue;
     itype z,y;
     mtc1 m(i, 1);
     z.uu.op = 15;
@@ -411,10 +436,74 @@ int main(int argc, char **argv) {
     *reinterpret_cast<uint32_t*>(s->mem[pos+8]) = bswap<false>(m.u);
     pos += 12;    
   }
+
+  if(s->fcr1[CP1_CR25]) {
+    //std::cout << "need to set to " << s->fcr1[CP1_CR25] << "\n";
+    for(int i = 0; i < 8; i++) {
+      if(s->fcr1[CP1_CR25] & (1<<i)) {
+	ceqs z(1, 1, i);
+	*reinterpret_cast<uint32_t*>(s->mem[pos]) = bswap<false>(0x46000032U);
+	pos += 4;	
+      }
+    }
+  }
   
-  //write out initialization instructions for the GPRs
-  for(int i = 1; i < 32; i++) {
+  
+  if(s->lo) {
+    uint32_t r = *reinterpret_cast<uint32_t*>(&s->lo);
+    //std::cout << "lo = " << std::hex << r << std::dec << "\n";
+    itype z,y;
+    mtlo m(1);
+    
+    //save in $1
+    z.uu.op = 15;
+    z.uu.rt = 1;
+    z.uu.rs = 1;
+    z.uu.imm = (r >> 16);
+
+    y.uu.op = 13;
+    y.uu.rt = 1;
+    y.uu.rs = 1;
+    y.uu.imm = r & 0xffff;
+    *reinterpret_cast<uint32_t*>(s->mem[pos]) = bswap<false>(z.u);
+    *reinterpret_cast<uint32_t*>(s->mem[pos+4]) = bswap<false>(y.u);
+    *reinterpret_cast<uint32_t*>(s->mem[pos+8]) = bswap<false>(m.u);
+    // std::cout << "i0 : " << std::hex << pos << " " << std::dec
+    // 	      << getAsmString(z.u, pos+0) << "\n";
+    // std::cout << "i1 : " << std::hex << pos+4 << " " << std::dec
+    // 	      << getAsmString(y.u, pos+4) << "\n";
+    // std::cout << "i2 : " <<  std::hex << pos+8 << " " << std::dec
+    // 	      << getAsmString(m.u, pos+8) << "\n";
+    pos += 12;    
+  }
+  
+  if(s->hi) {
+    uint32_t r = *reinterpret_cast<uint32_t*>(&s->hi);
+    itype z,y;
+    mthi m(1);
+    //save in $1
+    z.uu.op = 15;
+    z.uu.rt = 1;
+    z.uu.rs = 1;
+    z.uu.imm = (r >> 16);
+    y.uu.op = 13;
+    y.uu.rt = 1;
+    y.uu.rs = 1;
+    y.uu.imm = r & 0xffff;
+    *reinterpret_cast<uint32_t*>(s->mem[pos]) = bswap<false>(z.u);
+    *reinterpret_cast<uint32_t*>(s->mem[pos+4]) = bswap<false>(y.u);
+    *reinterpret_cast<uint32_t*>(s->mem[pos+8]) = bswap<false>(m.u);
+    //std::cout << getAsmString(z.u, pos+0) << "\n";
+    //std::cout << getAsmString(y.u, pos+4) << "\n";
+    //std::cout << getAsmString(m.u, pos+8) << "\n";
+    pos += 12;    
+  }
+ 
+ //write out initialization instructions for the GPRs
+ for(int i = 1; i < 32; i++) {
     uint32_t r = *reinterpret_cast<uint32_t*>(&s->gpr[i]);
+    if(r == 0)
+      continue;
     itype z,y;
     z.uu.op = 15;
     z.uu.rt = i;
@@ -435,10 +524,10 @@ int main(int argc, char **argv) {
   pos += 4;
 
   //write out a bunch of nops
-  //for(int i = 0; i < 128; i++) {
-  //*reinterpret_cast<uint32_t*>(s->mem[pos]) = 0;
-  //pos += 4;
-  //}
+  for(int i = 0; i < 128; i++) {
+    *reinterpret_cast<uint32_t*>(s->mem[pos]) = 0;
+    pos += 4;
+  }
   //std::cout << "init last instruction at " << std::hex << pos << std::dec << "\n";
   
   while(true) {
@@ -1093,7 +1182,7 @@ int main(int argc, char **argv) {
 
     uint64_t total_fetch = 0, total_fetch_cycles = 0;
     for(int i = 0; i < 5; i++) {
-      out << "n_fetch[" << i << "] = " << n_fetch[i] << "\n";
+      //out << "n_fetch[" << i << "] = " << n_fetch[i] << "\n";
       total_fetch_cycles += n_fetch[i];
       total_fetch += n_fetch[i] * i;
     }
@@ -1102,15 +1191,13 @@ int main(int argc, char **argv) {
     out << "front-end queues full = " << n_fq_full << "\n";
     double total_fetch_cap = 0.0;
 
-
   
-  
-    for(int i = 0; i < 3; i++) {
-      out << "uq_full[" << i << "] = " << n_uq_full[i] << "\n";
-    }
-    for(int i = 0; i < 3; i++) {
-      out << "alloc[" << i << "] = " << n_alloc[i] << "\n";
-    }
+    // for(int i = 0; i < 3; i++) {
+    //   out << "uq_full[" << i << "] = " << n_uq_full[i] << "\n";
+    // }
+    // for(int i = 0; i < 3; i++) {
+    //   out << "alloc[" << i << "] = " << n_alloc[i] << "\n";
+    // }
     out << n_int_exec[0] << " cycles where int exec queue is not empty\n";
     out << n_int_exec[1] << " cycles where int exec queue dispatches\n";
     out << n_mem_exec[0] << " cycles where mem exec queue is not empty\n";
@@ -1126,12 +1213,50 @@ int main(int argc, char **argv) {
     out << n_active << " cycles where the machine is in active state\n";
     out << rob_full << " cycles where the rob is full\n";
   
-    for(int i = 0; i < 3; i++) {
-      out << "insn ready " << i
-		<< " "
-		<< n_rdy[i] << "\n";
+    //for(int i = 0; i < 3; i++) {
+    //out << "insn ready " << i
+    //		<< " "
+    //<< n_rdy[i] << "\n";
+    //}
+    double avg_restart = 0.0;
+    uint64_t total_restart = 0, accum_restart = 0;
+    for(auto &p : restart_distribution) {
+      avg_restart += (p.first * p.second);
+      total_restart += p.second;
     }
-  
+    for(auto &p : restart_distribution) {
+      accum_restart += p.second;
+      if(accum_restart >= (total_restart/2)) {
+	out << p.first << " median flush cycles\n";
+	break;
+      }
+    }
+    out << avg_restart << " cycles spent in pipeline flush\n";
+    avg_restart /= total_restart;
+    out << total_restart << " times pipeline was flushed\n";
+    out << avg_restart << " cycles to flush on avg\n";
+    out << restart_distribution.begin()->first << " min cycles to flush\n";
+    out << restart_distribution.rbegin()->first << " max cycles to flush\n";
+    double avg_ds_restart = 0.0;
+    uint64_t total_ds_restart = 0, accum_ds_restart = 0;
+    for(auto &p : restart_ds_distribution) {
+      avg_ds_restart += (p.first * p.second);
+      total_ds_restart += p.second;
+    }
+    for(auto &p : restart_ds_distribution) {
+      accum_ds_restart += p.second;
+      if(accum_ds_restart >= (total_ds_restart/2)) {
+	out << p.first << " median delay slot flush cycles\n";
+	break;
+      }
+    }
+    out << avg_ds_restart << " cycles spent waiting for delay slot in flush\n";
+    avg_ds_restart /= total_ds_restart;
+    out << avg_ds_restart << " cycles waiting on delay slot on avg\n";
+    out << restart_ds_distribution.begin()->first << " min cycles for delay slot\n";
+    out << restart_ds_distribution.rbegin()->first << " max cycles for delay slot\n";
+
+    
     dump_histo("branch_info.txt", mispredicts, s);
     uint64_t total_pushout = 0;
     for(auto &p : pushout_histo) {
@@ -1153,11 +1278,15 @@ int main(int argc, char **argv) {
     out << "l1d_reqs = " << l1d_reqs << "\n";
     out << "l1d_acks = " << l1d_acks << "\n";
     out << "l1d_stores = " << l1d_stores << "\n";
-    for(auto &p :block_distribution) {
-      out << p.first << "," << p.second << "\n";
-    }
-    for(int i = 0; i < 8; i++) {
-      out << "l1d stall reason " << i << " : " << l1d_stall_reasons[i] << "\n";
+    out << "l1d tput = " << (static_cast<double>(l1d_acks) /l1d_reqs) << "\n";
+    
+    //for(auto &p :block_distribution) {
+    //out << p.first << "," << p.second << "\n";
+    //}
+    for(int i = 1; i < 8; i++) {
+      if(l1d_stall_reasons[i] != 0) {
+	out << l1d_stall_reasons[i] << " " << l1d_stall_str[i] << "\n";
+      }
     }
     std::cout << "total_retire = " << total_retire << "\n";
     std::cout << "total_cycle  = " << total_cycle << "\n";

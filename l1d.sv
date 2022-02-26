@@ -249,6 +249,7 @@ endfunction
    logic [31:0] 			  t_w32_2, t_bswap_w32_2;
    logic [63:0] 			  t_w64_2, t_bswap_w64_2;
 
+   logic 				  t_got_rd_retry, t_port2_hit_cache;
       
    logic 				  t_mark_invalid;
    logic 				  t_wr_array;
@@ -1344,15 +1345,11 @@ endfunction
      begin
 	r_fwd_cnt <= reset ? 'd0 : (r_got_req && r_must_forward ? r_fwd_cnt + 'd1 : r_fwd_cnt);
      end
-	      
-
-   logic t_handled;
-   logic t_got_rd_retry;
-   
+	         
    always_comb
      begin
-	t_handled = 1'b0;
 	t_got_rd_retry = 1'b0;
+	t_port2_hit_cache = r_valid_out2 && (r_tag_out2 == r_cache_tag2);
 	
 	n_state = r_state;
 	t_miss_idx = r_miss_idx;
@@ -1455,8 +1452,13 @@ endfunction
 		    n_core_mem_rsp.dst_ptr = r_req2.dst_ptr;
 		    n_core_mem_rsp.was_mem = !non_mem_op(r_req2.op);
 		    n_core_mem_rsp.pc = r_req2.pc;
-		    
-		    if(r_req2.op == MEM_MTC1_MERGE)
+		    if(drain_ds_complete)
+		      begin
+			 n_core_mem_rsp.dst_valid = r_req2.dst_valid;
+			 n_core_mem_rsp.fp_dst_valid = r_req2.fp_dst_valid;
+			 n_core_mem_rsp_valid = 1'b1;
+		      end
+		    else if(r_req2.op == MEM_MTC1_MERGE)
 		      begin
 
 			 n_core_mem_rsp.data = r_req2.lwc1_lo ? 
@@ -1464,7 +1466,6 @@ endfunction
 					       {r_req2.data[63:32], r_req2.addr[31:0]};
 			 n_core_mem_rsp.fp_dst_valid = r_req2.fp_dst_valid;
 			 n_core_mem_rsp_valid = 1'b1;
-			 t_handled = 1'b1;
 		      end // if (r_req.op == MEM_MTC1_MERGE)
 		    else if(r_req2.op == MEM_MFC1_MERGE)
 		      begin
@@ -1473,7 +1474,6 @@ endfunction
 					       {32'd0, r_req2.data[31:0]};
 			 n_core_mem_rsp.dst_valid = r_req2.dst_valid;
 			 n_core_mem_rsp_valid = 1'b1;
-			 t_handled = 1'b1;			 
 		      end // if (r_req.op == MEM_MFC1_MERGE)
 		    else if(r_req2.is_store)
 		      begin
@@ -1483,23 +1483,25 @@ endfunction
 			 //ack early
 			 n_core_mem_rsp.dst_valid = 1'b0;
 			 n_core_mem_rsp.fp_dst_valid = 1'b0;
-			 n_core_mem_rsp.missed_l1d = 1'b0;
 			  
 			 if(r_req2.in_storebuf) 
 			   begin
 			    $display("hit store buf, was retry = %b", r_is_retry);
 			    $stop();
-			 end
+			   end
+			 if(t_port2_hit_cache)
+			   begin
+			      n_cache_hits = r_cache_hits + 'd1;
+			      n_core_mem_rsp.missed_l1d = 1'b0;			      
+			   end
+			 else
+			   begin
+			      n_core_mem_rsp.missed_l1d = 1'b1;
+			   end
 			 n_core_mem_rsp_valid = 1'b1;
-			 t_handled = 1'b1;
 		      end // if (r_req2.is_store)
-		    else if(r_valid_out2 && (r_tag_out2 == r_cache_tag2) && !r_hit_busy_addr2)
+		    else if(t_port2_hit_cache && !r_hit_busy_addr2)
 		      begin
-			 //if(r_req2.uuid == 'd64845)
-			 //begin
-			 //$display("r_hit_busy_addr2 = %b, r_hit_busy_addr = %b", r_hit_busy_addr2, r_hit_busy_addr);
-			 //$stop();
-			 //end
 `ifdef VERBOSE_L1D
 			 $display("cycle %d port2 hit for uuid %d, addr %x, data %x", r_cycle, r_req2.uuid, r_req2.addr, t_rsp_data2);
 `endif
@@ -1509,23 +1511,18 @@ endfunction
                          n_core_mem_rsp.missed_l1d = 1'b0;
                          n_cache_hits = r_cache_hits + 'd1;
                          n_core_mem_rsp_valid = 1'b1;
-			 t_handled = 1'b1;
 		      end
 		    else
 		      begin
-			 t_got_miss = 1'b1;
 			 t_push_miss = 1'b1;
-			 t_handled = 1'b1;
+			 if(t_port2_hit_cache)
+			   begin
+			      n_cache_hits = r_cache_hits + 'd1;
+			   end
 		      end
 		 end // if (r_got_req2)
 	       
 
-	       if(r_got_req2 && !t_handled)
-		 begin
-		    $display("how is port2 not handled");
-		    $stop();
-		 end
-	       
 	       if(r_got_req)
 		 begin
 		    if(r_valid_out && (r_tag_out == r_cache_tag))
@@ -1539,13 +1536,7 @@ endfunction
 			 if(!(r_is_retry || r_did_reload))
 			   $stop();
 			 
-			 
-			 if(n_core_mem_rsp_valid && !r_req.is_store)
-			   begin
-			      $display("already driving value out on the reply port r_req.uuid = %d, r_req2.uuid = %d!", r_req.uuid, r_req2.uuid);
-			      $stop();
-			   end
-			 
+			 			 
 			 if(r_req.is_store)
 			   begin
 			      t_reset_graduated = 1'b1;				   
@@ -1556,10 +1547,8 @@ endfunction
 			      n_core_mem_rsp.dst_valid = t_rsp_dst_valid;
 			      n_core_mem_rsp.fp_dst_valid = t_rsp_fp_dst_valid;
 			      n_core_mem_rsp.missed_l1d = r_is_retry;
-			      n_cache_hits = r_cache_hits + 'd1;
 			      n_core_mem_rsp_valid = 1'b1;
 			   end // else: !if(r_req.is_store)
-			 
 		      end // if (r_valid_out && (r_tag_out == r_cache_tag))
 		    else if(r_valid_out && r_dirty_out && (r_tag_out != r_cache_tag) )
 		      begin
@@ -1634,10 +1623,8 @@ endfunction
 				 n_state = INJECT_RELOAD;
 				 n_mem_req_valid = 1'b1;
 			      end
-			    
 			 end // if (!t_stall_for_busy)
 		    end // else: !if(r_valid_out && r_dirty_out && (r_tag_out != r_cache_tag)...
-		    
 	       end // if (r_got_req)
 
 
@@ -1728,7 +1715,6 @@ endfunction
 	       if(core_mem_req_valid &&
 		  !t_got_miss && 
 		  !(mem_q_almost_full||mem_q_full) && 
-		  !r_lock_cache && 
 		  !t_got_rd_retry &&
 		  !(r_last_wr2 && (r_cache_idx2 == core_mem_req.addr[IDX_STOP-1:IDX_START]) && !core_mem_req.is_store) && 
 		  !t_cm_block_stall &&
@@ -1911,11 +1897,6 @@ endfunction
 		  //$display("full prevents ack at cycle %d", r_cycle);
 		  t_stall_reason = 'd2;
 	       end
-	     else if(r_lock_cache) 
-	       begin
-		  //$display("locked cache prevents ack at cycle %d", r_cycle);
-		  t_stall_reason = 'd3;
-	       end
 	     else if(t_got_rd_retry)
 	       begin
 		  //$display("retried load prevents ack at cycle %d", r_cycle);
@@ -1948,15 +1929,6 @@ endfunction
 		   t_stall_reason);
      end
 `endif
-   
-`ifdef VERBOSE_L1D
-   // always_ff@(negedge clk)
-   //   begin
-   // 	$display("at cycle %d : state = %d, t_pop_mq = %b, t_push_mq = %b, r_got_req = %b, mem_q_empty = %b, memq_empty = %b, t_got_miss = %b, core_mem_req_valid = %b, core_mem_req_ack = %b", 
-   // 		 r_cycle, r_state, t_pop_mq, t_push_miss, r_got_req, mem_q_empty, memq_empty, t_got_miss, core_mem_req_valid, core_mem_req_ack);
-   //   end
-`endif
-
- 
+    
 endmodule // l1d
 

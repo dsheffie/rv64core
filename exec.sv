@@ -20,6 +20,7 @@ import "DPI-C" function void report_exec(input int int_valid,
 
 module exec(clk, 
 	    reset,
+	    ds_done,
 	    machine_clr,
 	    delayslot_rob_ptr,
 	    in_32fp_reg_mode,	    
@@ -48,7 +49,7 @@ module exec(clk,
 	    monitor_rsp_data_valid);
    input logic clk;
    input logic reset;
-   
+   input logic ds_done;
    input logic machine_clr;
    input logic [`LG_ROB_ENTRIES-1:0] delayslot_rob_ptr;
    output logic 		     in_32fp_reg_mode;
@@ -662,22 +663,6 @@ module exec(clk,
      end
 
 
-   
-   //always_ff@(negedge clk)
-   //begin
-   //$display("mem_q_head_ptr = %d, mem_q_tail_ptr = %d", r_mq_head_ptr, r_mq_tail_ptr);
-    // end
-   
-
-   //always_ff@(negedge clk)
-   //begin
-   //if(mem_req_ack)
-   //begin
-   //$display("got ack in the exec unit");
-   ////$finish();
-   //end
-   //end
-   
    assign mem_req = t_mem_head;
    assign mem_req_valid = !mem_q_empty;
    assign in_32fp_reg_mode = r_in_32fp_reg_mode;
@@ -708,10 +693,10 @@ module exec(clk,
 	  end
 	else
 	  begin
-	     r_prf_inflight <= n_prf_inflight;
-	     r_fp_prf_inflight <= n_fp_prf_inflight;
-	     r_hilo_inflight <= n_hilo_inflight;
-	     r_fcr_prf_inflight <= n_fcr_prf_inflight;
+	     r_prf_inflight <= ds_done ? 'd0 : n_prf_inflight;
+	     r_fp_prf_inflight <= ds_done ? 'd0 : n_fp_prf_inflight;
+	     r_hilo_inflight <= ds_done ? 'd0 : n_hilo_inflight;
+	     r_fcr_prf_inflight <= ds_done ? 'd0 : n_fcr_prf_inflight;
 	  end
      end // always_ff@ (posedge clk)
 
@@ -1661,7 +1646,18 @@ module exec(clk,
 	t_fp_srcs_rdy = 1'b0;
 	t_fp_result = 64'd0;
 	case(fp_uq.op)
-	  FP_MOV:
+	  SP_MOV:
+	    begin
+	       t_fp_result = {32'd0, t_fp_srcA[31:0]};
+	       t_fp_srcs_rdy = !r_fp_prf_inflight[fp_uq.srcA] 
+			       && !t_fp_uq_empty
+			       && !t_fp_div_active
+			       && !r_fp_wb_bitvec[0];
+	       //$display("cycle %d, fp move sources ready %b, wb bitvec %b", 
+	       //r_cycle, t_fp_srcs_rdy, r_fp_wb_bitvec);
+	       t_fp_wr_prf = t_fp_srcs_rdy; 
+	    end // case: FP_MOV	    
+	  DP_MOV:
 	    begin
 	       t_fp_result = t_fp_srcA;
 	       t_fp_srcs_rdy = !r_fp_prf_inflight[fp_uq.srcA] 

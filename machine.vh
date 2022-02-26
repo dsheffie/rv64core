@@ -37,19 +37,19 @@
 `define LG_FQ_ENTRIES 3
 
 //rob size
-`define LG_ROB_ENTRIES 5
+`define LG_ROB_ENTRIES 4
 
 `define LG_RET_STACK_ENTRIES 2
 
 /* non-uop queue */
-`define LG_UQ_ENTRIES 4
+`define LG_UQ_ENTRIES 2
 /* mem uop queue */
-`define LG_MEM_UQ_ENTRIES 4
+`define LG_MEM_UQ_ENTRIES 2
 /* fp uop queue */
-`define LG_FP_UQ_ENTRIES 4
+`define LG_FP_UQ_ENTRIES 2
 
 /* mem uop queue */
-`define LG_MQ_ENTRIES 3
+`define LG_MQ_ENTRIES 2
 
 /* mem retry queue */
 `define LG_MRQ_ENTRIES 3

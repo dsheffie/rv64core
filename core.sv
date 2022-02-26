@@ -21,6 +21,10 @@ import "DPI-C" function void record_retirement(input longint pc,
 					       input int     fault,
 					       input int     is_mem,
 					       input int     missed_l1d);
+
+import "DPI-C" function void record_restart(input int restart_cycles);
+import "DPI-C" function void record_ds_restart(input int delay_cycles);
+
 `endif
 
 module core(clk, 
@@ -385,8 +389,8 @@ module core(clk,
 			     } state_t;
    
    state_t r_state, n_state;
-   logic [9:0] 	r_restart_cycles, n_restart_cycles;
-   
+   logic [31:0] r_restart_cycles, n_restart_cycles;
+
    
    always_comb
      begin
@@ -649,7 +653,16 @@ module core(clk,
 			       t_rob_next_head.faulted ? 32'd1 : 32'd0,
 			       t_rob_next_head.is_mem ? 32'd1 : 32'd0,
 			       t_rob_next_head.missed_l1d ? 32'd1 : 32'd0);	     
-   	  end
+   	  end // if (t_retire_two)
+	if(r_state == RAT && n_state == ACTIVE)
+	  begin
+	     record_restart(r_restart_cycles);
+	  end
+	if(r_state == DRAIN && !r_ds_done && n_ds_done)
+	  begin
+	     record_ds_restart(r_restart_cycles);
+	  end
+	    
      end // always_ff@ (negedge clk)
 `endif
    
@@ -847,12 +860,7 @@ module core(clk,
 			   begin
 			      n_ds_done = !t_rob_head.has_delay_slot;
 			      n_state = DRAIN;
-			      n_restart_cycles = 'd0;
-			      if(t_rob_head.has_delay_slot && t_rob_next_empty)
-				begin
-				   $display("branch delay insn hasn't been alloc!");
-				   $stop();
-				end
+			      n_restart_cycles = 'd1;
 			   end // else: !if(t_rob_head.is_ii)
 			 n_machine_clr = 1'b1;
 			 n_delayslot_rob_ptr = r_rob_next_head_ptr[`LG_ROB_ENTRIES-1:0];
@@ -2138,6 +2146,7 @@ module core(clk,
    exec e (
 	   .clk(clk), 
 	   .reset(reset),
+	   .ds_done(r_ds_done),
 	   .machine_clr(r_machine_clr),
 	   .delayslot_rob_ptr(r_delayslot_rob_ptr),
 	   .in_32fp_reg_mode(t_in_32fp_reg_mode),

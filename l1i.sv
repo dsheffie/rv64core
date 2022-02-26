@@ -375,6 +375,8 @@ endfunction
    logic 		  r_flush_complete, n_flush_complete;
    logic 		  n_delay_slot, r_delay_slot;
    logic 		  t_take_br, t_is_cflow;
+   logic 		  t_update_spec_hist;
+   
    logic [31:0] 	  t_insn_data, t_insn_data2, t_insn_data3, t_insn_data4;
    logic [`M_WIDTH-1:0]   t_simm;
    logic 		  t_is_call, t_is_ret;
@@ -750,7 +752,8 @@ endfunction
 	t_push_insn3 = 1'b0;
 	t_push_insn4 = 1'b0;
 	t_take_br = 1'b0;
-	t_is_cflow = 1'b0;	
+	t_is_cflow = 1'b0;
+	t_update_spec_hist = 1'b0;
 	t_is_call = 1'b0;
 	t_is_ret = 1'b0;
 	
@@ -817,6 +820,7 @@ endfunction
 		 end
 	       else if(t_hit && !fq_full)
 		 begin
+		    t_update_spec_hist = (t_pd != NOT_CFLOW);
 		    if(t_pd == IS_JAL || t_pd == IS_J)
 		      begin
 			 t_is_cflow = 1'b1;
@@ -1094,14 +1098,24 @@ endfunction
    logic t_valid_ram_value = (r_state != FLUSH_CACHE);
    logic [`LG_L1D_NUM_SETS-1:0] t_valid_ram_idx = mem_rsp_valid ? r_mem_req_addr[IDX_STOP-1:IDX_START] : r_cache_idx;
 
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if(t_pd == IS_COND_BR)
+   // 	  begin
+   // 	     $display("pc %x, pht idx %d, r_pht_out = %b, spec hist %b, lo %b, pd %d", 
+   // 		      r_cache_pc, n_pht_idx, r_spec_gbl_hist, r_spec_gbl_hist[0], r_pht_out, t_pd);
+   // 	  end
+   //   end
 
    always_comb
      begin
 	t_xor_pc_hist = {n_cache_pc[`GBL_HIST_LEN-7:2], 8'd0} ^ r_spec_gbl_hist;	
 	//n_pht_idx = t_xor_pc_hist[`LG_PHT_SZ-1:0];
+
+	//n_pht_idx = r_spec_gbl_hist[15:0];
 	
-	n_pht_idx = (n_cache_pc[15:0] ^ r_spec_gbl_hist[15:0]) ^
-                    (n_cache_pc[31:16] ^ r_spec_gbl_hist[31:16]);
+	//n_pht_idx = (n_cache_pc[15:0] ^ r_spec_gbl_hist[15:0]) ^
+	//(n_cache_pc[31:16] ^ r_spec_gbl_hist[31:16]);
 	
 	t_pht_val = r_pht_update_out;
 	t_do_pht_wr = r_pht_update;
@@ -1294,7 +1308,7 @@ endfunction
 	  begin
 	     n_spec_gbl_hist = r_arch_gbl_hist;
 	  end
-	else if(t_is_cflow)
+	else if(t_update_spec_hist)
 	  begin
 	     n_spec_gbl_hist = {r_spec_gbl_hist[`GBL_HIST_LEN-2:0], t_take_br};
 	  end

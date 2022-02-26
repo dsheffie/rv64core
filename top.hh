@@ -147,6 +147,23 @@ int fp64_compare_lt(long long a_, long long b_) {
   return (a<b);
 }
 
+int fp32_compare_le(int a_, int b_) {
+  float a = *reinterpret_cast<float*>(&a_);
+  float b = *reinterpret_cast<float*>(&b_);
+  //assert(!std::isnan(a));
+  //assert(!std::isnan(b));
+  
+  return (a<=b);
+}
+
+int fp64_compare_le(long long a_, long long b_) {
+  double a = *reinterpret_cast<double*>(&a_);
+  double b = *reinterpret_cast<double*>(&b_);
+  //assert(std::isnormal(a));
+  //assert(std::isnormal(b));
+  return (a<=b);
+}
+
 union itype {
   struct {
     uint32_t imm : 16;
@@ -169,6 +186,28 @@ union rtype {
   uint32_t u;
 };
 
+union ceqs {
+  struct {
+    uint32_t fpop : 6;
+    uint32_t zeros : 2;
+    uint32_t cc : 3;
+    uint32_t fs : 5;
+    uint32_t ft : 5;
+    uint32_t fmt : 5;
+    uint32_t opcode : 6;
+  } uu;
+  uint32_t u;
+  ceqs(uint32_t fs, uint32_t ft, uint32_t cc) {
+    uu.fpop = 50;
+    uu.zeros = 0;
+    uu.cc = cc;
+    uu.fs = fs;
+    uu.ft = ft;
+    uu.fmt = 16;
+    uu.opcode = 17;
+  }  
+};
+
 union mtc1 {
   struct {
     uint32_t zeros : 11;
@@ -186,6 +225,41 @@ union mtc1 {
     uu.rt = rt;
   }
 };
+
+
+union mthi {
+  struct {
+    uint32_t secondary_opcode : 6;
+    uint32_t zeros : 15;
+    uint32_t rs : 5;
+    uint32_t primary_opcode : 6;
+  } uu;
+  uint32_t u;
+  mthi(uint32_t rs) {
+    uu.primary_opcode = 0;
+    uu.rs = rs;
+    uu.zeros = 0;
+    uu.secondary_opcode = 17;
+  }
+};
+
+union mtlo {
+  struct {
+    uint32_t secondary_opcode : 6;
+    uint32_t zeros : 15;
+    uint32_t rs : 5;
+    uint32_t primary_opcode : 6;
+  } uu;
+  uint32_t u;
+  mtlo(uint32_t rs) {
+    uu.primary_opcode = 0;
+    uu.rs = rs;
+    uu.zeros = 0;
+    uu.secondary_opcode = 19;
+  }
+};
+
+
 
 struct dbl {
   uint64_t f : 52;

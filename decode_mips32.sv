@@ -1001,7 +1001,14 @@ module decode_mips32(in_64b_fpreg_mode, insn,
 			   uop.dst = fd;
 			   uop.fp_dst_valid = 1'b1;
 			   uop.is_fp = 1'b1;
-			   uop.op = FP_MOV;
+			   case(insn[25:21])
+			     5'd16:
+			       uop.op = SP_MOV;
+			     5'd17:
+			       uop.op = DP_MOV;
+			     default:
+			       uop.op = II;
+			   endcase // case (insn[25:21])
 			end
 		      6'd13: /* trunc.w */
 			begin

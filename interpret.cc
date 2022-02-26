@@ -997,9 +997,6 @@ static void _truncw(uint32_t inst, state_t *s) {
     case FMT_D:
       d = (*((double*)(s->cpr1 + fs)));
       *ptr = (int32_t)d;
-      if(currFpMode != fpMode::mips32) {
-	s->cpr1[fd + 1] = 0;
-      }      
       //printf("id=%d\n", *ptr);
       break;
     default:
@@ -1007,7 +1004,9 @@ static void _truncw(uint32_t inst, state_t *s) {
       exit(-1);
       break;
     }
-    
+  if(currFpMode != fpMode::mips32) {
+    s->cpr1[fd + 1] = 0;
+  }      
   s->pc += 4;
 }
 
