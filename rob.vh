@@ -4,7 +4,7 @@
 `include "machine.vh"
 
 typedef struct packed {
-   logic       complete;
+   //logic       complete;
    logic       faulted;
    logic       is_ii;
    logic       take_trap;

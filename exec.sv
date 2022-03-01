@@ -20,10 +20,17 @@ import "DPI-C" function void report_exec(input int int_valid,
 
 module exec(clk, 
 	    reset,
+`ifdef VERILATOR
+	    clear_cnt,
+`endif
 	    ds_done,
 	    machine_clr,
+	    restart_complete,
 	    delayslot_rob_ptr,
-	    in_32fp_reg_mode,	    
+	    in_32fp_reg_mode,
+	    uq_wait,
+	    mq_wait,
+	    fq_wait,
 	    uq_empty,
 	    uq_full,
 	    uq_next_full,
@@ -43,16 +50,27 @@ module exec(clk,
 	    mem_req_ack,
 	    mem_rsp_dst_ptr,
 	    mem_rsp_dst_valid,
+	    mem_rsp_rob_ptr,
 	    mem_rsp_fp_dst_valid,
 	    mem_rsp_load_data,
 	    monitor_rsp_data,
 	    monitor_rsp_data_valid);
    input logic clk;
    input logic reset;
+`ifdef VERILATOR
+   input logic [31:0] clear_cnt;
+`endif
    input logic ds_done;
    input logic machine_clr;
+   input logic restart_complete;
    input logic [`LG_ROB_ENTRIES-1:0] delayslot_rob_ptr;
    output logic 		     in_32fp_reg_mode;
+   
+   localparam N_ROB_ENTRIES = (1<<`LG_ROB_ENTRIES);   
+   output logic [N_ROB_ENTRIES-1:0]  uq_wait;   
+   output logic [N_ROB_ENTRIES-1:0]  mq_wait;
+   output logic [N_ROB_ENTRIES-1:0]  fq_wait;
+   
    output logic 		     uq_empty;
    output logic 			     uq_full;
    output logic 			     uq_next_full;
@@ -81,7 +99,8 @@ module exec(clk,
    input logic 			     mem_rsp_dst_valid;
    input logic 			     mem_rsp_fp_dst_valid;
    input logic [63:0] 		     mem_rsp_load_data;
-   
+   input logic [`LG_ROB_ENTRIES-1:0] mem_rsp_rob_ptr;
+     
    input logic [`M_WIDTH-1:0] monitor_rsp_data;
    input logic 		      monitor_rsp_data_valid;
    
@@ -158,7 +177,7 @@ module exec(clk,
    
    localparam E_BITS = `M_WIDTH-16;
    localparam HI_EBITS = `M_WIDTH-32;
-
+   
    logic [`M_WIDTH-1:0] t_simm, t_mem_simm;
    logic [`M_WIDTH-1:0] t_result;
    logic [`M_WIDTH-1:0] t_cpr0_result;
@@ -215,7 +234,7 @@ module exec(clk,
    logic [`LG_HILO_PRF_ENTRIES-1:0] t_div_hilo_prf_ptr_out;
    logic 			    t_div_complete;
 
-   
+   logic [N_ROB_ENTRIES-1:0] 	    r_uq_wait, r_mq_wait, r_fq_wait;
    /* non mem uop queue */
    uop_t r_uq[N_UQ_ENTRIES];
    uop_t uq;
@@ -248,7 +267,13 @@ module exec(clk,
    logic [`LG_FP_UQ_ENTRIES:0]  r_fp_uq_tail_ptr, n_fp_uq_tail_ptr;
    logic [`LG_FP_UQ_ENTRIES:0]  r_fp_uq_next_head_ptr, n_fp_uq_next_head_ptr;
    logic [`LG_FP_UQ_ENTRIES:0]  r_fp_uq_next_tail_ptr, n_fp_uq_next_tail_ptr;
-   
+
+   logic 			t_flash_clear;
+   always_comb
+     begin
+	t_flash_clear = ds_done;
+	
+     end
 
    always_comb
      begin
@@ -284,10 +309,37 @@ module exec(clk,
 	     r_in_32fp_reg_mode <= n_in_32fp_reg_mode;
 	  end
      end	
-      
+
+`ifdef VERILATOR
+   always_ff@(negedge clk)
+     begin
+	//if(t_pop_uq && uq.clear_id != clear_cnt)
+	//begin
+	//$stop();
+	//end
+	//if(t_pop_mem_uq && mem_uq.clear_id != clear_cnt)
+	//begin
+	//$stop();
+	 // end
+	    
+	//if(t_flash_clear && !t_mem_uq_empty)
+	//begin
+	//$display("clearing non empty mem queue at cycle %d, mask %b", r_cycle, r_mq_wait);
+	//end
+	//if(t_flash_clear &&!t_fp_uq_empty)
+	//begin
+	//$display("clearing non empty fp queue at cycle %d, mask %b", r_cycle, r_fq_wait);
+	//end
+	//if(t_flash_clear && !t_uq_empty)
+	//begin
+	//   $display("clearing non empty int queue at cycle %d, mask %b", r_cycle, r_uq_wait);
+	// end
+     end // always_ff@ (negedge clk)
+`endif
+   
    always_ff@(posedge clk)
      begin
-	if(reset)
+	if(reset || t_flash_clear)
 	  begin
 	     r_uq_head_ptr <= 'd0;
 	     r_uq_tail_ptr <= 'd0;
@@ -296,8 +348,8 @@ module exec(clk,
 	  end
 	else
 	  begin
-	     r_uq_head_ptr <= n_uq_head_ptr;
-	     r_uq_tail_ptr <= n_uq_tail_ptr;
+	     r_uq_head_ptr <=  n_uq_head_ptr;
+	     r_uq_tail_ptr <=  n_uq_tail_ptr;
 	     r_uq_next_head_ptr <= n_uq_next_head_ptr;
 	     r_uq_next_tail_ptr <= n_uq_next_tail_ptr;	     
 	  end
@@ -305,7 +357,7 @@ module exec(clk,
 
    always_ff@(posedge clk)
      begin
-	if(reset)
+	if(reset  || t_flash_clear)
 	  begin
 	     r_mem_uq_head_ptr <= 'd0;
 	     r_mem_uq_tail_ptr <= 'd0;
@@ -363,6 +415,81 @@ module exec(clk,
 
    always_ff@(posedge clk)
      begin
+	if(reset)
+	  begin
+	     r_mq_wait <= 'd0;
+	     r_uq_wait <= 'd0;
+	     r_fq_wait <= 'd0;
+	  end
+	else if(restart_complete)
+	  begin
+	     r_mq_wait <= 'd0;
+	     r_uq_wait <= 'd0;
+	     r_fq_wait <= 'd0;
+	  end
+	else
+	  begin
+	     //mem port
+	     if(t_push_two_mem)
+	       begin
+		  r_mq_wait[uq_uop_two.rob_ptr] <= 1'b1;
+		  r_mq_wait[uq_uop.rob_ptr] <= 1'b1;
+	       end
+	     else if(t_push_one_mem)
+	       begin
+		  r_mq_wait[uq_uop.is_mem ? uq_uop.rob_ptr : uq_uop_two.rob_ptr] <= 1'b1; 
+	       end
+	     if(t_pop_mem_uq)
+	       begin
+		  r_mq_wait[mem_uq.rob_ptr] <= 1'b0;		  
+	       end
+	     
+	     //int port
+	     if(t_push_two_int)
+	       begin
+		  r_uq_wait[uq_uop.rob_ptr] <= 1'b1;
+		  r_uq_wait[uq_uop_two.rob_ptr] <= 1'b1;
+	       end
+	     else if(t_push_one_int)
+	       begin
+		  r_uq_wait[uq_uop.is_int ? uq_uop.rob_ptr : uq_uop_two.rob_ptr] <= 1'b1; 
+	       end
+	     
+	     if(t_pop_uq)
+	       begin
+		  r_uq_wait[uq.rob_ptr] <= 1'b0;
+	       end
+	     //fp port
+	     if(t_push_two_fp)
+	       begin
+		  r_fq_wait[uq_uop.rob_ptr] <= 1'b1;
+		  r_fq_wait[uq_uop_two.rob_ptr] <= 1'b1;		  
+	       end
+	     else if(t_push_one_fp)
+	       begin
+		  r_fq_wait[uq_uop.is_fp ? uq_uop.rob_ptr : uq_uop_two.rob_ptr] <= 1'b1;
+	       end
+	     if(t_pop_fp_uq)
+	       begin
+		  r_fq_wait[fp_uq.rob_ptr] <= 1'b0;
+	       end
+	  end // else: !if(reset)
+     end // always_ff@ (posedge clk)
+
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if(t_pop_fp_uq && fp_uq.rob_ptr == 'd5)
+   // 	  begin
+   // 	     $display("POPPING fq_up.pc = %x at cycle %d", fp_uq.pc, r_cycle);
+   // 	  end
+   // 	if(t_pop_uq && uq.rob_ptr == 'd5)
+   // 	  begin
+   // 	     $display("POPPING uq.pc = %x at cycle %d", uq.pc, r_cycle);
+   // 	  end	
+   //   end
+   
+   always_ff@(posedge clk)
+     begin
 	if(t_push_two_mem)
 	  begin
 	     //$display("cycle %d : pushing mem ops for rob slots %d & %d", r_cycle, uq_uop_two.rob_ptr, uq_uop.rob_ptr);
@@ -379,7 +506,7 @@ module exec(clk,
    
    always_ff@(posedge clk)
      begin
-	if(reset)
+	if(reset || t_flash_clear)
 	  begin
 	     r_fp_uq_head_ptr <= 'd0;
 	     r_fp_uq_tail_ptr <= 'd0;
@@ -666,6 +793,9 @@ module exec(clk,
    assign mem_req = t_mem_head;
    assign mem_req_valid = !mem_q_empty;
    assign in_32fp_reg_mode = r_in_32fp_reg_mode;
+   assign uq_wait = r_uq_wait;
+   assign mq_wait = r_mq_wait;
+   assign fq_wait = r_fq_wait;   
    
    
    always_ff@(posedge clk)
@@ -700,6 +830,25 @@ module exec(clk,
 	  end
      end // always_ff@ (posedge clk)
 
+   
+
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if(mem_rsp_dst_valid && mem_rsp_dst_ptr == 'd55)
+   // 	  begin
+   // 	     $display("cycle %d : mem writes back for %d and clobbers", 
+   // 		      r_cycle, mem_rsp_rob_ptr);
+   // 	  end
+   // 	if(t_pop_uq && t_wr_int_prf && uq.dst == 'd55)
+   // 	  begin
+   // 	     $display("uq.dst %d was already not inflight", uq.dst);
+   // 	  end
+   // 	if(t_gpr_prf_ptr_val_out && t_gpr_prf_ptr_out=='d55)
+   // 	  begin
+   // 	     $display("long lat %d was already not inflight", t_gpr_prf_ptr_out);
+   // 	  end
+   //   end // always_ff@ (negedge clk)
+   
    always_comb
      begin
 	n_prf_inflight = r_prf_inflight;
@@ -831,14 +980,6 @@ module exec(clk,
      end
 `endif //  `ifdef VERILATOR
 
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if(uq.op == JR && t_pop_uq)
-   // 	  begin
-   // 	     $display("cycle %d JR, pc %x, prf entry A =%d, t_srcA = %x", 
-   // 		      r_cycle, uq.pc, uq.srcA, t_srcA);
-   // 	  end
-   //   end
       
    always_comb
      begin
@@ -1517,7 +1658,8 @@ module exec(clk,
 	    end
 	endcase // case (uq.op)
 
-	t_pop_uq = t_uq_empty ? 1'b0 : 
+	t_pop_uq = t_flash_clear ? 1'b0 :
+		   t_uq_empty ? 1'b0 : 
 		   !t_srcs_rdy ? 1'b0 : 
 		   (r_wb_bitvec[0]) ? 1'b0 :
 		   t_start_mul & r_wb_bitvec[`MUL_LAT] ? 1'b0 : 
@@ -1627,7 +1769,7 @@ module exec(clk,
 	.src_b(t_fp_srcB),
 	.src_c(t_fp_srcC),
 	.src_fcr(r_fcr_prf[fp_uq.hilo_src]),
-	.start(t_start_fpu),
+	.start(t_start_fpu && t_pop_fp_uq),
 	.rob_ptr_in(fp_uq.rob_ptr),
 	.dst_ptr_in(fp_uq.dst),
 	.fcr_ptr_in(fp_uq.hilo_dst),
@@ -1954,7 +2096,7 @@ module exec(clk,
 		 end
 	    end
 	endcase // case (fp_uq.op)
-	t_pop_fp_uq = t_fp_uq_empty ? 1'b0 : t_fp_srcs_rdy && (!t_fp_div_active);
+	t_pop_fp_uq = t_fp_uq_empty || t_flash_clear ? 1'b0 : t_fp_srcs_rdy && (!t_fp_div_active);
      end
 `else
    always_comb
@@ -2288,7 +2430,7 @@ module exec(clk,
 		 end
 	    end
 	endcase // case (mem_uq.op)
-	t_pop_mem_uq = t_mem_uq_empty ? 1'b0 : !t_mem_srcs_rdy ? 1'b0 : 1'b1;
+	t_pop_mem_uq = t_mem_uq_empty || t_flash_clear  ? 1'b0 : !t_mem_srcs_rdy ? 1'b0 : 1'b1;
      end // always_comb
 
 
@@ -2304,7 +2446,8 @@ module exec(clk,
      begin
 	if(t_pop_uq && t_wr_int_prf)
 	  begin
-	     //$display("ALU writing to prf loc %d at cycle %d", uq.dst, r_cycle);
+	     //$display("DS_DONE ALU writing to prf loc %d at cycle %d", uq.dst, r_cycle);
+	     
 	     r_int_prf[uq.dst] <= r_in_32b_mode ? {{HI_EBITS{1'b0}}, t_result[31:0]} : t_result;
 	  end
 	else if(t_gpr_prf_ptr_val_out)
@@ -2315,8 +2458,8 @@ module exec(clk,
 	//2nd write port
 	if(mem_rsp_dst_valid)
 	  begin
-	     //$display("mem writing to prf loc %d at cycle %d", mem_rsp_dst_ptr, r_cycle);
-		  r_int_prf[mem_rsp_dst_ptr] <= r_in_32b_mode ? {{HI_EBITS{1'b0}},mem_rsp_load_data[31:0]} : mem_rsp_load_data[`M_WIDTH-1:0];
+	     //$display("mem writing to prf loc %d at cycle %d with data %x", mem_rsp_dst_ptr, r_cycle, mem_rsp_load_data);
+	     r_int_prf[mem_rsp_dst_ptr] <= r_in_32b_mode ? {{HI_EBITS{1'b0}},mem_rsp_load_data[31:0]} : mem_rsp_load_data[`M_WIDTH-1:0];
 	  end
 	/* warning - terrible hack */
 	else if(t_got_syscall && t_pop_uq)

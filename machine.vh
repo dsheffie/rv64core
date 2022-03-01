@@ -37,19 +37,18 @@
 `define LG_FQ_ENTRIES 3
 
 //rob size
-`define LG_ROB_ENTRIES 4
+`define LG_ROB_ENTRIES 5
 
 `define LG_RET_STACK_ENTRIES 2
 
 /* non-uop queue */
-`define LG_UQ_ENTRIES 2
+`define LG_UQ_ENTRIES 3
 /* mem uop queue */
-`define LG_MEM_UQ_ENTRIES 2
+`define LG_MEM_UQ_ENTRIES 3
 /* fp uop queue */
-`define LG_FP_UQ_ENTRIES 2
-
+`define LG_FP_UQ_ENTRIES 3
 /* mem uop queue */
-`define LG_MQ_ENTRIES 2
+`define LG_MQ_ENTRIES 3
 
 /* mem retry queue */
 `define LG_MRQ_ENTRIES 3
@@ -109,7 +108,8 @@ typedef enum logic [4:0] {
    MEM_MFC1_MERGE = 5'd22,			  			  
    MEM_DEAD_LD = 5'd23,
    MEM_DEAD_ST = 5'd24,
-   MEM_DEAD_SC = 5'd25			  
+   MEM_DEAD_SC = 5'd25,
+   MEM_NOP = 5'd26			  
 } mem_op_t;
 
 /* MIPS R10000 exception ordering 

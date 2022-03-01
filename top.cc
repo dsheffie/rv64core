@@ -253,6 +253,9 @@ int main(int argc, char **argv) {
   std::string sysArgs, pipelog;
   std::string mips_binary = "dhrystone3";
   std::string log_name = "log.txt";
+  std::string pushout_name = "pushout.txt";
+  std::string branch_name = "branch_info.txt";
+  
   bool use_checkpoint = false, use_checker_only = false;
   uint64_t heartbeat = 1UL<<36, start_trace_at = ~0UL;
   uint64_t max_cycle = 0, max_icnt = 0, mem_lat = 2;
@@ -270,6 +273,8 @@ int main(int argc, char **argv) {
       ("file,f", po::value<std::string>(&mips_binary), "mips binary")
       ("heartbeat,h", po::value<uint64_t>(&heartbeat)->default_value(1<<24), "heartbeat for stats")
       ("log,l", po::value<std::string>(&log_name), "stats log filename")
+      ("pushout", po::value<std::string>(&pushout_name), "pushout log filename")
+      ("branch", po::value<std::string>(&branch_name), "branch log filename")
       ("memlat,m", po::value<uint64_t>(&mem_lat)->default_value(4), "memory latency")
       ("pipelog,p", po::value<std::string>(&pipelog), "log for pipeline tracing")
       ("maxcycle", po::value<uint64_t>(&max_cycle)->default_value(1UL<<34), "maximum cycles")
@@ -895,8 +900,16 @@ int main(int argc, char **argv) {
 		    << r_inst
 		    << ")"
 		    << std::dec
-		    << " : " << getAsmString(r_inst, tb->retire_pc)
-		    << " cycle " << globals::cycle
+		    << " : " << getAsmString(r_inst, tb->retire_two_pc);
+	  if(tb->retire_reg_two_valid) {
+	    std::cout << " : "
+		      << getGPRName(tb->retire_reg_two_ptr)
+		      << " = "
+		      << std::hex
+		      << tb->retire_reg_two_data
+		      << std::dec;
+	  }
+	  std::cout << " cycle " << globals::cycle
 		    << ", " << static_cast<double>(insns_retired) / globals::cycle << " IPC "	    
 		    << ", insns_retired "
 		    << insns_retired
@@ -937,6 +950,15 @@ int main(int argc, char **argv) {
 			  << "\n";
 		//globals::trace_retirement |= (wrong_bits != 0);
 		diverged = true;//(wrong_bits > 16);
+		uint32_t r_inst = *reinterpret_cast<uint32_t*>(s->mem[ss->pc]);
+		r_inst = bswap<false>(r_inst);
+		std::cout << "incorrect "
+			  << std::hex
+			  << ss->pc 
+			  << std::dec
+			  << " : " << getAsmString(r_inst, ss->pc )
+			  << "\n";
+		
 	      }
 	    }
 	    for(int i = 0; i < 32; i+=2) {
@@ -947,6 +969,7 @@ int main(int argc, char **argv) {
 		std::cout << "fp reg " << i <<" : rtl = " << std::hex << rtl << ", sim = " << sim << std::dec << "\n";
 	      }
 	    }
+
 	    
 	  }
 	  
@@ -1002,6 +1025,26 @@ int main(int argc, char **argv) {
 		      << ", sim pc =" << ss->pc
 		      << std::dec
 		      <<"\n";
+	    for(int i = 0; i < 32; i+=4) {
+	      std::cout << "reg "
+			<< getGPRName(i)
+			<< " = "
+			<< std::hex
+			<< s->gpr[i]
+			<< " reg "
+			<< getGPRName(i+1)
+			<< " = "
+			<< s->gpr[i+1]
+			<< " reg "
+			<< getGPRName(i+2)
+			<< " = "
+			<< s->gpr[i+2]
+			<< " reg "
+			<< getGPRName(i+3)
+			<< " = "
+			<< s->gpr[i+3]
+			<< std::dec <<"\n";
+	    }
 	    break;
 	  }
 	}
@@ -1231,12 +1274,15 @@ int main(int argc, char **argv) {
 	break;
       }
     }
-    out << avg_restart << " cycles spent in pipeline flush\n";
-    avg_restart /= total_restart;
-    out << total_restart << " times pipeline was flushed\n";
-    out << avg_restart << " cycles to flush on avg\n";
-    out << restart_distribution.begin()->first << " min cycles to flush\n";
-    out << restart_distribution.rbegin()->first << " max cycles to flush\n";
+    if(total_restart != 0) {
+      out << avg_restart << " cycles spent in pipeline flush\n";
+      avg_restart /= total_restart;
+      out << total_restart << " times pipeline was flushed\n";
+      out << avg_restart << " cycles to flush on avg\n";
+      out << restart_distribution.begin()->first << " min cycles to flush\n";
+      out << restart_distribution.rbegin()->first << " max cycles to flush\n";
+    }
+    
     double avg_ds_restart = 0.0;
     uint64_t total_ds_restart = 0, accum_ds_restart = 0;
     for(auto &p : restart_ds_distribution) {
@@ -1250,31 +1296,32 @@ int main(int argc, char **argv) {
 	break;
       }
     }
-    out << avg_ds_restart << " cycles spent waiting for delay slot in flush\n";
-    avg_ds_restart /= total_ds_restart;
-    out << avg_ds_restart << " cycles waiting on delay slot on avg\n";
-    out << restart_ds_distribution.begin()->first << " min cycles for delay slot\n";
-    out << restart_ds_distribution.rbegin()->first << " max cycles for delay slot\n";
-
+    if(total_ds_restart != 0) {
+      out << avg_ds_restart << " cycles spent waiting for delay slot in flush\n";
+      avg_ds_restart /= total_ds_restart;
+      out << avg_ds_restart << " cycles waiting on delay slot on avg\n";
+      out << restart_ds_distribution.begin()->first << " min cycles for delay slot\n";
+      out << restart_ds_distribution.rbegin()->first << " max cycles for delay slot\n";
+    }
     
-    dump_histo("branch_info.txt", mispredicts, s);
+    dump_histo(branch_name, mispredicts, s);
     uint64_t total_pushout = 0;
     for(auto &p : pushout_histo) {
       total_pushout += p.second;
     }
     out << total_pushout << " cycles of pushout\n";
-    dump_histo("pushout.txt", pushout_histo, s);
+    dump_histo(pushout_name, pushout_histo, s);
 
-    std::ofstream branch_info("retire_info.csv");
+    //std::ofstream branch_info("retire_info.csv");
     uint64_t total_retire = 0, total_cycle = 0;
     for(auto &p : retire_map) {
       total_retire += p.second;
     }
     for(auto &p : retire_map) {
-      branch_info << p.first << "," << p.second << "," << static_cast<double>(p.second) / total_retire << "\n";
+      //branch_info << p.first << "," << p.second << "," << static_cast<double>(p.second) / total_retire << "\n";
       total_cycle += (p.first * p.second);
     }
-    branch_info.close();
+    //branch_info.close();
     out << "l1d_reqs = " << l1d_reqs << "\n";
     out << "l1d_acks = " << l1d_acks << "\n";
     out << "l1d_stores = " << l1d_stores << "\n";

@@ -527,21 +527,31 @@ endfunction
      begin
 	if(t_push_insn)
 	  begin
+	     //$display("t_insn.pc = %x, t_clear_fq=%b", t_insn.pc,t_clear_fq);
 	     r_fq[r_fq_tail_ptr[`LG_FQ_ENTRIES-1:0]] <= t_insn;
 	  end
 	else if(t_push_insn2)
 	  begin
+	     //$display("t_insn.pc = %x, t_clear_fq=%b", t_insn.pc,t_clear_fq);	     	     	     
+	     //$display("t_insn2.pc = %x", t_insn2.pc);	     
 	     r_fq[r_fq_tail_ptr[`LG_FQ_ENTRIES-1:0]] <= t_insn;
 	     r_fq[r_fq_next_tail_ptr[`LG_FQ_ENTRIES-1:0]] <= t_insn2;
 	  end
 	else if(t_push_insn3)
 	  begin
+	     //$display("t_insn.pc = %x, t_clear_fq=%b", t_insn.pc,t_clear_fq);	     	     
+	     //$display("t_insn2.pc = %x", t_insn2.pc);
+	     //$display("t_insn3.pc = %x", t_insn3.pc);	     	     	     
 	     r_fq[r_fq_tail_ptr[`LG_FQ_ENTRIES-1:0]] <= t_insn;
 	     r_fq[r_fq_next_tail_ptr[`LG_FQ_ENTRIES-1:0]] <= t_insn2;
 	     r_fq[r_fq_next3_tail_ptr[`LG_FQ_ENTRIES-1:0]] <= t_insn3;	  	     
 	  end
 	else if(t_push_insn4)
 	  begin
+	     //$display("t_insn.pc = %x, t_clear_fq=%b", t_insn.pc,t_clear_fq);	     
+	     //$display("t_insn2.pc = %x", t_insn2.pc);
+	     //$display("t_insn3.pc = %x", t_insn3.pc);
+	     //$display("t_insn4.pc = %x", t_insn4.pc);	     	     	     
 	     r_fq[r_fq_tail_ptr[`LG_FQ_ENTRIES-1:0]] <= t_insn;
 	     r_fq[r_fq_next_tail_ptr[`LG_FQ_ENTRIES-1:0]] <= t_insn2;
 	     r_fq[r_fq_next3_tail_ptr[`LG_FQ_ENTRIES-1:0]] <= t_insn3;
@@ -612,6 +622,18 @@ endfunction
    assign utlb_miss_req = r_utlb_miss_req;
    assign utlb_miss_paddr = r_utlb_miss_paddr;
 
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if(restart_valid)
+   // 	  begin
+   // 	     $display("fe received restart at cycle %d, restart pc = %x", r_cycle, restart_pc);
+   // 	  end
+   // 	if(restart_ack)
+   // 	  begin
+   // 	     $display("fe restart ack at cycle %d, restart pc = %x", r_cycle, restart_pc);
+   // 	  end
+   //   end
+   
    always_ff@(posedge clk)
      begin
 	if(restart_valid && restart_src_is_indirect)
@@ -1024,6 +1046,16 @@ endfunction
 		    n_state = FLUSH_CACHE;
 		    t_cache_idx = 0;		    
 		 end
+	       else if(n_restart_req)
+		 begin
+		    n_restart_ack = 1'b1;
+		    n_restart_req = 1'b0;
+		    n_delay_slot = 1'b0;
+		    n_pc = restart_pc;
+		    n_req = 1'b0;
+		    n_state = ACTIVE;
+		    t_clear_fq = 1'b1;
+		 end // if (n_restart_req)
 	    end
 	  RELOAD_UTLB:
 	    begin
@@ -1110,12 +1142,12 @@ endfunction
    always_comb
      begin
 	t_xor_pc_hist = {n_cache_pc[`GBL_HIST_LEN-7:2], 8'd0} ^ r_spec_gbl_hist;	
-	//n_pht_idx = t_xor_pc_hist[`LG_PHT_SZ-1:0];
+	n_pht_idx = t_xor_pc_hist[`LG_PHT_SZ-1:0];
 
 	//n_pht_idx = r_spec_gbl_hist[15:0];
 	
 	//n_pht_idx = (n_cache_pc[15:0] ^ r_spec_gbl_hist[15:0]) ^
-	//(n_cache_pc[31:16] ^ r_spec_gbl_hist[31:16]);
+        //(n_cache_pc[31:16] ^ r_spec_gbl_hist[31:16]);
 	
 	t_pht_val = r_pht_update_out;
 	t_do_pht_wr = r_pht_update;

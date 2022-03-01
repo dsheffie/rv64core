@@ -123,6 +123,7 @@ module l1d(clk,
   
    localparam N_MQ_ENTRIES = (1<<`LG_MRQ_ENTRIES);
 
+   
 function logic [L1D_CL_LEN_BITS-1:0] merge_cl64(logic [L1D_CL_LEN_BITS-1:0] cl, logic [63:0] w64, logic pos);
    logic [L1D_CL_LEN_BITS-1:0] 		 cl_out;
    case(pos)
@@ -209,7 +210,7 @@ endfunction
    logic 				  r_lock_cache, n_lock_cache;
    
    logic [31:0] 			  rr_uuid;
-
+   logic [`LG_MRQ_ENTRIES:0] 		  r_n_inflight;   
 
 
    
@@ -394,6 +395,10 @@ endfunction
    localparam N_ROB_ENTRIES = (1<<`LG_ROB_ENTRIES);
    logic [1:0] r_graduated [N_ROB_ENTRIES-1:0];
 
+
+
+
+   
    always_ff@(negedge clk)
      begin
 	//$display("at cycle %d : state = %d, r_flush_req = %b, mem_q_empty = %b, memq_empty = %b, t_got_miss = %b, head_of_rob_valid = %b", 
@@ -401,7 +406,12 @@ endfunction
 
 	//if(drain_ds_complete && core_mem_req_valid && core_mem_req_ack)
 	//$stop();
-
+	//if(memq_empty)
+	//begin
+	//   $display("memq_empty claimed but %d txns inflight", r_n_inflight);
+	// end
+	
+	
 `ifdef VERBOSE_L1D
 	if(drain_ds_complete)
 	  begin
@@ -490,6 +500,22 @@ endfunction
 	   
      end
 
+   always_ff@(posedge clk)
+     begin
+	if(reset)
+	  begin
+	     r_n_inflight <= 'd0;
+	  end
+	else if(core_mem_req_valid && core_mem_req_ack && !core_mem_rsp_valid)
+	  begin
+	     r_n_inflight <= r_n_inflight + 'd1;
+	  end
+	else if(!(core_mem_req_valid && core_mem_req_ack) && core_mem_rsp_valid)
+	  begin
+	     r_n_inflight <= r_n_inflight - 'd1;
+	  end
+     end // always_ff@ (posedge clk)
+   
    
    always_comb
      begin
@@ -705,7 +731,13 @@ endfunction
 	     r_utlb_miss_req <= n_utlb_miss_req;
 	     r_utlb_miss_paddr <= n_utlb_miss_paddr;
 	     r_inhibit_write <= n_inhibit_write;
-	     memq_empty <= mem_q_empty && drain_ds_complete && !core_mem_req_valid && !t_got_req && !t_got_req2 && !t_push_miss;
+	     memq_empty <= mem_q_empty 
+			   && drain_ds_complete 
+			   && !core_mem_req_valid 
+			   && !t_got_req && !t_got_req2 
+			   && !t_push_miss
+			   && (r_n_inflight == 'd0);
+	     
 	     r_q_priority <= n_q_priority;
 	     r_must_forward  <= t_mh_block & t_pop_mq;
 	     r_must_forward2 <= t_cm_block & core_mem_req_ack;
@@ -1492,7 +1524,7 @@ endfunction
 			 if(t_port2_hit_cache)
 			   begin
 			      n_cache_hits = r_cache_hits + 'd1;
-			      n_core_mem_rsp.missed_l1d = 1'b0;			      
+			      n_core_mem_rsp.missed_l1d = 1'b0;
 			   end
 			 else
 			   begin
@@ -1728,6 +1760,11 @@ endfunction
 		  n_req2 = core_mem_req;
 		  core_mem_req_ack = 1'b1;
 		  t_got_req2 = 1'b1;
+
+		  //if(core_mem_req.op == MEM_LW && core_mem_req.addr[1:0] != 'd0)
+		  //begin
+		  //$display("unaligned load!!!! from pc %x", core_mem_req.pc);
+		  //end
 		  
 `ifdef VERBOSE_L1D		       
 		  $display("accepting new op %d, pc %x, addr %x for rob ptr %d at cycle %d, mem_q_empty %b, uuid %d", 

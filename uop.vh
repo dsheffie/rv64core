@@ -205,6 +205,9 @@ typedef struct packed {
    logic 		       is_fp;
    logic 		       is_store;
    logic [`LG_PHT_SZ-1:0]      pht_idx;
+`ifdef VERILATOR
+   logic [31:0] 	       clear_id;
+`endif
 `ifdef ENABLE_CYCLE_ACCOUNTING
    logic [63:0] 	    fetch_cycle;
 `endif   
