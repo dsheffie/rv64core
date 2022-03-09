@@ -713,7 +713,27 @@ module exec(clk,
 `endif
 	//non-renamed
 	t_cpr0_srcA = r_cpr0[uq.srcA[4:0]];
-     end
+     end // always_comb
+
+
+   logic t_alu_srcA_rdy;
+   logic t_alu_srcB_rdy;
+   logic t_alu_srcC_rdy;
+   logic t_alu_hilo_rdy;
+   logic t_alu_fcr_rdy;
+   
+   always_comb
+     begin
+	t_alu_srcA_rdy = uq.srcA_valid ? !r_prf_inflight[uq.srcA] : 1'b1;
+	t_alu_srcB_rdy = uq.srcB_valid ? !r_prf_inflight[uq.srcB] : 1'b1;
+	t_alu_srcC_rdy = uq.srcC_valid ? !r_prf_inflight[uq.srcC] : 1'b1;
+	t_alu_hilo_rdy = uq.hilo_src_valid ? !r_hilo_inflight[uq.hilo_src] : 1'b1;
+	t_alu_fcr_rdy = uq.fcr_src_valid ? !r_fcr_prf_inflight[uq.hilo_src] : 1'b1;
+	
+	t_srcs_rdy = t_alu_srcA_rdy && t_alu_srcB_rdy && t_alu_srcC_rdy && 
+		     t_alu_hilo_rdy && t_alu_fcr_rdy;
+     end // always_comb
+   
    
    count_leading_zeros #(.LG_N(5)) c0(.in(t_srcA[31:0]), .y(w_clz));
        
@@ -1001,7 +1021,6 @@ module exec(clk,
 	t_mispred_br = 1'b0;
 	t_jaddr = {uq.jmp_imm[9:0],uq.imm,2'd0};
 	t_alu_valid = 1'b0;
-	t_srcs_rdy = 1'b0;
 	t_hilo_result = 'd0;
 	t_wr_hilo = 1'b0;
 	t_got_break = 1'b0;
@@ -1017,12 +1036,10 @@ module exec(clk,
 	  NOP:
 	    begin
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = 1'b1;
 	    end
 	  BREAK:
 	    begin
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = 1'b1;
 	       t_got_break = 1'b1;
 	       t_fault = 1'b1;
 	       //t_unimp_op = 1'b1;
@@ -1031,7 +1048,6 @@ module exec(clk,
 	    begin
 	       //4283 is set_thread_area
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = 1'b1;
 	       t_got_syscall = 1'b1;
 	       t_mispred_br = 1'b1;
 	       //t_fault = 1'b1;
@@ -1053,7 +1069,7 @@ module exec(clk,
 	       t_result = t_srcA << uq.srcB;
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = !r_prf_inflight[uq.srcA];
+
 	    end
 	  MOVT:
 	    begin
@@ -1067,9 +1083,6 @@ module exec(clk,
 		 end
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = !(r_fcr_prf_inflight[uq.hilo_src] 
-			      || r_prf_inflight[uq.srcA] 
-			      || r_prf_inflight[uq.srcB]);
 	    end
 	  MOVF:
 	    begin
@@ -1083,9 +1096,6 @@ module exec(clk,
 		 end
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = !(r_fcr_prf_inflight[uq.hilo_src] 
-			      || r_prf_inflight[uq.srcA] 
-			      || r_prf_inflight[uq.srcB]);
 	    end
 	  SRA:
 	    begin
@@ -1097,7 +1107,6 @@ module exec(clk,
 	       t_result = {{HI_EBITS{t_shift_right[31]}}, t_shift_right};
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = !r_prf_inflight[uq.srcA];
 	    end // case: SRA
 	  SRAV:
 	    begin
@@ -1106,70 +1115,60 @@ module exec(clk,
 	       t_result = {{HI_EBITS{t_shift_right[31]}}, t_shift_right};	       
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = !(r_prf_inflight[uq.srcA] || r_prf_inflight[uq.srcB]);
 	    end
 	  SRL:
 	    begin
 	       t_result = t_srcA >> uq.srcB;	       
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = !r_prf_inflight[uq.srcA];
 	    end
 	  SLLV:
 	    begin
 	       t_result = t_srcA << (t_srcB[4:0]);
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = !(r_prf_inflight[uq.srcA] || r_prf_inflight[uq.srcB]);
 	    end
 	  SRLV:
 	    begin
 	       t_result = t_srcA >> (t_srcB[4:0]);
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = !(r_prf_inflight[uq.srcA] || r_prf_inflight[uq.srcB]);
 	    end
 	  MTLO:
 	    begin
 	       t_hilo_result = {r_hilo_prf[uq.hilo_src][63:32], t_srcA[31:0]};
 	       t_wr_hilo = 1'b1;
 	       t_alu_valid = 1'b1;	       
-	       t_srcs_rdy = !(r_hilo_inflight[uq.hilo_src] || r_prf_inflight[uq.srcA]);
 	    end
 	  MTHI:
 	    begin
 	       t_hilo_result = {t_srcA[31:0], r_hilo_prf[uq.hilo_src][31:0] };
 	       t_wr_hilo = 1'b1;
 	       t_alu_valid = 1'b1;	       
-	       t_srcs_rdy = !(r_hilo_inflight[uq.hilo_src] || r_prf_inflight[uq.srcA]);
 	    end
 	  MFLO:
 	    begin
 	       t_result = {{HI_EBITS{1'b0}}, r_hilo_prf[uq.hilo_src][31:0]};
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = !r_hilo_inflight[uq.hilo_src];
 	    end
 	  MFHI:
 	    begin
 	       t_result = {{HI_EBITS{1'b0}},r_hilo_prf[uq.hilo_src][63:32]};
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = !r_hilo_inflight[uq.hilo_src];
 	    end
 	  ADDU:
 	    begin
 	       t_result = t_srcA + t_srcB;
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = !(r_prf_inflight[uq.srcA] || r_prf_inflight[uq.srcB]);
 	    end
 	  DADDU:
 	    begin
 	       t_result = t_srcA + t_srcB;
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = !(r_prf_inflight[uq.srcA] || r_prf_inflight[uq.srcB]);
 	       t_unimp_op = r_in_32b_mode;
 	    end
 	  CLZ:
@@ -1177,52 +1176,43 @@ module exec(clk,
 	       t_result = {{(`M_WIDTH-6){1'b0}}, w_clz};
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = !r_prf_inflight[uq.srcA];
 	    end
 	  MOVN:
 	    begin
 	       t_result = (t_srcA != 'd0) ? t_srcB : t_srcC;
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = !(r_prf_inflight[uq.srcA] || r_prf_inflight[uq.srcB] || r_prf_inflight[uq.srcC]);
 	    end
 	  MOVZ:
 	    begin
 	       t_result = (t_srcA == 'd0) ? t_srcB : t_srcC;
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = !(r_prf_inflight[uq.srcA] || r_prf_inflight[uq.srcB] || r_prf_inflight[uq.srcC]);
 	    end
 	  MUL:
 	    begin
-	       t_srcs_rdy = !(r_prf_inflight[uq.srcA] || r_prf_inflight[uq.srcB]) && !t_uq_empty;
 	       t_start_mul = t_srcs_rdy & !t_uq_empty;
 	    end
 	  MADD:
 	    begin
-	       t_srcs_rdy = !(r_prf_inflight[uq.srcA] || r_prf_inflight[uq.srcB] || r_hilo_inflight[uq.hilo_src]);
 	       t_start_mul = t_srcs_rdy  & !t_uq_empty;
 	    end
 	  MSUB:
 	    begin
-	       t_srcs_rdy = !(r_prf_inflight[uq.srcA] || r_prf_inflight[uq.srcB] || r_hilo_inflight[uq.hilo_src]);
 	       t_start_mul = t_srcs_rdy  & !t_uq_empty;
 	    end
 	  MULT:
 	    begin
-	       t_srcs_rdy = !(r_prf_inflight[uq.srcA] || r_prf_inflight[uq.srcB]) && !t_uq_empty;
 	       t_start_mul = t_srcs_rdy & !t_uq_empty;
 	    end
 	  MULTU:
 	    begin
-	       t_srcs_rdy = !(r_prf_inflight[uq.srcA] || r_prf_inflight[uq.srcB]) && !t_uq_empty;
 	       t_start_mul = t_srcs_rdy & !t_uq_empty;
 	    end
 `ifdef VERILATOR
 	  DIV:
 	    begin
 	       t_alu_valid = 1'b1;	       
-	       t_srcs_rdy = !(r_prf_inflight[uq.srcA] || r_prf_inflight[uq.srcB]);
 	       t_hilo_result[31:0] = $signed(t_srcA[31:0]) / $signed(t_srcB[31:0]);
 	       t_hilo_result[63:32] = $signed(t_srcA[31:0]) % $signed(t_srcB[31:0]);
 	       t_wr_hilo = 1'b1;
@@ -1231,7 +1221,6 @@ module exec(clk,
 	  DIVU:
 	    begin
 	       t_alu_valid = 1'b1;	       
-	       t_srcs_rdy = !(r_prf_inflight[uq.srcA] || r_prf_inflight[uq.srcB]);
 	       t_hilo_result[31:0] = t_srcA[31:0] / t_srcB[31:0];
 	       t_hilo_result[63:32] = t_srcA[31:0] % t_srcB[31:0];
 	       t_wr_hilo = 1'b1;
@@ -1241,12 +1230,10 @@ module exec(clk,
 	  DIV:
 	    begin
 	       t_signed_div = 1'b1;
-	       t_srcs_rdy = !(r_prf_inflight[uq.srcA] || r_prf_inflight[uq.srcB]) && !t_uq_empty;
 	       t_start_div32 = t_srcs_rdy & !t_uq_empty;	       
 	    end
 	  DIVU:
 	    begin
-	       t_srcs_rdy = !(r_prf_inflight[uq.srcA] || r_prf_inflight[uq.srcB]) && !t_uq_empty;
 	       t_start_div32 = t_srcs_rdy & !t_uq_empty;
 	    end
 `endif
@@ -1255,7 +1242,6 @@ module exec(clk,
 	       t_signed_shift = 1'b0;
 	       t_shift_amt = uq.imm[10:6];
 	       t_result ={{HI_EBITS{t_ext[31]}}, t_ext};
-	       t_srcs_rdy = !r_prf_inflight[uq.srcA];
 	       t_alu_valid = 1'b1;
 	       t_wr_int_prf = 1'b1;
 	    end
@@ -1264,28 +1250,24 @@ module exec(clk,
 	       t_result = {{(`M_WIDTH-8){t_srcA[7]}} , t_srcA[7:0]};
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = !r_prf_inflight[uq.srcA];	       
 	    end
 	  SEH:
 	    begin
 	       t_result = {{E_BITS{t_srcA[15]}} , t_srcA[15:0]};
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = !r_prf_inflight[uq.srcA];	       
 	    end	  
 	  SUBU:
 	    begin
 	       t_result = t_srcA - t_srcB;
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = !(r_prf_inflight[uq.srcA] || r_prf_inflight[uq.srcB]);
 	    end
 	  DSUBU:
 	    begin
 	       t_result = t_srcA + t_srcB;
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = !(r_prf_inflight[uq.srcA] || r_prf_inflight[uq.srcB]);
 	       t_unimp_op = r_in_32b_mode;
 	    end
 	  AND:
@@ -1293,35 +1275,30 @@ module exec(clk,
 	       t_result = t_srcA & t_srcB;
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = !(r_prf_inflight[uq.srcA] || r_prf_inflight[uq.srcB]);
 	    end
 	  MOV:
 	    begin
 	       t_result = t_srcA;
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = !r_prf_inflight[uq.srcA];
 	    end
 	  OR:
 	    begin
 	       t_result = t_srcA | t_srcB;
 	       t_wr_int_prf = 1'b1;//uq.dst_valid;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = !(r_prf_inflight[uq.srcA] || r_prf_inflight[uq.srcB]);
 	    end
 	  XOR:
 	    begin
 	       t_result = t_srcA ^ t_srcB;
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = !(r_prf_inflight[uq.srcA] || r_prf_inflight[uq.srcB]);
 	    end
 	  NOR:
 	    begin
 	       t_result = ~(t_srcA | t_srcB);
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = !(r_prf_inflight[uq.srcA] || r_prf_inflight[uq.srcB]);
 	    end
 	  SLT:
 	    begin
@@ -1330,14 +1307,12 @@ module exec(clk,
 			  (($signed(t_srcB) <  $signed(t_srcA)) ? 'd1 : 'd0);
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = !(r_prf_inflight[uq.srcA] || r_prf_inflight[uq.srcB]);
 	    end // case: SLT
 	  SLTU:
 	    begin
 	       t_result = (t_srcB <  t_srcA) ? 'd1 : 'd0;
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = !(r_prf_inflight[uq.srcA] || r_prf_inflight[uq.srcB]);
 	    end // case: SLTU
 	  BEQ:
 	    begin
@@ -1345,7 +1320,6 @@ module exec(clk,
 	       t_mispred_br = uq.br_pred != t_take_br;
 	       t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = !(r_prf_inflight[uq.srcA] || r_prf_inflight[uq.srcB]);
 	    end
 	  BEQL:
 	    begin
@@ -1353,7 +1327,6 @@ module exec(clk,
 	       t_mispred_br = uq.br_pred != t_take_br || !t_take_br;
 	       t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = !(r_prf_inflight[uq.srcA] || r_prf_inflight[uq.srcB]);
 	    end
 	  BNE:
 	    begin
@@ -1361,7 +1334,6 @@ module exec(clk,
 	       t_mispred_br = uq.br_pred != t_take_br;
 	       t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = !(r_prf_inflight[uq.srcA] || r_prf_inflight[uq.srcB]);
 	    end // case: BNE
 	  BGEZ:
 	    begin
@@ -1370,7 +1342,6 @@ module exec(clk,
 	       t_mispred_br = uq.br_pred != t_take_br;
 	       t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;	       
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = !r_prf_inflight[uq.srcA];
 	    end
 	  BGEZAL:
 	    begin
@@ -1381,7 +1352,6 @@ module exec(clk,
      	       t_result = t_take_br ?  uq.pc + {{HI_EBITS{1'b0}}, 32'd8} : t_srcB;
 	       t_alu_valid = 1'b1;
 	       t_wr_int_prf = 1'b1;
-	       t_srcs_rdy = !(r_prf_inflight[uq.srcA] || r_prf_inflight[uq.srcB]);
 	    end // case: BGEZAL
 	  BAL:
 	    begin
@@ -1391,7 +1361,6 @@ module exec(clk,
 	       t_result = uq.pc + {{HI_EBITS{1'b0}}, 32'd8};
 	       t_alu_valid = 1'b1;
 	       t_wr_int_prf = 1'b1;
-	       t_srcs_rdy = 1'b1;
 	    end
 	  BLTZ:
 	    begin
@@ -1401,7 +1370,6 @@ module exec(clk,
 	       t_mispred_br = uq.br_pred != t_take_br;
 	       t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = !r_prf_inflight[uq.srcA];
 	    end
 	  BLEZ:
 	    begin
@@ -1411,7 +1379,6 @@ module exec(clk,
 	       t_mispred_br = uq.br_pred != t_take_br;
 	       t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = !r_prf_inflight[uq.srcA];
 	    end
 	  BLEZL:
 	    begin
@@ -1421,7 +1388,6 @@ module exec(clk,
 	       t_mispred_br = uq.br_pred != t_take_br || !t_take_br;
 	       t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = !(r_prf_inflight[uq.srcA] || r_prf_inflight[uq.srcB]);
 	    end
 	  BGTZ:
 	    begin
@@ -1431,8 +1397,6 @@ module exec(clk,
 	       t_mispred_br = uq.br_pred != t_take_br;
 	       t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;	       
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = !r_prf_inflight[uq.srcA];
-	       
 	    end
 	  BNEL:
 	    begin
@@ -1440,7 +1404,6 @@ module exec(clk,
 	       t_mispred_br = (uq.br_pred != t_take_br) /* || !t_take_br */;
 	       t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = !(r_prf_inflight[uq.srcA] || r_prf_inflight[uq.srcB]);
 	    end
 	  BLTZL:
 	    begin
@@ -1450,7 +1413,6 @@ module exec(clk,
 	       t_mispred_br = (uq.br_pred != t_take_br) || !t_take_br;
 	       t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = !r_prf_inflight[uq.srcA];
 	    end
 	  BGTZL:
 	    begin
@@ -1460,7 +1422,6 @@ module exec(clk,
 	       t_mispred_br = (uq.br_pred != t_take_br) || !t_take_br;
 	       t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = !r_prf_inflight[uq.srcA];
 	    end
 	  BGEZL:
 	    begin
@@ -1470,7 +1431,6 @@ module exec(clk,
 	       t_mispred_br = (uq.br_pred != t_take_br) || !t_take_br;
 	       t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = !r_prf_inflight[uq.srcA];
 	    end
 	  // J:
 	  //   begin
@@ -1488,7 +1448,6 @@ module exec(clk,
 	       t_result = uq.pc + {{HI_EBITS{1'b0}}, 32'd8};
 	       t_alu_valid = 1'b1;
 	       t_wr_int_prf = 1'b1;
-	       t_srcs_rdy = 1'b1;	       
 	    end
 	  JR:
 	    begin
@@ -1496,7 +1455,6 @@ module exec(clk,
 	       t_mispred_br = (t_srcA != {uq.jmp_imm,uq.imm});
 	       t_pc = t_srcA;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = !(r_prf_inflight[uq.srcA]);
 	    end
 	  JALR:
 	    begin
@@ -1504,7 +1462,6 @@ module exec(clk,
 	       t_mispred_br = (t_srcA != {uq.jmp_imm,uq.imm});
 	       t_pc = t_srcA;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = !(r_prf_inflight[uq.srcA]);
 	       t_result = uq.pc + {{HI_EBITS{1'b0}},32'd8};
 	       t_wr_int_prf = 1'b1;
 	    end
@@ -1516,35 +1473,30 @@ module exec(clk,
 	       t_alu_valid = 1'b1;
 	       t_result = monitor_rsp_data;
 	       t_wr_int_prf = 1'b1;
-	       t_srcs_rdy = 1'b1;
 	    end
 	  ANDI:
 	    begin
 	       t_result = t_srcA & {{E_BITS{1'b0}},uq.imm};
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = !(r_prf_inflight[uq.srcA]);
 	    end
 	  ORI:
 	    begin
 	       t_result = t_srcA | {{E_BITS{1'b0}},uq.imm};	       
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = !(r_prf_inflight[uq.srcA]);
 	    end
 	  XORI:
 	    begin
 	       t_result = t_srcA ^ {{E_BITS{1'b0}},uq.imm};
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = !(r_prf_inflight[uq.srcA]);
 	    end
 	  LUI:
 	    begin
 	       t_result = {{HI_EBITS{uq.imm[15]}},uq.imm, 16'd0};
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = 1'b1;
 	    end
 	  ADDIU:
 	    begin
@@ -1552,21 +1504,18 @@ module exec(clk,
 	       t_result = {{HI_EBITS{t_result32[31]}}, t_result32};
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = !(r_prf_inflight[uq.srcA]);	       
 	    end
 	  MOVI:
 	    begin
 	       t_result = {{HI_EBITS{t_simm[31]}}, t_simm[31:0]};
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = !(r_prf_inflight[uq.srcA]);	       
 	    end
 	  DADDIU:
 	    begin
 	       t_result = t_srcA + t_simm;
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = !(r_prf_inflight[uq.srcA]);
 	       t_unimp_op = r_in_32b_mode;
 	    end
 	  SLTI:
@@ -1576,7 +1525,6 @@ module exec(clk,
 			  (($signed(t_srcA) < $signed(t_simm)) ? 'd1 : 'd0);
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = !(r_prf_inflight[uq.srcA]);	       
 	    end
 	  SLTIU:
 	    begin
@@ -1585,7 +1533,6 @@ module exec(clk,
 			  (t_srcA < t_simm ? 'd1 : 'd0);
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = !(r_prf_inflight[uq.srcA]);	       
 	    end
 	  MFC0:
 	    begin
@@ -1597,7 +1544,6 @@ module exec(clk,
 	       t_result = t_cpr0_srcA;
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = 1'b1;
 	    end
 	  MTC0:
 	    begin
@@ -1609,29 +1555,25 @@ module exec(clk,
 		 end
 	       t_cpr0_result = t_srcA;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = 1'b1;
 	       t_pc = t_pc4;
 	    end // case: MTC0
 	  II:
 	    begin
 	       t_unimp_op = 1'b1;
 	       t_alu_valid = 1'b1;
-	       t_srcs_rdy = 1'b1;
 	    end
 	   BC1TL:
 	     begin
-	       t_take_br = r_fcr_prf[uq.hilo_src][uq.srcC[2:0]];
-	       t_mispred_br = uq.br_pred != t_take_br;
-	       t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
-	       t_srcs_rdy = !r_fcr_prf_inflight[uq.hilo_src];
-	       t_alu_valid = 1'b1;
+		t_take_br = r_fcr_prf[uq.hilo_src][uq.srcC[2:0]];
+		t_mispred_br = uq.br_pred != t_take_br;
+		t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
+		t_alu_valid = 1'b1;
 	     end
 	  BC1F:
 	    begin
 	       t_take_br = r_fcr_prf[uq.hilo_src][uq.srcC[2:0]]==1'b0;
 	       t_mispred_br = uq.br_pred != t_take_br;
 	       t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
-	       t_srcs_rdy = !r_fcr_prf_inflight[uq.hilo_src];
 	       t_alu_valid = 1'b1;	       
 	    end
 	  BC1FL:
@@ -1639,7 +1581,6 @@ module exec(clk,
 	       t_take_br = r_fcr_prf[uq.hilo_src][uq.srcC[2:0]]==1'b0;
 	       t_mispred_br = uq.br_pred != t_take_br;
 	       t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
-	       t_srcs_rdy = !r_fcr_prf_inflight[uq.hilo_src];
 	       t_alu_valid = 1'b1;
 	    end
 	  BC1T:
@@ -1647,13 +1588,11 @@ module exec(clk,
 	       t_take_br = r_fcr_prf[uq.hilo_src][uq.srcC[2:0]];
 	       t_mispred_br = uq.br_pred != t_take_br;
 	       t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
-	       t_srcs_rdy = !r_fcr_prf_inflight[uq.hilo_src];
 	       t_alu_valid = 1'b1;
 	    end
 	  default:
 	    begin
 	       t_unimp_op = 1'b1;
-	       t_srcs_rdy = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
 	endcase // case (uq.op)
