@@ -165,6 +165,42 @@ typedef enum logic [7:0]
    II //illegal instruction
    } opcode_t;
 
+function logic is_mult(opcode_t op);
+   logic     x;
+   case(op)
+     MUL:
+       x = 1'b1;
+     MADD:
+       x = 1'b1;
+     MSUB:
+       x = 1'b1;
+     MULT:
+       x = 1'b1;
+     MULTU:
+       x = 1'b1;
+     default:
+       x = 1'b0;
+   endcase
+   return x;
+endfunction // is_mult
+
+function logic is_div(opcode_t op);
+   logic     x;
+   case(op)
+`ifdef VERILATOR
+     DIV:
+       x = 1'b1;
+     DIVU:
+       x = 1'b1;
+`endif     
+     default:
+       x = 1'b0;
+   endcase
+   return x;
+endfunction // is_div
+
+
+
 typedef struct packed {
    opcode_t op;
    
@@ -212,7 +248,6 @@ typedef struct packed {
    logic [63:0] 	    fetch_cycle;
 `endif   
 } uop_t;
-
 
 
 

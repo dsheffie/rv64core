@@ -34,6 +34,31 @@
 #include "Vcore_l1d_l1i__Dpi.h"
 #include "svdpi.h"
 
+template <typename A, typename B>
+inline double histo_mean_median(const std::map<A,B> &histo, A &median) {
+  double acc = 0.0;
+  B count = 0, x = 0;
+  if(histo.size() == 0) {
+    median = 0;
+    return 0.0;
+  }
+  
+  for(const auto &p : histo) {
+    acc += (p.first * p.second);
+    count += p.second;
+  }
+
+  acc /= count;
+  for(const auto &p : histo) {
+    x += p.second;
+    if(x >= (count/2)) {
+      median = p.first;
+      break;
+    }
+  }
+  return acc;
+}
+
 
 int fp32_add(int a_, int b_) {
   float a = *reinterpret_cast<float*>(&a_);

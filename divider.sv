@@ -114,7 +114,7 @@ module divider(clk,
 	t_valid = 1'b0;
 	
 	//output signals
-	ready = (r_state == IDLE);
+	ready = (r_state == IDLE) & !start_div;
 	rob_ptr_out = r_rob_ptr;
 	hilo_prf_ptr_out = r_hilo_prf_ptr;
 	y = r_Y;

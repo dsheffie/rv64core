@@ -1059,7 +1059,8 @@ module decode_mips32(in_64b_fpreg_mode, insn,
 			   uop.srcC = {{FCR_ZP{1'b0}}, insn[20:18]};
 			   uop.fcr_src_valid = 1'b1;
 			   uop.is_fp = 1'b1;
-			end
+			end // case: 6'd17
+ `ifdef FMOVZ_FMOVN
 		      6'd18: /* fmovz */
 			begin
 			   uop.dst = fd;
@@ -1085,7 +1086,8 @@ module decode_mips32(in_64b_fpreg_mode, insn,
 			   uop.srcC = rt;
 			   uop.srcC_valid = 1'b1;			   
 			   uop.is_fp = 1'b1;
-			end
+			end // case: 6'd19
+ `endif
 		      6'd32: /* cvt.s */
 			begin
 			   uop.srcA = fs;

@@ -20,6 +20,7 @@ import "DPI-C" function void record_retirement(input longint pc,
 					       input longint retire_cycle,
 					       input int     fault,
 					       input int     is_mem,
+					       input int     is_fp,
 					       input int     missed_l1d);
 
 import "DPI-C" function void record_restart(input int restart_cycles);
@@ -647,6 +648,7 @@ module core(clk,
    			       r_cycle,
 			       t_rob_head.faulted ? 32'd1 : 32'd0,
 			       t_rob_head.is_mem ? 32'd1 : 32'd0,
+			       t_rob_head.is_fp ? 32'd1 : 32'd0,
 			       t_rob_head.missed_l1d ? 32'd1 : 32'd0);
    	  end
    	if(t_retire_two)
@@ -658,6 +660,7 @@ module core(clk,
    			       r_cycle,
 			       t_rob_next_head.faulted ? 32'd1 : 32'd0,
 			       t_rob_next_head.is_mem ? 32'd1 : 32'd0,
+			       t_rob_next_head.is_fp ? 32'd1 : 32'd0,
 			       t_rob_next_head.missed_l1d ? 32'd1 : 32'd0);	     
    	  end // if (t_retire_two)
 	if(r_state == RAT && n_state == ACTIVE)
@@ -675,7 +678,7 @@ module core(clk,
    
 //`define DEBUG
 
-//`define DUMP_ROB
+`define DUMP_ROB
 `ifdef DUMP_ROB
    always_ff@(negedge clk)
      begin
@@ -699,7 +702,7 @@ module core(clk,
 		  $display("\trob entry %d, pc %x, complete %b, faulted %b",
 			   i[`LG_ROB_ENTRIES-1:0], 
 			   r_rob[i[`LG_ROB_ENTRIES-1:0]].pc, 
-			   r_rob[i[`LG_ROB_ENTRIES-1:0]].complete,
+			   r_rob_complete[i[`LG_ROB_ENTRIES-1:0]],
 			   r_rob[i[`LG_ROB_ENTRIES-1:0]].faulted);
 	       end
 	  end
@@ -1596,6 +1599,7 @@ module core(clk,
 `ifdef ENABLE_CYCLE_ACCOUNTING
 	     t_rob_tail.missed_l1d = 1'b0;
 	     t_rob_tail.is_mem = 1'b0;
+	     t_rob_tail.is_fp = 1'b0;
 	     t_rob_tail.fetch_cycle = t_alloc_uop.fetch_cycle;
 	     t_rob_tail.alloc_cycle = r_cycle;
 	     t_rob_tail.complete_cycle = 'd0;
@@ -1671,6 +1675,7 @@ module core(clk,
 `ifdef ENABLE_CYCLE_ACCOUNTING
 	     t_rob_next_tail.missed_l1d = 1'b0;
 	     t_rob_next_tail.is_mem = 1'b0;
+	     t_rob_next_tail.is_fp = 1'b0;
 	     t_rob_next_tail.fetch_cycle = t_alloc_uop2.fetch_cycle;
 	     t_rob_next_tail.alloc_cycle = r_cycle;
 	     t_rob_next_tail.complete_cycle = 'd0;
@@ -1798,6 +1803,7 @@ module core(clk,
 		  r_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].data <= t_complete_bundle_2.data;
 `ifdef ENABLE_CYCLE_ACCOUNTING
 		  r_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].complete_cycle <= r_cycle;
+		  r_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].is_fp <= 1'b1;
 `endif	    	     
 	       end
 	     if(core_mem_rsp_valid)

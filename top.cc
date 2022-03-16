@@ -81,11 +81,14 @@ void record_l1d(int req, int ack, int ack_st, int blocked, int stall_reason) {
   l1d_stall_reasons[stall_reason&15]++;
 }
 
+static std::map<int, uint64_t> int_sched_rdy_map;
+
 void report_exec(int int_valid, int int_ready,
 		 int mem_valid, int mem_ready,
 		 int fp_valid,  int fp_ready,
 		 int intq_full, int memq_full,
-		 int fpq_full) {
+		 int fpq_full,
+		 int ready_int) {
   n_int_exec[0] += int_valid;
   n_int_exec[1] += int_ready;
   n_mem_exec[0] += mem_valid;
@@ -95,6 +98,7 @@ void report_exec(int int_valid, int int_ready,
   q_full[0] += intq_full;
   q_full[1] += memq_full;
   q_full[2] += fpq_full;
+  int_sched_rdy_map[__builtin_popcount(ready_int)]++;
 }
 
 
@@ -170,22 +174,33 @@ void record_fetch(int p1, int p2, int p3, int p4,
   else
     ++n_fetch[0];
 }
-  
+
+static std::map<int, uint64_t> mem_lat_map, fp_lat_map, non_mem_lat_map;
 
 void record_retirement(long long pc, long long fetch_cycle, long long alloc_cycle, long long complete_cycle, long long retire_cycle,
-		       int faulted , int is_mem, int missed_l1d) {
+		       int faulted , int is_mem, int is_fp, int missed_l1d) {
 
   //if(pc == 0x2033c || pc == 0x20340 || pc == 0x20344 || pc == 0x20348) {
   //auto i = getAsmString(get_insn(pc, s), pc);
   //std::cout << std::hex << pc << std::dec << " " << i << " : " << alloc_cycle << "," << complete_cycle << "," << retire_cycle << "," << faulted << "\n";
   //}
-  //uint32_t insn = get_insn(pc, s);
+  uint32_t insn = get_insn(pc, s);
   uint64_t delta = retire_cycle - last_retire_cycle;
 
-  //if(is_memory(insn)) {
-  //auto i = getAsmString(get_insn(pc, s), pc);
-  //std::cout << std::hex << pc << std::dec << " " << i << " : " << alloc_cycle << "," << complete_cycle << "," << retire_cycle << "," << faulted << "\n";
-  //}
+  if(is_mem) {
+    //auto i = getAsmString(insn, pc);
+    //std::cout << std::hex << pc << std::dec << " " << i << " : " << alloc_cycle << ","
+    //<< complete_cycle << "," << retire_cycle << "," << faulted << "\n";
+    //std::cout << std::hex << pc << std::dec << " " << i << " : "
+    mem_lat_map[(complete_cycle-alloc_cycle)]++;
+    //<< (complete_cycle-alloc_cycle) << "\n";    
+  }
+  else if(is_fp) {
+    fp_lat_map[(complete_cycle-alloc_cycle)]++;
+  }
+  else {
+    non_mem_lat_map[(complete_cycle-alloc_cycle)]++;
+  }
   //if(delta == 3) {
   //std::cout << "curr = " << std::hex << pc << std::dec << " : " << getAsmString(get_insn(pc, s), pc) << "\n";
   //std::cout << "last = " << std::hex << last_retire_pc << std::dec << " : " << getAsmString(get_insn(last_retire_pc, s), last_retire_pc) << "\n";
@@ -1322,6 +1337,26 @@ int main(int argc, char **argv) {
       total_cycle += (p.first * p.second);
     }
     //branch_info.close();
+    int median_int_rdy;
+    double avg_int_rdy = histo_mean_median(int_sched_rdy_map, median_int_rdy);
+    out << "avg int rdy insn = " << avg_int_rdy << "\n";
+    out << "median int rdy insn = " << median_int_rdy << "\n";
+    
+    int median_mem_lat = 0;
+    double avg_mem_lat = histo_mean_median(mem_lat_map, median_mem_lat);
+    out << "avg mem alloc to complete = " << avg_mem_lat << "\n";
+    out << "median mem alloc to complete = " << median_mem_lat << "\n";
+
+    avg_mem_lat = histo_mean_median(non_mem_lat_map, median_mem_lat);
+    out << "avg non-mem alloc to complete = " << avg_mem_lat << "\n";
+    out << "median non-mem alloc to complete = " << median_mem_lat << "\n";
+
+
+    avg_mem_lat = histo_mean_median(fp_lat_map, median_mem_lat);
+    out << "avg fp alloc to complete = " << avg_mem_lat << "\n";
+    out << "median fp alloc to complete = " << median_mem_lat << "\n";
+
+    
     out << "l1d_reqs = " << l1d_reqs << "\n";
     out << "l1d_acks = " << l1d_acks << "\n";
     out << "l1d_stores = " << l1d_stores << "\n";

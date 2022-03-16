@@ -39,6 +39,7 @@ typedef struct packed {
 `ifdef ENABLE_CYCLE_ACCOUNTING
    logic 			 missed_l1d;
    logic 			 is_mem;
+   logic 			 is_fp;
    logic [63:0] 	    fetch_cycle;
    logic [63:0] 	    alloc_cycle;
    logic [63:0] 	    complete_cycle;
