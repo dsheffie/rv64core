@@ -538,6 +538,7 @@ module exec(clk,
 	  end
 	
      end
+
    
    always_comb
      begin
@@ -671,13 +672,10 @@ module exec(clk,
    logic 			  t_alu_sched_full;
    
    logic [N_INT_SCHED_ENTRIES-1:0] t_alu_alloc_entry, t_alu_select_entry;
-   logic [N_INT_SCHED_ENTRIES-1:0] r_alu_last_select;
-   
 
-   
    uop_t r_alu_sched_uops[N_INT_SCHED_ENTRIES-1:0];
    
-   logic [N_INT_SCHED_ENTRIES-1:0] t_alu_entry_rdy, t_alu_entry_can_exec;
+   logic [N_INT_SCHED_ENTRIES-1:0] t_alu_entry_rdy;
    logic [LG_INT_SCHED_ENTRIES:0]  t_alu_sched_select_ptr;
    
 	
@@ -747,7 +745,11 @@ module exec(clk,
    //   begin
    // 	if(r_start_int)
    // 	  begin
-   // 	     $display("scheduled uop at pc %x, op = %d", int_uop.pc, int_uop.op);
+   // 	     $display("scheduled uop at pc %x, op = %d, int %b, mem %b, fp %b", int_uop.pc, int_uop.op, int_uop.is_int, int_uop.is_mem, int_uop.is_fp);
+   // 	     if(int_uop.is_mem)
+   // 	       begin
+   // 		  $stop();
+   // 	       end
    // 	  end
    // 	if(t_pop_uq)
    // 	  begin
@@ -818,7 +820,8 @@ module exec(clk,
 									   );
 
 		//is_mult(r_alu_sched_uops[i].op);
-		t_alu_entry_can_exec[i] = r_alu_sched_valid[i] &&
+		
+		t_alu_entry_rdy[i] = r_alu_sched_valid[i] &&
 				     (is_div(r_alu_sched_uops[i].op) ?  t_div_ready :  (is_mult(r_alu_sched_uops[i].op) ?  !r_wb_bitvec[`MUL_LAT+1] : !r_wb_bitvec[1]))
 				     ? (
 					(t_alu_srcA_match[i] |r_alu_srcA_rdy[i]) & 
@@ -869,18 +872,21 @@ module exec(clk,
 	     end // always_ff@ (posedge clk)
 	end // for (genvar i = 0; i < LG_INT_SCHED_ENTRIES; i=i+1)
    endgenerate
-
    
-
+   
    
    always_comb
      begin
 	t_pop_uq = 1'b0;
 	t_alu_sched_full = (&r_alu_sched_valid);
 	
-	t_alu_entry_rdy = (t_alu_entry_can_exec & (~r_alu_last_select)) == 'd0 ?
-			  t_alu_entry_can_exec :
-			  (t_alu_entry_can_exec & (~r_alu_last_select));
+	//t_pop_uq = t_flash_clear ? 1'b0 :
+	//t_uq_empty ? 1'b0 : 
+	//!t_srcs_rdy ? 1'b0 : 
+	//(r_wb_bitvec[0]) ? 1'b0 :
+	//	   t_start_mul & r_wb_bitvec[`MUL_LAT] ? 1'b0 : 
+	//(t_start_div32 & (!t_div_ready || r_wb_bitvec[`DIV32_LAT])) ? 1'b0 :
+	//1'b1;
 
 	t_pop_uq = t_flash_clear ? 1'b0 :
 		   t_uq_empty ? 1'b0 :
@@ -897,7 +903,6 @@ module exec(clk,
 	if(reset || t_flash_clear)
 	  begin
 	     r_alu_sched_valid <= 'd0;
-	     r_alu_last_select <= 'd1;
 	  end
 	else
 	  begin
@@ -908,31 +913,27 @@ module exec(clk,
 	       end
 	     if(t_alu_entry_rdy != 'd0)
 	       begin
-		  //r_alu_last_select <= 'd0;
-		  r_alu_last_select <= (t_alu_entry_can_exec & (~r_alu_last_select)) == 'd0 ? t_alu_entry_can_exec : {r_alu_last_select[2:0], r_alu_last_select[3]};
 		  r_alu_sched_valid[t_alu_sched_select_ptr[LG_INT_SCHED_ENTRIES-1:0]] <= 1'b0;
 	       end
 	  end // else: !if(reset)
      end
    
-   //always_ff@(negedge clk)
-   //begin
+   // always_ff@(negedge clk)
+   //   begin
    // 	$display("r_alu_sched_valid = %b, t_uq_empty = %b, t_alu_sched_full = %b", r_alu_sched_valid, t_uq_empty, t_alu_sched_full);
-	 // 	$display("t_alu_entry_rdy = %b", t_alu_entry_rdy);
-   //if(t_alu_entry_can_exec != 'd0) 
-   //$display("cycle %d, r_alu_last_select = %b", r_cycle, r_alu_last_select);
-   //for(integer i = 0; i < 4; i=i+1)
-   //begin
-   //if(t_alu_entry_can_exec[i])
-   //begin
-   //$display("  entry %d, pc %x, picked %b", i, r_alu_sched_uops[i].pc, t_alu_select_entry[i]);
-//end
-//end
+   // 	$display("t_alu_entry_rdy = %b", t_alu_entry_rdy);
+   // 	for(integer i = 0; i < 4; i=i+1)
+   // 	  begin
+   // 	     if(r_alu_sched_valid[i])
+   // 	       begin
+   // 		  $display("entry %d, pc %x : %b %b %b %b %b", i, r_alu_sched_uops[i].pc, r_alu_srcA_rdy[i], r_alu_srcB_rdy[i], r_alu_srcC_rdy[i], r_alu_hilo_rdy[i], r_alu_fcr_rdy[i]);
+   // 	       end
+   // 	  end
    // 	if(t_pop_uq)
    // 	  begin
    // 	     $display("t_alu_alloc_entry = %b", t_alu_alloc_entry);
    // 	  end
-   //end // always_ff@ (negedge clk)
+   //   end // always_ff@ (negedge clk)
    
    
    count_leading_zeros #(.LG_N(5)) c0(.in(t_srcA[31:0]), .y(w_clz));
@@ -1407,7 +1408,7 @@ module exec(clk,
 	    begin
 	       t_start_mul = r_start_int;
 	    end
-`ifdef VERILATOR
+`ifdef SINGLE_CYCLE_INT_DIVIDE
 	  DIV:
 	    begin
 	       t_alu_valid = 1'b1;	       

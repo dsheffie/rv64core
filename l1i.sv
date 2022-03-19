@@ -532,7 +532,7 @@ endfunction
 	  end
 	else if(t_push_insn2)
 	  begin
-	     //$display("t_insn.pc = %x, t_clear_fq=%b", t_insn.pc,t_clear_fq);	     	     	     
+	     //$display("t_insn.pc = %x, t_clear_fq=%b", t_insn.pc,t_clear_fq);
 	     //$display("t_insn2.pc = %x", t_insn2.pc);	     
 	     r_fq[r_fq_tail_ptr[`LG_FQ_ENTRIES-1:0]] <= t_insn;
 	     r_fq[r_fq_next_tail_ptr[`LG_FQ_ENTRIES-1:0]] <= t_insn2;
@@ -548,8 +548,9 @@ endfunction
 	  end
 	else if(t_push_insn4)
 	  begin
-	     //$display("t_insn.pc = %x, t_clear_fq=%b", t_insn.pc,t_clear_fq);	     
-	     //$display("t_insn2.pc = %x", t_insn2.pc);
+	     //$display("push4 cycle = %d, r_valid_out =%b, r_tag_out =%d, r_cache_tag = %d, r_cache_pc = %x", r_cycle, r_valid_out,r_tag_out,r_cache_tag,r_cache_pc);
+	     //$display("t_insn.pc = %x,  bytes = %x, t_clear_fq=%b,hit=%b", t_insn.pc,t_insn.data,t_clear_fq,t_hit);	     
+	     //$display("t_insn2.pc = %x, bytes = %x", t_insn2.pc,t_insn2.data);
 	     //$display("t_insn3.pc = %x", t_insn3.pc);
 	     //$display("t_insn4.pc = %x", t_insn4.pc);	     	     	     
 	     r_fq[r_fq_tail_ptr[`LG_FQ_ENTRIES-1:0]] <= t_insn;
@@ -687,8 +688,6 @@ endfunction
 	     $stop();
 	  end
      end   
-
-
       
    always_comb
      begin
@@ -932,6 +931,7 @@ endfunction
 			      t_push_insn4 = 1'b1;
 			      t_cache_idx = r_cache_idx + 'd1;
 			      n_cache_pc = r_cache_pc + 'd16;
+			      t_cache_tag = n_cache_pc[(`M_WIDTH-1):IDX_STOP];
 			      n_pc = r_cache_pc + 'd20;
 			   end
 			 else if(t_first_branch == 'd3 && !fq_full3)
@@ -939,6 +939,7 @@ endfunction
 			      t_push_insn3 = 1'b1;
 			      n_cache_pc = r_cache_pc + 'd12;
 			      n_pc = r_cache_pc + 'd16;
+			      t_cache_tag = n_cache_pc[(`M_WIDTH-1):IDX_STOP];
 			      if(t_insn_idx != 0)
 				begin
 				   t_cache_idx = r_cache_idx + 'd1;
@@ -952,6 +953,7 @@ endfunction
 			      n_pc = r_cache_pc + 'd8;
 			      //guaranteed to end-up on another cacheline
 			      n_cache_pc = r_cache_pc + 'd8;
+			      t_cache_tag = n_cache_pc[(`M_WIDTH-1):IDX_STOP];
 			      n_pc = r_cache_pc + 'd12;
 			      if(t_insn_idx == 2)
 				begin

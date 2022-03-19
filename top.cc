@@ -177,6 +177,11 @@ void record_fetch(int p1, int p2, int p3, int p4,
 
 static std::map<int, uint64_t> mem_lat_map, fp_lat_map, non_mem_lat_map;
 
+int check_insn_bytes(long long pc, int data) {
+  uint32_t insn = get_insn(pc, s);
+  return (*reinterpret_cast<uint32_t*>(&data)) == insn;
+}
+
 void record_retirement(long long pc, long long fetch_cycle, long long alloc_cycle, long long complete_cycle, long long retire_cycle,
 		       int faulted , int is_mem, int is_fp, int missed_l1d) {
 
@@ -1146,7 +1151,8 @@ int main(int argc, char **argv) {
       
       if(tb->mem_req_opcode == 4) {/*load word */
 	for(int i = 0; i < 4; i++) {
-	  tb->mem_rsp_load_data[i] = *reinterpret_cast<uint32_t*>(s->mem[tb->mem_req_addr + 4*i]);
+	  uint64_t ea = (tb->mem_req_addr + 4*i) & ((1UL<<32)-1);
+	  tb->mem_rsp_load_data[i] = *reinterpret_cast<uint32_t*>(s->mem[ea]);
 	}
 	last_load_addr = tb->mem_req_addr;
 	assert((tb->mem_req_addr & 0xf) == 0);

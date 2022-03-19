@@ -25,6 +25,8 @@ import "DPI-C" function void record_retirement(input longint pc,
 
 import "DPI-C" function void record_restart(input int restart_cycles);
 import "DPI-C" function void record_ds_restart(input int delay_cycles);
+import "DPI-C" function int check_insn_bytes(input longint pc, input int data);
+
 
 `endif
 
@@ -678,11 +680,11 @@ module core(clk,
    
 //`define DEBUG
 
-`define DUMP_ROB
+//`define DUMP_ROB
 `ifdef DUMP_ROB
    always_ff@(negedge clk)
      begin
-	if(/*r_cycle >= 'd18147308*/0)
+	if(/*r_cycle >= 'd18147308*/1)
 	  begin
 	     $display("cycle %d : state = %d, alu complete %b, mem complete %b,head_ptr %d, inflight %d, complete %b,  can_retire_rob_head %b, head pc %x, empty %b, full %b", 
 		      r_cycle,
@@ -951,9 +953,10 @@ module core(clk,
 				       begin
 					  n_state = HANDLE_MONITOR;
 				       end
-				     'd52: /* flush cacheline */
+				     'd52: /* flush line in data cache */
 				       begin
 					  n_state = MONITOR_FLUSH_CACHE;
+					  n_l1i_flush_complete = 1'b1;
 					  n_flush_cl_addr = r_arch_a0;
 					  n_flush_cl_req = 1'b1;
 				       end
@@ -1085,6 +1088,7 @@ module core(clk,
 	    end
 	  MONITOR_FLUSH_CACHE:
 	    begin
+	       //$display("%d : %b %b", r_cycle, n_l1i_flush_complete, n_l1d_flush_complete);
 	       if(n_l1i_flush_complete && n_l1d_flush_complete)
 		 begin
 		    n_state = HANDLE_MONITOR;
@@ -1749,14 +1753,17 @@ module core(clk,
 	       end
 	     if(t_complete_valid_1)
 	       begin
+		  //$display("rob entry %d marked complete by port 1", t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]);
 		  r_rob_complete[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]] <= t_complete_bundle_1.complete;
 	       end
 	     if(t_complete_valid_2)
 	       begin
+		  //$display("rob entry %d marked complete by port 2", t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]);
                   r_rob_complete[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]] <= t_complete_bundle_2.complete;
 	       end
 	     if(core_mem_rsp_valid)
 	       begin
+		  //$display("rob entry %d marked complete by mem port", core_mem_rsp.rob_ptr);
 		  r_rob_complete[core_mem_rsp.rob_ptr] <= 1'b1;
 	       end
 	  end
@@ -2214,26 +2221,30 @@ module core(clk,
 		      .uop(t_dec_uop2));
 
 
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if(insn_ack)
-   // 	  begin
-   // 	     if(t_dec_uop.op == II)
-   // 	       begin
-   // 		  $display("t_dec_uop.pc = %x", t_dec_uop.pc);
-   // 		  $stop();
-   // 	       end
-   // 	  end
-   // 	if(insn_ack_two)
-   // 	  begin
-   // 	     if(t_dec_uop2.op == II)
-   // 	       begin
-   // 		  $display("t_dec_uop2.pc = %x", t_dec_uop2.pc);		  
-   // 		  $stop();
-   // 	       end
-   // 	  end
-   //   end
-
+`ifdef VERILATOR
+   always_ff@(negedge clk)
+     begin
+   	if(insn_ack)
+   	  begin
+	     if(check_insn_bytes(t_dec_uop.pc, insn.data) == 'd0)
+	       begin
+   		  $display("t_dec_uop.pc = %x, bytes = %x, decoded to op %d", 
+			   t_dec_uop.pc, insn.data, t_dec_uop.op);
+		  $stop();
+	       end
+   	  end
+   	if(insn_ack_two)
+   	  begin
+	     if(check_insn_bytes(t_dec_uop2.pc, insn_two.data) == 'd0)
+	       begin
+   		  $display("t_dec_uop2.pc = %x, bytes = %x, decoded to op %d", 
+			   t_dec_uop2.pc, insn_two.data, t_dec_uop2.op);
+		  $stop();
+	       end
+   	  end
+     end
+`endif //  `ifdef VERILATOR
+   
    logic t_push_1, t_push_2;
    
    always_comb
