@@ -399,7 +399,8 @@ module core(clk,
    
    state_t r_state, n_state;
    logic [31:0] r_restart_cycles, n_restart_cycles;
-
+   logic t_divide_ready;
+   
    
    always_comb
      begin
@@ -1026,7 +1027,7 @@ module core(clk,
 		    t_retire = 1'b1;
 		    n_ds_done = 1'b1;
 		 end
-	       if(r_rob_inflight == 'd0 && r_ds_done && memq_empty)
+	       if(r_rob_inflight == 'd0 && r_ds_done && memq_empty && t_divide_ready)
 		 begin
 		    //$display("%d : wait for drain and memq_empty  took  %d cycles",r_cycle, r_restart_cycles);		    
 		    n_state = RAT;
@@ -2271,6 +2272,7 @@ module core(clk,
    exec e (
 	   .clk(clk), 
 	   .reset(reset),
+	   .divide_ready(t_divide_ready),
 `ifdef VERILATOR
 	   .clear_cnt(r_clear_cnt),
 `endif

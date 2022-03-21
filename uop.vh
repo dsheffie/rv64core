@@ -5,22 +5,22 @@
 
 typedef enum logic [7:0] 
   {
-   SLL = 'd0,
-   SRL = 'd1,
-   SRA = 'd2,
-   SLLV = 'd3,
+   SLL,
+   SRL,
+   SRA,
+   SLLV,
    SRLV,
    SRAV,
    JR,
-   JALR ='d7,
+   JALR,
    SYSCALL,
    MFHI,
    MTHI,
-   MULT = 'd11,
+   MULT,
    MULTU,
    DIV,
    DIVU,
-   ADD = 'd15,
+   ADD,
    ADDU,
    SUB,
    SUBU,
@@ -187,12 +187,10 @@ endfunction // is_mult
 function logic is_div(opcode_t op);
    logic     x;
    case(op)
-`ifndef SINGLE_CYCLE_INT_DIVIDE
      DIV:
        x = 1'b1;
      DIVU:
        x = 1'b1;
-`endif     
      default:
        x = 1'b0;
    endcase

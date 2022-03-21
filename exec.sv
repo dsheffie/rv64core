@@ -24,6 +24,7 @@ module exec(clk,
 `ifdef VERILATOR
 	    clear_cnt,
 `endif
+	    divide_ready,
 	    ds_done,
 	    machine_clr,
 	    restart_complete,
@@ -61,6 +62,7 @@ module exec(clk,
 `ifdef VERILATOR
    input logic [31:0] clear_cnt;
 `endif
+   output logic       divide_ready;
    input logic ds_done;
    input logic machine_clr;
    input logic restart_complete;
@@ -737,7 +739,7 @@ module exec(clk,
 	  end
 	else
 	  begin
-	     r_start_int <= (t_alu_entry_rdy != 'd0);
+	     r_start_int <= (t_alu_entry_rdy != 'd0) & !ds_done;
 	  end
      end // always_comb
 
@@ -979,6 +981,7 @@ module exec(clk,
 	   .ready(t_div_ready)
 	   );
 
+   assign divide_ready = t_div_ready;
 
    // always_ff@(negedge clk)
    //   begin
@@ -1068,7 +1071,7 @@ module exec(clk,
    always_comb
      begin
 	n_prf_inflight = r_prf_inflight;
-	n_hilo_inflight = r_hilo_inflight;
+
 	
 	if(uq_push && uq_uop.dst_valid)
 	  begin
@@ -1079,10 +1082,6 @@ module exec(clk,
 	     n_prf_inflight[uq_uop_two.dst] = 1'b1;
 	  end
 	
-	if(uq_push && uq_uop.hilo_dst_valid)
-	  begin
-	     n_hilo_inflight[uq_uop.hilo_dst] = 1'b1;
-	  end
 	
 	if(mem_rsp_dst_valid)
 	  begin
@@ -1095,6 +1094,20 @@ module exec(clk,
 	if(r_start_int && t_wr_int_prf)
 	  begin
 	     n_prf_inflight[int_uop.dst] = 1'b0;
+	  end
+     end // always_comb
+   
+   always_comb
+     begin
+	n_hilo_inflight = r_hilo_inflight;
+	if(uq_push && uq_uop.hilo_dst_valid)
+	  begin
+	     n_hilo_inflight[uq_uop.hilo_dst] = 1'b1;
+	  end
+	
+	if(uq_push_two && uq_uop_two.hilo_dst_valid)
+	  begin
+	     n_hilo_inflight[uq_uop_two.hilo_dst] = 1'b1;
 	  end
 	
 	if(t_hilo_prf_ptr_val_out)
@@ -1112,11 +1125,10 @@ module exec(clk,
 
      end // always_comb
 
-
    
    always_comb
      begin
-	n_fp_prf_inflight = r_fp_prf_inflight;
+
 	n_fcr_prf_inflight = r_fcr_prf_inflight;
 
 	if(uq_push && uq_uop.fcr_dst_valid)
@@ -1125,16 +1137,24 @@ module exec(clk,
 	     //      r_cycle, uq_uop.hilo_dst, uq_uop.rob_ptr);
 	     n_fcr_prf_inflight[uq_uop.hilo_dst] = 1'b1;
 	  end
-
+	if(uq_push_two && uq_uop_two.fcr_dst_valid)
+	  begin
+	     //$display("at cycle %d marking fcr %d inflight for rob ptr %d", 
+	     //      r_cycle, uq_uop.hilo_dst, uq_uop.rob_ptr);
+	     n_fcr_prf_inflight[uq_uop_two.hilo_dst] = 1'b1;
+	  end
 	if(t_fpu_fcr_valid)
 	  begin
-	     //$display("marking fcr %d not inflight", t_fpu_fcr_ptr);
 	     n_fcr_prf_inflight[t_fpu_fcr_ptr] = 1'b0;
 	  end
+     end
+
+   always_comb
+     begin
+	n_fp_prf_inflight = r_fp_prf_inflight;
 	
 	if(uq_push && uq_uop.fp_dst_valid)
 	  begin
-	     //$display("pc %x marks fp %d inflight", uq_uop.pc, uq_uop.dst);
 	     n_fp_prf_inflight[uq_uop.dst] = 1'b1;
 	  end
 
@@ -1390,23 +1410,23 @@ module exec(clk,
 	    end
 	  MUL:
 	    begin
-	       t_start_mul = r_start_int;
+	       t_start_mul = r_start_int&!ds_done;
 	    end
 	  MADD:
 	    begin
-	       t_start_mul = r_start_int;
+	       t_start_mul = r_start_int&!ds_done;
 	    end
 	  MSUB:
 	    begin
-	       t_start_mul = r_start_int;
+	       t_start_mul = r_start_int&!ds_done;
 	    end
 	  MULT:
 	    begin
-	       t_start_mul = r_start_int;
+	       t_start_mul = r_start_int&!ds_done;
 	    end
 	  MULTU:
 	    begin
-	       t_start_mul = r_start_int;
+	       t_start_mul = r_start_int&!ds_done;
 	    end
 `ifdef SINGLE_CYCLE_INT_DIVIDE
 	  DIV:
@@ -1429,11 +1449,11 @@ module exec(clk,
 	  DIV:
 	    begin
 	       t_signed_div = 1'b1;
-	       t_start_div32 = r_start_int;	       
+	       t_start_div32 = r_start_int&!ds_done;	       
 	    end
 	  DIVU:
 	    begin
-	       t_start_div32 = r_start_int;
+	       t_start_div32 = r_start_int&!ds_done;
 	    end
 `endif
 	  EXT:
