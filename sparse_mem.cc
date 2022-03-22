@@ -16,8 +16,8 @@
 sparse_mem::sparse_mem() {
   void* mempt = mmap(nullptr, sparse_mem::sz, PROT, MAP, -1, 0);
   mem = reinterpret_cast<uint8_t*>(mempt);
-  assert(madvise(mem, 1UL<<32, MADV_DONTNEED)==0);
   assert(mem != reinterpret_cast<uint8_t*>(~0UL));
+  assert(madvise(mem, 1UL<<32, MADV_DONTNEED)==0);
   //memset(mem, 0, sparse_mem::sz);
 }
 
@@ -27,7 +27,13 @@ sparse_mem::~sparse_mem() {
 }
 
 void sparse_mem::clear() {
-  
+  if(mem) {
+    munmap(mem, sz);
+  }
+  void* mempt = mmap(nullptr, sparse_mem::sz, PROT, MAP, -1, 0);
+  mem = reinterpret_cast<uint8_t*>(mempt);
+  assert(mem != reinterpret_cast<uint8_t*>(~0UL));
+  assert(madvise(mem, 1UL<<32, MADV_DONTNEED)==0);
 }
 
 #if 0

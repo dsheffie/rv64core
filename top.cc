@@ -362,7 +362,7 @@ int main(int argc, char **argv) {
     exit(EXIT_SUCCESS);    
   }
   
-   
+  //load checker
    if(use_checkpoint) {
      loadState(*ss, mips_binary.c_str());
    }
@@ -1148,6 +1148,7 @@ int main(int argc, char **argv) {
       last_retire = 0;
       mem_reply_cycle = -1;
       assert(tb->mem_req_valid);
+
       
       if(tb->mem_req_opcode == 4) {/*load word */
 	for(int i = 0; i < 4; i++) {
@@ -1161,7 +1162,8 @@ int main(int argc, char **argv) {
       }
       else if(tb->mem_req_opcode == 7) { /* store word */
 	for(int i = 0; i < 4; i++) {
-	  *reinterpret_cast<uint32_t*>(s->mem[tb->mem_req_addr + 4*i]) = tb->mem_req_store_data[i];
+	  uint64_t ea = (tb->mem_req_addr + 4*i) & ((1UL<<32)-1);
+	  *reinterpret_cast<uint32_t*>(s->mem[ea]) = tb->mem_req_store_data[i];
 	}
 	last_store_addr = tb->mem_req_addr;
 	++n_stores;
