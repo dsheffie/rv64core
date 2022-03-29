@@ -1364,7 +1364,7 @@ endfunction
 	  begin
 	     r_stuck_cnt <= r_stuck_cnt + 'd1;
 	  end
-	if(r_stuck_cnt == 'd64)
+	if(r_stuck_cnt == 'd1024)
 	  begin
 	     $display("op with uuid %d, rob ptr %d stuck, pc = %x", t_mem_head.uuid, t_mem_head.rob_ptr, t_mem_head.pc);
 	     $stop();
