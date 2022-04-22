@@ -15,6 +15,7 @@ import "DPI-C" function void report_exec(input int int_valid,
 					 input int iq_full,
 					 input int mq_full,
 					 input int fq_full,
+					 input int blocked_by_store,
 					 input int int_ready
 					 );
 `endif
@@ -30,6 +31,7 @@ module exec(clk,
 	    restart_complete,
 	    delayslot_rob_ptr,
 	    in_32fp_reg_mode,
+	    cpr0_status_reg,
 	    uq_wait,
 	    mq_wait,
 	    fq_wait,
@@ -68,6 +70,7 @@ module exec(clk,
    input logic restart_complete;
    input logic [`LG_ROB_ENTRIES-1:0] delayslot_rob_ptr;
    output logic 		     in_32fp_reg_mode;
+   output logic [(`M_WIDTH-1):0]     cpr0_status_reg;
    
    localparam N_ROB_ENTRIES = (1<<`LG_ROB_ENTRIES);   
    output logic [N_ROB_ENTRIES-1:0]  uq_wait;   
@@ -155,7 +158,8 @@ module exec(clk,
    
    
    logic 			  t_wr_int_prf, t_wr_cpr0;
-  
+   logic [4:0] 			  t_dst_cpr0;
+   
    logic 	t_wr_hilo;
    logic 	t_take_br;
    logic 	t_mispred_br;
@@ -1202,7 +1206,15 @@ module exec(clk,
      end
 
 
+   
 `ifdef VERILATOR
+   logic t_blocked_by_store;
+   always_comb
+     begin
+	t_blocked_by_store = t_mem_uq_empty ? 1'b0 : !t_pop_mem_uq  & is_store(mem_uq.op) & 
+			     !r_prf_inflight[mem_uq.srcA] & r_prf_inflight[mem_uq.srcB] &
+			     !mem_q_full;
+     end
    always_ff@(negedge clk)
      begin
 	report_exec(uq_empty ? 32'd0 : 32'd1,
@@ -1214,11 +1226,19 @@ module exec(clk,
 		    t_uq_full ? 32'd1 : 32'd0,
 		    t_mem_uq_full ? 32'd1 : 32'd0,
 		    t_fp_uq_full ? 32'd1 : 32'd0,
+		    t_blocked_by_store ? 32'd1 : 32'd0,
 		    {28'd0, t_alu_entry_rdy}
 		    );
      end
 `endif //  `ifdef VERILATOR
 
+   //always_ff@(negedge clk)
+   //begin
+   //if(int_uop.op == WAIT && r_start_int)
+   //begin
+   //$display("got wait for pc %x", int_uop.pc);
+   //end
+   //end
       
    always_comb
      begin
@@ -1236,6 +1256,7 @@ module exec(clk,
 	t_simm = {{E_BITS{int_uop.imm[15]}},int_uop.imm};
 	t_wr_int_prf = 1'b0;
 	t_wr_cpr0 = 1'b0;
+	t_dst_cpr0 = int_uop.dst[4:0];
 	t_take_br = 1'b0;
 	t_mispred_br = 1'b0;
 	t_jaddr = {int_uop.jmp_imm[9:0],int_uop.imm,2'd0};
@@ -1754,9 +1775,39 @@ module exec(clk,
 	       t_alu_valid = 1'b1;
 	    end
 	  MFC0:
+	    begin	       
+	       //t_unimp_op = 1'b1;
+	       t_result = t_cpr0_srcA;
+	       t_alu_valid = 1'b1;
+	       t_wr_int_prf = 1'b1;
+	       t_pc = t_pc4;	       
+	    end
+	  DI:
+	    begin
+	       t_result = t_cpr0_srcA;
+	       t_alu_valid = 1'b1;
+	       t_wr_int_prf = int_uop.dst_valid;
+	       t_pc = t_pc4;
+	       t_wr_cpr0 = 1'b1;
+	       t_dst_cpr0 = 'd12;
+	       t_cpr0_result = {t_cpr0_srcA[(`M_WIDTH-1):1], 1'b0};
+	    end
+	  EI:
+	    begin
+	       t_result = t_cpr0_srcA;
+	       t_alu_valid = 1'b1;
+	       t_wr_int_prf = int_uop.dst_valid;
+	       t_pc = t_pc4;
+	       t_wr_cpr0 = 1'b1;
+	       t_dst_cpr0 = 'd12;
+	       t_cpr0_result = {t_cpr0_srcA[(`M_WIDTH-1):1], 1'b1};
+	    end
+	  WAIT:
 	    begin
 	       t_unimp_op = 1'b1;
 	       t_alu_valid = 1'b1;
+	       t_fault = 1'b1;
+	       t_pc = t_pc4;
 	    end
 	  RDHWR:
 	    begin
@@ -1766,7 +1817,7 @@ module exec(clk,
 	    end
 	  MTC0:
 	    begin
-	       t_wr_cpr0 = 1'b1;
+	       t_wr_cpr0 = 1'b1;	       
 	       if(int_uop.dst[4:0] == 5'd12)
 		 begin
 		    n_in_32b_mode = (t_srcA[5] == 1'b0);
@@ -1818,7 +1869,7 @@ module exec(clk,
 
 	
      end // always_comb
-   
+
 
 `ifdef ENABLE_FPU
    logic [31:0] t_sp_trunc, t_w_sp_cvt;
@@ -2622,18 +2673,46 @@ module exec(clk,
 
    always_ff@(posedge clk)
      begin
-	if(r_start_int && t_wr_cpr0)
-	  begin	     
-	     r_cpr0[uq.dst[4:0]] <= t_cpr0_result;
-	  end
-	/* this is a terrible hack for linux o32 syscall emulation */
-	else if(r_start_int && t_set_thread_area)
+	if(reset)
 	  begin
-	     r_cpr0['d29] <= t_cpr0_result;
+	     cpr0_status_reg <= 'd4194308; 
 	  end
-	else if(exception_wr_cpr0_val)
+	else
 	  begin
-	     r_cpr0[exception_wr_cpr0_ptr] <= exception_wr_cpr0_data;
+	     if(r_start_int && t_wr_cpr0 && (t_dst_cpr0=='d12))
+	       begin
+		  cpr0_status_reg <= t_cpr0_result;
+	       end
+	  end
+     end
+   
+   always_ff@(posedge clk)
+     begin
+	if(reset)
+	  begin
+	     r_cpr0['d12] <= 'd4194308;
+	  end
+	else
+	  begin
+	     if(r_start_int && t_wr_cpr0)
+	       begin
+		  //$display("writing %x to cpr0 %d, pc %x, dst %d, dst valid %b", 
+		  //t_cpr0_result,
+		  //t_dst_cpr0, 
+		  //int_uop.pc,
+		  //int_uop.dst,
+		  //int_uop.dst_valid);
+		  r_cpr0[t_dst_cpr0] <= t_cpr0_result;
+	       end
+	     /* this is a terrible hack for linux o32 syscall emulation */
+	     else if(r_start_int && t_set_thread_area)
+	       begin
+		  r_cpr0['d29] <= t_cpr0_result;
+	       end
+	     else if(exception_wr_cpr0_val)
+	       begin
+		  r_cpr0[exception_wr_cpr0_ptr] <= exception_wr_cpr0_data;
+	       end
 	  end	
      end
 

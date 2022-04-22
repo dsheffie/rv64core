@@ -200,10 +200,11 @@ void load_elf(const char* fn, state_t *ms) {
       
       /* not strictly required, prefault fills with zeros */
       for(int32_t cc = 0; cc < p_memsz; cc++) {
-        mem.at(cc+p_vaddr) = 0;
+	mem.set<uint8_t>(cc+p_vaddr, 0);
       }
+      
       for(int32_t cc = 0; cc < p_filesz; cc++) {
-        mem.at(cc+p_vaddr) = reinterpret_cast<uint8_t*>(buf + p_offset)[cc];
+	mem.set<uint8_t>(cc+p_vaddr, reinterpret_cast<uint8_t*>(buf + p_offset)[cc]);
       }
     }
     

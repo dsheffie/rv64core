@@ -6,11 +6,12 @@
  `define ENABLE_CYCLE_ACCOUNTING 1
  `define ENABLE_FPU 1
  `define ENABLE_64BITS 1
- //`define SINGLE_CYCLE_INT_DIVIDE 1
+// `define SINGLE_CYCLE_INT_DIVIDE 1
 `endif
 
 `define LG_M_WIDTH 6
 
+`define BIG_ENDIAN 1
 
 //gshare branch predictor
 `define LG_PHT_SZ 16
@@ -160,16 +161,35 @@ typedef enum logic [4:0] {
 
 
 function logic [63:0] bswap64(logic [63:0] in);
+`ifdef BIG_ENDIAN
    return {in[7:0], in[15:8], in[23:16], in[31:24], in[39:32], in[47:40], in[55:48], in[63:56]};
+`else
+   return in;
+`endif
 endfunction
 
 function logic [31:0] bswap32(logic [31:0] in);
+`ifdef BIG_ENDIAN
    return {in[7:0], in[15:8], in[23:16], in[31:24]};
+`else
+   return in;
+`endif
 endfunction
 
 function logic [15:0] bswap16(logic [15:0] in);
+`ifdef BIG_ENDIAN
    return {in[7:0], in[15:8]};
+`else
+   return in;
+`endif
 endfunction
 
+function logic sext16(logic [15:0] in);
+`ifdef BIG_ENDIAN
+   return in[7];
+`else
+   return in[15];
+`endif
+endfunction
 
 `endif

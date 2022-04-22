@@ -22,6 +22,8 @@ module decode_mips32(in_64b_fpreg_mode, insn,
 
    logic [5:0] 	opcode = insn[31:26];
    logic 	is_nop = (insn == 32'd0);
+   logic 	is_ehb = (insn == 32'd192);
+   
    
    /* how many zero pad bits for reg specifiers */
    localparam ZP = (`LG_PRF_ENTRIES-5);
@@ -90,7 +92,7 @@ module decode_mips32(in_64b_fpreg_mode, insn,
 		      uop.srcB = shamt;
 		      uop.dst = rd;
 		      uop.dst_valid = (rd != 'd0);
-		      uop.op = is_nop ? NOP :SLL;
+		      uop.op = is_nop||is_ehb ? NOP :SLL;
 		      uop.is_int = 1'b1;		      
 		   end
 		 6'd1: /* movf and movt */
@@ -766,8 +768,38 @@ module decode_mips32(in_64b_fpreg_mode, insn,
 	       if(insn[25] && (insn[5:0] == 6'd24))
 		 begin
 		    uop.op = ERET;
+		    uop.is_int = 1'b1;
+		    uop.serializing_op = 1'b1;
+		    uop.must_restart = 1'b1;		    
 		 end
-	       else
+	       else if(insn[25] && (insn[5:0] == 6'd32))
+		 begin
+		    uop.op = WAIT;
+		    uop.is_int = 1'b1;
+		    uop.serializing_op = 1'b1;
+		    uop.must_restart = 1'b1;		    
+		 end
+	       else if((insn[25:21] == 5'b01011) && (insn[15:0] == 16'b0110000000000000))
+		 begin
+		    uop.op = DI;
+		    uop.is_int = 1'b1;
+		    uop.dst = rt;
+		    uop.dst_valid = (rt != 'd0);
+		    uop.srcA = 'd12; //status reg
+		    uop.serializing_op = 1'b1;
+		    uop.must_restart = 1'b1;
+		 end
+ 	       else if((insn[25:21] == 5'b01011) && (insn[15:0] == 16'b0110000000100000))
+		 begin
+		    uop.op = EI;
+		    uop.is_int = 1'b1;
+		    uop.dst = rt;
+		    uop.dst_valid = (rt != 'd0);
+		    uop.srcA = 'd12; //status reg
+		    uop.serializing_op = 1'b1;
+		    uop.must_restart = 1'b1;
+		 end
+ 	       else
 		 begin
 		    case(insn[25:21]) /* switch on RS */
 		      5'd0: /* mfc0 */
@@ -778,6 +810,7 @@ module decode_mips32(in_64b_fpreg_mode, insn,
 			   uop.srcA = rd;
 			   uop.is_int = 1'b1;
 			   uop.serializing_op = 1'b1;
+			   uop.must_restart = 1'b1;
 			end
 		      5'd4: /* mtc0 */
 			begin

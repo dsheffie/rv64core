@@ -36,8 +36,9 @@ static void execCoproc2(uint32_t inst, state_t *s);
 template <bool EL> void execMips(state_t *s);
 
 void execMips(state_t *s) {
-  execMips<false>(s);
+  execMips<IS_LITTLE_ENDIAN>(s);
 }
+
 #if 1
 std::ostream &operator<<(std::ostream &out, const state_t & s) {
   using namespace std;
@@ -131,9 +132,7 @@ void mkMonitorVectors(state_t *s) {
   for (uint32_t loop = 0; (loop < IDT_MONITOR_SIZE); loop += 4) {
       uint32_t vaddr = IDT_MONITOR_BASE + loop;
       uint32_t insn = 13;
-      *(uint32_t*)(s->mem+vaddr) = globals::isMipsEL ?
-	bswap<true,uint32_t>(insn) :
-	bswap<false,uint32_t>(insn);
+      s->mem.set<uint32_t>(vaddr, globals::isMipsEL ? bswap<true,uint32_t>(insn) : bswap<false,uint32_t>(insn));
   }  
 #else
   for (uint32_t loop = 0; (loop < IDT_MONITOR_SIZE); loop += 4) {
@@ -141,9 +140,8 @@ void mkMonitorVectors(state_t *s) {
       uint32_t insn = (RSVD_INSTRUCTION |
 		       (((loop >> 2) & RSVD_INSTRUCTION_ARG_MASK)
 			<< RSVD_INSTRUCTION_ARG_SHIFT));
-      *(uint32_t*)(s->mem+vaddr) = globals::isMipsEL ?
-	bswap<true,uint32_t>(insn) :
-	bswap<false,uint32_t>(insn);
+      s->mem.set<uint32_t>(vaddr, globals::isMipsEL ? bswap<true,uint32_t>(insn) : bswap<false,uint32_t>(insn));
+
   }
 #endif
 }
@@ -167,6 +165,7 @@ static void execSpecial2(uint32_t inst,state_t *s) {
       y += acc;
       s->lo = (int32_t)(y & 0xffffffff);
       s->hi = (int32_t)(y >> 32);
+      s->insn_histo[mipsInsn::MADD]++;
       break;
     }
     case 0x1: /* maddu */ {
@@ -181,13 +180,14 @@ static void execSpecial2(uint32_t inst,state_t *s) {
       y += acc;
       s->lo = (uint32_t)(y & 0xffffffff);
       s->hi = (uint32_t)(y >> 32);
+      s->insn_histo[mipsInsn::MADDU]++;
       break;
     }
     case(0x2): /* mul */{
       int64_t y = ((int64_t)s->gpr[rs]) * ((int64_t)s->gpr[rt]);
       //printf("multiply: %x x %x -> %x\n", s->gpr[rs], s->gpr[rt], y);
       s->gpr[rd] = (int32_t)y;
-
+      s->insn_histo[mipsInsn::MUL]++;
       break;
     }
     case(0x4): /* msub */ {
@@ -198,11 +198,12 @@ static void execSpecial2(uint32_t inst,state_t *s) {
       y = acc - y;
       s->lo = (int32_t)(y & 0xffffffff);
       s->hi = (int32_t)(y >> 32);
+      s->insn_histo[mipsInsn::MSUB]++;
       break;
     }
-
     case(0x20): /* clz */
       s->gpr[rd] = (s->gpr[rs]==0) ? 32 : __builtin_clz(s->gpr[rs]);
+      s->insn_histo[mipsInsn::CLZ]++;
       break;
     default:
       printf("unhandled special2 instruction @ 0x%08x\n", s->pc); 
@@ -223,9 +224,11 @@ static void execSpecial3(uint32_t inst,state_t *s) {
       {
       case 0x10: /* seb */
 	s->gpr[rd] = (int32_t)((int8_t)s->gpr[rt]);
+	s->insn_histo[mipsInsn::SEB]++;
 	break;
       case 0x18: /* seh */
 	s->gpr[rd] = (int32_t)((int16_t)s->gpr[rt]);
+	s->insn_histo[mipsInsn::SEH]++;
 	break;
       default:
 	printf("unhandled special3 instruction @ 0x%08x, opcode = %x\n", s->pc, funct); 
@@ -237,6 +240,7 @@ static void execSpecial3(uint32_t inst,state_t *s) {
     uint32_t pos = (inst >> 6) & 31;
     uint32_t size = ((inst >> 11) & 31) + 1;
     s->gpr[rt] = (s->gpr[rs] >> pos) & ((1<<size)-1);
+    s->insn_histo[mipsInsn::EXT]++;
   }
   else if(funct == 0x4) {/* ins */
     uint32_t size = rd-op+1;
@@ -245,12 +249,14 @@ static void execSpecial3(uint32_t inst,state_t *s) {
     uint32_t v = (s->gpr[rs] & mask) << op;
     uint32_t c = (s->gpr[rt] & cmask) | v;
     s->gpr[rt] = c;
+    s->insn_histo[mipsInsn::INS]++;    
   }
   else if(funct == 0x3b) { /* rdhwr */
     switch(rd)
       {
       case 29:
 	s->gpr[rt] = s->cpr0[29];
+	s->insn_histo[mipsInsn::RDHWR]++;
 	break;
       default:
 	abort();
@@ -295,7 +301,7 @@ template <bool EL, typename T>
 void lxc1(uint32_t inst, state_t *s) {
   mips_t mi(inst);
   uint32_t ea = s->gpr[mi.lc1x.base] + s->gpr[mi.lc1x.index];
-  *reinterpret_cast<T*>(s->cpr1 + mi.lc1x.fd) = bswap<EL>(*reinterpret_cast<T*>(s->mem + ea));
+  *reinterpret_cast<T*>(s->cpr1 + mi.lc1x.fd) = bswap<EL>(s->mem.get<T>(ea));
   s->pc += 4;
 }
 
@@ -350,53 +356,81 @@ void branch(uint32_t inst, state_t *s) {
   switch(bt)
     {
     case branch_type::beql:
+      takeBranch = (s->gpr[rt] == s->gpr[rs]);
+      s->insn_histo[mipsInsn::BEQL]++;
       isLikely = true;
+      break;
     case branch_type::beq:
       takeBranch = (s->gpr[rt] == s->gpr[rs]);
+      s->insn_histo[mipsInsn::BEQ]++;
       break;
     case branch_type::bnel:
       isLikely = true;
+      takeBranch = (s->gpr[rt] != s->gpr[rs]);
+      s->insn_histo[mipsInsn::BNEL]++;
+      break;
     case branch_type::bne:
       takeBranch = (s->gpr[rt] != s->gpr[rs]);
+      s->insn_histo[mipsInsn::BNE]++;
       break;
     case branch_type::blezl:
       isLikely = true;
+      takeBranch = (s->gpr[rs] <= 0);
+      s->insn_histo[mipsInsn::BLEZL]++;
+      break;
     case branch_type::blez:
       takeBranch = (s->gpr[rs] <= 0);
-      //std::cerr << "s->gpr[" << rs << "] = " << std::hex << s->gpr[rs] << std::dec
-      //<< " takeBranch = "
-      //<< takeBranch
-      //<< "\n";
+      s->insn_histo[mipsInsn::BLEZ]++;
       break;
     case branch_type::bgtzl:
       isLikely = true;
+      takeBranch = (s->gpr[rs] > 0);
+      s->insn_histo[mipsInsn::BGTZL]++;
+      break;
     case branch_type::bgtz:
       takeBranch = (s->gpr[rs] > 0);
+      s->insn_histo[mipsInsn::BGTZ]++;
       break;
     case branch_type::bgezl:
       isLikely = true;
+      takeBranch = (s->gpr[rs] >= 0);
+      s->insn_histo[mipsInsn::BGEZL]++;
+      break;      
     case branch_type::bgez:
       takeBranch = (s->gpr[rs] >= 0);
-      //std::cout << std::hex << s->pc << " bgez  take " << takeBranch << std::dec << "\n";
+      s->insn_histo[mipsInsn::BGEZ]++;
       break;
     case branch_type::bltzl:
       isLikely = true;
+      takeBranch = (s->gpr[rs] < 0);
+      s->insn_histo[mipsInsn::BLTZL]++;
+      break;
     case branch_type::bltz:
       takeBranch = (s->gpr[rs] < 0);
+      s->insn_histo[mipsInsn::BLTZ]++;
       break;
     case branch_type::bgezal:
       takeBranch = (s->gpr[rs] >= 0);
+      s->insn_histo[mipsInsn::BGEZAL]++;
       saveReturn = true;
       break;
     case branch_type::bc1tl:
       isLikely = true;
+      takeBranch = getConditionCode(s,((inst>>18)&7))==1;
+      s->insn_histo[mipsInsn::BC1TL]++;
+      break;
     case branch_type::bc1t:
       takeBranch = getConditionCode(s,((inst>>18)&7))==1;
+      s->insn_histo[mipsInsn::BC1T]++;
       break;
     case branch_type::bc1fl:
       isLikely = true;
+      takeBranch = getConditionCode(s,((inst>>18)&7))==0;
+      s->insn_histo[mipsInsn::BC1FL]++;
+      break;
     case branch_type::bc1f:
       takeBranch = getConditionCode(s,((inst>>18)&7))==0;
+      s->insn_histo[mipsInsn::BC1F]++;
       break;
     default:
       UNREACHABLE();
@@ -457,13 +491,14 @@ void _lw(uint32_t inst, state_t *s) {
   int16_t himm = (int16_t)(inst & ((1<<16) - 1));
   int32_t imm = (int32_t)himm;
   uint32_t ea = (uint32_t)s->gpr[rs] + imm;
-  s->gpr[rt] = bswap<EL>(*((int32_t*)(s->mem + ea)));
+  s->gpr[rt] = bswap<EL>(s->mem.get<int32_t>(ea));
   //#define TRACE_MEM
 #ifdef TRACE_MEM
   printf("_lw pc %x from ea %x = %x\n", s->pc, ea, s->gpr[rt]);
 #endif
   //#undef TRACE_MEM
   s->pc += 4;
+  s->insn_histo[mipsInsn::LW]++;
 }
 
 template <bool EL>
@@ -474,12 +509,14 @@ void _lh(uint32_t inst, state_t *s) {
   int32_t imm = (int32_t)himm;
   
   uint32_t ea = s->gpr[rs] + imm;
-  int16_t mem = bswap<EL>(*((int16_t*)(s->mem + ea)));
+  int16_t mem = bswap<EL>(s->mem.get<int16_t>(ea));
+  
   s->gpr[rt] = static_cast<int32_t>(mem);
 #ifdef TRACE_MEM
   printf("_lh from %x = %x\n", ea, s->gpr[rt]);
 #endif
   s->pc +=4;
+  s->insn_histo[mipsInsn::LH]++;  
 }
 
 
@@ -490,12 +527,12 @@ static void _lb(uint32_t inst, state_t *s){
   int32_t imm = (int32_t)himm;
   
   uint32_t ea = s->gpr[rs] + imm;
-  int8_t v = *reinterpret_cast<int8_t*>(s->mem + ea);
-  s->gpr[rt] = v;
+  s->gpr[rt] = static_cast<int32_t>(s->mem.get<int8_t>(ea));
 #ifdef TRACE_MEM
   printf("_lb from %x = %x\n", ea, s->gpr[rt]);
 #endif  
   s->pc += 4;
+  s->insn_histo[mipsInsn::LB]++;  
 }
 
 static void _lbu(uint32_t inst, state_t *s){
@@ -505,9 +542,10 @@ static void _lbu(uint32_t inst, state_t *s){
   int32_t imm = (int32_t)himm;
 
   uint32_t ea = s->gpr[rs] + imm;
-  uint32_t zExt = (uint32_t)s->mem.at(ea);
+  uint32_t zExt = s->mem.get<uint8_t>(ea);
   *((uint32_t*)&(s->gpr[rt])) = zExt;
   s->pc += 4;
+  s->insn_histo[mipsInsn::LBU]++;
 }
 
 
@@ -519,10 +557,11 @@ void _lhu(uint32_t inst, state_t *s) {
   int32_t imm = (int32_t)himm;
   
   uint32_t ea = s->gpr[rs] + imm;
-  uint32_t zExt = bswap<EL>(*((uint16_t*)(s->mem + ea)));
+  uint32_t zExt = bswap<EL>(s->mem.get<uint16_t>(ea));
   *((uint32_t*)&(s->gpr[rt])) = zExt;
   //printf("_lhu from %x = %x\n", ea, s->gpr[rt]);  
   s->pc += 4;
+  s->insn_histo[mipsInsn::LHU]++;  
 }
 
 
@@ -533,20 +572,22 @@ void _sw(uint32_t inst, state_t *s) {
   int16_t himm = (int16_t)(inst & ((1<<16) - 1));
   int32_t imm = (int32_t)himm;
   uint32_t ea = s->gpr[rs] + imm;
-  *((int32_t*)(s->mem + ea)) = bswap<EL>(s->gpr[rt]);
-  //#define TRACE_MEM
-#ifdef TRACE_MEM
-  printf("_sw to %x = %x\n", ea, s->gpr[rt]);
-#endif
-#undef TRACE_MEM
+  s->mem.set<int32_t>(ea,  bswap<EL>(s->gpr[rt]));
   s->pc += 4;
+  s->insn_histo[mipsInsn::SW]++;
 }
 
 template <bool EL>
 void _sc(uint32_t inst, state_t *s) {
   uint32_t rt = (inst >> 16) & 31;
-  _sw<EL>(inst, s);
+  uint32_t rs = (inst >> 21) & 31;
+  int16_t himm = (int16_t)(inst & ((1<<16) - 1));
+  int32_t imm = (int32_t)himm;
+  uint32_t ea = s->gpr[rs] + imm;
+  s->mem.set<int32_t>(ea,  bswap<EL>(s->gpr[rt]));
   s->gpr[rt] = 1;
+  s->pc += 4;
+  s->insn_histo[mipsInsn::SC]++;
 }
 
 
@@ -558,17 +599,9 @@ void _sh(uint32_t inst, state_t *s) {
   int32_t imm = (int32_t)himm;
     
   uint32_t ea = s->gpr[rs] + imm;
-  *((int16_t*)(s->mem + ea)) = bswap<EL>(((int16_t)s->gpr[rt]));
-
-  // ea &= (~3U);
-  // std::cout << "_sh " << std::hex << ea << " mem = "
-  // 	    << (*((int32_t*)(s->mem + (ea & (~3U)))))
-  // 	    << " reg value = "
-  // 	    << s->gpr[rt]
-  // 	    << std::dec
-  // 	    << "\n";
-  
+  s->mem.set<int16_t>(ea,  bswap<EL>(((int16_t)s->gpr[rt])));
   s->pc += 4;
+  s->insn_histo[mipsInsn::SH]++;  
 }
 
 static void _sb(uint32_t inst, state_t *s) {
@@ -578,18 +611,10 @@ static void _sb(uint32_t inst, state_t *s) {
   int32_t imm = (int32_t)himm;
     
   uint32_t ea = s->gpr[rs] + imm;
-  s->mem.at(ea) = (uint8_t)s->gpr[rt];
-
-  // std::cout << "_sb " << std::hex << ea << " mem = "
-  // 	    << (*((int32_t*)(s->mem + (ea & (~3U)))))
-  // 	    << " reg value = "
-  // 	    << s->gpr[rt]
-  // 	    << std::dec
-  // 	    << " sel = "
-  // 	    << (ea & 3)
-  // 	    << "\n";
+  s->mem.set<uint8_t>(ea, static_cast<uint8_t>(s->gpr[rt]));
   
   s->pc +=4;
+  s->insn_histo[mipsInsn::SB]++;
 }
 
 static void _mtc1(uint32_t inst, state_t *s) {
@@ -597,6 +622,7 @@ static void _mtc1(uint32_t inst, state_t *s) {
   uint32_t rt = (inst>>16) & 31;
   s->cpr1[rd] = s->gpr[rt];
   s->pc += 4;
+  s->insn_histo[mipsInsn::MTC1]++;  
 }
 
 static void _mfc1(uint32_t inst, state_t *s) {
@@ -604,6 +630,7 @@ static void _mfc1(uint32_t inst, state_t *s) {
   uint32_t rt = (inst>>16) & 31;
   s->gpr[rt] = s->cpr1[rd];
   s->pc +=4;
+  s->insn_histo[mipsInsn::MFC1]++;
 }
 
 
@@ -619,7 +646,7 @@ void _swl(uint32_t inst, state_t *s) {
   ea &= 0xfffffffc;
   if(EL)
     ma = 3 - ma;
-  uint32_t r = bswap<EL>(*reinterpret_cast<uint32_t*>(s->mem + ea));   
+  uint32_t r = bswap<EL>(s->mem.get<uint32_t>(ea));   
   uint32_t xx=0,x = s->gpr[rt];
   
   uint32_t xs = x >> (8*ma);
@@ -631,8 +658,9 @@ void _swl(uint32_t inst, state_t *s) {
   // 	    << ", R = " << r
   // 	    << ", XX = " << xx << std::dec << "\n";
 
-  *reinterpret_cast<uint32_t*>(s->mem + ea) = bswap<EL>(xx);  
+  s->mem.set<uint32_t>(ea, bswap<EL>(xx));
   s->pc += 4;
+  s->insn_histo[mipsInsn::SWL]++;  
 }
 
 template <bool EL>
@@ -647,26 +675,16 @@ void _swr(uint32_t inst, state_t *s) {
   if(EL)
     ma = 3 - ma;
   ea &= ~(3U);
-  uint32_t r = bswap<EL>(*reinterpret_cast<uint32_t*>(s->mem + ea)); 
+  uint32_t r = bswap<EL>(s->mem.get<uint32_t>(ea));   
   uint32_t xx=0,x = s->gpr[rt];
   
   uint32_t xs = 8*(3-ma);
   uint32_t rm = (1U << xs) - 1;
 
   xx = (x << xs) | (rm & r);
-  
-  // if(s->pc == 0x29388 && ea == 0x4cadc) {
-  //   std::cout << "SIM SWR EA "
-  // 	      << std::hex << ea
-  // 	      << ", MA = " << ma
-  // 	      << ", REG VAL = " << x
-  //     	      << ", MEM MASK = " << rm 
-  // 	      << ", OLD MEM = " << r
-  // 	      << ", NEW MEM = " << xx
-  // 	      << std::dec << "\n";
-  // }
-  *reinterpret_cast<uint32_t*>(s->mem + ea) = bswap<EL>(xx);
+  s->mem.set<uint32_t>(ea, bswap<EL>(xx));
   s->pc += 4;
+  s->insn_histo[mipsInsn::SWR]++;
 }
 
 template <bool EL>
@@ -682,7 +700,7 @@ void _lwl(uint32_t inst, state_t *s) {
   ea &= 0xfffffffc;
   if(EL)
     ma = 3 - ma;
-  uint32_t r = bswap<EL>(*reinterpret_cast<uint32_t*>(s->mem + ea));   
+  uint32_t r = bswap<EL>(s->mem.get<uint32_t>(ea));
   int32_t x =  s->gpr[rt];
   
   switch(ma)
@@ -704,6 +722,7 @@ void _lwl(uint32_t inst, state_t *s) {
   printf("_lwl from %x = %x\n", u_ea, s->gpr[rt]);
 #endif  
   s->pc += 4;
+  s->insn_histo[mipsInsn::LWL]++;  
 }
 
 template<bool EL>
@@ -719,7 +738,8 @@ void _lwr(uint32_t inst, state_t *s) {
   ea &= 0xfffffffc;
   if(EL)
     ma = 3-ma;
-  uint32_t r = bswap<EL>(*((int32_t*)(s->mem + ea))); 
+
+  uint32_t r = bswap<EL>(s->mem.get<uint32_t>(ea));
   uint32_t x =  s->gpr[rt];
 
   switch(ma)
@@ -743,11 +763,12 @@ void _lwr(uint32_t inst, state_t *s) {
 #endif  
   
   s->pc += 4;
+  s->insn_histo[mipsInsn::LWR]++;
 }
 
 static inline char* get_open_string(sparse_mem &mem, uint32_t offset) {
   size_t len = 0;
-  char *ptr = (char*)(mem + offset);
+  char *ptr = reinterpret_cast<char*>(mem.get_raw_ptr(offset));
   char *buf = nullptr;
   while(*ptr != '\0') {
     ptr++;
@@ -755,7 +776,7 @@ static inline char* get_open_string(sparse_mem &mem, uint32_t offset) {
   }
   buf = new char[len+1];
   memset(buf, 0, len+1);
-  ptr = (char*)(mem + offset);
+  ptr = reinterpret_cast<char*>(mem.get_raw_ptr(offset));
   for(size_t i = 0; i < len; i++) {
     buf[i] = *ptr;
     ptr++;
@@ -779,7 +800,7 @@ void _monitorBody(uint32_t inst, state_t *s) {
   switch(reason)
     {
     case 6: /* int open(char *path, int flags) */
-      path = (char*)(s->mem + (uint32_t)s->gpr[R_a0]);
+      path = reinterpret_cast<char*>(s->mem.get_raw_ptr(s->gpr[R_a0]));
       flags = remapIOFlags(s->gpr[R_a1]);
       fd = open(path, flags, S_IRUSR|S_IWUSR);
       s->gpr[R_v0] = fd;
@@ -820,40 +841,10 @@ void _monitorBody(uint32_t inst, state_t *s) {
       else
 	s->gpr[R_v0] = 0;
       break;
-    case 13:
-      /* fstat */
-      fd = s->gpr[R_a0];
-      s->gpr[R_v0] = fstat(fd, &native_stat);
-      host_stat = (stat32_t*)(s->mem + (uint32_t)s->gpr[R_a1]); 
-
-      host_stat->st_dev = bswap<EL>((uint32_t)native_stat.st_dev);
-      host_stat->st_ino = bswap<EL>((uint16_t)native_stat.st_ino);
-      host_stat->st_mode = bswap<EL>((uint32_t)native_stat.st_mode);
-      host_stat->st_nlink = bswap<EL>((uint16_t)native_stat.st_nlink);
-      host_stat->st_uid = bswap<EL>((uint16_t)native_stat.st_uid);
-      host_stat->st_gid = bswap<EL>((uint16_t)native_stat.st_gid);
-      host_stat->st_size = bswap<EL>((uint32_t)native_stat.st_size);
-      host_stat->_st_atime = bswap<EL>((uint32_t)native_stat.st_atime);
-      host_stat->_st_mtime = 0;
-      host_stat->_st_ctime = 0;
-      host_stat->st_blksize = bswap<EL>((uint32_t)native_stat.st_blksize);
-      host_stat->st_blocks = bswap<EL>((uint32_t)native_stat.st_blocks);
-      break;
     case 33: {
       uint32_t uptr = *(uint32_t*)(s->gpr + R_a0);
-      if(globals::enClockFuncts) {
-	gettimeofday(&tp, nullptr);
-	tp32.tv_sec = bswap<EL>((uint32_t)tp.tv_sec);
-	tp32.tv_usec = bswap<EL>((uint32_t)tp.tv_usec);
-      }
-      else {
-	uint64_t mips = globals::icountMIPS*1000000;
-	tp.tv_sec = s->icnt / mips;
-	tp.tv_usec = ((s->icnt % mips) * 1000000)/ mips;
-      }
-      tp32.tv_sec = 0; //bswap<EL>((uint32_t)tp.tv_sec);
-      tp32.tv_usec = 0; //bswap<EL>((uint32_t)tp.tv_usec);      
-      *((timeval32_t*)(s->mem + uptr)) = tp32;
+      s->mem.set<uint32_t>(uptr, 0);
+      s->mem.set<uint32_t>(uptr+4, 0);
       s->gpr[R_v0] = 0;
       break;
     }
@@ -893,8 +884,7 @@ void _monitorBody(uint32_t inst, state_t *s) {
       break;
     case 38:
       /* int chdir(const char *path); */
-      path = (char*)(s->mem + (uint32_t)s->gpr[R_a0]);
-      //printf("chdir(%s)\n", path);
+      path = reinterpret_cast<char*>(s->mem.get_raw_ptr(s->gpr[R_a0]));
       s->gpr[R_v0] = chdir(path);
       break;
     case 50:
@@ -908,11 +898,13 @@ void _monitorBody(uint32_t inst, state_t *s) {
       /*      [A0 + 8] = data cache size */
       /* 256 MBytes of DRAM */
       //printf("monitor writing to words %x, %x, and %x\n", s->gpr[R_a0], s->gpr[R_a0] + 4, s->gpr[R_a0] + 8);
-      *((uint32_t*)(s->mem + (uint32_t)s->gpr[R_a0] + 0)) = bswap<EL>(K1SIZE);
+      s->mem.set<uint32_t>(static_cast<uint32_t>(s->gpr[R_a0] + 0),
+			   bswap<EL>(K1SIZE));
       /* No Icache */
-      *((uint32_t*)(s->mem + (uint32_t)s->gpr[R_a0] + 4)) = 0;
+      s->mem.set<uint32_t>(static_cast<uint32_t>(s->gpr[R_a0] + 4), 0);
       /* No Dcache */
-      *((uint32_t*)(s->mem + (uint32_t)s->gpr[R_a0] + 8)) = 0;
+      s->mem.set<uint32_t>(static_cast<uint32_t>(s->gpr[R_a0] + 8), 0);
+      
       s->gpr[R_v0] = 0;
       break;
     default:
@@ -921,6 +913,7 @@ void _monitorBody(uint32_t inst, state_t *s) {
       break;
     }
   s->pc = s->gpr[31];
+  s->insn_histo[mipsInsn::MONITOR]++;
 }
 
 
@@ -932,8 +925,9 @@ void _ldc1(uint32_t inst, state_t *s) {
   int16_t himm = (int16_t)(inst & ((1<<16) - 1));
   int32_t imm = (int32_t)himm;
   uint32_t ea = s->gpr[rs] + imm;
-  *((int64_t*)(s->cpr1 + ft)) = bswap<EL>(*((int64_t*)(s->mem + ea))); 
+  *reinterpret_cast<int64_t*>(s->cpr1 + ft) = bswap<EL>(s->mem.get<int64_t>(ea));
   s->pc += 4;
+  s->insn_histo[mipsInsn::LDC1]++;
 }
 
 template <bool EL>
@@ -943,8 +937,9 @@ void _sdc1(uint32_t inst, state_t *s) {
   int16_t himm = (int16_t)(inst & ((1<<16) - 1));
   int32_t imm = (int32_t)himm;
   uint32_t ea = s->gpr[rs] + imm;
-  *((int64_t*)(s->mem + ea)) = bswap<EL>((*(int64_t*)(s->cpr1 + ft)));
+  s->mem.set<int64_t>(ea,  bswap<EL>((*(int64_t*)(s->cpr1 + ft))));
   s->pc += 4;
+  s->insn_histo[mipsInsn::SDC1]++;  
 }
 
 template <bool EL>
@@ -954,9 +949,10 @@ void _lwc1(uint32_t inst, state_t *s) {
   int16_t himm = (int16_t)(inst & ((1<<16) - 1));
   int32_t imm = (int32_t)himm;
   uint32_t ea = s->gpr[rs] + imm;
-  uint32_t v = bswap<EL>(*((uint32_t*)(s->mem + ea))); 
+  uint32_t v = bswap<EL>(s->mem.get<uint32_t>(ea)); 
   *((float*)(s->cpr1 + ft)) = *((float*)&v);
   s->pc += 4;
+  s->insn_histo[mipsInsn::LWC1]++;
 }
 
 template <bool EL>
@@ -967,8 +963,9 @@ void _swc1(uint32_t inst, state_t *s) {
   int32_t imm = (int32_t)himm;
   uint32_t ea = s->gpr[rs] + imm;
   uint32_t v = *((uint32_t*)(s->cpr1+ft));
-  *((uint32_t*)(s->mem + ea)) = bswap<EL>(v);
+  s->mem.set<uint32_t>(ea, bswap<EL>(v));
   s->pc += 4;
+  s->insn_histo[mipsInsn::SWC1]++;
 }
 
 static void _truncl(uint32_t inst, state_t *s) {
@@ -993,10 +990,12 @@ static void _truncw(uint32_t inst, state_t *s) {
       f = (*((float*)(s->cpr1 + fs)));
       //printf("f=%g\n", f);
       *ptr = (int32_t)f;
+      s->insn_histo[mipsInsn::TRUNC_SP_W]++;
       break;
     case FMT_D:
       d = (*((double*)(s->cpr1 + fs)));
       *ptr = (int32_t)d;
+      s->insn_histo[mipsInsn::TRUNC_DP_W]++;      
       //printf("id=%d\n", *ptr);
       break;
     default:
@@ -1059,17 +1058,14 @@ static void _movcd(uint32_t inst, state_t *s) {
       s->cpr1[fd+0] = s->cpr1[fs+0];
       s->cpr1[fd+1] = s->cpr1[fs+1];
     }
+    s->insn_histo[mipsInsn::FP_MOVF];    
   }
   else {
-    // std::cout << std::hex << s->pc << std::dec << " fp cond mov with " << fd << " and " << fs
-    // 	      << " select is " << getConditionCode(s,cc)
-    // 	      << " old fd = " << *reinterpret_cast<double*>(s->cpr1+fd)
-    //   	      << " old fs = " << *reinterpret_cast<double*>(s->cpr1+fs)
-    // 	      << "\n";
     if(getConditionCode(s,cc)==1) {
       s->cpr1[fd+0] = s->cpr1[fs+0];
       s->cpr1[fd+1] = s->cpr1[fs+1];
     }
+    s->insn_histo[mipsInsn::FP_MOVT];    
   }
   s->pc += 4;
 }
@@ -1081,9 +1077,11 @@ static void _movcs(uint32_t inst, state_t *s) {
   uint32_t tf = (inst>>16) & 1;
   if(tf==0) {
     s->cpr1[fd+0] = getConditionCode(s, cc) ? s->cpr1[fd+0] : s->cpr1[fs+0];
+    s->insn_histo[mipsInsn::FP_MOVF];
   }
   else {
     s->cpr1[fd+0] = getConditionCode(s, cc) ? s->cpr1[fs+0] : s->cpr1[fd+0];
+    s->insn_histo[mipsInsn::FP_MOVT];
   }
   s->pc += 4;
 }
@@ -1097,10 +1095,12 @@ static void _movci(uint32_t inst, state_t *s) {
   if(tf==0) {
     /* movf */
     s->gpr[rd] = getConditionCode(s, cc) ? s->gpr[rd] : s->gpr[rs];
+    s->insn_histo[mipsInsn::MOVF]++;
   }
   else {
     /* movt */
     s->gpr[rd] = getConditionCode(s, cc) ? s->gpr[rs] : s->gpr[rd];
+    s->insn_histo[mipsInsn::MOVT]++;    
   }
   s->pc += 4;
 }
@@ -1229,16 +1229,17 @@ static void fpCmp(uint32_t inst, state_t *s) {
       break;
     case COND_EQ:
       v = (Tfs == Tft);
+      s->insn_histo[select_fp_insn<T>(mipsInsn::DP_CMP_EQ, mipsInsn::SP_CMP_EQ)]++;            
       s->fcr1[CP1_CR25] = setBit(s->fcr1[CP1_CR25],v,cc);
       break;
     case COND_LT:
       v = (Tfs < Tft);
-      //std::cout << std::hex << s->pc << " : " << Tfs << " LT " << Tft << " = " << v << "\n";
+      s->insn_histo[select_fp_insn<T>(mipsInsn::DP_CMP_LT, mipsInsn::SP_CMP_LT)]++;      
       s->fcr1[CP1_CR25] = setBit(s->fcr1[CP1_CR25],v,cc);
       break;
     case COND_LE:
       v = (Tfs <= Tft);
-      //std::cout << std::hex << s->pc << " : " << Tfs << " LE " << Tft << " = " << v << "\n";
+      s->insn_histo[select_fp_insn<T>(mipsInsn::DP_CMP_LE, mipsInsn::SP_CMP_LE)]++;            
       s->fcr1[CP1_CR25] = setBit(s->fcr1[CP1_CR25],v,cc);
       break;
     default:
@@ -1292,21 +1293,27 @@ static void execFP(uint32_t inst, state_t *s) {
     {
     case fpOperation::abs:
       _fd = std::abs(_fs);
+      s->insn_histo[select_fp_insn<T>(mipsInsn::DP_ABS, mipsInsn::SP_ABS)]++;      
       break;
     case fpOperation::neg:
       _fd = -_fs;
+      s->insn_histo[select_fp_insn<T>(mipsInsn::DP_NEG, mipsInsn::SP_NEG)]++;
       break;
     case fpOperation::mov:
       _fd = _fs;
+      s->insn_histo[select_fp_insn<T>(mipsInsn::DP_MOV, mipsInsn::SP_MOV)]++;            
       break;
     case fpOperation::add:
       _fd = _fs + _ft;
+      s->insn_histo[select_fp_insn<T>(mipsInsn::DP_ADD, mipsInsn::SP_ADD)]++;            
       break;
     case fpOperation::sub:
       _fd = _fs - _ft;
+      s->insn_histo[select_fp_insn<T>(mipsInsn::DP_SUB, mipsInsn::SP_SUB)]++;                  
       break;
     case fpOperation::mul:
       _fd = _fs * _ft;
+      s->insn_histo[select_fp_insn<T>(mipsInsn::DP_MUL, mipsInsn::SP_MUL)]++;      
       break;
     case fpOperation::div:
       if(_ft==0.0) {
@@ -1315,15 +1322,19 @@ static void execFP(uint32_t inst, state_t *s) {
       else {
 	_fd = _fs / _ft;
       }
+      s->insn_histo[select_fp_insn<T>(mipsInsn::DP_DIV, mipsInsn::SP_DIV)]++;       
       break;
     case fpOperation::sqrt:
       _fd = std::sqrt(_fs);
+      s->insn_histo[select_fp_insn<T>(mipsInsn::DP_SQRT, mipsInsn::SP_SQRT)]++;      
       break;
     case fpOperation::rsqrt:
       _fd = static_cast<T>(1.0) / std::sqrt(_fs);
+      s->insn_histo[select_fp_insn<T>(mipsInsn::DP_RSQRT, mipsInsn::SP_RSQRT)]++;
       break;
     case fpOperation::recip:
       _fd = static_cast<T>(1.0) / _fs;
+      s->insn_histo[select_fp_insn<T>(mipsInsn::DP_RECIP, mipsInsn::SP_RECIP)]++;
       break;
     default:
       UNREACHABLE();
@@ -1469,7 +1480,7 @@ static void execCoproc1(uint32_t inst, state_t *s) {
 template <bool EL>
 bool is_store_insn(state_t *s) {
   sparse_mem &mem = s->mem;
-  uint32_t inst = bswap<EL>(mem.get32(s->pc));
+  uint32_t inst = bswap<EL>(mem.get<uint32_t>(s->pc));
   uint32_t opcode = inst>>26;
   switch(opcode)
     {
@@ -1497,7 +1508,7 @@ bool is_store_insn(state_t *s) {
 template <bool EL>
 void execMips(state_t *s) {
   sparse_mem &mem = s->mem;
-  uint32_t inst = bswap<EL>(mem.get32(s->pc));
+  uint32_t inst = bswap<EL>(mem.get<uint32_t>(s->pc));
   if(globals::trace_retirement and false) {
     std::cout << std::hex
 	      << "cosim "
@@ -1531,6 +1542,12 @@ void execMips(state_t *s) {
       case 0x00: /*sll*/
 	s->gpr[rd] = s->gpr[rt] << sa;
 	s->pc += 4;
+	if(inst == 0) {
+	  s->insn_histo[mipsInsn::NOP]++;
+	}
+	else {
+	  s->insn_histo[mipsInsn::SLL]++;
+	}
 	break;
       case 0x01: /* movci */
 	_movci(inst,s);
@@ -1538,14 +1555,17 @@ void execMips(state_t *s) {
       case 0x02: /* srl */
 	s->gpr[rd] = ((uint32_t)s->gpr[rt] >> sa);
 	s->pc += 4;
+	s->insn_histo[mipsInsn::SRL]++;
 	break;
       case 0x03: /* sra */
 	s->gpr[rd] = s->gpr[rt] >> sa;
 	s->pc += 4;
-	break;
+	s->insn_histo[mipsInsn::SRA]++;
+	break;	
       case 0x04: /* sllv */
 	s->gpr[rd] = s->gpr[rt] << (s->gpr[rs] & 0x1f);
 	s->pc += 4;
+	s->insn_histo[mipsInsn::SLLV]++;
 	break;
       case 0x05:
 #ifdef LINUX_SYSCALL_EMULATION
@@ -1557,16 +1577,19 @@ void execMips(state_t *s) {
       case 0x06:  
 	s->gpr[rd] = ((uint32_t)s->gpr[rt]) >> (s->gpr[rs] & 0x1f);
 	s->pc += 4;
+	s->insn_histo[mipsInsn::SRLV]++;
 	break;
       case 0x07:  
 	s->gpr[rd] = s->gpr[rt] >> (s->gpr[rs] & 0x1f);
 	s->pc += 4;
+	s->insn_histo[mipsInsn::SRAV]++;
 	break;
       case 0x08: { /* jr */
 	uint32_t jaddr = s->gpr[rs];
 	s->pc += 4;
 	execMips<EL>(s);
 	s->pc = jaddr;
+	s->insn_histo[mipsInsn::JR]++;	
 	break;
       }
       case 0x09: { /* jalr */
@@ -1575,6 +1598,7 @@ void execMips(state_t *s) {
 	s->pc += 4;
 	execMips<EL>(s);
 	s->pc = jaddr;
+	s->insn_histo[mipsInsn::JALR]++;	
 	break;
       }
       case 0x0C: /* syscall */
@@ -1585,25 +1609,31 @@ void execMips(state_t *s) {
 #endif
       case 0x0D: /* break */
 	s->brk = 1;
+	s->insn_histo[mipsInsn::BREAK]++;
 	break;
       case 0x0f: /* sync */
 	s->pc += 4;
+	s->insn_histo[mipsInsn::SYNC]++;
 	break;
       case 0x10: /* mfhi */
 	s->gpr[rd] = s->hi;
 	s->pc += 4;
+	s->insn_histo[mipsInsn::MFHI]++;
 	break;
       case 0x11: /* mthi */ 
 	s->hi = s->gpr[rs];
 	s->pc += 4;
+	s->insn_histo[mipsInsn::MTHI]++;
 	break;
       case 0x12: /* mflo */
 	s->gpr[rd] = s->lo;
 	s->pc += 4;
+	s->insn_histo[mipsInsn::MFLO]++;	
 	break;
       case 0x13: /* mtlo */
 	s->lo = s->gpr[rs];
 	s->pc += 4;
+	s->insn_histo[mipsInsn::MTLO]++;		
 	break;
       case 0x18: { /* mult */
 	int64_t y;
@@ -1611,6 +1641,7 @@ void execMips(state_t *s) {
 	s->lo = (int32_t)(y & 0xffffffff);
 	s->hi = (int32_t)(y >> 32);
 	s->pc += 4;
+	s->insn_histo[mipsInsn::MULT]++;			
 	break;
       }
       case 0x19: { /* multu */
@@ -1621,6 +1652,7 @@ void execMips(state_t *s) {
 	*((uint32_t*)&(s->lo)) = (uint32_t)y;
 	*((uint32_t*)&(s->hi)) = (uint32_t)(y>>32);
 	s->pc += 4;
+	s->insn_histo[mipsInsn::MULTU]++;				
 	break;
       }
       case 0x1A: /* div */
@@ -1629,6 +1661,7 @@ void execMips(state_t *s) {
 	  s->hi = s->gpr[rs] % s->gpr[rt];
 	}
 	s->pc += 4;
+	s->insn_histo[mipsInsn::DIV]++;
 	break;
       case 0x1B: /* divu */
 	if(s->gpr[rt] != 0) {
@@ -1636,16 +1669,19 @@ void execMips(state_t *s) {
 	  s->hi = (uint32_t)s->gpr[rs] % (uint32_t)s->gpr[rt];
 	}
 	s->pc += 4;
+	s->insn_histo[mipsInsn::DIVU]++;
 	break;
       case 0x20: /* add */
 	s->gpr[rd] = s->gpr[rs] + s->gpr[rt];
 	s->pc += 4;
+	s->insn_histo[mipsInsn::ADD]++;
 	break;
       case 0x21: { /* addu */
 	uint32_t u_rs = (uint32_t)s->gpr[rs];
 	uint32_t u_rt = (uint32_t)s->gpr[rt];
 	s->gpr[rd] = u_rs + u_rt;
 	s->pc += 4;
+	s->insn_histo[mipsInsn::ADDU]++;
 	break;
       }
       case 0x22: /* sub */
@@ -1658,44 +1694,53 @@ void execMips(state_t *s) {
 	uint32_t y = u_rs - u_rt;
 	s->gpr[rd] = y;
 	s->pc += 4;
+	s->insn_histo[mipsInsn::SUBU]++;
 	break;
       }
       case 0x24: /* and */
 	s->gpr[rd] = s->gpr[rs] & s->gpr[rt];
 	s->pc += 4;
+	s->insn_histo[mipsInsn::AND]++;
 	break;
       case 0x25: /* or */
 	if(rd != 0) {
 	  s->gpr[rd] = s->gpr[rs] | s->gpr[rt];
 	}
 	s->pc += 4;
+	s->insn_histo[mipsInsn::OR]++;
 	break;
       case 0x26: /* xor */
 	s->gpr[rd] = s->gpr[rs] ^ s->gpr[rt];
 	s->pc += 4;
+	s->insn_histo[mipsInsn::XOR]++;	
 	break;
       case 0x27: /* nor */
 	s->gpr[rd] = ~(s->gpr[rs] | s->gpr[rt]);
 	s->pc += 4;
+	s->insn_histo[mipsInsn::NOR]++;
 	break;
       case 0x2A: /* slt */
 	s->gpr[rd] = s->gpr[rs] < s->gpr[rt];
 	s->pc += 4;
+	s->insn_histo[mipsInsn::SLT]++;	
 	break;
       case 0x2B: { /* sltu */
 	uint32_t urs = (uint32_t)s->gpr[rs];
 	uint32_t urt = (uint32_t)s->gpr[rt];
 	s->gpr[rd] = (urs < urt);
 	s->pc += 4;
+	s->insn_histo[mipsInsn::SLTU]++;	
 	break;
       }
       case 0x0B: /* movn */
 	s->gpr[rd] = (s->gpr[rt] != 0) ? s->gpr[rs] : s->gpr[rd];
 	s->pc +=4;
+	s->insn_histo[mipsInsn::MOVN]++;
 	break;
       case 0x0A: /* movz */
 	s->gpr[rd] = (s->gpr[rt] == 0) ? s->gpr[rs] : s->gpr[rd];
 	s->pc += 4;
+	s->insn_histo[mipsInsn::MOVZ]++;	
 	break;
       case 0x34: /* teq */
 	if(s->gpr[rs] == s->gpr[rt]) {
@@ -1703,6 +1748,7 @@ void execMips(state_t *s) {
 	  exit(-1);
 	}
 	s->pc += 4;
+	s->insn_histo[mipsInsn::TEQ]++;
 	break;
       default:
 	printf("%sunknown RType instruction %x, funct = %d%s\n", 
@@ -1720,10 +1766,12 @@ void execMips(state_t *s) {
     jaddr <<= 2;
     if(opcode==0x2) { /* j */
       s->pc += 4;
+      s->insn_histo[mipsInsn::J]++;
     }
     else if(opcode==0x3) { /* jal */
       s->gpr[31] = s->pc+8;
       s->pc += 4;
+      s->insn_histo[mipsInsn::JAL]++;
     }
     else {
       printf("Unknown JType instruction\n");
@@ -1733,18 +1781,61 @@ void execMips(state_t *s) {
     execMips<EL>(s);
     s->pc = jaddr;
   }
-  else if(isCoproc0) {  
-    switch(rs) 
-      {
-      case 0x0: /*mfc0*/
-	s->gpr[rt] = s->cpr0[rd];
-	break;
-      case 0x4: /*mtc0*/
-	s->cpr0[rd] = s->gpr[rt];
-	break;
-      default:
-	printf("unknown %s instruction @ %x", __func__, s->pc); exit(-1);
-	break;
+  else if(isCoproc0) {
+    if( ((inst >> 25)&1) ) {
+      switch(inst & 63)
+	{
+	case 24: //ERETU
+	  exit(-1);
+	case 32: //WAIT
+	  if((s->cpr0[CPR0_SR] & 1) == 0) {
+	    printf("attempting to wait with interrupts disabled @ VA %x, PA %x\n",
+		   s->pc, VA2PA(s->pc));
+	    exit(-1);
+	  }
+	  s->insn_histo[mipsInsn::WAIT]++;
+	  break;
+	default:
+	  exit(-1);
+	}
+    }
+    else if( (((inst >> 21) & 31) == 11 ) &&
+	     ((inst & 65535) == 0x6000) ) {
+      //DI
+      if(rt != 0) {
+	s->gpr[rt] = s->cpr0[CPR0_SR];
+      }
+      s->cpr0[CPR0_SR] &= (~1U);
+      s->insn_histo[mipsInsn::DI]++;
+    }
+    else if( (((inst >> 21) & 31) == 11 ) &&
+	     ((inst & 65535) == 0x6020) ) {
+      //EI
+      if(rt != 0) {
+	s->gpr[rt] = s->cpr0[CPR0_SR];
+      }
+      s->cpr0[CPR0_SR] |= 1U;
+      s->insn_histo[mipsInsn::EI]++;
+    }
+
+    else {
+      switch(rs) 
+	{
+	case 0x0: /*mfc0*/
+	  s->gpr[rt] = s->cpr0[rd];
+	  s->insn_histo[mipsInsn::MFC0]++;
+	  break;
+	case 0x4: /*mtc0*/
+	  s->cpr0[rd] = s->gpr[rt];
+	  //std::cout << "writing cpr0[" << rd << "] = " << std::hex << s->gpr[rt] << std::dec << "\n";
+	  s->insn_histo[mipsInsn::MTC0]++;
+	  break;
+	default:
+	  std::cerr << "unhandled cpr0 instruction @ "
+		    << std::hex << s->pc << std::dec << "\n";
+	  exit(-1);
+	  break;
+	}
       }
     s->pc += 4;
   }
@@ -1770,7 +1861,7 @@ void execMips(state_t *s) {
 	_bgez_bltz<EL>(inst, s); 
 	break;
       case 0x04:
-	branch<EL,branch_type::beq>(inst, s); 
+	branch<EL,branch_type::beq>(inst, s);
 	break;
       case 0x05:
 	branch<EL,branch_type::bne>(inst, s); 
@@ -1784,36 +1875,44 @@ void execMips(state_t *s) {
       case 0x08: /* addi */
 	s->gpr[rt] = s->gpr[rs] + simm32;  
 	s->pc+=4;
+	s->insn_histo[mipsInsn::ADDI]++;
 	break;
       case 0x09: /* addiu */
 	tmp = s->gpr[rs] + simm32;
 	s->gpr[rt] = tmp;
 	s->pc+=4;
+	s->insn_histo[mipsInsn::ADDIU]++;
 	break;
       case 0x0A: /* slti */
 	s->gpr[rt] = (s->gpr[rs] < simm32);
 	s->pc += 4;
+	s->insn_histo[mipsInsn::SLTI]++;
 	break;
       case 0x0B:/* sltiu */
 	s->gpr[rt] = ((uint32_t)s->gpr[rs] < (uint32_t)simm32);
 	s->pc += 4;
+	s->insn_histo[mipsInsn::SLTIU]++;
 	break;
       case 0x0c: /* andi */
 	s->gpr[rt] = s->gpr[rs] & uimm32;
 	s->pc += 4;
+	s->insn_histo[mipsInsn::ANDI]++;
 	break;
       case 0x0d: /* ori */
 	s->gpr[rt] = s->gpr[rs] | uimm32;
 	s->pc += 4;
+	s->insn_histo[mipsInsn::ORI]++;
 	break;
       case 0x0e: /* xori */
 	s->gpr[rt] = s->gpr[rs] ^ uimm32;
 	s->pc += 4;
+	s->insn_histo[mipsInsn::XORI]++;
 	break;
       case 0x0F: /* lui */
 	uimm32 <<= 16;
 	s->gpr[rt] = uimm32;
 	s->pc += 4;
+	s->insn_histo[mipsInsn::LUI]++;
 	break;
       case 0x14:
 	branch<EL,branch_type::beql>(inst, s); 

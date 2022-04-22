@@ -307,7 +307,7 @@ static inline T round_to_alignment(T x, T m) {
 }
 
 static inline uint32_t get_insn(uint32_t pc, const state_t *s) {
-  return bswap<false>(*reinterpret_cast<uint32_t*>(s->mem + pc));
+  return bswap<IS_LITTLE_ENDIAN>(s->mem.get<uint32_t>(pc));
 }
 
 
@@ -322,8 +322,8 @@ static inline void dump_histo(const std::string &fname,
   std::ofstream out(fname);
   std::sort(sorted_by_cnt.begin(), sorted_by_cnt.end());
   for(auto it = sorted_by_cnt.rbegin(), E = sorted_by_cnt.rend(); it != E; ++it) {
-    uint32_t r_inst = *reinterpret_cast<uint32_t*>(s->mem[it->second]);
-    r_inst = bswap<false>(r_inst);	
+    uint32_t r_inst = s->mem.get<uint32_t>(it->second);
+    r_inst = bswap<IS_LITTLE_ENDIAN>(r_inst);	
     auto s = getAsmString(r_inst, it->second);
     out << std::hex << it->second << ":"
   	      << s << ","

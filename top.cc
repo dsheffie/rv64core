@@ -3,10 +3,11 @@
 #define BRANCH_DEBUG 1
 #define CACHE_STATS 1
 
+
 char **globals::sysArgv = nullptr;
 int globals::sysArgc = 0;
 bool globals::enClockFuncts = false;
-bool globals::isMipsEL = false;
+bool globals::isMipsEL = IS_LITTLE_ENDIAN;
 uint64_t globals::icountMIPS = 0;
 uint64_t globals::cycle = 0;
 bool globals::trace_retirement = false;
@@ -33,7 +34,7 @@ static uint64_t n_alloc[3] = {0};
 static uint64_t n_rdy[3] = {0};
 
 static uint64_t n_int_exec[2] = {0};
-static uint64_t n_mem_exec[2] = {0};
+static uint64_t n_mem_exec[3] = {0};
 static uint64_t n_fp_exec[2] = {0};
 
 static uint64_t q_full[3] = {0};
@@ -88,16 +89,22 @@ void report_exec(int int_valid, int int_ready,
 		 int fp_valid,  int fp_ready,
 		 int intq_full, int memq_full,
 		 int fpq_full,
+		 int blocked_by_store,
 		 int ready_int) {
   n_int_exec[0] += int_valid;
   n_int_exec[1] += int_ready;
   n_mem_exec[0] += mem_valid;
   n_mem_exec[1] += mem_ready;
+  n_mem_exec[2] += blocked_by_store;
+  
   n_fp_exec[0] += fp_valid;
   n_fp_exec[1] += fp_ready;
+
+  
   q_full[0] += intq_full;
   q_full[1] += memq_full;
   q_full[2] += fpq_full;
+  
   int_sched_rdy_map[__builtin_popcount(ready_int)]++;
 }
 
@@ -409,6 +416,7 @@ int main(int argc, char **argv) {
     tb->monitor_rsp_data_valid = 0;
     tb->monitor_rsp_data = 0;    
     tb->reset = 1;
+    tb->extern_irq = 0;
     tb->clk = 1;
     tb->eval();
     tb->clk = 0;
@@ -456,9 +464,9 @@ int main(int argc, char **argv) {
     y.uu.rt = 1;
     y.uu.rs = 1;
     y.uu.imm = r & 0xffff;
-    *reinterpret_cast<uint32_t*>(s->mem[pos]) = bswap<false>(z.u);
-    *reinterpret_cast<uint32_t*>(s->mem[pos+4]) = bswap<false>(y.u);
-    *reinterpret_cast<uint32_t*>(s->mem[pos+8]) = bswap<false>(m.u);
+    s->mem.set<uint32_t>(pos, bswap<IS_LITTLE_ENDIAN>(z.u));
+    s->mem.set<uint32_t>(pos+4, bswap<IS_LITTLE_ENDIAN>(y.u));
+    s->mem.set<uint32_t>(pos+8, bswap<IS_LITTLE_ENDIAN>(m.u));
     pos += 12;    
   }
 
@@ -467,7 +475,7 @@ int main(int argc, char **argv) {
     for(int i = 0; i < 8; i++) {
       if(s->fcr1[CP1_CR25] & (1<<i)) {
 	ceqs z(1, 1, i);
-	*reinterpret_cast<uint32_t*>(s->mem[pos]) = bswap<false>(0x46000032U);
+	s->mem.set<uint32_t>(pos, bswap<IS_LITTLE_ENDIAN>(0x46000032U));
 	pos += 4;	
       }
     }
@@ -490,9 +498,10 @@ int main(int argc, char **argv) {
     y.uu.rt = 1;
     y.uu.rs = 1;
     y.uu.imm = r & 0xffff;
-    *reinterpret_cast<uint32_t*>(s->mem[pos]) = bswap<false>(z.u);
-    *reinterpret_cast<uint32_t*>(s->mem[pos+4]) = bswap<false>(y.u);
-    *reinterpret_cast<uint32_t*>(s->mem[pos+8]) = bswap<false>(m.u);
+    s->mem.set<uint32_t>(pos, bswap<IS_LITTLE_ENDIAN>(z.u));
+    s->mem.set<uint32_t>(pos+4, bswap<IS_LITTLE_ENDIAN>(y.u));
+    s->mem.set<uint32_t>(pos+8, bswap<IS_LITTLE_ENDIAN>(m.u));
+    
     // std::cout << "i0 : " << std::hex << pos << " " << std::dec
     // 	      << getAsmString(z.u, pos+0) << "\n";
     // std::cout << "i1 : " << std::hex << pos+4 << " " << std::dec
@@ -515,12 +524,9 @@ int main(int argc, char **argv) {
     y.uu.rt = 1;
     y.uu.rs = 1;
     y.uu.imm = r & 0xffff;
-    *reinterpret_cast<uint32_t*>(s->mem[pos]) = bswap<false>(z.u);
-    *reinterpret_cast<uint32_t*>(s->mem[pos+4]) = bswap<false>(y.u);
-    *reinterpret_cast<uint32_t*>(s->mem[pos+8]) = bswap<false>(m.u);
-    //std::cout << getAsmString(z.u, pos+0) << "\n";
-    //std::cout << getAsmString(y.u, pos+4) << "\n";
-    //std::cout << getAsmString(m.u, pos+8) << "\n";
+    s->mem.set<uint32_t>(pos, bswap<IS_LITTLE_ENDIAN>(z.u));
+    s->mem.set<uint32_t>(pos+4, bswap<IS_LITTLE_ENDIAN>(y.u));
+    s->mem.set<uint32_t>(pos+8, bswap<IS_LITTLE_ENDIAN>(m.u));
     pos += 12;    
   }
  
@@ -538,19 +544,19 @@ int main(int argc, char **argv) {
     y.uu.rt = i;
     y.uu.rs = i;
     y.uu.imm = r & 0xffff;
-    *reinterpret_cast<uint32_t*>(s->mem[pos]) = bswap<false>(z.u);
-    *reinterpret_cast<uint32_t*>(s->mem[pos+4]) = bswap<false>(y.u);
+    s->mem.set<uint32_t>(pos, bswap<IS_LITTLE_ENDIAN>(z.u));
+    s->mem.set<uint32_t>(pos+4, bswap<IS_LITTLE_ENDIAN>(y.u));
     pos += 8;
   }
   rtype b;
   b.u = 0;
   b.uu.subop = 13;
-  *reinterpret_cast<uint32_t*>(s->mem[pos]) = bswap<false>(b.u);
+  s->mem.set<uint32_t>(pos, bswap<IS_LITTLE_ENDIAN>(b.u));
   pos += 4;
 
   //write out a bunch of nops
   for(int i = 0; i < 128; i++) {
-    *reinterpret_cast<uint32_t*>(s->mem[pos]) = 0;
+    s->mem.set<uint32_t>(pos, 0);
     pos += 4;
   }
   //std::cout << "init last instruction at " << std::hex << pos << std::dec << "\n";
@@ -565,7 +571,7 @@ int main(int argc, char **argv) {
     
     if(tb->mem_req_valid) {
       for(int i = 0; i < 4; i++) {
-	tb->mem_rsp_load_data[i] = *reinterpret_cast<uint32_t*>(s->mem[tb->mem_req_addr + 4*i]);
+	tb->mem_rsp_load_data[i] = s->mem.get<uint32_t>(tb->mem_req_addr + 4*i);
       }
       tb->mem_rsp_valid = 1;
     }
@@ -599,7 +605,7 @@ int main(int argc, char **argv) {
     tb->mem_rsp_valid = 0;
     if(tb->mem_req_valid) {
       for(int i = 0; i < 4; i++) {
-	tb->mem_rsp_load_data[i] = *reinterpret_cast<uint32_t*>(s->mem[tb->mem_req_addr + 4*i]);
+	tb->mem_rsp_load_data[i] = s->mem.get<uint32_t>(tb->mem_req_addr + 4*i);
       }
       tb->mem_rsp_valid = 1;
     }
@@ -664,17 +670,17 @@ int main(int argc, char **argv) {
     if(tb->monitor_req_valid) {
       bool handled = false;
       
-      //std::cerr << "got monitor reason "
-      //<< static_cast<int>(tb->monitor_req_reason)
-      //<< " with "
-      //<< touched_lines.count()
-      //<< " touched cachelines in the machine\n";
-
+      // std::cerr << "got monitor reason "
+      // 		<< static_cast<int>(tb->monitor_req_reason)
+      // 		<< " with "
+      // 		<< touched_lines.count()
+      // 		<< " touched cachelines in the machine\n";
+      
       
       switch(tb->monitor_req_reason)
 	{
 	case 6: {
-	  char *path = (char*)(s->mem + (uint32_t)s->gpr[R_a0]);
+	  char *path = reinterpret_cast<char*>(s->mem.get_raw_ptr(s->gpr[R_a0]));
 	  int32_t flags = remapIOFlags(s->gpr[R_a1]);
 	  tb->monitor_rsp_data = open(path, flags, S_IRUSR|S_IWUSR);	  
 	  tb->monitor_rsp_data_valid = 1;
@@ -687,7 +693,7 @@ int main(int argc, char **argv) {
 	case 7: {
 	  int32_t fd = s->gpr[R_a0];
 	  int32_t nr = s->gpr[R_a2];
-	  tb->monitor_rsp_data = read(fd, (char*)(s->mem + (uint32_t)s->gpr[R_a1]), nr);
+	  tb->monitor_rsp_data = read(fd, reinterpret_cast<char*>(s->mem.get_raw_ptr(s->gpr[R_a1])), nr);
 #ifdef PRINT_SYSCALL	  
 	  std::cout << insns_retired << " read " << fd << ","
 		    << std::hex << s->gpr[R_a1] << std::dec
@@ -705,7 +711,7 @@ int main(int argc, char **argv) {
 	  int32_t fd = s->gpr[R_a0];
 	  int32_t nr = s->gpr[R_a2];
 	  
-	  tb->monitor_rsp_data = write(fd, (void*)(s->mem + (uint32_t)s->gpr[R_a1]), nr);
+	  tb->monitor_rsp_data = write(fd, reinterpret_cast<void*>(s->mem.get_raw_ptr(s->gpr[R_a1])), nr);
 #ifdef PRINT_SYSCALL
 	  std::cout << insns_retired << " write " << fd << ","
 		    << std::hex << s->gpr[R_a1] << std::dec << "," << nr << "\n";
@@ -740,8 +746,8 @@ int main(int argc, char **argv) {
 	case 33: {
 	  handled = true;	  
 	  uint32_t uptr = *(uint32_t*)(s->gpr + R_a0);
-	  timeval32_t tp32;	  
-	  *((timeval32_t*)(s->mem + uptr)) = tp32;
+	  s->mem.set<uint32_t>(uptr, 0);
+	  s->mem.set<uint32_t>(uptr+4, 0);
 	  tb->monitor_rsp_data_valid = 1;
 	  tb->monitor_rsp_data = 0;
 	  break;
@@ -749,10 +755,9 @@ int main(int argc, char **argv) {
 	case 34: {
 	  handled = true;	  
 	  uint32_t uptr = *(uint32_t*)(s->gpr + R_a0);
-	  *((uint32_t*)(s->mem + uptr + 0)) = 0;
-	  *((uint32_t*)(s->mem + uptr + 1)) = 0;
-	  *((uint32_t*)(s->mem + uptr + 2)) = 0;
-	  *((uint32_t*)(s->mem + uptr + 3)) = 0;
+	  for(int i = 0; i < 4; i++) {
+	    s->mem.set<uint32_t>(uptr+i,0);
+	  }
 	  tb->monitor_rsp_data_valid = 1;
 	  tb->monitor_rsp_data = 0;
 	  break;
@@ -762,8 +767,8 @@ int main(int argc, char **argv) {
 	  handled = true;
 	  for(int i = 0; i < std::min(MARGS, globals::sysArgc); i++) {
 	    uint32_t arrayAddr = ((uint32_t)s->gpr[R_a0])+4*i;
-	    uint32_t ptr = bswap<false>(*((uint32_t*)(s->mem + arrayAddr)));
-	    strcpy((char*)(s->mem + ptr), globals::sysArgv[i]);
+	    uint32_t ptr = bswap<IS_LITTLE_ENDIAN>(s->mem.get<uint32_t>(arrayAddr));
+	    strcpy(reinterpret_cast<char*>(s->mem.get_raw_ptr(ptr)), globals::sysArgv[i]);
 	  }
 	  tb->monitor_rsp_data_valid = 1;
 	  tb->monitor_rsp_data = globals::sysArgc;
@@ -786,14 +791,33 @@ int main(int argc, char **argv) {
 	  tb->monitor_rsp_data = insns_retired;
 	  tb->monitor_rsp_data_valid = 1;
 	  break;	  
-	case 55:
+	case 55: {
 	  handled = true;
-	  *((uint32_t*)(s->mem + (uint32_t)s->gpr[R_a0] + 0)) = bswap<false>(K1SIZE);
+	  //std::cerr << "R_a0 = " << std::hex << s->gpr[R_a0] << std::dec << "\n";
+	  s->mem.set<uint32_t>(static_cast<uint32_t>(s->gpr[R_a0] + 0),
+			       bswap<IS_LITTLE_ENDIAN>(K1SIZE));
 	  /* No Icache */
-	  *((uint32_t*)(s->mem + (uint32_t)s->gpr[R_a0] + 4)) = 0;
+	  s->mem.set<uint32_t>(static_cast<uint32_t>(s->gpr[R_a0] + 4), 0);
 	  /* No Dcache */
-	  *((uint32_t*)(s->mem + (uint32_t)s->gpr[R_a0] + 8)) = 0;
+	  s->mem.set<uint32_t>(static_cast<uint32_t>(s->gpr[R_a0] + 8), 0);
+	  
+	  
+	  //std::cerr << "u = " << std::hex << s->mem.get<uint32_t>(s->gpr[R_a0]) << std::dec << "\n"; 	  
+	  //*((uint32_t*)(s->mem + (uint32_t)s->gpr[R_a0] + 0)) = bswap<IS_LITTLE_ENDIAN>(K1SIZE);
+
+	  //std::cerr << "u = " << std::hex << *((uint32_t*)(s->mem + (uint32_t)s->gpr[R_a0] + 0))
+	  //<< std::dec << "\n";
+	  
+	  //auto uu = *((uint32_t*)(s->mem + (uint32_t)s->gpr[R_a0] + 0));
+	  //assert(uu == u);
+	  /* No Icache */
+	  //*((uint32_t*)(s->mem + (uint32_t)s->gpr[R_a0] + 4)) = 0;
+	  /* No Dcache */
+	  //*((uint32_t*)(s->mem + (uint32_t)s->gpr[R_a0] + 8)) = 0;
+	  
+	  s->gpr[R_v0] = 0;
 	  break;
+	}
 	default:
 	  break;
 	}
@@ -864,6 +888,16 @@ int main(int argc, char **argv) {
     if(tb->in_flush_mode) {
       ++n_flush_cycles;
     }
+
+    //if(tb->extern_irq) {
+    //tb->extern_irq = 0;
+    //}
+    
+    //if((globals::cycle & ((1UL<<8)-1)) == 0) {
+    //std::cout << "firing irq at cycle " << globals::cycle << "\n";
+    //tb->extern_irq = 1;
+    //}
+    
     
     if(tb->retire_valid) {
       ++insns_retired;
@@ -878,10 +912,12 @@ int main(int argc, char **argv) {
 
       if(insns_retired >= start_trace_at)
 	globals::trace_retirement = true;
+
+
       
       if(((insns_retired % heartbeat) == 0) or globals::trace_retirement ) {
-	uint32_t r_inst = *reinterpret_cast<uint32_t*>(s->mem[tb->retire_pc]);
-	r_inst = bswap<false>(r_inst);	
+	uint32_t r_inst = s->mem.get<uint32_t>(tb->retire_pc);
+	r_inst = bswap<IS_LITTLE_ENDIAN>(r_inst);	
 	std::cout << "retiring "
 		  << std::hex
 		  << tb->retire_pc
@@ -911,8 +947,8 @@ int main(int argc, char **argv) {
       if(tb->retire_two_valid) {
 	++insns_retired;
 	if(((insns_retired % heartbeat) == 0) or globals::trace_retirement ) {
-	  uint32_t r_inst = *reinterpret_cast<uint32_t*>(s->mem[tb->retire_two_pc]);
-	  r_inst = bswap<false>(r_inst);	
+	  uint32_t r_inst = s->mem.get<uint32_t>(tb->retire_two_pc);
+	  r_inst = bswap<IS_LITTLE_ENDIAN>(r_inst);	
 	  std::cout << "retiring 2nd "
 		    << std::hex
 		    << tb->retire_two_pc
@@ -970,8 +1006,8 @@ int main(int argc, char **argv) {
 			  << "\n";
 		//globals::trace_retirement |= (wrong_bits != 0);
 		diverged = true;//(wrong_bits > 16);
-		uint32_t r_inst = *reinterpret_cast<uint32_t*>(s->mem[ss->pc]);
-		r_inst = bswap<false>(r_inst);
+		uint32_t r_inst = s->mem.get<uint32_t>(ss->pc);
+		r_inst = bswap<IS_LITTLE_ENDIAN>(r_inst);
 		std::cout << "incorrect "
 			  << std::hex
 			  << ss->pc 
@@ -995,8 +1031,8 @@ int main(int argc, char **argv) {
 	  
 	  if(diverged) {
 	    incorrect = true;
-	    uint32_t r_inst = *reinterpret_cast<uint32_t*>(s->mem[tb->retire_pc]);
-	    r_inst = bswap<false>(r_inst);
+	    uint32_t r_inst = s->mem.get<uint32_t>(tb->retire_pc);
+	    r_inst = bswap<IS_LITTLE_ENDIAN>(r_inst);
 	    std::cout << "incorrect "
 		      << std::hex
 		      << tb->retire_pc
@@ -1035,7 +1071,7 @@ int main(int argc, char **argv) {
 	else {
 	  ++last_check;
 	  if(last_check > 2) {
-	    uint32_t linsn = bswap<false>(*reinterpret_cast<uint32_t*>(s->mem[last_match_pc]));
+	    uint32_t linsn = bswap<IS_LITTLE_ENDIAN>(s->mem.get<uint32_t>(last_match_pc));
 	    std::cerr << "no match in a while, last match : "
 		      << std::hex
 		      << last_match_pc
@@ -1153,7 +1189,7 @@ int main(int argc, char **argv) {
       if(tb->mem_req_opcode == 4) {/*load word */
 	for(int i = 0; i < 4; i++) {
 	  uint64_t ea = (tb->mem_req_addr + 4*i) & ((1UL<<32)-1);
-	  tb->mem_rsp_load_data[i] = *reinterpret_cast<uint32_t*>(s->mem[ea]);
+	  tb->mem_rsp_load_data[i] = s->mem.get<uint32_t>(ea);
 	}
 	last_load_addr = tb->mem_req_addr;
 	assert((tb->mem_req_addr & 0xf) == 0);
@@ -1163,7 +1199,7 @@ int main(int argc, char **argv) {
       else if(tb->mem_req_opcode == 7) { /* store word */
 	for(int i = 0; i < 4; i++) {
 	  uint64_t ea = (tb->mem_req_addr + 4*i) & ((1UL<<32)-1);
-	  *reinterpret_cast<uint32_t*>(s->mem[ea]) = tb->mem_req_store_data[i];
+	  s->mem.set<uint32_t>(ea, tb->mem_req_store_data[i]);
 	}
 	last_store_addr = tb->mem_req_addr;
 	++n_stores;
@@ -1194,6 +1230,10 @@ int main(int argc, char **argv) {
   }
   tb->final();
   t0 = timestamp() - t0;
+
+  if(incorrect) {
+    s->mem.compare(ss->mem);
+  }
   
   if(!incorrect) {
     std::ofstream out(log_name);
@@ -1268,6 +1308,7 @@ int main(int argc, char **argv) {
     out << n_int_exec[1] << " cycles where int exec queue dispatches\n";
     out << n_mem_exec[0] << " cycles where mem exec queue is not empty\n";
     out << n_mem_exec[1] << " cycles where mem exec queue dispatches\n";
+    out << n_mem_exec[2] << " cycles where mem exec queue is blocked by a store\n";
     out << n_fp_exec[0] << " cycles where fp exec queue is not empty\n";
     out << n_fp_exec[1] << " cycles where fp exec queue dispatches\n";
 
@@ -1381,6 +1422,15 @@ int main(int argc, char **argv) {
     std::cout << "total_retire = " << total_retire << "\n";
     std::cout << "total_cycle  = " << total_cycle << "\n";
     std::cout << "total ipc    = " << static_cast<double>(total_retire) / total_cycle << "\n";
+
+    uint64_t total_histo = 0;
+    for(auto &p : ss->insn_histo) {
+      if(p.second) {
+	out << p.first << "," << p.second << "\n";
+	total_histo += p.second;
+      }
+    }
+    out << "total_histo = " << total_histo << "\n";
     out.close();
   }
   else {

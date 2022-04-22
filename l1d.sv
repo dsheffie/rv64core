@@ -1003,11 +1003,11 @@ endfunction
 	       case(r_req2.addr[1])
 		 1'b0:
 		   begin
-		      t_rsp_data2 = {{48{t_w32_2[7]}}, bswap16(t_w32_2[15:0])};
+		      t_rsp_data2 = {{48{sext16(t_w32_2[15:0])}}, bswap16(t_w32_2[15:0])};
 		   end
 		 1'b1:
 		   begin
-		      t_rsp_data2 = {{48{t_w32_2[23]}}, bswap16(t_w32_2[31:16])};	     
+		      t_rsp_data2 = {{48{sext16(t_w32_2[31:16])}}, bswap16(t_w32_2[31:16])};	     
 		   end
 	       endcase 
 	       t_rsp_dst_valid2 = r_req2.dst_valid & t_hit_cache2;
@@ -1158,11 +1158,11 @@ endfunction
 	       case(r_req.addr[1])
 		 1'b0:
 		   begin
-		      t_rsp_data = {{48{t_w32[7]}}, bswap16(t_w32[15:0])};
+		      t_rsp_data = {{48{sext16(t_w32[15:0])}}, bswap16(t_w32[15:0])};
 		   end
 		 1'b1:
 		   begin
-		      t_rsp_data = {{48{t_w32[23]}}, bswap16(t_w32[31:16])};	     
+		      t_rsp_data = {{48{sext16(t_w32[31:16])}}, bswap16(t_w32[31:16])};	     
 		   end
 	       endcase // case (r_req.addr[1])
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;

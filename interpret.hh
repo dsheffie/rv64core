@@ -9,6 +9,9 @@
 #include <unordered_map>
 
 #include "sparse_mem.hh"
+#include "mips_insns.hh"
+
+#define IS_LITTLE_ENDIAN false
 
 /* from gdb simulator */
 #define RSVD_INSTRUCTION           (0x00000005)
@@ -246,9 +249,9 @@ public:
   sparse_mem &mem;
   image_info32 linux_image;
   fp_reg_state cpr1_state[32] = {fp_reg_state::unknown};
+  std::unordered_map<mipsInsn,uint64_t> insn_histo;
   state_t(sparse_mem &mem) : mem(mem) {
     memset(&linux_image, 0, sizeof(linux_image));
-    
   }
   ~state_t();
 };
@@ -440,5 +443,9 @@ struct new_utsname;
 int sys_uname(struct new_utsname *buf);
 
 bool is_store_insn(state_t *s);
+
+#define CPR0_SR 12
+
+#define VA2PA(x) ((x & 0x1fffffff))
 
 #endif

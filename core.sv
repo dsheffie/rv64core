@@ -32,6 +32,7 @@ import "DPI-C" function int check_insn_bytes(input longint pc, input int data);
 
 module core(clk, 
 	    reset,
+	    extern_irq,
 	    head_of_rob_ptr_valid,
 	    head_of_rob_ptr,
 	    resume,
@@ -100,6 +101,7 @@ module core(clk,
 	    inflight);
    input logic clk;
    input logic reset;
+   input logic extern_irq;
    output logic head_of_rob_ptr_valid;
    output logic [`LG_ROB_ENTRIES-1:0] head_of_rob_ptr;
    input logic resume;
@@ -313,6 +315,8 @@ module core(clk,
    logic 		     n_l1d_flush_complete, r_l1d_flush_complete;
    
    logic 		     t_in_32fp_reg_mode;
+   logic [(`M_WIDTH-1):0]    t_cpr0_status_reg;
+   
    logic [(`M_WIDTH-1):0]    r_arch_a0;
 
    logic [4:0] 		     n_cause, r_cause;
@@ -384,7 +388,6 @@ module core(clk,
 			     RAT,
 			     DELAY_SLOT,
 			     ALLOC_FOR_SERIALIZE,
-			     WAIT_FOR_SERIALIZE,
 			     MONITOR_FLUSH_CACHE,
 			     HANDLE_MONITOR,
 			     ALLOC_FOR_MONITOR,
@@ -394,7 +397,9 @@ module core(clk,
 			     WAIT_FOR_SERIALIZE_AND_RESTART,
 			     WRITE_EPC,
 			     WRITE_CAUSE,
-			     WRITE_BADVADDR
+			     WRITE_BADVADDR,
+			     EXCEPTION_DRAIN,
+			     ARCH_WAIT
 			     } state_t;
    
    state_t r_state, n_state;
@@ -713,9 +718,30 @@ module core(clk,
 `endif
 
    logic t_restart_complete;
+   logic t_clr_extern_irq;
+   logic r_extern_irq;
+   always_ff@(posedge clk)
+     begin
+	if(reset)
+	  begin
+	     r_extern_irq <= 1'b0;
+	  end
+	else
+	  begin
+	     if(t_clr_extern_irq)
+	       begin
+		  r_extern_irq <= 1'b0;
+	       end 
+	     else if(extern_irq)
+	       begin
+		  r_extern_irq <= 1'b1;
+	       end
+	  end // else: !if(reset)
+     end // always_ff@ (posedge clk)
    
    always_comb
      begin
+	t_clr_extern_irq = 1'b0;
 	t_restart_complete = 1'b0;
 	
 	t_exception_wr_cpr0_val = 1'b0;
@@ -806,11 +832,22 @@ module core(clk,
 	unique case (r_state)
 	  ACTIVE:
 	    begin
-	       if(t_can_retire_rob_head)
+	       if(r_extern_irq && !t_rob_empty && !t_rob_head.in_delay_slot)
+		 begin
+		    //$display("got an external interrupt, stopping, t_rob_head.pc = %x at cycle %d", 
+		    //t_rob_head.pc, r_cycle);
+		    n_state = EXCEPTION_DRAIN;
+		    n_restart_pc = t_rob_head.pc;
+		    n_machine_clr = 1'b1;
+		    n_ds_done = 1'b1;
+		    t_clr_extern_irq = 1'b1;
+		    n_restart_valid = 1'b1;
+		 end	       
+	       else if(t_can_retire_rob_head)
 		 begin
 		    if(t_rob_head.faulted)
 		      begin
-//`define REPORT_FAULTS
+			 //`define REPORT_FAULTS
 `ifdef REPORT_FAULTS
 			  $display("cycle %d : got fault for %x, eret %b, break %d, ii %d, trap %d, tlb %b, rob head %d, rob tail %d",
 			  	   r_cycle, 
@@ -827,6 +864,22 @@ module core(clk,
 			 if(t_rob_head.is_eret)
 			   begin
 			      $stop();
+			   end
+			 else if(t_rob_head.is_wait)
+			   begin
+			      //interrupts are enabled
+			      if(t_cpr0_status_reg[0])
+				begin
+				   n_state = ARCH_WAIT;				   
+				end
+			      else
+				begin
+				   $display("wait without interrupts enabled, the end");
+				   n_got_break = 1'b1;
+				   n_flush_req = 1'b1;
+				   n_cause = 5'd9;
+				   n_state = WRITE_EPC;
+				end
 			   end
 			 else if(t_rob_head.is_break)
 			   begin
@@ -875,8 +928,8 @@ module core(clk,
 			   begin
 			      n_ds_done = !t_rob_head.has_delay_slot;
 			      n_state = DRAIN;
-			      n_restart_valid = 1'b1;
 			      n_restart_cycles = 'd1;
+			      n_restart_valid = 1'b1;
 			   end // else: !if(t_rob_head.is_ii)
 			 n_machine_clr = 1'b1;
 			 n_delayslot_rob_ptr = r_rob_next_head_ptr[`LG_ROB_ENTRIES-1:0];
@@ -888,10 +941,10 @@ module core(clk,
 			 n_has_nullifying_delay_slot = t_rob_head.has_nullifying_delay_slot;
 			 n_take_br = t_rob_head.take_br;
 			 t_bump_rob_head = 1'b1;
-		      end
-		    else
+		      end // if (t_rob_head.faulted)
+		    else if(!t_dq_empty)
 		      begin
-			 if(t_uop.serializing_op && !t_dq_empty)
+			 if(t_uop.serializing_op)
 			   begin
 			      if(/*r_inflight*/t_rob_empty)
 				begin
@@ -902,10 +955,12 @@ module core(clk,
 			   end
 			 else
 			   begin
+			      if(t_uop.serializing_op) $stop();
+			      
 			      t_possible_to_alloc = !t_rob_full
 						    && !t_uq_full
 						    && !t_dq_empty;
-			      
+
 			      t_alloc = !t_rob_full
 					&& !t_uq_full
 					&& !t_dq_empty					
@@ -917,6 +972,7 @@ module core(clk,
 					
 			      
 			      t_alloc_two = t_alloc
+					    && !t_uop2.serializing_op
 					    && !t_dq_next_empty 
 					    && !t_rob_next_full
 					    && !t_uq_next_full
@@ -927,7 +983,7 @@ module core(clk,
 					    ;
 			      //&& (t_uop2.op == NOP || t_uop2.op == J);
 			   end // else: !if(t_uop.serializing_op && !t_dq_empty)
-		      end // else: !if(t_rob_head.faulted)
+		      end // if (!t_dq_empty)
 		    t_retire = t_rob_head_complete;
 		    t_retire_two = !t_rob_next_empty
 		    		   && !t_rob_head.faulted
@@ -939,57 +995,57 @@ module core(clk,
 				   && !t_rob_next_head.is_call
 				   && !t_rob_next_head.valid_fcr_dst
 		    		   && !t_rob_next_head.valid_hilo_dst;
-		 end // if (t_rob_head.complete)
+		 end // if (t_can_retire_rob_head)
 	       else if(!t_dq_empty)
 		 begin
-		    if(t_uop.serializing_op)
+		    if(t_uop.serializing_op && t_rob_empty)
 		      begin
-			 if(/*r_inflight*/t_rob_empty)
+			 if(t_uop.op == MONITOR)
 			   begin
-			      if(t_uop.op == MONITOR)
-				begin
-				   n_monitor_reason = t_uop.imm;
-				   case(t_uop.imm)
-				     'd50: /* get cycle */
-				       begin
-					  n_state = HANDLE_MONITOR;
-				       end
-				     'd52: /* flush line in data cache */
-				       begin
-					  n_state = MONITOR_FLUSH_CACHE;
-					  n_l1i_flush_complete = 1'b1;
-					  n_flush_cl_addr = r_arch_a0;
-					  n_flush_cl_req = 1'b1;
-				       end
-				     'd53: /* get icnt */
-				       begin
-					  n_state = HANDLE_MONITOR;
-				       end
-				     default:
-				       begin
-					  n_flush_req = 1'b1;
-					  n_state = MONITOR_FLUSH_CACHE;
-				       end
-				   endcase // case (t_uop.imm)
-				end // if (t_uop.op == MONITOR)
-			      else if(t_uop.op == SYSCALL)
-				begin
-				   n_flush_req = 1'b1;
-				   n_state = MONITOR_FLUSH_CACHE;
-				end
-			      else
-				begin
-				   n_state =  ALLOC_FOR_SERIALIZE;
-				end
-			   end // if (...
-		      end
-		    else
+			      n_monitor_reason = t_uop.imm;
+			      case(t_uop.imm)
+				'd50: /* get cycle */
+				  begin
+				     n_state = HANDLE_MONITOR;
+				  end
+				'd52: /* flush line in data cache */
+				  begin
+				     n_state = MONITOR_FLUSH_CACHE;
+				     n_l1i_flush_complete = 1'b1;
+				     n_flush_cl_addr = r_arch_a0;
+				     n_flush_cl_req = 1'b1;
+				  end
+				'd53: /* get icnt */
+				  begin
+				     n_state = HANDLE_MONITOR;
+				  end
+				default:
+				  begin
+				     n_flush_req = 1'b1;
+				     n_state = MONITOR_FLUSH_CACHE;
+				  end
+			      endcase // case (t_uop.imm)
+			   end // if (t_uop.op == MONITOR)
+			 else if(t_uop.op == SYSCALL)
+			   begin
+			      n_flush_req = 1'b1;
+			      n_state = MONITOR_FLUSH_CACHE;
+			   end
+			 else
+			   begin
+			      n_state =  ALLOC_FOR_SERIALIZE;
+			   end
+		      end // if (t_uop.serializing_op)
+		    else if(!t_uop.serializing_op)
 		      begin
+			 if(t_uop.serializing_op) $stop();
+			 
 			 t_possible_to_alloc = !t_rob_full
 					       && !t_uq_full
 					       && !t_dq_empty;
 			 
 			 t_alloc = !t_rob_full
+				   && !t_uop.serializing_op
 				   && !t_uq_full
 				   && !t_dq_empty
 				   && t_enough_iprfs
@@ -998,6 +1054,7 @@ module core(clk,
 				   && t_enough_fcrprfs;
 
 			 t_alloc_two = t_alloc
+				       && !t_uop2.serializing_op
 				       && !t_dq_next_empty 
 				       && !t_rob_next_full
 				       && !t_uq_next_full
@@ -1038,13 +1095,20 @@ module core(clk,
 
 
 	    end // case: DRAIN
+	  EXCEPTION_DRAIN:
+	    begin
+	       if(r_rob_inflight == 'd0 && memq_empty && t_divide_ready)
+		 begin
+		    n_state = RAT;
+		 end
+	    end
 	  RAT:
 	    begin
 	       t_rat_copy = 1'b1;
 	       t_clr_rob = 1'b1;
 	       t_clr_dq = 1'b1;
 	       n_machine_clr = 1'b0;
-	       
+	       //$display("restarting after fault at cycle %d", r_cycle);
 	       //$display("$t4 rat pointer : spec %d, retire %d", 
 		//	r_alloc_rat['d12], r_retire_rat['d12]);
 	       
@@ -1060,16 +1124,9 @@ module core(clk,
 	    begin
 	       t_alloc = !t_rob_full && !t_uq_full 
 			 && (r_prf_free != 'd0) 
-			   && !t_dq_empty;			 
-	       n_state = t_uop.must_restart ? WAIT_FOR_SERIALIZE_AND_RESTART :
-			 WAIT_FOR_SERIALIZE;
-	    end
-	  WAIT_FOR_SERIALIZE:
-	    begin
-	       if(t_any_complete)
-		 begin
-		    n_state = ACTIVE;
-		 end
+			   && !t_dq_empty;
+	       //$display("allocating serializing instruction for pc %x", t_uop.pc);
+	       n_state = t_alloc ? WAIT_FOR_SERIALIZE_AND_RESTART : ALLOC_FOR_SERIALIZE;
 	    end
 	  WAIT_FOR_SERIALIZE_AND_RESTART:
 	    begin
@@ -1082,7 +1139,8 @@ module core(clk,
 		    n_restart_valid = 1'b1;
 		    if(n_got_restart_ack)
 		      begin
-			 //$display("RESTART PIPELINE AT %d", r_cycle);
+			 //$display("RESTART PIPELINE AT %d, pc %x", 
+			 //r_cycle, n_restart_pc);
 			 n_state = ACTIVE;
 		      end
 		 end
@@ -1125,6 +1183,7 @@ module core(clk,
 		    n_restart_valid = 1'b1;
 		    if(n_got_restart_ack)
 		      begin
+			 t_retire = 1'b1;
 			 //$display(">>>> monitor/syscall at %x complete at cycle %d, restart to %x",
 			 //t_rob_head.pc, r_cycle, n_restart_pc);			 
 			 n_state = ACTIVE;
@@ -1166,6 +1225,10 @@ module core(clk,
 		 begin
 		    n_state = ACTIVE;
 		 end
+	    end
+	  ARCH_WAIT:
+	    begin
+	       $stop();
 	    end
 	  WRITE_EPC:
 	    begin
@@ -1265,7 +1328,11 @@ module core(clk,
 	  end
      end // always_ff@ (posedge clk)
 
-
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if(t_alloc) $display("alloc1 %x at cycle %d of type %d, monitor=%b", t_uop.pc, r_cycle, t_uop.op, t_uop.op == MONITOR);
+   // 	if(t_alloc_two) $display("alloc2 %x at cycle %d of type %d, monitor=%b", t_uop2.pc, r_cycle, t_uop2.op, t_uop2.op == MONITOR);
+   //   end
    // 	if(n_state == ACTIVE && r_state == RAT)
    // 	  begin
    // 	     $display("RESTART COMPLETE at cycle %d", r_cycle);
@@ -1292,6 +1359,7 @@ module core(clk,
    // 	  end
 	
    //   end
+
    
    always_comb
      begin
@@ -1599,7 +1667,8 @@ module core(clk,
 	     t_rob_tail.is_ret = (t_alloc_uop.op == JR) && (t_uop.srcA == 'd31);
 	     t_rob_tail.is_syscall = (t_alloc_uop.op == SYSCALL);
 	     t_rob_tail.is_break  = (t_alloc_uop.op == BREAK);
-	     t_rob_tail.is_eret = 1'b0;
+	     t_rob_tail.is_eret = (t_alloc_uop.op == ERET);
+	     t_rob_tail.is_wait = (t_alloc_uop.op == WAIT);
 	     t_rob_tail.is_indirect = t_alloc_uop.op == JALR || t_alloc_uop.op == JR;
 `ifdef ENABLE_CYCLE_ACCOUNTING
 	     t_rob_tail.missed_l1d = 1'b0;
@@ -1674,7 +1743,8 @@ module core(clk,
 	     t_rob_next_tail.is_ret = (t_alloc_uop2.op == JR) && (t_uop.srcA == 'd31);
 	     t_rob_next_tail.is_syscall = (t_alloc_uop2.op == SYSCALL);
 	     t_rob_next_tail.is_break  = (t_alloc_uop2.op == BREAK);
-	     t_rob_next_tail.is_eret = 1'b0;
+	     t_rob_next_tail.is_wait = (t_alloc_uop2.op == WAIT);
+	     t_rob_next_tail.is_eret = (t_alloc_uop2.op == ERET);
 	     t_rob_next_tail.is_indirect = t_alloc_uop2.op == JALR || t_alloc_uop2.op == JR;
 	     
 `ifdef ENABLE_CYCLE_ACCOUNTING
@@ -1920,6 +1990,7 @@ module core(clk,
 
    //always_ff@(negedge clk)
    //begin
+   //if(t_alloc) $display("t_alloc_uop.pc = %x", t_alloc_uop.pc);
    //if((r_rob_next_head_ptr != t_next_rob_head_ptr))
    //begin
    //$display("reset = %d, r_rob_next_head_ptr = %d, t_next_rob_head_ptr = %d",
@@ -2281,6 +2352,7 @@ module core(clk,
 	   .restart_complete(t_restart_complete),
 	   .delayslot_rob_ptr(r_delayslot_rob_ptr),
 	   .in_32fp_reg_mode(t_in_32fp_reg_mode),
+	   .cpr0_status_reg(t_cpr0_status_reg),
 	   .mq_wait(mq_wait),
 	   .uq_wait(uq_wait),
 	   .fq_wait(fq_wait),

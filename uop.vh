@@ -162,6 +162,9 @@ typedef enum logic [7:0]
    MOV,
    MONITOR,
    NOP,
+   DI,
+   EI,
+   WAIT,
    II //illegal instruction
    } opcode_t;
 
@@ -196,6 +199,31 @@ function logic is_div(opcode_t op);
    endcase
    return x;
 endfunction // is_div
+
+function logic is_store(opcode_t op);
+   logic     x;
+   case(op)
+     SB:
+       x = 1'b1;
+     SH:
+       x = 1'b1;
+     SW:
+       x = 1'b1;
+     SDC1:
+       x = 1'b1;
+     SWC1_MERGE:
+       x = 1'b1;
+     SC:
+       x = 1'b1;
+     SWR:
+       x = 1'b1;
+     SWL:
+       x = 1'b1;
+     default:
+       x = 1'b0;
+   endcase // case (op)
+   return x;
+endfunction // is_store
 
 
 
