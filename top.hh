@@ -11,6 +11,7 @@
 #include <cfenv>
 
 #include <sys/time.h>
+#include <boost/serialization/library_version_type.hpp>
 #include <boost/program_options.hpp>
 #include <boost/dynamic_bitset.hpp>
 
