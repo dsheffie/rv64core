@@ -11,7 +11,12 @@
 #include <cfenv>
 
 #include <sys/time.h>
+#include <boost/version.hpp>
+
+#if BOOST_VERSION >= 107400
 #include <boost/serialization/library_version_type.hpp>
+#endif
+
 #include <boost/program_options.hpp>
 #include <boost/dynamic_bitset.hpp>
 
