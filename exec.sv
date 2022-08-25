@@ -707,8 +707,13 @@ module exec(clk,
    find_first_set#(LG_INT_SCHED_ENTRIES) ffs_int_sched_alloc( .in(~r_alu_sched_valid),
 							      .y(t_alu_sched_alloc_ptr));
 
-   find_first_set#(LG_INT_SCHED_ENTRIES) ffs_int_sched_select( .in(t_alu_entry_rdy),
-							       .y(t_alu_sched_select_ptr));
+   //find_first_set#(LG_INT_SCHED_ENTRIES) ffs_int_sched_select( .in(t_alu_entry_rdy),
+//							       .y(t_alu_sched_select_ptr//));
+
+   fair_sched#(LG_INT_SCHED_ENTRIES) ffs_int_sched_select( .clk(clk),
+							   .rst(reset),
+							   .in(t_alu_entry_rdy),
+							   .y(t_alu_sched_select_ptr));
 
    
    always_comb
@@ -747,32 +752,32 @@ module exec(clk,
 	  end
      end // always_comb
 
-   always_ff@(negedge clk)
-     begin
-	for(logic [2:0] i = 0; i < N_INT_SCHED_ENTRIES; i=i+1)
-	  begin
-	     logic [1:0] ii = i[1:0];
+   // always_ff@(negedge clk)
+   //   begin
+   // 	for(logic [2:0] i = 0; i < N_INT_SCHED_ENTRIES; i=i+1)
+   // 	  begin
+   // 	     logic [1:0] ii = i[1:0];
 	     
-	     if(r_alu_sched_uops[ii].pc == 'h2a3a4 && r_alu_sched_valid[ii])
-	       begin
-		  if(ii == t_alu_sched_select_ptr[LG_INT_SCHED_ENTRIES-1:0])
-		    begin
-		       $display("picked at cycle %d", r_cycle);
-		    end
-		  else
-		    begin
-		       $display("not picked at cycle %d, was ready %b :  srcA rdy %b, srcB rdy %b, this entry %d, sched %b, picked %d", 
-				r_cycle,
-				t_alu_entry_rdy[ii],
-				(t_alu_srcA_match[ii] |r_alu_srcA_rdy[ii]),
-				(t_alu_srcB_match[ii] |r_alu_srcB_rdy[ii]),
-				ii,
-				t_alu_entry_rdy,
-				t_alu_sched_select_ptr
-				);
-		    end
-	       end
-	  end
+   // 	     if(r_alu_sched_uops[ii].pc == 'h2a3a4 && r_alu_sched_valid[ii])
+   // 	       begin
+   // 		  if(ii == t_alu_sched_select_ptr[LG_INT_SCHED_ENTRIES-1:0])
+   // 		    begin
+   // 		       $display("picked at cycle %d", r_cycle);
+   // 		    end
+   // 		  else
+   // 		    begin
+   // 		       $display("not picked at cycle %d, was ready %b :  srcA rdy %b, srcB rdy %b, this entry %d, sched %b, picked %d", 
+   // 				r_cycle,
+   // 				t_alu_entry_rdy[ii],
+   // 				(t_alu_srcA_match[ii] |r_alu_srcA_rdy[ii]),
+   // 				(t_alu_srcB_match[ii] |r_alu_srcB_rdy[ii]),
+   // 				ii,
+   // 				t_alu_entry_rdy,
+   // 				t_alu_sched_select_ptr
+   // 				);
+   // 		    end
+   // 	       end
+   // 	  end
    	// if(r_start_int && int_uop.pc == 'h2a3a4)
    	//   begin
    	//      $display("scheduled uop at pc %x, op = %d, int %b, mem %b, fp %b", 
@@ -788,7 +793,7 @@ module exec(clk,
    	//begin
    	//$display("allocated uop at pc %x", uq.pc);
    	// end
-     end
+   //end
    
    always_comb
      begin
