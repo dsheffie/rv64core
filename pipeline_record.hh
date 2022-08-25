@@ -1,6 +1,11 @@
 #ifndef __pipeline_record_hh__
 #define __pipeline_record_hh__
 
+#if BOOST_VERSION >= 107400
+#include <boost/serialization/library_version_type.hpp>
+#endif
+
+
 #include <boost/serialization/serialization.hpp>
 #include <boost/serialization/list.hpp>
 #include <boost/archive/binary_oarchive.hpp>
