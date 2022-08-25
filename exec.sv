@@ -747,21 +747,48 @@ module exec(clk,
 	  end
      end // always_comb
 
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if(r_start_int)
-   // 	  begin
-   // 	     $display("scheduled uop at pc %x, op = %d, int %b, mem %b, fp %b", int_uop.pc, int_uop.op, int_uop.is_int, int_uop.is_mem, int_uop.is_fp);
-   // 	     if(int_uop.is_mem)
-   // 	       begin
-   // 		  $stop();
-   // 	       end
-   // 	  end
-   // 	if(t_pop_uq)
-   // 	  begin
-   // 	     $display("allocated uop at pc %x", uq.pc);
-   // 	  end
-   //   end
+   always_ff@(negedge clk)
+     begin
+	for(logic [2:0] i = 0; i < N_INT_SCHED_ENTRIES; i=i+1)
+	  begin
+	     logic [1:0] ii = i[1:0];
+	     
+	     if(r_alu_sched_uops[ii].pc == 'h2a3a4 && r_alu_sched_valid[ii])
+	       begin
+		  if(ii == t_alu_sched_select_ptr[LG_INT_SCHED_ENTRIES-1:0])
+		    begin
+		       $display("picked at cycle %d", r_cycle);
+		    end
+		  else
+		    begin
+		       $display("not picked at cycle %d, was ready %b :  srcA rdy %b, srcB rdy %b, this entry %d, sched %b, picked %d", 
+				r_cycle,
+				t_alu_entry_rdy[ii],
+				(t_alu_srcA_match[ii] |r_alu_srcA_rdy[ii]),
+				(t_alu_srcB_match[ii] |r_alu_srcB_rdy[ii]),
+				ii,
+				t_alu_entry_rdy,
+				t_alu_sched_select_ptr
+				);
+		    end
+	       end
+	  end
+   	// if(r_start_int && int_uop.pc == 'h2a3a4)
+   	//   begin
+   	//      $display("scheduled uop at pc %x, op = %d, int %b, mem %b, fp %b", 
+	// 	      int_uop.pc, int_uop.op, int_uop.is_int, 
+	// 	      int_uop.is_mem, int_uop.is_fp);
+	     
+   	//      if(int_uop.is_mem)
+   	//        begin
+   	// 	  $stop();
+   	//        end
+   	//   end
+   	//if(t_pop_uq)
+   	//begin
+   	//$display("allocated uop at pc %x", uq.pc);
+   	// end
+     end
    
    always_comb
      begin
@@ -1232,13 +1259,6 @@ module exec(clk,
      end
 `endif //  `ifdef VERILATOR
 
-   //always_ff@(negedge clk)
-   //begin
-   //if(int_uop.op == WAIT && r_start_int)
-   //begin
-   //$display("got wait for pc %x", int_uop.pc);
-   //end
-   //end
       
    always_comb
      begin

@@ -189,6 +189,8 @@ int check_insn_bytes(long long pc, int data) {
   return (*reinterpret_cast<uint32_t*>(&data)) == insn;
 }
 
+long long lrc = -1;
+
 void record_retirement(long long pc, long long fetch_cycle, long long alloc_cycle, long long complete_cycle, long long retire_cycle,
 		       int faulted , int is_mem, int is_fp, int missed_l1d) {
 
@@ -199,6 +201,12 @@ void record_retirement(long long pc, long long fetch_cycle, long long alloc_cycl
   uint32_t insn = get_insn(pc, s);
   uint64_t delta = retire_cycle - last_retire_cycle;
 
+  if(retire_cycle < lrc) {
+    std::cout << "retirement cycle out-of-order\n";
+    exit(-1);
+  }
+  lrc = retire_cycle;
+  
   if(is_mem) {
     //auto i = getAsmString(insn, pc);
     //std::cout << std::hex << pc << std::dec << " " << i << " : " << alloc_cycle << ","
@@ -234,7 +242,7 @@ void record_retirement(long long pc, long long fetch_cycle, long long alloc_cycl
   if(pl == nullptr) {
     return;
   }
-  pl->append(pc, fetch_cycle, alloc_cycle, complete_cycle, retire_cycle, faulted);
+  pl->append(getAsmString(get_insn(pc, s), pc), pc, fetch_cycle, alloc_cycle, complete_cycle, retire_cycle, faulted);
 }
 
 

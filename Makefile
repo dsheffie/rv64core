@@ -64,7 +64,12 @@ obj_dir/Vcore_l1d_l1i__ALL.a : $(SV_SRC)
 	$(VERILATOR) -cc core_l1d_l1i.sv
 	$(MAKE) OPT_FAST="-O3 -flto" -C obj_dir -f Vcore_l1d_l1i.mk
 
+gen_html : gen_html.cc pipeline_record.hh
+	$(CXX) -MMD $(CXXFLAGS) gen_html.cc $(LIBS) -o gen_html
+
 -include $(DEP)
+
+
 
 clean:
 	rm -rf $(EXE) $(OBJ) $(DEP) obj_dir
