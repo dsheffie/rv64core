@@ -6,7 +6,7 @@
  `define ENABLE_CYCLE_ACCOUNTING 1
  `define ENABLE_FPU 1
  `define ENABLE_64BITS 1
-// `define SINGLE_CYCLE_INT_DIVIDE 1
+ `define SINGLE_CYCLE_INT_DIVIDE 1
 `endif
 
 `define LG_M_WIDTH 6
@@ -72,7 +72,7 @@
 `define LG_L1D_CL_LEN 4
 
 //number of sets in direct mapped cache
-`define LG_L1D_NUM_SETS 10
+`define LG_L1D_NUM_SETS 12
 
 `define LG_MEM_TAG_ENTRIES 2
 

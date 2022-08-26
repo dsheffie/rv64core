@@ -663,6 +663,8 @@ int main(int argc, char **argv) {
   //done with initialize
   globals::cycle = 0;  
 
+  //std::cout << getAsmString(get_insn(0xa45b0, s), 0xa45b0) << "\n";
+  
   double t0 = timestamp();
   while(!Verilated::gotFinish() && (globals::cycle < max_cycle) && (insns_retired < max_icnt)) {
     contextp->timeInc(1);  // 1 timeprecision periodd passes...    

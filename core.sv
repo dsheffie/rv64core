@@ -690,7 +690,7 @@ module core(clk,
 `ifdef DUMP_ROB
    always_ff@(negedge clk)
      begin
-	if(/*r_cycle >= 'd18147308*/1)
+	if(r_cycle >= 'd520401)
 	  begin
 	     $display("cycle %d : state = %d, alu complete %b, mem complete %b,head_ptr %d, inflight %d, complete %b,  can_retire_rob_head %b, head pc %x, empty %b, full %b", 
 		      r_cycle,

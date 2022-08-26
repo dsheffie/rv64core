@@ -725,7 +725,9 @@ module exec(clk,
 	     t_alu_alloc_entry[t_alu_sched_alloc_ptr[LG_INT_SCHED_ENTRIES-1:0]] = 1'b1;
 	     if(r_alu_sched_valid[t_alu_sched_alloc_ptr[LG_INT_SCHED_ENTRIES-1:0]])
 	       begin
-		  $display("alloc ptr = %d, valid = %b", t_alu_sched_alloc_ptr[LG_INT_SCHED_ENTRIES-1:0], r_alu_sched_valid);
+		  $display("alloc ptr = %d, valid = %b", 
+			   t_alu_sched_alloc_ptr[LG_INT_SCHED_ENTRIES-1:0], 
+			   r_alu_sched_valid);
 		  $stop();
 	       end
 	  end
@@ -758,11 +760,11 @@ module exec(clk,
    // 	  begin
    // 	     logic [1:0] ii = i[1:0];
 	     
-   // 	     if(r_alu_sched_uops[ii].pc == 'h2a3a4 && r_alu_sched_valid[ii])
+   // 	     if(r_alu_sched_uops[ii].pc == 'ha45b0 && r_alu_sched_valid[ii])
    // 	       begin
    // 		  if(ii == t_alu_sched_select_ptr[LG_INT_SCHED_ENTRIES-1:0])
    // 		    begin
-   // 		       $display("picked at cycle %d", r_cycle);
+   // 		       $display("picked at cycle %d, sched %b", r_cycle, t_alu_select_entry);
    // 		    end
    // 		  else
    // 		    begin
@@ -777,23 +779,15 @@ module exec(clk,
    // 				);
    // 		    end
    // 	       end
+   // 	  end // for (logic [2:0] i = 0; i < N_INT_SCHED_ENTRIES; i=i+1)
+
+   // 	if(r_start_int && int_uop.pc == 'ha45b0)
+   // 	  begin
+   // 	     $display("starting divide , rob ptr = %d, wr_hilo = %b, t_mul_complete = %b", 
+   // 		      int_uop.rob_ptr, t_wr_hilo, t_mul_complete);
    // 	  end
-   	// if(r_start_int && int_uop.pc == 'h2a3a4)
-   	//   begin
-   	//      $display("scheduled uop at pc %x, op = %d, int %b, mem %b, fp %b", 
-	// 	      int_uop.pc, int_uop.op, int_uop.is_int, 
-	// 	      int_uop.is_mem, int_uop.is_fp);
-	     
-   	//      if(int_uop.is_mem)
-   	//        begin
-   	// 	  $stop();
-   	//        end
-   	//   end
-   	//if(t_pop_uq)
-   	//begin
-   	//$display("allocated uop at pc %x", uq.pc);
-   	// end
-   //end
+   //   end // always_ff@ (negedge clk)
+   
    
    always_comb
      begin
@@ -860,7 +854,11 @@ module exec(clk,
 		//is_mult(r_alu_sched_uops[i].op);
 		
 		t_alu_entry_rdy[i] = r_alu_sched_valid[i] &&
+`ifdef SINGLE_CYCLE_INT_DIVIDE
+				     ( (is_mult(r_alu_sched_uops[i].op) ?  !r_wb_bitvec[`MUL_LAT+1] : !r_wb_bitvec[1]) )
+`else
 				     (is_div(r_alu_sched_uops[i].op) ?  t_div_ready :  (is_mult(r_alu_sched_uops[i].op) ?  !r_wb_bitvec[`MUL_LAT+1] : !r_wb_bitvec[1]))
+`endif
 				     ? (
 					(t_alu_srcA_match[i] |r_alu_srcA_rdy[i]) & 
 					(t_alu_srcB_match[i] |r_alu_srcB_rdy[i]) &
