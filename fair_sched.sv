@@ -10,10 +10,16 @@ module fair_sched#(parameter LG_N = 2)(clk, rst, in, y);
    
    logic [LG_N-1:0] 	 r_cnt, n_cnt;
 
-   logic [(2*N)-1:0] 	 t_in2 = {in,in};
-   logic [(2*N)-1:0] 	 t_in_shift = t_in2 << r_cnt;
-   logic [N-1:0] 	 t_in =  t_in_shift[(2*N)-1:N];
+   logic [(2*N)-1:0] 	 t_in2, t_in_shift;
+   logic [N-1:0] 	 t_in;
    logic [LG_N:0] 	 t_y;
+
+   always_comb
+     begin
+	t_in2 = {in, in};
+	t_in_shift =  (t_in2 << r_cnt);
+	t_in =  t_in_shift[(2*N)-1:N];
+     end
    
    always_ff@(posedge clk)
      begin
@@ -45,7 +51,11 @@ module fair_sched#(parameter LG_N = 2)(clk, rst, in, y);
 	  begin
 	     if(in[y[LG_N-1:0]] == 1'b0)
 	       begin
-		  $display("input %b, r_cnt %d, t_in %b, t_y = %d, y = %d", in, r_cnt, t_in, t_y, y);
+		  $display("input %b, r_cnt %d, t_in %b, t_y = %d, y = %d",
+			   in, r_cnt, t_in, t_y, y);
+		  $display("t_in_shift = %b", t_in_shift);
+		  $display("t_in2 = %b", t_in2);
+		  
 		  $stop();
 	       end
 	  end
