@@ -50,7 +50,14 @@ int main(int argc, char *argv[]) {
   list<string> pre, post, ops;
   pipeline_reader r;
   read_template(pre, post);
-  r.read(fname);
+  try {
+    r.read(fname);
+  }
+  catch(...) {
+    cout << "exception occured loading " << fname << "\n";
+    exit(-1);
+  }
+    
   size_t cnt = 0;
   cout << "Start at " << start << " and complete at " << len+start << "\n";
   for(auto &rec : r.get_records()) {
