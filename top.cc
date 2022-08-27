@@ -15,7 +15,7 @@ bool globals::trace_fp = false;
 static state_t *s = nullptr;
 static state_t *ss = nullptr;
 static uint64_t insns_retired = 0;
-static uint64_t pipestart = 0;
+static uint64_t pipestart = 0, pipeend = ~(0UL);
 
 static boost::dynamic_bitset<> touched_lines(1UL<<28);
 
@@ -241,7 +241,7 @@ void record_retirement(long long pc, long long fetch_cycle, long long alloc_cycl
   }
   l1d_insns += is_mem;
   
-  if((pl != nullptr) and (insns_retired >= pipestart)) {
+  if((pl != nullptr) and (insns_retired >= pipestart) and (insns_retired < pipeend)) {
     pl->append(getAsmString(get_insn(pc, s), pc), pc, fetch_cycle, alloc_cycle, complete_cycle, retire_cycle, faulted);
   }
 }
@@ -314,6 +314,7 @@ int main(int argc, char **argv) {
       ("memlat,m", po::value<uint64_t>(&mem_lat)->default_value(4), "memory latency")
       ("pipelog,p", po::value<std::string>(&pipelog), "log for pipeline tracing")
       ("pipestart", po::value<uint64_t>(&pipestart)->default_value(0), "when to start logging")
+      ("pipeend", po::value<uint64_t>(&pipeend)->default_value(~0UL), "when to stop logging")      
       ("maxcycle", po::value<uint64_t>(&max_cycle)->default_value(1UL<<34), "maximum cycles")
       ("maxicnt", po::value<uint64_t>(&max_icnt)->default_value(1UL<<50), "maximum icnt")
       ("tracefp", po::value<bool>(&globals::trace_fp)->default_value(false), "trace fp instructions")
