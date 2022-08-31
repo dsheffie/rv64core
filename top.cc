@@ -242,7 +242,7 @@ void record_retirement(long long pc, long long fetch_cycle, long long alloc_cycl
   l1d_insns += is_mem;
   
   if((pl != nullptr) and (insns_retired >= pipestart) and (insns_retired < pipeend)) {
-    pl->append(getAsmString(get_insn(pc, s), pc), pc, fetch_cycle, alloc_cycle, complete_cycle, retire_cycle, faulted);
+    pl->append(insns_retired, getAsmString(get_insn(pc, s), pc), pc, fetch_cycle, alloc_cycle, complete_cycle, retire_cycle, faulted);
   }
 }
 

@@ -20,6 +20,7 @@
 
 class pipeline_record {
 public:
+  uint64_t uuid;
   std::string disasm;
   uint64_t pc;
   uint64_t fetch_cycle, alloc_cycle, complete_cycle, retire_cycle;
@@ -27,6 +28,7 @@ public:
   friend class boost::serialization::access;
   template<class Archive>
   void serialize(Archive & ar, const unsigned int version) {
+    ar & uuid;
     ar & disasm;
     ar & pc;
     ar & fetch_cycle;
@@ -36,18 +38,19 @@ public:
     ar & faulted;
   }
 public:
-  pipeline_record(const std::string &disasm,
+  pipeline_record(uint64_t uuid,
+		  const std::string &disasm,
 		  uint64_t pc,
 		  uint64_t fetch_cycle,
 		  uint64_t alloc_cycle,
 		  uint64_t complete_cycle,
 		  uint64_t retire_cycle,
 		  bool faulted) :
-    disasm(disasm), pc(pc), fetch_cycle(fetch_cycle), alloc_cycle(alloc_cycle),
+    uuid(uuid), disasm(disasm), pc(pc), fetch_cycle(fetch_cycle), alloc_cycle(alloc_cycle),
     complete_cycle(complete_cycle), retire_cycle(retire_cycle),
     faulted(faulted) {}
   pipeline_record() :
-    disasm(""), pc(0), fetch_cycle(0), alloc_cycle(0),
+    uuid(~0UL), disasm(""), pc(0), fetch_cycle(0), alloc_cycle(0),
     complete_cycle(0), retire_cycle(0), faulted(false) {}
 
   friend std::ostream &operator<<(std::ostream &out, const pipeline_record &r) {
@@ -95,14 +98,15 @@ public:
       delete ofs;
     }
   }
-  void append(const std::string &disasm,
+  void append(uint64_t uuid,
+	      const std::string &disasm,
 	      uint64_t pc,
 	      uint64_t fetch_cycle,
 	      uint64_t alloc_cycle,
 	      uint64_t complete_cycle,
 	      uint64_t retire_cycle,
 	      bool faulted) {
-    records.emplace_back(disasm, pc, fetch_cycle, alloc_cycle, complete_cycle,
+    records.emplace_back(uuid, disasm, pc, fetch_cycle, alloc_cycle, complete_cycle,
 			 retire_cycle, faulted);
   }
 };
