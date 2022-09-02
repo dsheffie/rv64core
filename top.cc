@@ -191,7 +191,8 @@ int check_insn_bytes(long long pc, int data) {
   return (*reinterpret_cast<uint32_t*>(&data)) == insn;
 }
 
-long long lrc = -1;
+static long long lrc = -1;
+static uint64_t record_insns_retired = 0;
 
 void record_retirement(long long pc, long long fetch_cycle, long long alloc_cycle, long long complete_cycle, long long retire_cycle,
 		       int faulted , int is_mem, int is_fp, int missed_l1d) {
@@ -241,9 +242,10 @@ void record_retirement(long long pc, long long fetch_cycle, long long alloc_cycl
   }
   l1d_insns += is_mem;
   
-  if((pl != nullptr) and (insns_retired >= pipestart) and (insns_retired < pipeend)) {
-    pl->append(insns_retired, getAsmString(get_insn(pc, s), pc), pc, fetch_cycle, alloc_cycle, complete_cycle, retire_cycle, faulted);
+  if((pl != nullptr) and (record_insns_retired >= pipestart) and (record_insns_retired < pipeend)) {
+    pl->append(record_insns_retired, getAsmString(get_insn(pc, s), pc), pc, fetch_cycle, alloc_cycle, complete_cycle, retire_cycle, faulted);
   }
+  ++record_insns_retired;
 }
 
 
@@ -683,11 +685,9 @@ int main(int argc, char **argv) {
     if(tb->monitor_req_valid) {
       bool handled = false;
       
-      // std::cerr << "got monitor reason "
-      // 		<< static_cast<int>(tb->monitor_req_reason)
-      // 		<< " with "
-      // 		<< touched_lines.count()
-      // 		<< " touched cachelines in the machine\n";
+      //std::cerr << "got monitor reason "
+      //<< static_cast<int>(tb->monitor_req_reason)
+      //	<< "\n";
       
       
       switch(tb->monitor_req_reason)
@@ -748,8 +748,9 @@ int main(int argc, char **argv) {
 	  int32_t fd = s->gpr[R_a0];
 	  handled = true;
 	  tb->monitor_rsp_data = 0;
-	  if(fd>2)
+	  if(fd>2) {
 	    tb->monitor_rsp_data = (int32_t)close(fd);
+	  }
 #ifdef PRINT_SYSCALL
 	  std::cout << insns_retired << " close " << fd << "\n";
 #endif

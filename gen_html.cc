@@ -71,6 +71,8 @@ int main(int argc, char *argv[]) {
        << hex << rec.pc << dec
        << " " << rec.disasm << "\""
        << ",uops:[{"
+       << "\"uuid\":"
+       << "\"" << rec.uuid << "\","
        << "\"events\":{"
        << "\"" << rec.fetch_cycle << "\":\"F\","
        << "\"" << rec.alloc_cycle << "\":\"A\","
