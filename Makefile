@@ -25,15 +25,16 @@ ifeq ($(UNAME_S),FreeBSD)
 endif
 
 ifeq ($(UNAME_S),Darwin)
-	CXX = clang++ -march=native -I/opt/local/include
-	VERILATOR_SRC = /Users/dsheffie/local/share/verilator/include/verilated.cpp
-	VERILATOR_INC = /Users/dsheffie/local/share/verilator/include
-	VERILATOR_VCD = /Users/dsheffie/local/share/verilator/include/verilated_vcd_c.cpp
-	VERILATOR = /Users/dsheffie/local/bin/verilator
-	EXTRA_LD = -L/opt/local/lib -lboost_program_options-mt -lcapstone
+	CXX = clang++ -I/opt/local/include
+	VERILATOR_SRC = /opt/local/share/verilator/include/verilated.cpp
+	VERILATOR_INC = /opt/local/share/verilator/include
+	VERILATOR_VCD = /opt/local/share/verilator/include/verilated_vcd_c.cpp
+	VERILATOR_DPI_INC = /opt/local/share/verilator/include/vltstd/
+	VERILATOR = /opt/local/bin/verilator
+	EXTRA_LD = -L/opt/local/lib -lboost_program_options-mt -lboost_serialization-mt -lcapstone
 endif
 
-OPT = -O3 -g -std=c++11 #-fomit-frame-pointer
+OPT = -O3 -g -std=c++14 #-fomit-frame-pointer
 CXXFLAGS = -std=c++11 -g  $(OPT) -I$(VERILATOR_INC) -I$(VERILATOR_DPI_INC) #-DLINUX_SYSCALL_EMULATION=1
 LIBS =  $(EXTRA_LD) -lpthread
 

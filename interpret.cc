@@ -13,7 +13,10 @@
 #include <sys/stat.h>
 #include <sys/uio.h>
 #include <sys/utsname.h>
+
+#ifdef __linux__
 #include <linux/utsname.h>
+#endif
 
 #include "interpret.hh"
 #include "disassemble.hh"

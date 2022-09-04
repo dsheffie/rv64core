@@ -1,3 +1,5 @@
+#ifdef __linux__
+
 #include <cassert>
 #include <cmath>
 #include <cstdio>
@@ -13,6 +15,7 @@
 #include <sys/stat.h>
 #include <sys/uio.h>
 #include <sys/utsname.h>
+
 #include <linux/utsname.h>
 
 #include "interpret.hh"
@@ -227,3 +230,4 @@ void linux_o32_syscall(state_t *s){
       abort();
     }
 }
+#endif
