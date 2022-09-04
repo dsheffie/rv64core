@@ -10,6 +10,7 @@ namespace globals {
   extern uint64_t cycle;
   extern bool trace_retirement;
   extern bool trace_fp;
+  extern bool report_syscalls;
 };
 
 #endif

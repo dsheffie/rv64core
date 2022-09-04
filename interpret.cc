@@ -796,7 +796,9 @@ void _monitorBody(uint32_t inst, state_t *s) {
   tms32_t tms32_buf;
   struct stat native_stat;
   stat32_t *host_stat = nullptr;
-  //printf("monitor reason %d\n", reason);
+  if(globals::report_syscalls) {
+    printf("monitor reason %d\n", reason);
+  }
   switch(reason)
     {
     case 6: /* int open(char *path, int flags) */
@@ -850,21 +852,26 @@ void _monitorBody(uint32_t inst, state_t *s) {
     }
     case 34: {
       uint32_t uptr = *(uint32_t*)(s->gpr + R_a0);
-      if(globals::enClockFuncts) {
-	*((uint32_t*)(&s->gpr[R_v0])) = times(&tms_buf);
+      //if(globals::enClockFuncts) {
+      //	 = times(&tms_buf);
+      // }
+      //else {
+      //uint64_t mips = globals::icountMIPS*1000000;
+      // tms_buf.tms_utime = (s->icnt/mips)*100;
+      //tms_buf.tms_stime = 0;
+      //tms_buf.tms_cutime = 0;
+      //tms_buf.tms_cstime = 0;	
+      //}
+      //memset(&tms32_buf, 0, sizeof(tms32_buf));
+      //tms32_buf.tms_utime = bswap<EL>((uint32_t)tms_buf.tms_utime);
+      //tms32_buf.tms_stime = bswap<EL>((uint32_t)tms_buf.tms_stime);
+      //tms32_buf.tms_cutime = bswap<EL>((uint32_t)tms_buf.tms_cutime);
+      //tms32_buf.tms_cstime = bswap<EL>((uint32_t)tms_buf.tms_cstime);      
+      //*((tms32_t*)(s->mem + uptr)) = tms32_buf;
+      for(int i = 0; i < 4; i++) {
+	s->mem.set<uint32_t>(uptr+i,0);
       }
-      else {
-	uint64_t mips = globals::icountMIPS*1000000;
-        tms_buf.tms_utime = (s->icnt/mips)*100;
-	tms_buf.tms_stime = 0;
-	tms_buf.tms_cutime = 0;
-	tms_buf.tms_cstime = 0;	
-      }
-      tms32_buf.tms_utime = bswap<EL>((uint32_t)tms_buf.tms_utime);
-      tms32_buf.tms_stime = bswap<EL>((uint32_t)tms_buf.tms_stime);
-      tms32_buf.tms_cutime = bswap<EL>((uint32_t)tms_buf.tms_cutime);
-      tms32_buf.tms_cstime = bswap<EL>((uint32_t)tms_buf.tms_cstime);      
-      *((tms32_t*)(s->mem + uptr)) = tms32_buf;
+      *((uint32_t*)(&s->gpr[R_v0])) = 0;
       break;
     }
     case 35:

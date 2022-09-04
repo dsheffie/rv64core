@@ -12,6 +12,7 @@ uint64_t globals::icountMIPS = 0;
 uint64_t globals::cycle = 0;
 bool globals::trace_retirement = false;
 bool globals::trace_fp = false;
+bool globals::report_syscalls = false;
 static state_t *s = nullptr;
 static state_t *ss = nullptr;
 static uint64_t insns_retired = 0;
@@ -323,6 +324,7 @@ int main(int argc, char **argv) {
       ("trace,t", po::value<bool>(&globals::trace_retirement)->default_value(false), "trace retired instruction stream")
       ("starttrace,s", po::value<uint64_t>(&start_trace_at)->default_value(~0UL), "start tracing retired instructions")
       ("checkeronly,o", po::value<bool>(&use_checker_only)->default_value(false), "no RTL simulation, just run checker")
+      ("reportsyscalls", po::value<bool>(&globals::report_syscalls)->default_value(false), "print syscall id when syscall executed")
       ; 
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);
@@ -684,10 +686,12 @@ int main(int argc, char **argv) {
     
     if(tb->monitor_req_valid) {
       bool handled = false;
-      
-      //std::cerr << "got monitor reason "
-      //<< static_cast<int>(tb->monitor_req_reason)
-      //	<< "\n";
+
+      if(globals::report_syscalls) {
+	std::cerr << "got monitor reason "
+		  << static_cast<int>(tb->monitor_req_reason)
+		  << "\n";
+      }
       
       
       switch(tb->monitor_req_reason)
