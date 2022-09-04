@@ -25,7 +25,7 @@ ifeq ($(UNAME_S),FreeBSD)
 endif
 
 ifeq ($(UNAME_S),Darwin)
-	CXX = clang++ -I/opt/local/include
+	CXX = clang++ -I/opt/local/include -flto
 	VERILATOR_SRC = /opt/local/share/verilator/include/verilated.cpp
 	VERILATOR_INC = /opt/local/share/verilator/include
 	VERILATOR_VCD = /opt/local/share/verilator/include/verilated_vcd_c.cpp
