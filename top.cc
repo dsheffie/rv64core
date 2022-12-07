@@ -934,25 +934,14 @@ int main(int argc, char **argv) {
 
       
       if(((insns_retired % heartbeat) == 0) or globals::trace_retirement ) {
-	uint32_t r_inst = s->mem.get<uint32_t>(tb->retire_pc);
-	r_inst = bswap<IS_LITTLE_ENDIAN>(r_inst);	
+	//uint32_t r_inst = s->mem.get<uint32_t>(tb->retire_pc);
+	//r_inst = bswap<IS_LITTLE_ENDIAN>(r_inst);	
 	std::cout << "retiring "
 		  << std::hex
 		  << tb->retire_pc
-		  << "("
-		  << r_inst
-		  << ")"
 		  << std::dec
-		  << " : " << getAsmString(r_inst, tb->retire_pc);
-	if(tb->retire_reg_valid) {
-	  std::cout << " : "
-		    << getGPRName(tb->retire_reg_ptr)
-		    << " = "
-		    << std::hex
-		    << tb->retire_reg_data
-		    << std::dec;
-	}
-	std::cout << " cycle " << globals::cycle
+		  << " cycle " << globals::cycle
+		  << std::fixed
 		  << ", " << static_cast<double>(insns_retired) / globals::cycle << " IPC "
 		  << ", insns_retired "
 		  << insns_retired
@@ -960,37 +949,26 @@ int main(int argc, char **argv) {
 		  << ((static_cast<double>(n_mispredicts)/n_branches)*100.0)
 		  << ", mispredict pki "
 		  << (static_cast<double>(n_mispredicts) / insns_retired) * 1000.0
+		  << std::defaultfloat	  
 		  <<" \n";
       }
       if(tb->retire_two_valid) {
 	++insns_retired;
 	if(((insns_retired % heartbeat) == 0) or globals::trace_retirement ) {
-	  uint32_t r_inst = s->mem.get<uint32_t>(tb->retire_two_pc);
-	  r_inst = bswap<IS_LITTLE_ENDIAN>(r_inst);	
-	  std::cout << "retiring 2nd "
+	  std::cout << "retiring "
 		    << std::hex
 		    << tb->retire_two_pc
-		    << "("
-		    << r_inst
-		    << ")"
 		    << std::dec
-		    << " : " << getAsmString(r_inst, tb->retire_two_pc);
-	  if(tb->retire_reg_two_valid) {
-	    std::cout << " : "
-		      << getGPRName(tb->retire_reg_two_ptr)
-		      << " = "
-		      << std::hex
-		      << tb->retire_reg_two_data
-		      << std::dec;
-	  }
-	  std::cout << " cycle " << globals::cycle
+		    << " cycle " << globals::cycle
+		    << std::fixed
 		    << ", " << static_cast<double>(insns_retired) / globals::cycle << " IPC "	    
 		    << ", insns_retired "
 		    << insns_retired
-		    << ", n_restarts "
-		    << n_mispredicts
+		    << ", mispredict rate "
+		    << ((static_cast<double>(n_mispredicts)/n_branches)*100.0)
 		    << ", mispredict pki "
 		    << (static_cast<double>(n_mispredicts) / insns_retired) * 1000.0
+		    << std::defaultfloat
 		    <<" \n";
 	}
       }
