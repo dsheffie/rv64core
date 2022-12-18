@@ -924,14 +924,7 @@ module exec(clk,
 	//(t_start_div32 & (!t_div_ready || r_wb_bitvec[`DIV32_LAT])) ? 1'b0 :
 	//1'b1;
 
-	t_pop_uq = t_flash_clear ? 1'b0 :
-		   t_uq_empty ? 1'b0 :
-		   t_alu_sched_full ? 1'b0 :
-		   1'b1;
-
-	
-	//r_start_int = t_pop_uq;
-	
+	t_pop_uq = !(t_flash_clear || t_uq_empty ||t_alu_sched_full);
      end
    
    always_ff@(posedge clk)
