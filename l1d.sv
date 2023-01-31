@@ -1419,7 +1419,7 @@ endfunction
 	n_core_mem_rsp_valid = 1'b0;
 	
 	n_core_mem_rsp.op = r_req.op;
-	n_core_mem_rsp.data = r_req.addr;
+	n_core_mem_rsp.data = {32'd0, r_req.addr};
 	n_core_mem_rsp.rob_ptr = r_req.rob_ptr;
 	n_core_mem_rsp.dst_ptr = r_req.dst_ptr;
 	
@@ -1479,7 +1479,7 @@ endfunction
 	       if(r_got_req2)
 		 begin
 		    n_core_mem_rsp.op = r_req2.op;
-		    n_core_mem_rsp.data = r_req2.addr;
+		    n_core_mem_rsp.data = {32'd0, r_req2.addr};
 		    n_core_mem_rsp.rob_ptr = r_req2.rob_ptr;
 		    n_core_mem_rsp.dst_ptr = r_req2.dst_ptr;
 		    n_core_mem_rsp.was_mem = !non_mem_op(r_req2.op);

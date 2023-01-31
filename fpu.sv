@@ -28,7 +28,7 @@ module fpu(clk,
    
    input logic clk;
    input logic reset;
-   input logic [63:0] pc;
+   input logic [31:0] pc;
    input opcode_t opcode;
    input logic start;
    

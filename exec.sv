@@ -1,4 +1,5 @@
 `include "uop.vh"
+`include "rob.vh"
 
 `ifdef DEBUG_FPU
 import "DPI-C" function int fp64_to_fp32(input longint a);
@@ -311,11 +312,7 @@ module exec(clk,
 	  end
 	else
 	  begin
-`ifdef ENABLE_64BITS 
-	     r_in_32b_mode <= n_in_32b_mode;
-`else
 	     r_in_32b_mode <= 1'b1;
-`endif
 	     r_in_32fp_reg_mode <= n_in_32fp_reg_mode;
 	  end
      end	
@@ -723,13 +720,6 @@ module exec(clk,
 	if(t_pop_uq)
 	  begin
 	     t_alu_alloc_entry[t_alu_sched_alloc_ptr[LG_INT_SCHED_ENTRIES-1:0]] = 1'b1;
-	     if(r_alu_sched_valid[t_alu_sched_alloc_ptr[LG_INT_SCHED_ENTRIES-1:0]])
-	       begin
-		  $display("alloc ptr = %d, valid = %b", 
-			   t_alu_sched_alloc_ptr[LG_INT_SCHED_ENTRIES-1:0], 
-			   r_alu_sched_valid);
-		  $stop();
-	       end
 	  end
 	if(t_alu_entry_rdy != 'd0)
 	  begin
@@ -1593,16 +1583,14 @@ module exec(clk,
 	    end // case: BNE
 	  BGEZ:
 	    begin
-	       t_take_br = r_in_32b_mode ? (t_srcA[31] == 1'b0) :
-			   (t_srcA[63] == 1'b0);
+	       t_take_br = (t_srcA[31] == 1'b0);
 	       t_mispred_br = int_uop.br_pred != t_take_br;
 	       t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;	       
 	       t_alu_valid = 1'b1;
 	    end
 	  BGEZAL:
 	    begin
-	       t_take_br = r_in_32b_mode ? (t_srcA[31] == 1'b0) :
-			   (t_srcA[63] == 1'b0);
+	       t_take_br = (t_srcA[31] == 1'b0);
 	       t_mispred_br = int_uop.br_pred != t_take_br;
 	       t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;	  
      	       t_result = t_take_br ?  int_uop.pc + {{HI_EBITS{1'b0}}, 32'd8} : t_srcB;
@@ -2283,11 +2271,6 @@ module exec(clk,
 	  
 	  default:
 	    begin
-	       if(!t_fp_uq_empty)
-		 begin
-		    $display("unhandled FP opcode for pc %x", fp_uq.pc);
-		    $stop();
-		 end
 	    end
 	endcase // case (fp_uq.op)
 	t_pop_fp_uq = t_fp_uq_empty || t_flash_clear ? 1'b0 : t_fp_srcs_rdy && (!t_fp_div_active);
@@ -2617,11 +2600,6 @@ module exec(clk,
 	    end
 	  default:
 	    begin
-	       if(!t_mem_uq_empty)
-		 begin
-		    $display("wtf is %d, pc %x", mem_uq.op, mem_uq.pc);
-		    $stop();
-		 end
 	    end
 	endcase // case (mem_uq.op)
 	t_pop_mem_uq = t_mem_uq_empty || t_flash_clear  ? 1'b0 : !t_mem_srcs_rdy ? 1'b0 : 1'b1;
@@ -2781,7 +2759,7 @@ module exec(clk,
 	     complete_bundle_1.is_ii <= 1'b0;
 	     complete_bundle_1.take_br <= 1'b0;
 	     complete_bundle_1.take_trap <= 1'b0;
-	     complete_bundle_1.data <= t_mul_result[`M_WIDTH-1:0];
+	     complete_bundle_1.data <= {32'd0, t_mul_result[`M_WIDTH-1:0]};
 	  end
 	else
 	  begin
@@ -2792,31 +2770,12 @@ module exec(clk,
 	     complete_bundle_1.is_ii <= t_unimp_op;
 	     complete_bundle_1.take_br <= t_take_br;
 	     complete_bundle_1.take_trap <= 1'b0;
-	     complete_bundle_1.data <= r_in_32b_mode ? {{HI_EBITS{1'b0}}, t_result[31:0]} : t_result;
+	     complete_bundle_1.data <=  {32'd0, t_result};
 	  end
 	//(uq.rob_ptr == 'd5) ? 1'b1 : 1'b0;
      end
 
-   logic [3:0] t_fp_writebacks;
-   always_ff@(negedge clk)
-     begin
-	t_fp_writebacks = {3'd0,t_fp_wr_prf} + 
-			  {3'd0, t_fpu_result_valid} + 
-			  {3'd0, t_fpu_fcr_valid} +
-			  {3'd0, t_sp_div_valid} +
-			  {3'd0, t_dp_div_valid};
-	if(t_fp_writebacks > 'd1)
-	  begin
-	     $display("fp_uq.op = %d, pc = %x, t_fp_wr_prf = %b, t_fpu_result_vaild = %b, t_fpu_fcr_valid = %b, sp_div_valid = %b, dp_div_valid = %b",
-		      fp_uq.op,
-		      fp_uq.pc,
-		      t_fp_wr_prf , t_fpu_result_valid , t_fpu_fcr_valid , t_sp_div_valid , t_dp_div_valid);
-	     
-	     $stop();
-	  end
-	
-	
-     end
+
   always_ff@(posedge clk)
     begin
        if(reset)
@@ -2826,26 +2785,9 @@ module exec(clk,
        else
 	 begin
 	    complete_valid_2 <= t_fp_wr_prf || t_fpu_result_valid || t_fpu_fcr_valid || t_sp_div_valid || t_dp_div_valid;
-	    // if(t_fp_wr_prf && t_fpu_result_valid)
-	    //   $stop();
-	    // if(t_fpu_result_valid && t_fpu_fcr_valid)
-	    //   $stop();
-	    // if( t_fp_wr_prf && t_fpu_fcr_valid)
-	    //   $stop();
-	    //if(t_fp_wr_prf || t_fpu_result_valid || t_fpu_fcr_valid)
-	    //$display("cycle %d : t_fp_wr_prf = %b, t_fpu_result_valid = %b, t_fpu_fcr_valid = %b", 
-	    //r_cycle, t_fp_wr_prf, t_fpu_result_valid, t_fpu_fcr_valid);
 	 end
     end // always_ff@ (posedge clk)
 
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if(complete_valid_2)
-   // 	  begin
-   // 	     $display("complete_2 valid at cycle %d for rob ptr %d",
-   // 		      r_cycle, complete_bundle_2.rob_ptr);
-   // 	  end
-   //   end
 
    //t_fpu_fcr_valid
    always_ff@(posedge clk)

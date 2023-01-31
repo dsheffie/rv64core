@@ -317,7 +317,7 @@ module core(clk,
    logic 		     t_in_32fp_reg_mode;
    logic [(`M_WIDTH-1):0]    t_cpr0_status_reg;
    
-   logic [(`M_WIDTH-1):0]    r_arch_a0;
+   logic [31:0] 	     r_arch_a0;
 
    logic [4:0] 		     n_cause, r_cause;
    
@@ -363,7 +363,7 @@ module core(clk,
    
    logic 		     t_exception_wr_cpr0_val;
    logic [4:0] 		     t_exception_wr_cpr0_ptr;
-   logic [`M_WIDTH-1:0]      t_exception_wr_cpr0_data;
+   logic [63:0] 	     t_exception_wr_cpr0_data;
    
    mem_req_t t_mem_req;
    logic 		     t_mem_req_valid;
@@ -398,8 +398,7 @@ module core(clk,
 			     WRITE_EPC,
 			     WRITE_CAUSE,
 			     WRITE_BADVADDR,
-			     EXCEPTION_DRAIN,
-			     ARCH_WAIT
+			     EXCEPTION_DRAIN
 			     } state_t;
    
    state_t r_state, n_state;
@@ -575,7 +574,7 @@ module core(clk,
 	  end
 	else if(t_rob_head.valid_dst && t_retire && t_rob_head.ldst == 'd4)
 	  begin
-	     r_arch_a0 <= t_rob_head.data;
+	     r_arch_a0 <= t_rob_head.data[31:0];
 	  end
      end
    
@@ -608,11 +607,11 @@ module core(clk,
    	else
    	  begin
    	     retire_reg_ptr <= t_rob_head.ldst;
-   	     retire_reg_data <= t_rob_head.data;
+   	     retire_reg_data <= t_rob_head.data[31:0];
    	     retire_reg_valid <= t_rob_head.valid_dst && t_retire;
 	     retire_reg_fp_valid <= t_rob_head.valid_fp_dst && t_retire;
    	     retire_reg_two_ptr <= t_rob_next_head.ldst;
-   	     retire_reg_two_data <= t_rob_next_head.data;
+   	     retire_reg_two_data <= t_rob_next_head.data[31:0];
    	     retire_reg_two_valid <= t_rob_next_head.valid_dst && t_retire_two;
 	     retire_reg_fp_two_valid <= t_rob_next_head.valid_fp_dst && t_retire_two;
 	     
@@ -649,7 +648,7 @@ module core(clk,
 			    
    	if(t_retire)
    	  begin
-	     record_retirement(t_rob_head.pc, 
+	     record_retirement({32'd0,t_rob_head.pc}, 
    			       t_rob_head.fetch_cycle,
    			       t_rob_head.alloc_cycle,
    			       t_rob_head.complete_cycle,
@@ -661,7 +660,7 @@ module core(clk,
    	  end
    	if(t_retire_two)
    	  begin
-	     record_retirement(t_rob_next_head.pc, 
+	     record_retirement({32'd0, t_rob_next_head.pc}, 
    			       t_rob_next_head.fetch_cycle,
    			       t_rob_next_head.alloc_cycle,
    			       t_rob_next_head.complete_cycle,
@@ -746,7 +745,7 @@ module core(clk,
 	
 	t_exception_wr_cpr0_val = 1'b0;
 	t_exception_wr_cpr0_ptr = 5'd0;
-	t_exception_wr_cpr0_data = 64'd0;
+	t_exception_wr_cpr0_data = 'd0;
 	n_cause = r_cause;
 	
 	n_machine_clr = r_machine_clr;
@@ -834,8 +833,6 @@ module core(clk,
 	    begin
 	       if(r_extern_irq && !t_rob_empty && !t_rob_head.in_delay_slot)
 		 begin
-		    //$display("got an external interrupt, stopping, t_rob_head.pc = %x at cycle %d", 
-		    //t_rob_head.pc, r_cycle);
 		    n_state = EXCEPTION_DRAIN;
 		    n_restart_pc = t_rob_head.pc;
 		    n_machine_clr = 1'b1;
@@ -861,25 +858,13 @@ module core(clk,
 			  	   r_rob_tail_ptr[`LG_ROB_ENTRIES-1:0]
 			  	   );
 `endif
-			 if(t_rob_head.is_eret)
+			 if(t_rob_head.is_wait)
 			   begin
-			      $stop();
-			   end
-			 else if(t_rob_head.is_wait)
-			   begin
-			      //interrupts are enabled
-			      if(t_cpr0_status_reg[0])
-				begin
-				   n_state = ARCH_WAIT;				   
-				end
-			      else
-				begin
-				   $display("wait without interrupts enabled, the end");
-				   n_got_break = 1'b1;
-				   n_flush_req = 1'b1;
-				   n_cause = 5'd9;
-				   n_state = WRITE_EPC;
-				end
+			      $display("wait without interrupts enabled, the end");
+			      n_got_break = 1'b1;
+			      n_flush_req = 1'b1;
+			      n_cause = 5'd9;
+			      n_state = WRITE_EPC;
 			   end
 			 else if(t_rob_head.is_break)
 			   begin
@@ -909,21 +894,6 @@ module core(clk,
 			      $display("exception for tlb refill for pc %x, vaddr %x, is store %b", 
 				       t_rob_head.pc, t_rob_head.data, t_rob_head.is_store);
 			   end
-			 else if(t_rob_head.exception_tlb_modified)
-			   begin
-			      $stop();
-			   end
-			 else if(t_rob_head.exception_tlb_invalid)
-			   begin
-			      $stop();
-			   end
-			 // else if(t_rob_head.is_syscall)
-			 //   begin
-			 //      n_got_syscall = 1'b1;
-			 //      n_cause = 5'd8;
-			 //      n_flush_req = 1'b1;
-			 //      n_state = WRITE_EPC;
-			 //   end
 			 else
 			   begin
 			      n_ds_done = !t_rob_head.has_delay_slot;
@@ -955,8 +925,6 @@ module core(clk,
 			   end
 			 else
 			   begin
-			      if(t_uop.serializing_op) $stop();
-			      
 			      t_possible_to_alloc = !t_rob_full
 						    && !t_uq_full
 						    && !t_dq_empty;
@@ -1038,8 +1006,6 @@ module core(clk,
 		      end // if (t_uop.serializing_op)
 		    else if(!t_uop.serializing_op)
 		      begin
-			 if(t_uop.serializing_op) $stop();
-			 
 			 t_possible_to_alloc = !t_rob_full
 					       && !t_uq_full
 					       && !t_dq_empty;
@@ -1226,15 +1192,11 @@ module core(clk,
 		    n_state = ACTIVE;
 		 end
 	    end
-	  ARCH_WAIT:
-	    begin
-	       $stop();
-	    end
 	  WRITE_EPC:
 	    begin
 	       t_exception_wr_cpr0_val = 1'b1;
 	       t_exception_wr_cpr0_ptr = 5'd14;
-	       t_exception_wr_cpr0_data = t_rob_head.in_delay_slot ? (t_rob_head.pc - 'd4) : t_rob_head.pc;
+	       t_exception_wr_cpr0_data = {32'd0, (t_rob_head.in_delay_slot ? (t_rob_head.pc - 'd4) : t_rob_head.pc)};
 	       n_state = WRITE_CAUSE;
 	    end
 	  WRITE_CAUSE:
@@ -1474,18 +1436,6 @@ module core(clk,
 		  n_alloc_rat[t_uop2.dst[4:0]] = n_prf_entry2;
 		  t_alloc_uop2.dst = n_prf_entry2;
 	       end
-	     else if(t_uop2.hilo_dst_valid)
-	       begin
-		  //n_hilo_alloc_rat = n_hilo_prf_entry;
-		  //t_alloc_uop2.hilo_dst = n_hilo_prf_entry;
-		  $stop();
-	       end
-	     else if(t_uop2.fcr_dst_valid)
-	       begin
-		  //n_fcr_alloc_rat = n_fcr_prf_entry;
-		  //t_alloc_uop2.hilo_dst = n_fcr_prf_entry;
-		  $stop();
-	       end	     
 	     else if(t_uop2.fp_dst_valid)
 	       begin
 		  n_fp_alloc_rat[t_uop2.dst[4:0]] = n_fp_prf_entry2;
@@ -1623,7 +1573,7 @@ module core(clk,
 	t_rob_tail.is_br = 1'b0;
 	t_rob_tail.is_indirect = 1'b0;
 	t_rob_tail.in_delay_slot = r_in_delay_slot;
-	t_rob_tail.data = {`M_WIDTH{1'b0}};
+	t_rob_tail.data = 'd0;
 	t_rob_tail.pht_idx = 'd0;
 
 
@@ -1651,7 +1601,7 @@ module core(clk,
 	t_rob_next_tail.is_br = 1'b0;
 	t_rob_next_tail.is_indirect = 1'b0;
 	t_rob_next_tail.in_delay_slot = r_in_delay_slot;
-	t_rob_next_tail.data = {`M_WIDTH{1'b0}};
+	t_rob_next_tail.data = 'd0;
 	t_rob_next_tail.pht_idx = 'd0;
 	
 	if(t_alloc)
@@ -1886,7 +1836,7 @@ module core(clk,
 	       end
 	     if(core_mem_rsp_valid)
 	       begin
-		  r_rob[core_mem_rsp.rob_ptr].data <= core_mem_rsp.data[`M_WIDTH-1:0];
+		  r_rob[core_mem_rsp.rob_ptr].data <= core_mem_rsp.data;
 		  r_rob[core_mem_rsp.rob_ptr].faulted <= core_mem_rsp.faulted;
 		  r_rob[core_mem_rsp.rob_ptr].exception_tlb_refill <= core_mem_rsp.exception_tlb_refill;
 		  r_rob[core_mem_rsp.rob_ptr].exception_tlb_modified <= core_mem_rsp.exception_tlb_modified;
@@ -1986,19 +1936,7 @@ module core(clk,
 	       end
 	  end // else: !if(reset)
      end // always_ff@ (posedge clk)
-	      
-
-   //always_ff@(negedge clk)
-   //begin
-   //if(t_alloc) $display("t_alloc_uop.pc = %x", t_alloc_uop.pc);
-   //if((r_rob_next_head_ptr != t_next_rob_head_ptr))
-   //begin
-   //$display("reset = %d, r_rob_next_head_ptr = %d, t_next_rob_head_ptr = %d",
-   //reset, r_rob_next_head_ptr, t_next_rob_head_ptr);
-   //$stop();
-   //end
-   //end
-    
+	          
    
    always_comb
      begin
@@ -2293,29 +2231,6 @@ module core(clk,
 		      .uop(t_dec_uop2));
 
 
-`ifdef VERILATOR
-   always_ff@(negedge clk)
-     begin
-   	if(insn_ack)
-   	  begin
-	     if(check_insn_bytes(t_dec_uop.pc, insn.data) == 'd0)
-	       begin
-   		  $display("t_dec_uop.pc = %x, bytes = %x, decoded to op %d", 
-			   t_dec_uop.pc, insn.data, t_dec_uop.op);
-		  $stop();
-	       end
-   	  end
-   	if(insn_ack_two)
-   	  begin
-	     if(check_insn_bytes(t_dec_uop2.pc, insn_two.data) == 'd0)
-	       begin
-   		  $display("t_dec_uop2.pc = %x, bytes = %x, decoded to op %d", 
-			   t_dec_uop2.pc, insn_two.data, t_dec_uop2.op);
-		  $stop();
-	       end
-   	  end
-     end
-`endif //  `ifdef VERILATOR
    
    logic t_push_1, t_push_2;
    
@@ -2326,18 +2241,6 @@ module core(clk,
 	t_push_2 = t_alloc_two && !t_fold_uop2;
      end
 
-   //always_ff@(negedge clk)
-   //begin
-        //$display("t_alloc = %b, %x t_alloc_two = %b, %x, t_push_1 = %b, t_push_2 = %b, inflight = %b",
-        //t_alloc, t_uop.pc, t_alloc_two, t_uop2.pc, 
-	//t_push_1, t_push_2, r_rob_inflight);
-	
-        //if(t_push_1 && t_push_2 && t_uop.pc == 'h20078)
-        //begin
-	//
-        //$stop();
-        //end
-     //end
 
    
    exec e (
@@ -2370,7 +2273,7 @@ module core(clk,
 	   .complete_valid_2(t_complete_valid_2),
 	   .exception_wr_cpr0_val(t_exception_wr_cpr0_val),
 	   .exception_wr_cpr0_ptr(t_exception_wr_cpr0_ptr),
-	   .exception_wr_cpr0_data(t_exception_wr_cpr0_data),
+	   .exception_wr_cpr0_data(t_exception_wr_cpr0_data[31:0]),
 	   .mem_req(t_mem_req),
 	   .mem_req_valid(t_mem_req_valid),
 	   .mem_req_ack(core_mem_req_ack),
@@ -2487,101 +2390,5 @@ module core(clk,
 	       end
 	  end
      end // always_comb
-
-//`define DEBUG_BAD_RETIRE
-`ifdef DEBUG_BAD_RETIRE
-   logic [63:0] r_max_alloc;
-   always_ff@(posedge clk)
-     begin
-	if(reset)
-	  begin
-	     r_max_alloc <= 'd0;
-	  end
-	else
-	  begin
-	     if(t_retire)
-	       begin
-		  r_max_alloc <= t_rob_head.alloc_cycle;
-	       end
-	     else if(t_retire_two)
-	       begin
-		  r_max_alloc <= t_rob_next_head.alloc_cycle;
-	       end
-	  end
-     end // always_ff@ (posedge clk)
-
-   always_ff@(negedge clk)
-     begin
-	if(t_retire_two && (t_rob_next_head.alloc_cycle < r_max_alloc))
-	  begin
-	     $display("rob empty %b, next empty %b", 
-		      t_rob_empty, t_rob_next_empty);
-	     
-	     $display("head of rob pointer %d, pc %x", 
-		      r_rob_head_ptr[`LG_ROB_ENTRIES-1:0],
-		      t_rob_head.pc);
-	     $display("r_rob_inflight = %b", 
-		      r_rob_inflight[r_rob_head_ptr[`LG_ROB_ENTRIES-1:0]]);
-	     
-	     $display("head of rob pointer %d, pc %x", 
-		      r_rob_next_head_ptr[`LG_ROB_ENTRIES-1:0],
-		      t_rob_next_head.pc);
-	     
-	     $display("r_rob_inflight = %b", 
-		      r_rob_inflight[r_rob_next_head_ptr[`LG_ROB_ENTRIES-1:0]]);
-	     $stop();
-	  end
-	if(t_retire && (t_rob_head.alloc_cycle < r_max_alloc))
-	  begin
-	     $display("head of rob pointer %d", r_rob_head_ptr[`LG_ROB_ENTRIES-1:0]);
-	     $display("rob empty %b, next empty %b", 
-		      t_rob_empty, t_rob_next_empty);
-	     $display("r_rob_inflight = %b", 
-		      r_rob_inflight);
-	     $display("t_can_retire_rob_head = %b", t_can_retire_rob_head);
-	     $display("r_state = %d", r_state);
-	       
-	     $stop();
-	  end
-     end
-
-   
-    always_ff@(negedge clk)
-      begin
-	 if(t_clr_rob)
-	   begin
-	      $display("clearing rob at cycle %d", r_cycle);
-	   end
-	 
-	 if(t_retire)
-	   begin
-	      $display("retiring one insns in cycle %d, pc %x, fetched at %d, allocd at %d", r_cycle,
-		       t_rob_head.pc, t_rob_head.fetch_cycle, t_rob_head.alloc_cycle);
-	   end
-	 else if(t_retire_two)
-	   begin
-	      $display("retiring two insns in cycle %d, pcs %x and %x", r_cycle, t_rob_head.pc, t_rob_next_head.pc);
-	   end
-       if(t_alloc_two && 1'b1)
-    	begin
-    	   $display("allocating two insns in cycle %d, pcs %x and %x, rob entries %d %d, prf %d %d", 
-    		    r_cycle, t_uop.pc, t_uop2.pc, 
-    		    r_rob_tail_ptr[`LG_ROB_ENTRIES-1:0],
-    		    r_rob_next_tail_ptr[`LG_ROB_ENTRIES-1:0],
-		    n_prf_entry,
-		    n_prf_entry2
-    		    );
-    	end
-       else if(t_alloc && 1'b1)
-	   begin
-	      $display("allocating one insn in cycle %d, pcs %x, rob entries %d, prf %d", 
-    		       r_cycle, t_uop.pc, 
-    		       r_rob_tail_ptr[`LG_ROB_ENTRIES-1:0],
-		       n_prf_entry
-    		       );
-
-	   end
-      end // always_ff@ (negedge clk)
-`endif
    
 endmodule

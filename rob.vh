@@ -34,7 +34,7 @@ typedef struct packed {
    logic 			 take_br;
    logic 			 is_break;
    logic 			 is_syscall;
-   logic [(`M_WIDTH-1):0] 	 data;
+   logic [63:0] 		 data;
    logic [`LG_PHT_SZ-1:0] 	 pht_idx;
 
 `ifdef ENABLE_CYCLE_ACCOUNTING
@@ -56,7 +56,7 @@ typedef struct packed {
    logic 		       take_br;
    logic 		       is_ii;
    logic 		       take_trap;
-   logic [`M_WIDTH-1:0]        data;
+   logic [63:0] 	       data;
 } complete_t;
 
 typedef struct packed {

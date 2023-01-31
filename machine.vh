@@ -5,11 +5,10 @@
  `define DEBUG_FPU 1
  `define ENABLE_CYCLE_ACCOUNTING 1
  `define ENABLE_FPU 1
- `define ENABLE_64BITS 1
  `define SINGLE_CYCLE_INT_DIVIDE 1
 `endif
 
-`define LG_M_WIDTH 6
+`define LG_M_WIDTH 5
 
 `define BIG_ENDIAN 1
 
