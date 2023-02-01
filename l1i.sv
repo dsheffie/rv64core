@@ -193,7 +193,7 @@ module l1i(clk,
    logic [(`M_WIDTH-1):0]   r_spec_return_stack [RETURN_STACK_ENTRIES-1:0];
    logic [(`M_WIDTH-1):0]   r_arch_return_stack [RETURN_STACK_ENTRIES-1:0];
    logic [`LG_RET_STACK_ENTRIES-1:0] n_arch_rs_tos, r_arch_rs_tos;
-   logic [`LG_RET_STACK_ENTRIES-1:0] n_spec_rs_tos, r_spec_rs_tos;   
+   logic [`LG_RET_STACK_ENTRIES-1:0] n_spec_rs_tos, r_spec_rs_tos, t_next_spec_rs_tos;   
    
    logic [`GBL_HIST_LEN-1:0] 	     n_arch_gbl_hist, r_arch_gbl_hist;
    logic [`GBL_HIST_LEN-1:0] 	     n_spec_gbl_hist, r_spec_gbl_hist;
@@ -687,7 +687,7 @@ endfunction
 	n_mem_req_valid = 1'b0;
 	n_mem_req_addr = r_mem_req_addr;
 	n_resteer_bubble = 1'b0;
-	
+	t_next_spec_rs_tos = r_spec_rs_tos+'d1;
 	n_restart_req = restart_valid | r_restart_req;
 	t_miss = r_req && !(r_valid_out && (r_tag_out == r_cache_tag));
 	t_hit = r_req && (r_valid_out && (r_tag_out == r_cache_tag));
@@ -871,10 +871,7 @@ endfunction
 			 t_is_ret = 1'b1;
 			 n_delay_slot = 1'b1;
 			 t_take_br = 1'b1;
-			 n_pc = r_spec_return_stack[r_spec_rs_tos+'d1];
-			 //$display("predict jr at %x will return to %x",
-			 //r_cache_pc, n_pc);
-			 //$stop();
+			 n_pc = r_spec_return_stack[t_next_spec_rs_tos];
 		      end // if (t_pd == IS_JR_R31)
 		    else if(t_pd == IS_JR || t_pd == IS_JALR)
 		      begin
@@ -1090,14 +1087,6 @@ endfunction
    logic t_valid_ram_value = (r_state != FLUSH_CACHE);
    logic [`LG_L1D_NUM_SETS-1:0] t_valid_ram_idx = mem_rsp_valid ? r_mem_req_addr[IDX_STOP-1:IDX_START] : r_cache_idx;
 
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if(t_pd == IS_COND_BR)
-   // 	  begin
-   // 	     $display("pc %x, pht idx %d, r_pht_out = %b, spec hist %b, lo %b, pd %d", 
-   // 		      r_cache_pc, n_pht_idx, r_spec_gbl_hist, r_spec_gbl_hist[0], r_pht_out, t_pd);
-   // 	  end
-   //   end
 
    always_comb
      begin
