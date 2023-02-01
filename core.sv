@@ -844,20 +844,6 @@ module core(clk,
 		 begin
 		    if(t_rob_head.faulted)
 		      begin
-			 //`define REPORT_FAULTS
-`ifdef REPORT_FAULTS
-			  $display("cycle %d : got fault for %x, eret %b, break %d, ii %d, trap %d, tlb %b, rob head %d, rob tail %d",
-			  	   r_cycle, 
-			  	   t_rob_head.pc, 
-			  	   t_rob_head.is_eret, 
-			  	   t_rob_head.is_break,
-			  	   t_rob_head.is_ii,
-			  	   t_rob_head.take_trap,
-			  	   t_rob_head.exception_tlb_refill,
-			  	   r_rob_head_ptr[`LG_ROB_ENTRIES-1:0],
-			  	   r_rob_tail_ptr[`LG_ROB_ENTRIES-1:0]
-			  	   );
-`endif
 			 if(t_rob_head.is_wait)
 			   begin
 			      $display("wait without interrupts enabled, the end");
@@ -885,14 +871,6 @@ module core(clk,
 			      n_flush_req = 1'b1;
 			      n_cause = 5'd13;
 			      n_state = WRITE_EPC;
-			   end
-			 else if(t_rob_head.exception_tlb_refill)
-			   begin
-			      n_flush_req = 1'b1;
-			      n_cause = t_rob_head.is_store ? 5'd3 : 5'd2;
-			      n_state = WRITE_BADVADDR;
-			      $display("exception for tlb refill for pc %x, vaddr %x, is store %b", 
-				       t_rob_head.pc, t_rob_head.data, t_rob_head.is_store);
 			   end
 			 else
 			   begin
@@ -1561,9 +1539,6 @@ module core(clk,
 	t_rob_tail.target_pc = 'd0;
 	t_rob_tail.is_ii = 1'b0;
 	t_rob_tail.take_trap = 1'b0;
-	t_rob_tail.exception_tlb_refill = 1'b0;
-	t_rob_tail.exception_tlb_modified = 1'b0;
-	t_rob_tail.exception_tlb_invalid = 1'b0;
 	t_rob_tail.is_store = 1'b0;
 	t_rob_tail.is_call = 1'b0;
 	t_rob_tail.is_ret = 1'b0;
@@ -1589,9 +1564,6 @@ module core(clk,
 	t_rob_next_tail.target_pc = 'd0;
 	t_rob_next_tail.is_ii = 1'b0;
 	t_rob_next_tail.take_trap = 1'b0;
-	t_rob_next_tail.exception_tlb_refill = 1'b0;
-	t_rob_next_tail.exception_tlb_modified = 1'b0;
-	t_rob_next_tail.exception_tlb_invalid = 1'b0;
 	t_rob_next_tail.is_store = 1'b0;
 	t_rob_next_tail.is_call = 1'b0;
 	t_rob_next_tail.is_ret = 1'b0;
@@ -1838,9 +1810,6 @@ module core(clk,
 	       begin
 		  r_rob[core_mem_rsp.rob_ptr].data <= core_mem_rsp.data;
 		  r_rob[core_mem_rsp.rob_ptr].faulted <= core_mem_rsp.faulted;
-		  r_rob[core_mem_rsp.rob_ptr].exception_tlb_refill <= core_mem_rsp.exception_tlb_refill;
-		  r_rob[core_mem_rsp.rob_ptr].exception_tlb_modified <= core_mem_rsp.exception_tlb_modified;
-		  r_rob[core_mem_rsp.rob_ptr].exception_tlb_invalid <= core_mem_rsp.exception_tlb_invalid;
 `ifdef ENABLE_CYCLE_ACCOUNTING
 		  r_rob[core_mem_rsp.rob_ptr].complete_cycle <= r_cycle;
 		  r_rob[core_mem_rsp.rob_ptr].is_mem <= core_mem_rsp.was_mem;

@@ -54,9 +54,7 @@ module core_l1d_l1i(clk,
 		    got_break,
 		    got_syscall,
 		    got_ud,
-		    inflight,
-		    iside_tlb_miss,
-		    dside_tlb_miss);
+		    inflight);
 
    localparam L1D_CL_LEN = 1 << `LG_L1D_CL_LEN;
    localparam L1D_CL_LEN_BITS = 1 << (`LG_L1D_CL_LEN + 3);
@@ -148,8 +146,6 @@ module core_l1d_l1i(clk,
    output logic 			  got_syscall;
    output logic 			  got_ud;
    output logic [`LG_ROB_ENTRIES:0] 	  inflight;
-   output logic 			  iside_tlb_miss;
-   output logic 			  dside_tlb_miss;
    
    logic [63:0] 			  t_l1d_cache_accesses;
    logic [63:0] 			  t_l1d_cache_hits;
@@ -393,15 +389,8 @@ module core_l1d_l1i(clk,
 	  end
      end
 
-   logic 			 t_l1d_tlb_rsp_valid;
-   logic 			 t_l1i_tlb_rsp_valid;   
-   logic 			 t_l1d_utlb_miss_req;
-   logic 			 t_l1i_utlb_miss_req;   
-   logic [`M_WIDTH-`LG_PG_SZ-1:0] t_l1d_utlb_miss_paddr;
-   logic [`M_WIDTH-`LG_PG_SZ-1:0] t_l1i_utlb_miss_paddr;
    logic 			  drain_ds_complete;
    logic [(1<<`LG_ROB_ENTRIES)-1:0] dead_rob_mask;
-   utlb_entry_t t_tlb_rsp;
    
    l1d dcache (
 	       .clk(clk),
@@ -439,10 +428,6 @@ module core_l1d_l1i(clk,
 	       .mem_rsp_tag(mem_rsp_tag),
 	       .mem_rsp_opcode(mem_rsp_opcode),
 
-	       .utlb_miss_req(t_l1d_utlb_miss_req),
-	       .utlb_miss_paddr(t_l1d_utlb_miss_paddr),
-	       .tlb_rsp_valid(t_l1d_tlb_rsp_valid),
-	       .tlb_rsp(t_tlb_rsp),	       
 	       .cache_accesses(t_l1d_cache_accesses),
 	       .cache_hits(t_l1d_cache_hits),
 	       .cache_hits_under_miss(t_l1d_cache_hits_under_miss)
@@ -482,32 +467,10 @@ module core_l1d_l1i(clk,
 	      .mem_rsp_load_data(mem_rsp_load_data),
 	      .mem_rsp_tag(mem_rsp_tag),
 	      .mem_rsp_opcode(mem_rsp_opcode),
-	      .utlb_miss_req(t_l1i_utlb_miss_req),
-	      .utlb_miss_paddr(t_l1i_utlb_miss_paddr),
-	      .tlb_rsp_valid(t_l1i_tlb_rsp_valid),
-	      .tlb_rsp(t_tlb_rsp),	      
 	      .cache_accesses(t_l1i_cache_accesses),
 	      .cache_hits(t_l1i_cache_hits)	      
 	      );
    	      
-
-   tlb tlb0 (
-	     .clk(clk),
-	     .reset(reset),
-	     .iside_req(t_l1i_utlb_miss_req),
-	     .dside_req(t_l1d_utlb_miss_req),
-	     .iside_paddr(t_l1i_utlb_miss_paddr),
-	     .dside_paddr(t_l1d_utlb_miss_paddr),
-	     .iside_rsp_valid(t_l1i_tlb_rsp_valid),
-	     .dside_rsp_valid(t_l1d_tlb_rsp_valid),
-	     .tlb_rsp(t_tlb_rsp),
-	     .tlb_hit(),
-	     .iside_tlb_miss(iside_tlb_miss),
-	     .dside_tlb_miss(dside_tlb_miss)
-	     );
-   
-     
-      
    core cpu (
 	     .clk(clk),
 	     .reset(reset),

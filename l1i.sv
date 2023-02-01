@@ -76,12 +76,6 @@ module l1i(clk,
 	   mem_rsp_load_data,
 	   mem_rsp_tag,
 	   mem_rsp_opcode,
-
-	   utlb_miss_req,
-	   utlb_miss_paddr,
-	   tlb_rsp_valid,
-	   tlb_rsp,
-	   
 	   cache_accesses,
 	   cache_hits
 	   );
@@ -108,11 +102,6 @@ module l1i(clk,
    input logic 			branch_pc_valid;
    input logic 			took_branch;
    input logic [`LG_PHT_SZ-1:0] branch_pht_idx;
-
-   output logic 		utlb_miss_req;
-   output logic [`M_WIDTH-`LG_PG_SZ-1:0] utlb_miss_paddr;
-   input logic 				 tlb_rsp_valid;
-   input 				 utlb_entry_t tlb_rsp;
    
    output insn_fetch_t insn;
    output logic insn_valid;
@@ -212,10 +201,6 @@ module l1i(clk,
 
 
    logic [LG_WORDS_PER_CL-1:0] 	     t_insn_idx;
-   
-   
-   logic 			     n_utlb_miss_req, r_utlb_miss_req;
-   logic [`M_WIDTH-`LG_PG_SZ-1:0]    n_utlb_miss_paddr, r_utlb_miss_paddr;
    
    logic [63:0] 			 n_cache_accesses, r_cache_accesses;
    logic [63:0] 			 n_cache_hits, r_cache_hits;
@@ -380,8 +365,7 @@ endfunction
                              INJECT_RELOAD = 'd2,
 			     RELOAD_TURNAROUND = 'd3,
                              FLUSH_CACHE = 'd4,
-			     WAIT_FOR_NOT_FULL = 'd5,
-			     RELOAD_UTLB = 'd6
+			     WAIT_FOR_NOT_FULL = 'd5
 			    } state_t;
    
    logic [(`M_WIDTH-1):0] r_pc, n_pc, r_miss_pc, n_miss_pc;
@@ -408,7 +392,6 @@ endfunction
    logic [31:0] 	  t_insn_data, t_insn_data2, t_insn_data3, t_insn_data4;
    logic [`M_WIDTH-1:0]   t_simm;
    logic 		  t_is_call, t_is_ret;
-   logic 		  t_utlb_hit;
    logic [2:0] 		  t_branch_cnt;
    logic [4:0] 		  t_branch_marker, t_spec_branch_marker;
    logic [2:0] 		  t_first_branch;
@@ -418,8 +401,6 @@ endfunction
    //$display("r_cache_pc = %x, t_branch_locs = %b, t_insn_idx = %d, t_branch_marker = %b, first_branch = %d",
    //r_cache_pc,t_branch_locs, t_insn_idx, t_branch_marker, t_first_branch);
    //end
-   
-   utlb_entry_t t_utlb_hit_entry;
    
    
    localparam SEXT = `M_WIDTH-16;
@@ -635,33 +616,6 @@ endfunction
 	  end
      end
 `endif
-
-   utlb #(1) utlb0 (
-		    .clk(clk),
-		    .reset(reset),
-		    .flush(n_flush_complete),
-		    .req(n_req),
-		    .addr({t_cache_tag,t_cache_idx,{IDX_START{1'b0}}}),
-		    .tlb_rsp(tlb_rsp),
-		    .tlb_rsp_valid(tlb_rsp_valid),
-		    .hit(t_utlb_hit),
-		    .hit_entry(t_utlb_hit_entry)
-	       );
-
-   assign utlb_miss_req = r_utlb_miss_req;
-   assign utlb_miss_paddr = r_utlb_miss_paddr;
-
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if(restart_valid)
-   // 	  begin
-   // 	     $display("fe received restart at cycle %d, restart pc = %x", r_cycle, restart_pc);
-   // 	  end
-   // 	if(restart_ack)
-   // 	  begin
-   // 	     $display("fe restart ack at cycle %d, restart pc = %x", r_cycle, restart_pc);
-   // 	  end
-   //   end
    
    always_ff@(posedge clk)
      begin
@@ -719,8 +673,6 @@ endfunction
       
    always_comb
      begin
-	n_utlb_miss_req = 1'b0;
-	n_utlb_miss_paddr = r_utlb_miss_paddr;
 	n_pc = r_pc;
 	n_miss_pc = r_miss_pc;
 	n_cache_pc = 'd0;
@@ -849,15 +801,6 @@ endfunction
 		    t_clear_fq = 1'b1;
 		    if(r_resteer_bubble) $stop();		    
 		 end // if (n_restart_req)
-	       else if(!t_utlb_hit && (t_miss || t_hit))
-		 begin
-		    n_miss_pc = r_cache_pc;
-		    n_pc = r_pc;
-		    n_utlb_miss_req = 1'b1;
-		    n_utlb_miss_paddr = r_cache_pc[`M_WIDTH-1:`LG_PG_SZ];
-		    n_state = RELOAD_UTLB;
-		    if(r_resteer_bubble) $stop();		    
-		 end
 	       else if(t_miss)
 		 begin
 		    n_state = INJECT_RELOAD;
@@ -1087,19 +1030,6 @@ endfunction
 		    t_clear_fq = 1'b1;
 		 end // if (n_restart_req)
 	    end
-	  RELOAD_UTLB:
-	    begin
-	       t_cache_idx = r_miss_pc[IDX_STOP-1:IDX_START];
-	       t_cache_tag = r_miss_pc[(`M_WIDTH-1):IDX_STOP];
-	       //if(fq_full) $stop();
-	       //if(n_flush_req) $stop();
-	       if(tlb_rsp_valid)
-		 begin
-		    n_cache_pc = r_miss_pc;
-		    n_req = 1'b1;
-		    n_state = fq_full ? WAIT_FOR_NOT_FULL : ACTIVE;
-		 end
-	    end // case: RELOAD_TLB
 	  default:
 	    begin
 	    end
@@ -1423,8 +1353,6 @@ endfunction
 	     r_arch_rs_tos <= RETURN_STACK_ENTRIES-1;
 	     r_arch_gbl_hist <= 'd0;
 	     r_spec_gbl_hist <= 'd0;
-	     r_utlb_miss_req <= 1'b0;
-	     r_utlb_miss_paddr <= 'd0;	     
 	     r_cache_hits <= 'd0;
 	     r_cache_accesses <= 'd0;
 	     r_resteer_bubble <= 1'b0;
@@ -1455,8 +1383,6 @@ endfunction
 	     r_arch_rs_tos <= n_arch_rs_tos;
 	     r_arch_gbl_hist <= n_arch_gbl_hist;
 	     r_spec_gbl_hist <= n_spec_gbl_hist;
-	     r_utlb_miss_req <= n_utlb_miss_req;
-	     r_utlb_miss_paddr <= n_utlb_miss_paddr;	     
 	     r_cache_hits <= n_cache_hits;
 	     r_cache_accesses <= n_cache_accesses;
 	     r_resteer_bubble <= n_resteer_bubble;	     

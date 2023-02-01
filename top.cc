@@ -419,7 +419,6 @@ int main(int argc, char **argv) {
   uint64_t last_retired_pc = 0, last_retired_fp_pc = 0;
   uint64_t mismatches = 0, n_stores = 0, n_loads = 0;
   uint64_t n_branches = 0, n_mispredicts = 0, n_checks = 0, n_flush_cycles = 0;
-  uint64_t n_iside_tlb_misses = 0, n_dside_tlb_misses = 0;
   bool got_mem_req = false, got_mem_rsp = false, got_monitor = false, incorrect = false;
   //assert reset
   for(globals::cycle = 0; (globals::cycle < 4) && !Verilated::gotFinish(); ++globals::cycle) {
@@ -1161,10 +1160,6 @@ int main(int argc, char **argv) {
     inflight[tb->inflight & 31]++;
     max_inflight = std::max(max_inflight, static_cast<uint32_t>(tb->inflight));
 
-    if(tb->iside_tlb_miss)
-      ++n_iside_tlb_misses;
-    if(tb->dside_tlb_miss)
-      ++n_dside_tlb_misses;      
     //negedge
     tb->mem_rsp_valid = 0;
 
@@ -1266,8 +1261,6 @@ int main(int argc, char **argv) {
 	      << 100.0 *(static_cast<double>(tb->l1i_cache_hits) / tb->l1i_cache_accesses)
 	      << "\n";
 #endif
-    out << "iside tlb misses = " << n_iside_tlb_misses << "\n";
-    out << "dside tlb misses = " << n_dside_tlb_misses << "\n";
 
     out << "branch mispredict rate = "
 	      << (static_cast<double>(n_mispredicts)/n_branches)*100.0

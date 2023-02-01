@@ -47,10 +47,6 @@ module l1d(clk,
 	   mem_rsp_load_data,
 	   mem_rsp_tag,
 	   mem_rsp_opcode,
-	   utlb_miss_req,
-	   utlb_miss_paddr,
-	   tlb_rsp_valid,
-	   tlb_rsp,
 	   cache_accesses,
 	   cache_hits,
 	   cache_hits_under_miss
@@ -99,10 +95,6 @@ module l1d(clk,
 
    input logic [4:0] 			 mem_rsp_opcode;
 
-   output logic 			 utlb_miss_req;
-   output logic [`M_WIDTH-`LG_PG_SZ-1:0] utlb_miss_paddr;
-   input logic 				 tlb_rsp_valid;
-   input 				 utlb_entry_t tlb_rsp;
    
    output logic [63:0] 			 cache_accesses;
    output logic [63:0] 			 cache_hits;
@@ -313,7 +305,6 @@ endfunction
                              FLUSH_CACHE_WAIT,
                              FLUSH_CL,
                              FLUSH_CL_WAIT,
-                             RELOAD_UTLB,
                              HANDLE_RELOAD
                              } state_t;
 
@@ -336,10 +327,6 @@ endfunction
       
    logic [63:0] 			 r_store_stalls, n_store_stalls;
    
-   logic 				 t_utlb_hit;
-   utlb_entry_t t_utlb_hit_entry;
-   logic 				 n_utlb_miss_req, r_utlb_miss_req;
-   logic [`M_WIDTH-`LG_PG_SZ-1:0] 	 n_utlb_miss_paddr, r_utlb_miss_paddr;
    
    logic [31:0] 			 r_cycle;
    assign flush_complete = r_flush_complete;
@@ -354,22 +341,6 @@ endfunction
    assign cache_accesses = r_cache_accesses;
    assign cache_hits = r_cache_hits;
    assign cache_hits_under_miss = r_cache_hits_under_miss;
-   assign utlb_miss_req = r_utlb_miss_req;
-   assign utlb_miss_paddr = r_utlb_miss_paddr;
-  
-
-
-   utlb utlb0 (
-	       .clk(clk),
-	       .reset(reset),
-	       .flush(n_flush_complete),
-	       .req(t_got_req),
-	       .addr(t_addr),
-	       .tlb_rsp(tlb_rsp),
-	       .tlb_rsp_valid(tlb_rsp_valid),
-	       .hit(t_utlb_hit),
-	       .hit_entry(t_utlb_hit_entry)
-	       );
 
    
    always_ff@(posedge clk)
@@ -676,8 +647,6 @@ endfunction
 	     r_cache_accesses <= 'd0;
 	     r_cache_hits_under_miss <= 'd0;
 	     r_store_stalls <= 'd0;
-	     r_utlb_miss_req <= 1'b0;
-	     r_utlb_miss_paddr <= 'd0;
 	     r_inhibit_write <= 1'b0;
 	     memq_empty <= 1'b1;
 	     r_q_priority <= 1'b0;
@@ -728,8 +697,6 @@ endfunction
 	     r_cache_accesses <= n_cache_accesses;
 	     r_cache_hits_under_miss <= n_cache_hits_under_miss;
 	     r_store_stalls <= n_store_stalls;
-	     r_utlb_miss_req <= n_utlb_miss_req;
-	     r_utlb_miss_paddr <= n_utlb_miss_paddr;
 	     r_inhibit_write <= n_inhibit_write;
 	     memq_empty <= mem_q_empty 
 			   && drain_ds_complete 
@@ -1404,8 +1371,6 @@ endfunction
 	t_got_miss = 1'b0;
 	t_push_miss = 1'b0;
 	
-	n_utlb_miss_req = 1'b0;
-	n_utlb_miss_paddr = r_utlb_miss_paddr;	
 	n_req = r_req;
 	n_req2 = r_req2;
 	
@@ -1425,9 +1390,6 @@ endfunction
 	
 	n_core_mem_rsp.dst_valid = 1'b0;
 	n_core_mem_rsp.fp_dst_valid = 1'b0;
-	n_core_mem_rsp.exception_tlb_refill = 1'b0;
-	n_core_mem_rsp.exception_tlb_modified = 1'b0;
-	n_core_mem_rsp.exception_tlb_invalid = 1'b0;
 	n_core_mem_rsp.faulted = 1'b0;
 	n_core_mem_rsp.missed_l1d = 1'b0;
 	n_core_mem_rsp.was_mem = !non_mem_op(r_req.op);
@@ -1886,16 +1848,6 @@ endfunction
 		     n_state = FLUSH_CACHE;
 		     n_inhibit_write = 1'b0;
 		  end
-	    end
-	  RELOAD_UTLB:
-	    begin
-	       //$display("reload TLB for address %x @ cycle %d", 
-	       //	t_mem_head.addr, r_cycle);
-	       if(tlb_rsp_valid)
-		 begin
-		    n_state = ACTIVE;
-		 end
-	       //$stop();
 	    end
 	  default:
 	    begin

@@ -8,9 +8,6 @@ typedef struct packed {
    logic       faulted;
    logic       is_ii;
    logic       take_trap;
-   logic       exception_tlb_refill;
-   logic       exception_tlb_modified;
-   logic       exception_tlb_invalid;
    logic       is_store;
    logic       is_ret;
    logic       is_call;
@@ -95,22 +92,10 @@ typedef struct packed {
    logic 		       dst_valid;
    logic 		       fp_dst_valid;
    logic 		       faulted;
-   logic 		       exception_tlb_refill;
-   logic 		       exception_tlb_modified;
-   logic 		       exception_tlb_invalid;
    logic 		       was_mem;
    logic 		       missed_l1d;
    logic [`M_WIDTH-1:0]        pc;
 } mem_rsp_t;
-
-typedef struct packed {
-   logic [`M_WIDTH-`LG_PG_SZ-1:0] paddr;
-   logic 			  r;
-   logic 			  w;
-   logic 			  x;
-   logic 			  bogus;
-   logic 			  valid;
-} utlb_entry_t;
 
 
 `endif
