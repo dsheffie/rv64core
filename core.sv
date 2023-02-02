@@ -789,13 +789,11 @@ module core(clk,
 	
 	t_fold_uop = (t_uop.op == NOP || 
 		      t_uop.op == J  ||
-		      t_uop.op == II || 
-		      t_uop.op == ERET);
+		      t_uop.op == II);
 
 	t_fold_uop2 = (t_uop2.op == NOP || 
 		       t_uop2.op == J  ||
-		       t_uop2.op == II || 
-		       t_uop2.op == ERET);
+		       t_uop2.op == II);
 	
 	n_ds_done = r_ds_done;
 	n_flush_req = 1'b0;
@@ -844,15 +842,7 @@ module core(clk,
 		 begin
 		    if(t_rob_head.faulted)
 		      begin
-			 if(t_rob_head.is_wait)
-			   begin
-			      $display("wait without interrupts enabled, the end");
-			      n_got_break = 1'b1;
-			      n_flush_req = 1'b1;
-			      n_cause = 5'd9;
-			      n_state = WRITE_EPC;
-			   end
-			 else if(t_rob_head.is_break)
+			 if(t_rob_head.is_break)
 			   begin
 			      n_got_break = 1'b1;
 			      n_flush_req = 1'b1;
@@ -1589,8 +1579,6 @@ module core(clk,
 	     t_rob_tail.is_ret = (t_alloc_uop.op == JR) && (t_uop.srcA == 'd31);
 	     t_rob_tail.is_syscall = (t_alloc_uop.op == SYSCALL);
 	     t_rob_tail.is_break  = (t_alloc_uop.op == BREAK);
-	     t_rob_tail.is_eret = (t_alloc_uop.op == ERET);
-	     t_rob_tail.is_wait = (t_alloc_uop.op == WAIT);
 	     t_rob_tail.is_indirect = t_alloc_uop.op == JALR || t_alloc_uop.op == JR;
 `ifdef ENABLE_CYCLE_ACCOUNTING
 	     t_rob_tail.missed_l1d = 1'b0;
@@ -1638,11 +1626,6 @@ module core(clk,
 		       t_rob_tail.faulted = 1'b1;
 		       t_rob_tail.is_ii = 1'b1;
 		    end
-		  else if(t_uop.op == ERET)
-		    begin
-		       t_rob_tail.faulted = 1'b1;
-		       t_rob_tail.is_eret = 1'b1;
-		    end
 		  else if(t_uop.op == J)
 		    begin
 		       t_rob_tail.take_br = 1'b1;
@@ -1665,8 +1648,6 @@ module core(clk,
 	     t_rob_next_tail.is_ret = (t_alloc_uop2.op == JR) && (t_uop.srcA == 'd31);
 	     t_rob_next_tail.is_syscall = (t_alloc_uop2.op == SYSCALL);
 	     t_rob_next_tail.is_break  = (t_alloc_uop2.op == BREAK);
-	     t_rob_next_tail.is_wait = (t_alloc_uop2.op == WAIT);
-	     t_rob_next_tail.is_eret = (t_alloc_uop2.op == ERET);
 	     t_rob_next_tail.is_indirect = t_alloc_uop2.op == JALR || t_alloc_uop2.op == JR;
 	     
 `ifdef ENABLE_CYCLE_ACCOUNTING
@@ -1707,11 +1688,6 @@ module core(clk,
 		    begin
 		       t_rob_next_tail.faulted = 1'b1;
 		       t_rob_next_tail.is_ii = 1'b1;
-		    end
-		  else if(t_uop2.op == ERET)
-		    begin
-		       t_rob_next_tail.faulted = 1'b1;
-		       t_rob_next_tail.is_eret = 1'b1;
 		    end
 		  else if(t_uop2.op == J)
 		    begin

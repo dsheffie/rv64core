@@ -167,8 +167,7 @@ module exec(clk,
    logic 	t_alu_valid;
    logic 	t_got_break;
    logic 	t_got_syscall;
-   /* yet another hack for linux syscall emulation */
-   logic 	t_set_thread_area;
+
       
    mem_req_t r_mem_q[N_MQ_ENTRIES-1:0];
    logic [`LG_MQ_ENTRIES:0] r_mq_head_ptr, n_mq_head_ptr;
@@ -200,9 +199,9 @@ module exec(clk,
    logic [63:0] t_fp_result;
    
    
-   logic [`M_WIDTH-1:0] t_srcA, t_srcB, t_srcC;
-   logic [`M_WIDTH-1:0] tt_srcA, tt_srcB, tt_srcC;
-   logic [`M_WIDTH-1:0] t_mem_srcA, t_mem_srcB;
+   logic [31:0] t_srcA, t_srcB, t_srcC;
+   logic [31:0] tt_srcA, tt_srcB, tt_srcC;
+   logic [31:0] t_mem_srcA, t_mem_srcB;
    
    logic [63:0] 	t_fp_srcA, t_fp_srcB, t_fp_srcC;
    logic [63:0] 	t_mem_fp_srcB, t_mem_fp_srcC;
@@ -1255,7 +1254,6 @@ module exec(clk,
 	t_pc8 = int_uop.pc + {{HI_EBITS{1'b0}}, 32'd8};
 	t_result = {`M_WIDTH{1'b0}};
 	t_cpr0_result = {`M_WIDTH{1'b0}};
-	t_set_thread_area = 1'b0;	
 	t_result32 = 32'd0;
 	t_unimp_op = 1'b0;
 	t_fault = 1'b0;
@@ -1292,21 +1290,10 @@ module exec(clk,
 	    end
 	  SYSCALL:
 	    begin
-	       //4283 is set_thread_area
 	       t_alu_valid = 1'b1;
 	       t_got_syscall = 1'b1;
 	       t_mispred_br = 1'b1;
-	       //t_fault = 1'b1;
-	       if(t_srcB == 'd4283)
-		 begin
-		    t_result = 'd0;
-		    t_set_thread_area = 1'b1;
-		    t_cpr0_result = monitor_rsp_data;
-		 end
-	       else
-		 begin
-		    t_result = monitor_rsp_data;
-		 end
+	       t_result = monitor_rsp_data;
 	       t_wr_int_prf = 1'b1;	       
 	       t_pc = t_pc4;
 	    end
@@ -1410,13 +1397,6 @@ module exec(clk,
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
-	  DADDU:
-	    begin
-	       t_result = t_srcA + t_srcB;
-	       t_wr_int_prf = 1'b1;
-	       t_alu_valid = 1'b1;
-	       t_unimp_op = r_in_32b_mode;
-	    end
 	  CLZ:
 	    begin
 	       t_result = {{(`M_WIDTH-6){1'b0}}, w_clz};
@@ -1508,13 +1488,6 @@ module exec(clk,
 	       t_result = t_srcA - t_srcB;
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
-	    end
-	  DSUBU:
-	    begin
-	       t_result = t_srcA + t_srcB;
-	       t_wr_int_prf = 1'b1;
-	       t_alu_valid = 1'b1;
-	       t_unimp_op = r_in_32b_mode;
 	    end
 	  AND:
 	    begin
@@ -1755,13 +1728,6 @@ module exec(clk,
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
-	  DADDIU:
-	    begin
-	       t_result = t_srcA + t_simm;
-	       t_wr_int_prf = 1'b1;
-	       t_alu_valid = 1'b1;
-	       t_unimp_op = r_in_32b_mode;
-	    end
 	  SLTI:
 	    begin
 	       t_result = r_in_32b_mode ?
@@ -1785,39 +1751,6 @@ module exec(clk,
 	       t_alu_valid = 1'b1;
 	       t_wr_int_prf = 1'b1;
 	       t_pc = t_pc4;	       
-	    end
-	  DI:
-	    begin
-	       t_result = t_cpr0_srcA;
-	       t_alu_valid = 1'b1;
-	       t_wr_int_prf = int_uop.dst_valid;
-	       t_pc = t_pc4;
-	       t_wr_cpr0 = 1'b1;
-	       t_dst_cpr0 = 'd12;
-	       t_cpr0_result = {t_cpr0_srcA[(`M_WIDTH-1):1], 1'b0};
-	    end
-	  EI:
-	    begin
-	       t_result = t_cpr0_srcA;
-	       t_alu_valid = 1'b1;
-	       t_wr_int_prf = int_uop.dst_valid;
-	       t_pc = t_pc4;
-	       t_wr_cpr0 = 1'b1;
-	       t_dst_cpr0 = 'd12;
-	       t_cpr0_result = {t_cpr0_srcA[(`M_WIDTH-1):1], 1'b1};
-	    end
-	  WAIT:
-	    begin
-	       t_unimp_op = 1'b1;
-	       t_alu_valid = 1'b1;
-	       t_fault = 1'b1;
-	       t_pc = t_pc4;
-	    end
-	  RDHWR:
-	    begin
-	       t_result = t_cpr0_srcA;
-	       t_wr_int_prf = 1'b1;
-	       t_alu_valid = 1'b1;
 	    end
 	  MTC0:
 	    begin
@@ -2697,11 +2630,6 @@ module exec(clk,
 		  //int_uop.dst,
 		  //int_uop.dst_valid);
 		  r_cpr0[t_dst_cpr0] <= t_cpr0_result;
-	       end
-	     /* this is a terrible hack for linux o32 syscall emulation */
-	     else if(r_start_int && t_set_thread_area)
-	       begin
-		  r_cpr0['d29] <= t_cpr0_result;
 	       end
 	     else if(exception_wr_cpr0_val)
 	       begin

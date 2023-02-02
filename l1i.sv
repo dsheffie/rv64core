@@ -429,41 +429,6 @@ endfunction
    assign cache_hits = r_cache_hits;
    assign cache_accesses = r_cache_accesses;
    
-//`define DEBUG 1
-`ifdef DEBUG
-   
-   always_ff@(posedge clk)
-     begin
-	$display("now cycle %d, popping %b, ip %x, data %x, tag %d, monitor %b",
-		 r_cycle, 
-		 insn_ack,
-		 insn.pc,
-		 insn.data,
-		 insn.pht_idx,
-		 insn.data[31:26] == 6'd5);
-     end // always_ff@ (posedge clk)
-`endif //  `ifdef DEBUG
-
-   
-   always_ff@(negedge clk)
-     begin
-	if(fq_full && t_push_insn) $stop();
-	//if(fq_full4 && t_push_insn) $stop();
-	if(fq_full4 && t_push_insn4) $stop();
-	if(fq_empty && insn_ack) $stop();
-     end
-   
-   ///always_ff@(negedge clk)
-   //begin
-   //if(insn_ack)
-   //$display("INSN PC %x ACK'd, entry %d", 
-   //insn.pc, r_fq_head_ptr[`LG_FQ_ENTRIES-1:0]);
-   //if(insn_ack_two)
-   //$display("INSN TWO PC %x ACK'd, entry %d", 
-   //insn_two.pc, r_fq_next_head_ptr[`LG_FQ_ENTRIES-1:0]);
-   //end
-   
-
    always_comb
      begin
 	n_fq_tail_ptr = r_fq_tail_ptr;
@@ -569,61 +534,11 @@ endfunction
 	  end
      end // always_ff@ (posedge clk)
 
-//`define FOOOOOO
-`ifdef FOOOOOO
-   logic r_last_bubble;
-   always_ff@(posedge clk)
-     begin
-	r_last_bubble <= reset ? 1'b0 : r_resteer_bubble;
-     end
-   
-   always_ff@(negedge clk)
-     begin
-	if(t_push_insn4)
-	  begin
-	     $display("cycle %d full %b %b %b %b", r_cycle, fq_full, fq_full2, fq_full3, fq_full4);
-	     $display("4) insn 1 pc = %x, entry %d, tail %d", t_insn.pc,  r_fq_tail_ptr[`LG_FQ_ENTRIES-1:0],  r_fq_head_ptr[`LG_FQ_ENTRIES-1:0]);
-	     $display("4) insn 2 pc = %x, entry %d, tail %d", t_insn2.pc, r_fq_next_tail_ptr[`LG_FQ_ENTRIES-1:0], r_fq_head_ptr[`LG_FQ_ENTRIES-1:0]);
-	     $display("4) insn 3 pc = %x, entry %d, tail %d", t_insn3.pc, r_fq_next3_tail_ptr[`LG_FQ_ENTRIES-1:0], r_fq_head_ptr[`LG_FQ_ENTRIES-1:0]);
-	     $display("4) insn 4 pc = %x, entry %d, tail %d", t_insn4.pc, r_fq_next4_tail_ptr[`LG_FQ_ENTRIES-1:0], r_fq_head_ptr[`LG_FQ_ENTRIES-1:0]);
-	  end
-	if(t_push_insn3)
-	  begin
-	     $display("cycle %d full %b %b %b", r_cycle, fq_full, fq_full2, fq_full3);
-	     $display("3) insn 1 pc = %x, entry %d, tail %d", t_insn.pc,  r_fq_tail_ptr[`LG_FQ_ENTRIES-1:0],  r_fq_head_ptr[`LG_FQ_ENTRIES-1:0]);
-	     $display("3) insn 2 pc = %x, entry %d, tail %d", t_insn2.pc, r_fq_next_tail_ptr[`LG_FQ_ENTRIES-1:0], r_fq_head_ptr[`LG_FQ_ENTRIES-1:0]);
-	     $display("3) insn 3 pc = %x, entry %d, tail %d", t_insn3.pc, r_fq_next3_tail_ptr[`LG_FQ_ENTRIES-1:0], r_fq_head_ptr[`LG_FQ_ENTRIES-1:0]);
-	  end
-	if(t_push_insn2)
-	  begin
-	     $display("cycle %d full %b %b", r_cycle, fq_full, fq_full2);
-	     $display("2) insn 1 pc = %x, entry %d, tail %d", t_insn.pc,  r_fq_tail_ptr[`LG_FQ_ENTRIES-1:0],  r_fq_head_ptr[`LG_FQ_ENTRIES-1:0]);
-	     $display("2) insn 2 pc = %x, entry %d, tail %d", t_insn2.pc, r_fq_next_tail_ptr[`LG_FQ_ENTRIES-1:0], r_fq_head_ptr[`LG_FQ_ENTRIES-1:0]);
-	  end
-	if(t_push_insn)
-	  begin
-	     $display("1) insn 1 pc = %x, entry %d, tail %d", t_insn.pc, 
-		      r_fq_tail_ptr[`LG_FQ_ENTRIES-1:0],  r_fq_head_ptr[`LG_FQ_ENTRIES-1:0]);
-	  end
-	if(r_resteer_bubble)
-	  begin
-	     $display("resteer bubble : r_cache_pc = %x", r_cache_pc);	
-	  end
-	if(r_last_bubble)
-	  begin
-	     $display("cleered bubble : r_cache_pc = %x", r_cache_pc);	
-	     //$stop();
-	  end
-     end
-`endif
    
    always_ff@(posedge clk)
      begin
 	if(restart_valid && restart_src_is_indirect)
 	  begin
-	     //$display("installing %x in location %d", 
-	     //restart_pc, 
-	     //restart_src_pc[(`LG_BTB_SZ+1):2]);
 	     r_btb[restart_src_pc[(`LG_BTB_SZ+1):2]] <= restart_pc;
 	  end	
      end // always_ff@ (posedge clk)
@@ -633,43 +548,6 @@ endfunction
 	r_btb_pc <= reset ? 'd0 : r_btb[n_cache_pc[(`LG_BTB_SZ+1):2]];;
      end
 
-   logic r_dead_flush;
-   logic [31:0] r_dead_count;
-   always_ff@(posedge clk)
-     begin
-	if(reset)
-	  begin
-	     r_dead_flush <= 1'b0;
-	     r_dead_count <= 'd0;
-	  end
-	else
-	  begin
-	     if(r_dead_flush)
-	       begin
-		  //$display("in dead flush mode, %d cycles in", r_dead_count);
-		  r_dead_count <=  flush_complete ? 'd0 : r_dead_count + 'd1;
-	       end
-	     
-	     if(r_dead_flush && flush_complete)
-	       begin
-		  r_dead_flush <= 1'b0;
-	       end
-	     else if(flush_req)
-	       begin
-		  r_dead_flush <= 1'b1;
-	       end
-	  end
-     end // always_ff@ (posedge clk)
-
-   always_ff@(negedge clk)
-     begin
-	if(r_dead_count > 32'd16777216)
-	  begin
-	     $display("no fe flush in %d cycles!, r_state = %d, fq_full = %b", 
-		      r_dead_count, r_state, fq_full);
-	     $stop();
-	  end
-     end   
       
    always_comb
      begin
@@ -717,12 +595,6 @@ endfunction
 				} >> t_insn_idx) & 
 			       {4'b1111, !((t_pd == IS_COND_BR) && !r_pht_out[1])};
 
-	//if((t_branch_marker != t_spec_branch_marker))
-	//begin
-	//$display("t_branch_marker = %b, t_spec_branch_marker = %b, r_cache_pc = %x", t_branch_marker, t_spec_branch_marker, r_cache_pc);
-	//$stop();
-	//end
-	
 	
 	t_first_branch = 'd7;
 	casez(t_spec_branch_marker)
@@ -788,7 +660,6 @@ endfunction
 		    t_clear_fq = 1'b1;
 		    n_state = FLUSH_CACHE;
 		    t_cache_idx = 0;
-		    if(r_resteer_bubble) $stop();
 		 end
 	       else if(n_restart_req)
 		 begin
@@ -799,7 +670,6 @@ endfunction
 		    n_req = 1'b0;
 		    n_state = ACTIVE;
 		    t_clear_fq = 1'b1;
-		    if(r_resteer_bubble) $stop();		    
 		 end // if (n_restart_req)
 	       else if(t_miss)
 		 begin
@@ -808,7 +678,6 @@ endfunction
 		    n_mem_req_valid = 1'b1;
 		    n_miss_pc = r_cache_pc;
 		    n_pc = r_pc;
-		    if(r_resteer_bubble) $stop();		    
 		 end
 	       else if(t_hit && !fq_full)
 		 begin
@@ -891,9 +760,6 @@ endfunction
 		    //initial push multiple logic
 		    if(!(t_is_cflow || r_delay_slot))
 		      begin
-			 if(t_first_branch == 'd7)
-			   $stop();
-			 
 			 if(t_first_branch == 'd4 && !fq_full4)
 			   begin
 			      t_push_insn4 = 1'b1;
@@ -948,14 +814,12 @@ endfunction
 		    n_pc = r_pc;
 		    n_miss_pc = r_cache_pc;
 		    n_state = WAIT_FOR_NOT_FULL;
-		    if(r_resteer_bubble) $stop();		    
 		 end
 	    end
 	  INJECT_RELOAD:
 	    begin
 	       if(mem_rsp_valid)
 		 begin
-		    //$stop();
 		    n_state = RELOAD_TURNAROUND;
 		 end
 	    end

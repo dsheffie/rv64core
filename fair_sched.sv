@@ -44,21 +44,5 @@ module fair_sched#(parameter LG_N = 2)(clk, rst, in, y);
 	     y = {1'b0, t_yy};
 	  end
      end
-
-   always_ff@(negedge clk)
-     begin
-	if(any_valid)
-	  begin
-	     if(in[y[LG_N-1:0]] == 1'b0)
-	       begin
-		  $display("input %b, r_cnt %d, t_in %b, t_y = %d, y = %d",
-			   in, r_cnt, t_in, t_y, y);
-		  $display("t_in_shift = %b", t_in_shift);
-		  $display("t_in2 = %b", t_in2);
-		  
-		  $stop();
-	       end
-	  end
-     end
    
 endmodule

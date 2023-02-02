@@ -366,50 +366,6 @@ endfunction
    localparam N_ROB_ENTRIES = (1<<`LG_ROB_ENTRIES);
    logic [1:0] r_graduated [N_ROB_ENTRIES-1:0];
 
-
-
-
-   
-   always_ff@(negedge clk)
-     begin
-	//$display("at cycle %d : state = %d, r_flush_req = %b, mem_q_empty = %b, memq_empty = %b, t_got_miss = %b, head_of_rob_valid = %b", 
-	//r_cycle, r_state, r_flush_req, mem_q_empty, memq_empty, t_got_miss, head_of_rob_ptr_valid);
-
-	//if(drain_ds_complete && core_mem_req_valid && core_mem_req_ack)
-	//$stop();
-	//if(memq_empty)
-	//begin
-	//   $display("memq_empty claimed but %d txns inflight", r_n_inflight);
-	// end
-	
-	
-`ifdef VERBOSE_L1D
-	if(drain_ds_complete)
-	  begin
-	     $display("MACHINE CLEAR cycle %d : dead_rob_mask %b", r_cycle, dead_rob_mask);
-	  end
-	
-	if(core_mem_rsp_valid)
-	begin
-	   $display("RSP cycle %d : pc %x core_mem_rsp.rob_ptr = %d, dst_ptr = %d for data %x", 
-		    r_cycle, core_mem_rsp.pc, core_mem_rsp.rob_ptr, core_mem_rsp.dst_ptr, core_mem_rsp.data);
-	end
-	
-	if(core_mem_req_valid && core_mem_req_ack)
-	  begin
-	     $display("REQ at cycle %d, mem req for rob ptr %d valid, mem_q full %b, got miss %b, got req %b, r_last_wr %b, uuid %d store %b data %x", 
-		      r_cycle, core_mem_req.rob_ptr, mem_q_full, t_got_miss, r_got_req, r_last_wr, core_mem_req.uuid, core_mem_req.is_store, core_mem_req.data);
-	  end
-`endif //  `ifdef VERBOSE_L1D
-	
-	//if(restart_valid && !mem_q_empty && 1'b0)
-	//begin
-	//$display("mem_uq_head = %d, mem_uq_tail = %d",
-	//r_mq_head_ptr, r_mq_tail_ptr);
-	//$stop();
-	//end
-     end
-
    
    logic t_reset_graduated;
    
@@ -426,50 +382,27 @@ endfunction
 	  begin
 	     if(retired_rob_ptr_valid && r_graduated[retired_rob_ptr] == 2'b01)
 	       begin
-`ifdef VERBOSE_L1D
-		  $display("cycle %d, %d ENTRY GRADUATED", r_cycle, retired_rob_ptr);
-`endif
 		  r_graduated[retired_rob_ptr] <= 2'b10;
 	       end
 	     if(retired_rob_ptr_two_valid && r_graduated[retired_rob_ptr_two] == 2'b01) 
 	       begin
-`ifdef VERBOSE_L1D		  
-		  $display("cycle %d, %d ENTRY GRADUATED", r_cycle, retired_rob_ptr_two);
-`endif
 		  r_graduated[retired_rob_ptr_two] <= 2'b10;
 	       end
 	     if(t_incr_busy)
 	       begin
-		  if(r_graduated[r_req2.rob_ptr] != 2'b00)
-		    $stop();
-`ifdef VERBOSE_L1D
-		  $display("cycle %d, %d ENTRY INFLIGHT", r_cycle, r_req2.rob_ptr);
-`endif
 		  r_graduated[r_req2.rob_ptr] <= 2'b01;
 	       end
 	     if(t_reset_graduated)
                begin
-`ifdef VERBOSE_L1D		  
-		  $display("cycle %d, %d ENTRY RESET", r_cycle, r_req.rob_ptr);		  	
-`endif
 		  r_graduated[r_req.rob_ptr] <= 2'b00;
 	       end
 	     if(t_force_clear_busy)
 	       begin
-		  //$display("cycle %d, %d ENTRY FORCE RESET", r_cycle, t_mem_head.rob_ptr);		  		  		  
 		  r_graduated[t_mem_head.rob_ptr] <= 2'b00;
 	       end
 	  end
      end // always_ff@ (posedge clk)
 
-   always_ff@(negedge clk)
-     begin
-	if(drain_ds_complete && (retired_rob_ptr_valid || retired_rob_ptr_two_valid))
-	  begin
-	     $stop();
-	  end
-	   
-     end
 
    always_ff@(posedge clk)
      begin
@@ -855,55 +788,6 @@ endfunction
 	end
    endgenerate
 
-`ifdef DEBUG
-   always_ff@(negedge clk)
-     begin
-   	$display("state = %d, mem_q_empty = %b core_mem_req_valid = %b, op %d, head %d, rob ptr %d, dst ptr %d, rsp valid %b, rob rsp ptr %d",
-   		 r_state,
-		 mem_q_empty,
-   		 core_mem_req_valid,
-   		 core_mem_req.op,
-   		 head_of_rob_ptr, 
-   		 core_mem_req.rob_ptr,
-		 core_mem_req.dst_ptr,
-   		 core_mem_rsp_valid,
-   		 core_mem_rsp.rob_ptr
-   		 );
-     end
-`endif
-
-
-`ifdef VERBOSE_L1D
-   always_ff@(negedge clk)
-     begin
-	//store %b     end
-	//t_mh_block & t_pop_mq | t_cm_block & core_mem_req_ack;
-	if(r_got_req && r_must_forward)
-	  begin
-	     $display("cycle %d forwarding from last store for pc %x r_req.uuid = %d, last uuid %d,store %b, r_req.addr = %x, index %d, fwd cnt %d, rr_got_req %b, rr_is_retry %b rr_is_reload %b rr_last_wr %b", 
-		      r_cycle, r_req.pc, r_req.uuid, rr_uuid, r_req.is_store, r_req.addr, r_cache_idx, r_fwd_cnt, rr_got_req, rr_is_retry, rr_did_reload, rr_last_wr);
-	     //if(!(rr_is_retry||rr_did_reload)) $stop();
-
-	     $display("FWD DATA : t_data = %x, t_data2 = %x", t_data, t_data2);
-	     if(r_req.uuid == 'd33625 && rr_uuid == 'd33624)
-	       $stop();
-	  end
-	
-	
-	if(t_mh_block & t_pop_mq)
-	  begin
-	     $display("mh block : cycle %d need to forward next cycle for r_req.addr %x, state %d", 
-		      r_cycle, r_req.addr, r_state);
-	  end
-	if(t_cm_block & core_mem_req_ack)
-	  begin
-	     $display("cm block : cycle %d need to forward next cycle for r_req.addr %x, state %d", 
-		      r_cycle, r_req.addr, r_state);
-	  end
-
-	
-     end // always_ff@ (negedge clk)
-`endif
 
    always_comb
      begin
@@ -1059,8 +943,6 @@ endfunction
    
    always_comb
      begin
-	//$stop();
-	//end
 	t_data = r_got_req && r_must_forward ? r_array_wr_data : r_array_out;
 	
 	t_w32 = (select_cl32(t_data, r_req.addr[WORD_STOP-1:WORD_START]));
@@ -1522,14 +1404,6 @@ endfunction
 		    if(r_valid_out && (r_tag_out == r_cache_tag))
 		      begin /* valid cacheline - hit in cache */
 			 
-`ifdef VERBOSE_L1D
-			 $display("cache hit at cycle %d for store %b pc %x, dst ptr %d, rob ptr %d, addr %x, index %d, retry %b, reload %b, uuid %d, fwd %b", 
-				  r_cycle, r_req.is_store, r_req.pc, r_req.dst_ptr, r_req.rob_ptr, r_req.addr, r_cache_idx, r_is_retry, 
-				  r_did_reload, r_req.uuid, r_must_forward);
-`endif
-			 if(!(r_is_retry || r_did_reload))
-			   $stop();
-			 
 			 			 
 			 if(r_req.is_store)
 			   begin
@@ -1547,10 +1421,6 @@ endfunction
 		    else if(r_valid_out && r_dirty_out && (r_tag_out != r_cache_tag) )
 		      begin
 			 
-`ifdef VERBOSE_L1D
-			 $display("at cycle %d : cache tag miss for rob ptr %d, address %x, rr_cache_idx = %d, r_cache_idx = %d, r_last_wr = %b, rr_last_wr = %b",
-				  r_cycle, r_req.rob_ptr, r_req.addr, rr_cache_idx, r_cache_idx, r_last_wr, rr_last_wr);
-`endif
 			 n_reload_issue = 1'b1; //r_is_retry;			 			 
 			 t_got_miss = 1'b1;
 			 n_inhibit_write = 1'b1;
@@ -1656,11 +1526,6 @@ endfunction
 				 t_pop_mq = 1'b1;
 				 t_force_clear_busy = 1'b1;
 				 t_clr_stuck = 1'b1;
-				 if(t_push_miss && memq_empty) 
-				   begin
-				      $display("memq_empty = %b", memq_empty);
-				      $stop();
-				   end
 			      end
 			    else
 			      begin
