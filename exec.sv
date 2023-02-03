@@ -200,7 +200,6 @@ module exec(clk,
    
    
    logic [31:0] t_srcA, t_srcB, t_srcC;
-   logic [31:0] tt_srcA, tt_srcB, tt_srcC;
    logic [31:0] t_mem_srcA, t_mem_srcB;
    
    logic [63:0] 	t_fp_srcA, t_fp_srcB, t_fp_srcC;
@@ -644,12 +643,9 @@ module exec(clk,
    
    always_comb
      begin
-	tt_srcA = r_int_prf[int_uop.srcA];
-	tt_srcB = r_int_prf[int_uop.srcB];
-	tt_srcC = r_int_prf[int_uop.srcC];
-	t_srcA = r_in_32b_mode ? {{HI_EBITS{1'b0}},tt_srcA[31:0]} : tt_srcA;
-	t_srcB = r_in_32b_mode ? {{HI_EBITS{1'b0}},tt_srcB[31:0]} : tt_srcB;
-	t_srcC = r_in_32b_mode ? {{HI_EBITS{1'b0}},tt_srcC[31:0]} : tt_srcC;
+	t_srcA = r_int_prf[int_uop.srcA];
+	t_srcB = r_int_prf[int_uop.srcB];
+	t_srcC = r_int_prf[int_uop.srcC];
 	t_src_hilo = r_hilo_prf[int_uop.hilo_src];
 	t_mem_srcA = r_int_prf[mem_uq.srcA];
 	t_mem_srcB = r_int_prf[mem_uq.srcB];
