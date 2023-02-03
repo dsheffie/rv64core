@@ -96,7 +96,7 @@ module l1i(clk,
    input logic 			retired_ret;
 
    input logic [4:0] 		retire_reg_ptr;
-   input logic [(`M_WIDTH-1):0] retire_reg_data;
+   input logic [63:0] 		retire_reg_data;
    input logic 			retire_reg_valid;
 
    input logic 			branch_pc_valid;
@@ -1139,7 +1139,7 @@ endfunction
      begin
 	if(retire_reg_valid && retire_valid && retired_call)
 	  begin
-	     r_arch_return_stack[r_arch_rs_tos] <= retire_reg_data;
+	     r_arch_return_stack[r_arch_rs_tos] <= retire_reg_data[31:0];
 	  end
      end
    always_comb

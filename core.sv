@@ -148,12 +148,12 @@ module core(clk,
    input logic 	 core_mem_rsp_valid;
 
    output logic [4:0] 			  retire_reg_ptr;
-   output logic [(`M_WIDTH-1):0] 	  retire_reg_data;
+   output logic [63:0] 			  retire_reg_data;
    output logic 			  retire_reg_valid;
    output logic 			  retire_reg_fp_valid;
 
    output logic [4:0] 			  retire_reg_two_ptr;
-   output logic [(`M_WIDTH-1):0] 	  retire_reg_two_data;
+   output logic [63:0] 			  retire_reg_two_data;
    output logic 			  retire_reg_two_valid;
    output logic 			  retire_reg_fp_two_valid;
    
@@ -607,11 +607,11 @@ module core(clk,
    	else
    	  begin
    	     retire_reg_ptr <= t_rob_head.ldst;
-   	     retire_reg_data <= t_rob_head.data[31:0];
+   	     retire_reg_data <= t_rob_head.data;
    	     retire_reg_valid <= t_rob_head.valid_dst && t_retire;
 	     retire_reg_fp_valid <= t_rob_head.valid_fp_dst && t_retire;
    	     retire_reg_two_ptr <= t_rob_next_head.ldst;
-   	     retire_reg_two_data <= t_rob_next_head.data[31:0];
+   	     retire_reg_two_data <= t_rob_next_head.data;
    	     retire_reg_two_valid <= t_rob_next_head.valid_dst && t_retire_two;
 	     retire_reg_fp_two_valid <= t_rob_next_head.valid_fp_dst && t_retire_two;
 	     

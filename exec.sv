@@ -2560,7 +2560,7 @@ module exec(clk,
 	if(mem_rsp_dst_valid)
 	  begin
 	     //$display("mem writing to prf loc %d at cycle %d with data %x", mem_rsp_dst_ptr, r_cycle, mem_rsp_load_data);
-	     r_int_prf[mem_rsp_dst_ptr] <= r_in_32b_mode ? {{HI_EBITS{1'b0}},mem_rsp_load_data[31:0]} : mem_rsp_load_data[`M_WIDTH-1:0];
+	     r_int_prf[mem_rsp_dst_ptr] <= mem_rsp_load_data[31:0];
 	  end
 	/* warning - terrible hack */
 	else if(t_got_syscall && r_start_int)
