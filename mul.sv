@@ -80,7 +80,7 @@ module mul(clk,reset,opcode,go,
    assign hilo_prf_ptr_val_out = r_hilo_val[`MUL_LAT];
    assign hilo_prf_ptr_out = r_hilo_ptr[`MUL_LAT];
 
-   logic 			   t_signed;
+   logic 			   t_signed, r_signed;
    
    always_comb
      begin
@@ -91,21 +91,31 @@ module mul(clk,reset,opcode,go,
    wire [63:0] w_pp_us[31:0];
    wire [63:0] w_pp[31:0];
    logic [63:0] r_pp[`MUL_LAT:0][31:0];
+
+   logic [31:0] rA,rB;
+   always_ff@(posedge clk)
+     begin
+	rA <= src_A;
+	rB <= src_B;
+	r_signed <= t_signed;
+     end
    
    //compute unsigned partial products
+   assign w_pp_us[0] = {32'd0, (rA & {32{rB[0]}})};
+   assign w_pp_us[31] = {1'b0, (rA & {32{rB[31]}}), 31'd0};
    generate
-      for(genvar i = 0; i < 32; i=i+1)
+      for(genvar i = 1; i < 31; i=i+1)
 	begin
-	   assign w_pp_us[i] = { {(32-i){1'b0}}, (src_A & {32{src_B[i]}} ), {i{1'b0}} };
+	   assign w_pp_us[i] = { {(32-i){1'b0}}, (rA & {32{rB[i]}} ), {i{1'b0}} };
 	end
       
       for(genvar i = 1; i < 32; i=i+1)
 	begin
-	   assign w_pp[i] = {w_pp_us[i][63:(32+i)], (t_signed ? ~w_pp_us[i][31+i] : w_pp_us[i][31+i]), w_pp_us[i][(30+i):0]};
+	   assign w_pp[i] = {w_pp_us[i][63:(32+i)], (r_signed ? ~w_pp_us[i][31+i] : w_pp_us[i][31+i]), w_pp_us[i][(30+i):0]};
 	end
    endgenerate
-   assign w_pp[0] = {w_pp_us[0][63:33], (t_signed ? {1'b1, ~w_pp_us[0][31]} : {1'b0, w_pp_us[0][31]} ), w_pp_us[0][30:0]};
-   assign w_pp[31] = t_signed ? {1'b1, w_pp_us[31][62], ~w_pp_us[31][61:31], 31'd0} : w_pp_us[31];
+   assign w_pp[0] = {w_pp_us[0][63:33], (r_signed ? {1'b1, ~w_pp_us[0][31]} : {1'b0, w_pp_us[0][31]} ), w_pp_us[0][30:0]};
+   assign w_pp[31] = r_signed ? {1'b1, w_pp_us[31][62], ~w_pp_us[31][61:31], 31'd0} : w_pp_us[31];
 
    always_ff@(posedge clk)
      begin

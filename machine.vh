@@ -51,7 +51,7 @@
 /* mem retry queue */
 `define LG_MRQ_ENTRIES 3
 
-`define MUL_LAT 2
+`define MUL_LAT 3
 
 `define DIV32_LAT 35
 

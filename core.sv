@@ -856,12 +856,6 @@ module core(clk,
 			      n_cause = 5'd10;
 			      n_state = WRITE_EPC;
 			   end
-			 else if(t_rob_head.take_trap)
-			   begin
-			      n_flush_req = 1'b1;
-			      n_cause = 5'd13;
-			      n_state = WRITE_EPC;
-			   end
 			 else
 			   begin
 			      n_ds_done = !t_rob_head.has_delay_slot;
@@ -1042,13 +1036,9 @@ module core(clk,
 	       t_clr_rob = 1'b1;
 	       t_clr_dq = 1'b1;
 	       n_machine_clr = 1'b0;
-	       //$display("restarting after fault at cycle %d", r_cycle);
-	       //$display("$t4 rat pointer : spec %d, retire %d", 
-		//	r_alloc_rat['d12], r_retire_rat['d12]);
 	       
 	       if(n_got_restart_ack)
 		 begin
-		    //$display("%d : pipeline clear took  %d cycles",  r_cycle, r_restart_cycles);
 		    n_state = ACTIVE;
 		    n_ds_done = 1'b0;
 		    t_restart_complete = 1'b1;
@@ -1059,7 +1049,6 @@ module core(clk,
 	       t_alloc = !t_rob_full && !t_uq_full 
 			 && (r_prf_free != 'd0) 
 			   && !t_dq_empty;
-	       //$display("allocating serializing instruction for pc %x", t_uop.pc);
 	       n_state = t_alloc ? WAIT_FOR_SERIALIZE_AND_RESTART : ALLOC_FOR_SERIALIZE;
 	    end
 	  WAIT_FOR_SERIALIZE_AND_RESTART:
@@ -1528,8 +1517,6 @@ module core(clk,
 	t_rob_tail.pc = 'd0;
 	t_rob_tail.target_pc = 'd0;
 	t_rob_tail.is_ii = 1'b0;
-	t_rob_tail.take_trap = 1'b0;
-	t_rob_tail.is_store = 1'b0;
 	t_rob_tail.is_call = 1'b0;
 	t_rob_tail.is_ret = 1'b0;
 	t_rob_tail.is_break = 1'b0;
@@ -1553,8 +1540,6 @@ module core(clk,
 	t_rob_next_tail.pc = 'd0;
 	t_rob_next_tail.target_pc = 'd0;
 	t_rob_next_tail.is_ii = 1'b0;
-	t_rob_next_tail.take_trap = 1'b0;
-	t_rob_next_tail.is_store = 1'b0;
 	t_rob_next_tail.is_call = 1'b0;
 	t_rob_next_tail.is_ret = 1'b0;
 	t_rob_next_tail.is_break = 1'b0;
@@ -1573,7 +1558,6 @@ module core(clk,
 	     t_rob_tail.has_delay_slot = t_alloc_uop.has_delay_slot;
 	     t_rob_tail.has_nullifying_delay_slot = t_alloc_uop.has_nullifying_delay_slot;
 	     t_rob_tail.pht_idx = t_alloc_uop.pht_idx;
-	     t_rob_tail.is_store = t_alloc_uop.is_store;
 	     
 	     t_rob_tail.is_call = t_alloc_uop.op == JAL || t_alloc_uop.op == JALR || t_alloc_uop.op == BAL;
 	     t_rob_tail.is_ret = (t_alloc_uop.op == JR) && (t_uop.srcA == 'd31);
@@ -1642,7 +1626,6 @@ module core(clk,
 	     t_rob_next_tail.has_delay_slot = t_uop2.has_delay_slot;
 	     t_rob_next_tail.has_nullifying_delay_slot = t_uop2.has_nullifying_delay_slot;
 	     t_rob_next_tail.pht_idx = t_alloc_uop2.pht_idx;
-	     t_rob_next_tail.is_store = t_alloc_uop2.is_store;
 
 	     t_rob_next_tail.is_call = t_alloc_uop2.op == JAL || t_alloc_uop2.op == JALR || t_alloc_uop2.op == BAL;
 	     t_rob_next_tail.is_ret = (t_alloc_uop2.op == JR) && (t_uop.srcA == 'd31);
@@ -1762,7 +1745,6 @@ module core(clk,
 		  r_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].faulted <= t_complete_bundle_1.faulted;
 		  r_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].target_pc <= t_complete_bundle_1.restart_pc;
 		  r_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].is_ii <= t_complete_bundle_1.is_ii;
-		  r_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].take_trap <= t_complete_bundle_1.take_trap;	     
 		  r_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].take_br <= t_complete_bundle_1.take_br;
 		  r_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].data <= t_complete_bundle_1.data;
 `ifdef ENABLE_CYCLE_ACCOUNTING
@@ -1775,7 +1757,6 @@ module core(clk,
 		  r_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].target_pc <= t_complete_bundle_2.restart_pc;
 		  r_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].is_ii <= t_complete_bundle_2.is_ii;
 		  r_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].take_br <= t_complete_bundle_2.take_br;
-		  r_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].take_trap <= t_complete_bundle_2.take_trap;	     
 		  r_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].data <= t_complete_bundle_2.data;
 `ifdef ENABLE_CYCLE_ACCOUNTING
 		  r_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].complete_cycle <= r_cycle;

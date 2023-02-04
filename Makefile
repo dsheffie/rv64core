@@ -1,6 +1,6 @@
 UNAME_S = $(shell uname -s)
 
-OBJ = top.o verilated.o verilated_vcd_c.o loadelf.o interpret.o disassemble.o helper.o saveState.o sparse_mem.o interpret64.o linux_o32_syscall.o
+OBJ = top.o verilated.o verilated_vcd_c.o loadelf.o interpret.o disassemble.o helper.o saveState.o sparse_mem.o
 
 SV_SRC = core_l1d_l1i.sv core.sv exec.sv decode_mips32.sv ext_mask.sv shiftregbit.sv shift_right.sv mul.sv find_first_set.sv divider.sv l1d.sv l1i.sv machine.vh rob.vh uop.vh fpu.sv fp_mul.sv fp_add.sv ram1r1w.sv ram2r1w.sv popcount.sv count_leading_zeros.sv fp_trunc_to_int32.sv fp_div.sv unsigned_divider.sv fp_convert.sv fair_sched.sv fp_compare.sv fp_compare.vh
 

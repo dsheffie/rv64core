@@ -34,7 +34,6 @@
 #include "globals.hh"
 #include "disassemble.hh"
 #include "saveState.hh"
-#include "linux_monitor.hh"
 #include "pipeline_record.hh"
 
 #include "Vcore_l1d_l1i__Dpi.h"

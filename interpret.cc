@@ -14,15 +14,11 @@
 #include <sys/uio.h>
 #include <sys/utsname.h>
 
-#ifdef __linux__
-#include <linux/utsname.h>
-#endif
 
 #include "interpret.hh"
 #include "disassemble.hh"
 #include "helper.hh"
 #include "globals.hh"
-#include "linux_o32_syscall.hh"
 
 static fpMode currFpMode = fpMode::mipsii;
 
@@ -131,13 +127,6 @@ static void setConditionCode(state_t *s, uint32_t v, uint32_t cc) {
 
 
 void mkMonitorVectors(state_t *s) {
-#ifdef LINUX_SYSCALL_EMULATION
-  for (uint32_t loop = 0; (loop < IDT_MONITOR_SIZE); loop += 4) {
-      uint32_t vaddr = IDT_MONITOR_BASE + loop;
-      uint32_t insn = 13;
-      s->mem.set<uint32_t>(vaddr, globals::isMipsEL ? bswap<true,uint32_t>(insn) : bswap<false,uint32_t>(insn));
-  }  
-#else
   for (uint32_t loop = 0; (loop < IDT_MONITOR_SIZE); loop += 4) {
       uint32_t vaddr = IDT_MONITOR_BASE + loop;
       uint32_t insn = (RSVD_INSTRUCTION |
@@ -146,7 +135,6 @@ void mkMonitorVectors(state_t *s) {
       s->mem.set<uint32_t>(vaddr, globals::isMipsEL ? bswap<true,uint32_t>(insn) : bswap<false,uint32_t>(insn));
 
   }
-#endif
 }
 
 
@@ -1578,11 +1566,7 @@ void execMips(state_t *s) {
 	s->insn_histo[mipsInsn::SLLV]++;
 	break;
       case 0x05:
-#ifdef LINUX_SYSCALL_EMULATION
-	abort();
-#else
 	_monitorBody<EL>(inst, s);
-#endif
 	break;
       case 0x06:  
 	s->gpr[rd] = ((uint32_t)s->gpr[rt]) >> (s->gpr[rs] & 0x1f);
@@ -1612,11 +1596,6 @@ void execMips(state_t *s) {
 	break;
       }
       case 0x0C: /* syscall */
-#ifdef LINUX_SYSCALL_EMULATION
-	linux_o32_syscall(s);
-	s->pc += 4;
-	break;
-#endif
       case 0x0D: /* break */
 	s->brk = 1;
 	s->insn_histo[mipsInsn::BREAK]++;

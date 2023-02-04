@@ -2682,7 +2682,6 @@ module exec(clk,
 	     complete_bundle_1.restart_pc <= 'd0;
 	     complete_bundle_1.is_ii <= 1'b0;
 	     complete_bundle_1.take_br <= 1'b0;
-	     complete_bundle_1.take_trap <= 1'b0;
 	     complete_bundle_1.data <= {32'd0, t_mul_result[`M_WIDTH-1:0]};
 	  end
 	else
@@ -2693,7 +2692,6 @@ module exec(clk,
 	     complete_bundle_1.restart_pc <= t_pc;
 	     complete_bundle_1.is_ii <= t_unimp_op;
 	     complete_bundle_1.take_br <= t_take_br;
-	     complete_bundle_1.take_trap <= 1'b0;
 	     complete_bundle_1.data <=  {32'd0, t_result};
 	  end
 	//(uq.rob_ptr == 'd5) ? 1'b1 : 1'b0;
@@ -2724,7 +2722,6 @@ module exec(clk,
 	     complete_bundle_2.restart_pc <= 'd0;
 	     complete_bundle_2.is_ii <= 1'b0;
 	     complete_bundle_2.take_br <= 1'b0;
-	     complete_bundle_2.take_trap <= 1'b0;
 	     complete_bundle_2.data <= t_fpu_result;
 	  end // if (t_fpu_result_valid )
 	else if(t_sp_div_valid)
@@ -2735,7 +2732,6 @@ module exec(clk,
 	     complete_bundle_2.restart_pc <= 'd0;
 	     complete_bundle_2.is_ii <= 1'b0;
 	     complete_bundle_2.take_br <= 1'b0;
-	     complete_bundle_2.take_trap <= 1'b0;
 	     complete_bundle_2.data <= {32'd0, t_sp_div_result};	     
 	  end
 	else if(t_dp_div_valid)
@@ -2746,7 +2742,6 @@ module exec(clk,
 	     complete_bundle_2.restart_pc <= 'd0;
 	     complete_bundle_2.is_ii <= 1'b0;
 	     complete_bundle_2.take_br <= 1'b0;
-	     complete_bundle_2.take_trap <= 1'b0;
 	     complete_bundle_2.data <= t_dp_div_result;
 	  end
 	else
@@ -2757,7 +2752,6 @@ module exec(clk,
 	     complete_bundle_2.restart_pc <= 'd0;
 	     complete_bundle_2.is_ii <= 1'b0;
 	     complete_bundle_2.take_br <= 1'b0;
-	     complete_bundle_2.take_trap <= 1'b0;
 	     complete_bundle_2.data <= t_fp_result;
 	  end
      end
