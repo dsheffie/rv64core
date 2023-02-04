@@ -49,7 +49,6 @@ module decode_mips32(in_64b_fpreg_mode, insn,
 	uop.dst = 'd0;
 	uop.srcA_valid = 1'b0;
 	uop.srcB_valid = 1'b0;
-	uop.srcC_valid = 1'b0;
 	uop.fp_srcA_valid = 1'b0;
 	uop.fp_srcB_valid = 1'b0;
 	uop.fp_srcC_valid = 1'b0;
@@ -206,32 +205,6 @@ module decode_mips32(in_64b_fpreg_mode, insn,
 		      uop.is_br = 1'b1;
 		      uop.is_int = 1'b1;
 		   end
-		 6'd10: /* MOVZ */
-		   begin
-		      uop.srcA = rt;
-		      uop.srcA_valid = 1'b1;
-		      uop.srcB = rs;
-		      uop.srcB_valid = 1'b1;
-		      uop.srcC = rd;
-		      uop.srcC_valid = 1'b1;
-		      uop.dst = rd;
-		      uop.dst_valid = (rd != 'd0);
-		      uop.op = (rd == 'd0) ? NOP : MOVZ;
-		      uop.is_int = 1'b1;
-		   end
-		 6'd11: /* MOVN */
-		   begin
-		      uop.srcA = rt;
-		      uop.srcA_valid = 1'b1;
-		      uop.srcB = rs;
-		      uop.srcB_valid = 1'b1;
-		      uop.srcC = rd;
-		      uop.srcC_valid = 1'b1;
-		      uop.dst = rd;
-		      uop.dst_valid = (rd != 'd0);
-		      uop.op = (rd == 'd0) ? NOP : MOVN;
-		      uop.is_int = 1'b1;
-		   end // case: 6'd11
 		 6'd12:
 		   begin
 		      uop.op = SYSCALL;
@@ -941,34 +914,6 @@ module decode_mips32(in_64b_fpreg_mode, insn,
 			   uop.fcr_src_valid = 1'b1;
 			   uop.is_fp = 1'b1;
 			end // case: 6'd17
- `ifdef FMOVZ_FMOVN
-		      6'd18: /* fmovz */
-			begin
-			   uop.dst = fd;
-			   uop.op = fd[0] ? II:  FP_MOVZ;
-			   uop.fp_dst_valid = 1'b1;
-			   uop.srcA = fs;
-			   uop.fp_srcA_valid = 1'b1;
-			   uop.srcB = fd;
-			   uop.fp_srcB_valid = 1'b1;
-			   uop.srcC = rt;
-			   uop.srcC_valid = 1'b1;			   
-			   uop.is_fp = 1'b1;
-			end
-		      6'd19: /* fmovn */
-			begin
-			   uop.dst = fd;
-			   uop.op = fd[0] ? II : FP_MOVN;
-			   uop.fp_dst_valid = 1'b1;
-			   uop.srcA = fs;
-			   uop.fp_srcA_valid = 1'b1;
-			   uop.srcB = fd;
-			   uop.fp_srcB_valid = 1'b1;
-			   uop.srcC = rt;
-			   uop.srcC_valid = 1'b1;			   
-			   uop.is_fp = 1'b1;
-			end // case: 6'd19
- `endif
 		      6'd32: /* cvt.s */
 			begin
 			   uop.srcA = fs;

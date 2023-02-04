@@ -1306,11 +1306,9 @@ module core(clk,
 				r_fp_alloc_rat[t_uop.srcB[4:0]] :
 				r_alloc_rat[t_uop.srcB[4:0]];
 	  end
-	if(t_uop.srcC_valid || t_uop.fp_srcC_valid)
+	if(t_uop.fp_srcC_valid)
 	  begin
-	     t_alloc_uop.srcC = t_uop.fp_srcC_valid ?
-				r_fp_alloc_rat[t_uop.srcC[4:0]] :
-				r_alloc_rat[t_uop.srcC[4:0]];
+	     t_alloc_uop.srcC = r_fp_alloc_rat[t_uop.srcC[4:0]];
 	  end
 	     
 	if(t_uop.hilo_src_valid)
@@ -1339,13 +1337,10 @@ module core(clk,
 				 (t_uop.dst_valid && (t_uop2.srcB[4:0] == t_uop.dst[4:0]) ?
 				  n_prf_entry :  r_alloc_rat[t_uop2.srcB[4:0]]);	     	     
 	  end
-	if(t_uop2.srcC_valid || t_uop2.fp_srcC_valid)
+	if(t_uop2.fp_srcC_valid)
 	  begin
-	     t_alloc_uop2.srcC = t_uop2.fp_srcC_valid ?
-				 (t_uop.fp_dst_valid && (t_uop2.srcC[4:0] == t_uop.dst[4:0]) ?
-				  n_fp_prf_entry : r_fp_alloc_rat[t_uop2.srcC[4:0]]) :
-				 (t_uop.dst_valid && (t_uop2.srcC[4:0] == t_uop.dst[4:0]) ?
-				  n_prf_entry :  r_alloc_rat[t_uop2.srcC[4:0]]);	     
+	     t_alloc_uop2.srcC = (t_uop2.srcC[4:0] == t_uop.dst[4:0]) ?
+				 n_fp_prf_entry : r_fp_alloc_rat[t_uop2.srcC[4:0]];
 	  end
 	
 	if(t_uop2.hilo_src_valid)

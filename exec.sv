@@ -199,7 +199,7 @@ module exec(clk,
    logic [63:0] t_fp_result;
    
    
-   logic [31:0] t_srcA, t_srcB, t_srcC;
+   logic [31:0] t_srcA, t_srcB;
    logic [31:0] t_mem_srcA, t_mem_srcB;
    
    logic [63:0] 	t_fp_srcA, t_fp_srcB, t_fp_srcC;
@@ -291,15 +291,6 @@ module exec(clk,
 	uq_empty = t_uq_empty;
      end
 
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if(uq_next_full)
-   // 	  begin
-   // 	     $display("cycle %d : uq %b, mq %b, fp %b",
-   // 		      r_cycle, t_uq_next_full, t_mem_uq_next_full, t_fp_uq_next_full);
-   // 	  end
-   //   end
-   
 
    always_ff@(posedge clk)
      begin
@@ -645,7 +636,6 @@ module exec(clk,
      begin
 	t_srcA = r_int_prf[int_uop.srcA];
 	t_srcB = r_int_prf[int_uop.srcB];
-	t_srcC = r_int_prf[int_uop.srcC];
 	t_src_hilo = r_hilo_prf[int_uop.hilo_src];
 	t_mem_srcA = r_int_prf[mem_uq.srcA];
 	t_mem_srcB = r_int_prf[mem_uq.srcB];
@@ -679,19 +669,16 @@ module exec(clk,
 	
    logic [N_INT_SCHED_ENTRIES-1:0] r_alu_srcA_rdy, 
 				   r_alu_srcB_rdy, 
-				   r_alu_srcC_rdy,
 				   r_alu_hilo_rdy,
 				   r_alu_fcr_rdy;
 
    logic [N_INT_SCHED_ENTRIES-1:0] t_alu_srcA_match, 
 				   t_alu_srcB_match, 
-				   t_alu_srcC_match,
 				   t_alu_hilo_match,
 				   t_alu_fcr_match;
 
    logic t_alu_alloc_srcA_match, 
 	 t_alu_alloc_srcB_match, 
-	 t_alu_alloc_srcC_match,
 	 t_alu_alloc_hilo_match,
 	 t_alu_alloc_fcr_match;
 
@@ -787,11 +774,6 @@ module exec(clk,
 						   (t_gpr_prf_ptr_val_out & (t_gpr_prf_ptr_out == uq.srcB)) ||
 						   (r_start_int && t_wr_int_prf & (int_uop.dst == uq.srcB))
 						   );
-	t_alu_alloc_srcC_match = uq.srcC_valid && (
-						   (mem_rsp_dst_valid & (mem_rsp_dst_ptr == uq.srcC)) ||
-						   (t_gpr_prf_ptr_val_out & (t_gpr_prf_ptr_out == uq.srcC)) ||
-						   (r_start_int && t_wr_int_prf & (int_uop.dst == uq.srcC))
-						   );
 
 	t_alu_alloc_hilo_match = uq.hilo_src_valid && (
 						       (t_hilo_prf_ptr_val_out & (t_hilo_prf_ptr_out == uq.hilo_src)) ||
@@ -820,11 +802,6 @@ module exec(clk,
 									 (t_gpr_prf_ptr_val_out & (t_gpr_prf_ptr_out == r_alu_sched_uops[i].srcB)) ||
 									 (r_start_int && t_wr_int_prf & (int_uop.dst == r_alu_sched_uops[i].srcB))
 									 );
-		t_alu_srcC_match[i] = r_alu_sched_uops[i].srcC_valid && (
-									 (mem_rsp_dst_valid & (mem_rsp_dst_ptr == r_alu_sched_uops[i].srcC)) ||
-									 (t_gpr_prf_ptr_val_out & (t_gpr_prf_ptr_out == r_alu_sched_uops[i].srcC)) ||
-									 (r_start_int && t_wr_int_prf & (int_uop.dst == r_alu_sched_uops[i].srcC))
-									 );
 		
 		t_alu_hilo_match[i] = r_alu_sched_uops[i].hilo_src_valid && (
 									     (t_hilo_prf_ptr_val_out & (t_hilo_prf_ptr_out == r_alu_sched_uops[i].hilo_src)) ||
@@ -847,7 +824,6 @@ module exec(clk,
 				     ? (
 					(t_alu_srcA_match[i] |r_alu_srcA_rdy[i]) & 
 					(t_alu_srcB_match[i] |r_alu_srcB_rdy[i]) &
-					(t_alu_srcC_match[i] |r_alu_srcC_rdy[i]) & 
 					(t_alu_hilo_match[i] |r_alu_hilo_rdy[i]) & 
 					(t_alu_fcr_match[i] | r_alu_fcr_rdy[i])) : 1'b0;
 	     end // always_comb
@@ -858,7 +834,6 @@ module exec(clk,
 		  begin
 		     r_alu_srcA_rdy[i] <= 1'b0;
 		     r_alu_srcB_rdy[i] <= 1'b0;
-		     r_alu_srcC_rdy[i] <= 1'b0;
 		     r_alu_hilo_rdy[i] <= 1'b0;
 		     r_alu_fcr_rdy[i] <= 1'b0;
 		  end
@@ -868,7 +843,6 @@ module exec(clk,
 		       begin //allocating to this entry
 			  r_alu_srcA_rdy[i] <= uq.srcA_valid ? (!r_prf_inflight[uq.srcA] | t_alu_alloc_srcA_match) : 1'b1;
 			  r_alu_srcB_rdy[i] <= uq.srcB_valid ? (!r_prf_inflight[uq.srcB] | t_alu_alloc_srcB_match) : 1'b1;
-			  r_alu_srcC_rdy[i] <= uq.srcC_valid ? (!r_prf_inflight[uq.srcC] | t_alu_alloc_srcC_match) : 1'b1;
 			  r_alu_hilo_rdy[i] <= uq.hilo_src_valid ? (!r_hilo_inflight[uq.hilo_src] | t_alu_alloc_hilo_match) : 1'b1;
 			  r_alu_fcr_rdy[i] <= uq.fcr_src_valid ? (!r_fcr_prf_inflight[uq.hilo_src] | t_alu_alloc_fcr_match): 1'b1;
 		       end
@@ -876,7 +850,6 @@ module exec(clk,
 		       begin
 			  r_alu_srcA_rdy[i] <= 1'b0;
 			  r_alu_srcB_rdy[i] <= 1'b0;
-			  r_alu_srcC_rdy[i] <= 1'b0;
 			  r_alu_hilo_rdy[i] <= 1'b0;
 			  r_alu_fcr_rdy[i] <= 1'b0;
 		       end
@@ -884,7 +857,6 @@ module exec(clk,
 		       begin
 			  r_alu_srcA_rdy[i] <= r_alu_srcA_rdy[i] | t_alu_srcA_match[i];
 			  r_alu_srcB_rdy[i] <= r_alu_srcB_rdy[i] | t_alu_srcB_match[i];
-			  r_alu_srcC_rdy[i] <= r_alu_srcC_rdy[i] | t_alu_srcC_match[i];
 			  r_alu_hilo_rdy[i] <= r_alu_hilo_rdy[i] | t_alu_hilo_match[i];
 			  r_alu_fcr_rdy[i] <= r_alu_fcr_rdy[i] | t_alu_fcr_match[i];
 		       end // else: !if(t_pop_uq&&(t_alu_sched_alloc_ptr == i))
@@ -931,24 +903,6 @@ module exec(clk,
 	       end
 	  end // else: !if(reset)
      end
-   
-   // always_ff@(negedge clk)
-   //   begin
-   // 	$display("r_alu_sched_valid = %b, t_uq_empty = %b, t_alu_sched_full = %b", r_alu_sched_valid, t_uq_empty, t_alu_sched_full);
-   // 	$display("t_alu_entry_rdy = %b", t_alu_entry_rdy);
-   // 	for(integer i = 0; i < 4; i=i+1)
-   // 	  begin
-   // 	     if(r_alu_sched_valid[i])
-   // 	       begin
-   // 		  $display("entry %d, pc %x : %b %b %b %b %b", i, r_alu_sched_uops[i].pc, r_alu_srcA_rdy[i], r_alu_srcB_rdy[i], r_alu_srcC_rdy[i], r_alu_hilo_rdy[i], r_alu_fcr_rdy[i]);
-   // 	       end
-   // 	  end
-   // 	if(t_pop_uq)
-   // 	  begin
-   // 	     $display("t_alu_alloc_entry = %b", t_alu_alloc_entry);
-   // 	  end
-   //   end // always_ff@ (negedge clk)
-   
    
    count_leading_zeros #(.LG_N(5)) c0(.in(t_srcA[31:0]), .y(w_clz));
        
@@ -1396,18 +1350,6 @@ module exec(clk,
 	  CLZ:
 	    begin
 	       t_result = {{(`M_WIDTH-6){1'b0}}, w_clz};
-	       t_wr_int_prf = 1'b1;
-	       t_alu_valid = 1'b1;
-	    end
-	  MOVN:
-	    begin
-	       t_result = (t_srcA != 'd0) ? t_srcB : t_srcC;
-	       t_wr_int_prf = 1'b1;
-	       t_alu_valid = 1'b1;
-	    end
-	  MOVZ:
-	    begin
-	       t_result = (t_srcA == 'd0) ? t_srcB : t_srcC;
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
@@ -1961,34 +1903,6 @@ module exec(clk,
 	       //r_cycle, t_fp_srcs_rdy, r_fp_wb_bitvec);
 	       t_fp_wr_prf = t_fp_srcs_rdy; 
 	    end // case: FP_MOV
-
-	  //These are broken - using uq.srcC
-	  // FP_MOVZ:
-	  //   begin
-	  //      t_fp_result = t_srcC=='d0 ? t_fp_srcA : t_fp_srcB;
-	  //      t_fp_srcs_rdy = !(r_fp_prf_inflight[fp_uq.srcA] ||
-	  // 			 r_fp_prf_inflight[fp_uq.srcB] ||
-	  // 			 r_prf_inflight[uq.srcC]
-	  // 			 )
-	  // 		       && !t_fp_uq_empty
-	  // 		       && !t_fp_div_active
-	  // 		       && !r_fp_wb_bitvec[0];
-	  //      t_fp_wr_prf = t_fp_srcs_rdy; 
-	  //   end // case: FP_MOVZ
-	  // FP_MOVN:
-	  //   begin
-	  //      t_fp_result = t_srcC!='d0 ? t_fp_srcA : t_fp_srcB;
-	  //      t_fp_srcs_rdy = !(r_fp_prf_inflight[fp_uq.srcA] ||
-	  // 			 r_fp_prf_inflight[fp_uq.srcB] ||
-				 
-	  // 			 r_prf_inflight[uq.srcC]
-	  // 			 )
-	  // 		       && !t_fp_uq_empty
-	  // 		       && !t_fp_div_active
-	  // 		       && !r_fp_wb_bitvec[0];
-	  //      t_fp_wr_prf = t_fp_srcs_rdy; 
-	  //   end // case: FP_MOVN
-
 	  FP_MOVT:
 	    begin
 	       if(r_fcr_prf[fp_uq.hilo_src][fp_uq.srcC[2:0]]==1'b1)

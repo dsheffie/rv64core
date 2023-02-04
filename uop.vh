@@ -66,8 +66,6 @@ typedef enum logic [7:0]
    BGEZL,
    BGTZL,
    BLEZL,
-   MOVN,
-   MOVZ,
    TEQ,
    EXT,
    INS,
@@ -214,7 +212,6 @@ typedef struct packed {
    logic 		       srcB_valid;
    logic 		       fp_srcB_valid;   
    logic [`LG_PRF_ENTRIES-1:0] srcC;
-   logic 		       srcC_valid;
    logic 		       fp_srcC_valid;      
    logic [`LG_PRF_ENTRIES-1:0] dst;
    logic 		       dst_valid;
