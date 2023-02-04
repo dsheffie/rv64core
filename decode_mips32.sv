@@ -691,7 +691,6 @@ module decode_mips32(insn,
 		    uop.jmp_imm = { {(`M_WIDTH-17){1'b0}}, rd[0]};
 		    uop.fp_srcB_valid = 1;			 
 		    uop.fp_dst_valid = 1'b1;
-		    uop.imm = insn[15:0];
 		    uop.is_mem = 1'b1;
 		 end // if ((insn[25:21]==5'd4) && (insn[10:0] == 11'd0))
 	       else

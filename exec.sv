@@ -2078,6 +2078,10 @@ module exec(clk,
 	t_fp_result = 64'd0;
      end
 `endif // !`ifdef ENABLE_FPU
+
+
+   wire [31:0] w_agu32;
+   ppa32 agu (.A(t_mem_srcA), .B({{E_BITS{mem_uq.imm[15]}},mem_uq.imm}), .Y(w_agu32));
    
    always_comb
      begin
@@ -2085,7 +2089,7 @@ module exec(clk,
 	t_mem_simm = {{E_BITS{mem_uq.imm[15]}},mem_uq.imm};
 	t_push_mq = 1'b0;
 	t_mem_tail.op = MEM_LW;
-	t_mem_tail.addr = 'd0;
+	t_mem_tail.addr = w_agu32;
 	t_mem_tail.data = 'd0;
 	t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 	t_mem_tail.dst_valid = 1'b0;
@@ -2106,7 +2110,6 @@ module exec(clk,
 		 begin
 		    t_mem_tail.op = MEM_SB;
 		    t_mem_tail.is_store = 1'b1;
-		    t_mem_tail.addr = t_mem_srcA + t_mem_simm;
 		    t_mem_tail.data = {{Z_BITS{1'b0}}, t_mem_srcB}; /* needs byte swap */
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.dst_valid = 1'b0;
@@ -2120,7 +2123,6 @@ module exec(clk,
 		 begin
 		    t_mem_tail.op = MEM_SH;
 		    t_mem_tail.is_store = 1'b1;
-		    t_mem_tail.addr = t_mem_srcA + t_mem_simm;
 		    t_mem_tail.data = {{Z_BITS{1'b0}},t_mem_srcB}; /* needs byte swap */
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.dst_valid = 1'b0;
@@ -2134,7 +2136,6 @@ module exec(clk,
 		 begin
 		    t_mem_tail.op = MEM_SW;
 		    t_mem_tail.is_store = 1'b1;
-		    t_mem_tail.addr = t_mem_srcA + t_mem_simm;
 		    t_mem_tail.data = {{Z_BITS{1'b0}},t_mem_srcB}; /* needs byte swap */
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.dst_valid = 1'b0;
@@ -2148,7 +2149,6 @@ module exec(clk,
 		 begin
 		    t_mem_tail.op = MEM_SDC1;
 		    t_mem_tail.is_store = 1'b1;
-		    t_mem_tail.addr = t_mem_srcA + t_mem_simm;
 		    t_mem_tail.data = t_mem_fp_srcB; /* needs byte swap */
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.dst_valid = 1'b0;
@@ -2165,7 +2165,6 @@ module exec(clk,
 		    t_mem_tail.op = MEM_SWC1_MERGE;
 		    t_mem_tail.is_store = 1'b1;
 		    t_mem_tail.lwc1_lo = mem_uq.jmp_imm[0];		    
-		    t_mem_tail.addr = t_mem_srcA + t_mem_simm;
 		    t_mem_tail.data = t_mem_fp_srcB; /* needs byte swap */
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.dst_valid = 1'b0;
@@ -2180,7 +2179,6 @@ module exec(clk,
 	       if(mem_q_empty)
 		 begin
 		    t_mem_tail.op = MEM_DEAD_LD;
-		    t_mem_tail.addr = 'd0;
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.dst_valid = 1'b0;
 		    t_mem_srcs_rdy = 1'b1;
@@ -2193,7 +2191,6 @@ module exec(clk,
 		 begin
 		    t_mem_tail.op = MEM_SC;
 		    t_mem_tail.is_store = 1'b1;
-		    t_mem_tail.addr = t_mem_srcA + t_mem_simm;
 		    t_mem_tail.data = {{Z_BITS{1'b0}},t_mem_srcB}; /* needs byte swap */
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_srcs_rdy = !(r_prf_inflight[mem_uq.srcA] || r_prf_inflight[mem_uq.srcB]);
@@ -2208,7 +2205,6 @@ module exec(clk,
 		 begin
 		    t_mem_tail.op = MEM_SWR;
 		    t_mem_tail.is_store = 1'b1;
-		    t_mem_tail.addr = t_mem_srcA + t_mem_simm;
 		    t_mem_tail.data = {{Z_BITS{1'b0}},t_mem_srcB}; /* needs byte swap */
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.dst_valid = 1'b0;
@@ -2222,7 +2218,6 @@ module exec(clk,
 		 begin
 		    t_mem_tail.op = MEM_SWL;
 		    t_mem_tail.is_store = 1'b1;
-		    t_mem_tail.addr = t_mem_srcA + t_mem_simm;
 		    t_mem_tail.data = {{Z_BITS{1'b0}}, t_mem_srcB}; /* needs byte swap */
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.dst_valid = 1'b0;
@@ -2235,7 +2230,6 @@ module exec(clk,
 	       if(!(mem_q_full || r_prf_inflight[mem_uq.srcA]))
 		 begin
 		    t_mem_tail.op = MEM_LW;
-		    t_mem_tail.addr = t_mem_srcA + t_mem_simm;
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.dst_valid = 1'b1;
 		    t_mem_tail.dst_ptr = mem_uq.dst;
@@ -2253,7 +2247,6 @@ module exec(clk,
 	       if(!(mem_q_full || r_prf_inflight[mem_uq.srcA]))
 		 begin
 		    t_mem_tail.op = MEM_LDC1;
-		    t_mem_tail.addr = t_mem_srcA + t_mem_simm;
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.fp_dst_valid = 1'b1;
 		    t_mem_tail.dst_ptr = mem_uq.dst;
@@ -2269,7 +2262,6 @@ module exec(clk,
 		    t_mem_tail.op = MEM_LWC1_MERGE;
 		    t_mem_tail.lwc1_lo = mem_uq.jmp_imm[0];
 		    t_mem_tail.data = t_mem_fp_srcB;
-		    t_mem_tail.addr = t_mem_srcA + t_mem_simm;
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.fp_dst_valid = 1'b1;
 		    t_mem_tail.dst_ptr = mem_uq.dst;
@@ -2285,7 +2277,6 @@ module exec(clk,
 	       if(!(mem_q_full || r_prf_inflight[mem_uq.srcA] || r_prf_inflight[mem_uq.srcB]))
 		 begin
 		    t_mem_tail.op = MEM_LWL;
-		    t_mem_tail.addr = t_mem_srcA + t_mem_simm;
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.dst_valid = 1'b1;
 		    t_mem_tail.dst_ptr = mem_uq.dst;
@@ -2299,7 +2290,6 @@ module exec(clk,
 	       if(!(mem_q_full || r_prf_inflight[mem_uq.srcA] || r_prf_inflight[mem_uq.srcB]))
 		 begin
 		    t_mem_tail.op = MEM_LWR;
-		    t_mem_tail.addr = t_mem_srcA + t_mem_simm;
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.dst_valid = 1'b1;
 		    t_mem_tail.dst_ptr = mem_uq.dst;
@@ -2313,7 +2303,6 @@ module exec(clk,
 	       if(!(mem_q_full || r_prf_inflight[mem_uq.srcA] ))
 		 begin
 		    t_mem_tail.op = MEM_LB;
-		    t_mem_tail.addr = t_mem_srcA + t_mem_simm;
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.dst_valid = 1'b1;
 		    t_mem_tail.dst_ptr = mem_uq.dst;
@@ -2326,7 +2315,6 @@ module exec(clk,
 	       if(!(mem_q_full || r_prf_inflight[mem_uq.srcA] ))
 		 begin
 		    t_mem_tail.op = MEM_LBU;
-		    t_mem_tail.addr = t_mem_srcA + t_mem_simm;
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.dst_valid = 1'b1;
 		    t_mem_tail.dst_ptr = mem_uq.dst;
@@ -2339,7 +2327,6 @@ module exec(clk,
 	       if(!(mem_q_full || r_prf_inflight[mem_uq.srcA]))
 		 begin
 		    t_mem_tail.op = MEM_LHU;
-		    t_mem_tail.addr = t_mem_srcA + t_mem_simm;
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.dst_valid = 1'b1;
 		    t_mem_tail.dst_ptr = mem_uq.dst;
@@ -2352,7 +2339,6 @@ module exec(clk,
 	       if(!(mem_q_full || r_prf_inflight[mem_uq.srcA]))
 		 begin
 		    t_mem_tail.op = MEM_LH;
-		    t_mem_tail.addr = t_mem_srcA + t_mem_simm;
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.dst_valid = 1'b1;
 		    t_mem_tail.dst_ptr = mem_uq.dst;
@@ -2382,7 +2368,6 @@ module exec(clk,
 		    t_mem_tail.op = MEM_MTC1_MERGE;
 		    t_mem_tail.lwc1_lo = mem_uq.jmp_imm[0];
 		    t_mem_tail.data = t_mem_fp_srcB;
-		    t_mem_tail.addr = t_mem_srcA;
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.fp_dst_valid = 1'b1;
 		    t_mem_tail.dst_ptr = mem_uq.dst;
