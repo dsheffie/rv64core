@@ -13,7 +13,6 @@ typedef enum logic [7:0]
    SRAV,
    JR,
    JALR,
-   SYSCALL,
    MFHI,
    MTHI,
    MULT,

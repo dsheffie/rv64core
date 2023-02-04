@@ -52,7 +52,6 @@ module core_l1d_l1i(clk,
 		    l1d_cache_hits_under_miss,
 `endif
 		    got_break,
-		    got_syscall,
 		    got_ud,
 		    inflight);
 
@@ -143,7 +142,6 @@ module core_l1d_l1i(clk,
    input logic 				  monitor_rsp_data_valid;
    input logic [(`M_WIDTH-1):0] 	  monitor_rsp_data;
    output logic 			  got_break;
-   output logic 			  got_syscall;
    output logic 			  got_ud;
    output logic [`LG_ROB_ENTRIES:0] 	  inflight;
    
@@ -266,14 +264,6 @@ module core_l1d_l1i(clk,
    assign l1i_cache_hits = t_l1i_cache_hits;
 `endif
    
-   // always_ff@(posedge clk)
-   //   begin
-   // 	if(got_break || got_syscall || got_ud)
-   // 	  begin
-   // 	     $display("l1d accesses = %d, l1d misses = %d",
-   // 		      l1d_cache_accesses, l1d_cache_hits);
-   // 	  end
-   //   end
    
    logic 				  l1d_mem_req_ack;
    logic 				  l1d_mem_req_valid;
@@ -537,7 +527,6 @@ module core_l1d_l1i(clk,
 	     .monitor_rsp_data_valid(monitor_rsp_data_valid),
 	     .monitor_rsp_data(monitor_rsp_data),
 	     .got_break(got_break),
-	     .got_syscall(got_syscall),
 	     .got_ud(got_ud),
 	     .inflight(inflight)
 	     );

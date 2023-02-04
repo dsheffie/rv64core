@@ -1141,12 +1141,7 @@ int main(int argc, char **argv) {
     if(tb->got_break) {
       break;
     }
-#ifndef LINUX_SYSCALL_EMULATION    
-    if(tb->got_syscall) {
-      std::cerr << "GOT SYSCALL\n";
-      break;
-    }
-#endif
+
     if(tb->got_ud) {
       std::cerr << "GOT UD for "
 		<< std::hex

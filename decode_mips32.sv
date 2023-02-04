@@ -204,21 +204,6 @@ module decode_mips32(insn,
 		      uop.is_br = 1'b1;
 		      uop.is_int = 1'b1;
 		   end
-		 6'd12:
-		   begin
-		      uop.op = SYSCALL;
-		      /* hacks for user-level emulation */
-		      uop.srcA = 'd7;
-		      uop.srcA_valid = 1'b1;
-		      uop.srcB = 'd2;
-		      uop.srcB_valid = 1'b1;
-		      uop.dst = 'd2;
-		      uop.dst_valid = 1'b1;
-		      /* serializing semantics */
-		      uop.must_restart = 1'b1;
-		      uop.serializing_op = 1'b1;
-		      uop.is_int = 1'b1;
-		   end
 		 6'd13:
 		   begin
 		      uop.op = BREAK;

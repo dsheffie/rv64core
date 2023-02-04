@@ -162,7 +162,6 @@ module exec(clk,
    logic 	t_mispred_br;
    logic 	t_alu_valid;
    logic 	t_got_break;
-   logic 	t_got_syscall;
 
       
    mem_req_t r_mem_q[N_MQ_ENTRIES-1:0];
@@ -1173,7 +1172,7 @@ module exec(clk,
      end
 `endif //  `ifdef VERILATOR
 
-      
+
    always_comb
      begin
 	t_pc = int_uop.pc;
@@ -1194,7 +1193,6 @@ module exec(clk,
 	t_hilo_result = 'd0;
 	t_wr_hilo = 1'b0;
 	t_got_break = 1'b0;
-	t_got_syscall = 1'b0;
 	t_signed_shift = 1'b0;
 	t_shift_amt = 5'd0;
 	t_start_mul = 1'b0;
@@ -1213,15 +1211,6 @@ module exec(clk,
 	       t_got_break = 1'b1;
 	       t_fault = 1'b1;
 	       //t_unimp_op = 1'b1;
-	    end
-	  SYSCALL:
-	    begin
-	       t_alu_valid = 1'b1;
-	       t_got_syscall = 1'b1;
-	       t_mispred_br = 1'b1;
-	       t_result = monitor_rsp_data;
-	       t_wr_int_prf = 1'b1;	       
-	       t_pc = t_pc4;
 	    end
 	  SLL:
 	    begin
@@ -2423,11 +2412,6 @@ module exec(clk,
 	  begin
 	     //$display("mem writing to prf loc %d at cycle %d with data %x", mem_rsp_dst_ptr, r_cycle, mem_rsp_load_data);
 	     r_int_prf[mem_rsp_dst_ptr] <= mem_rsp_load_data[31:0];
-	  end
-	/* warning - terrible hack */
-	else if(t_got_syscall && r_start_int)
-	  begin
-	     r_int_prf[int_uop.srcA] <= 'd0;
 	  end
      end // always_ff@ (posedge clk)
 

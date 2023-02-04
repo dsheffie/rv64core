@@ -96,7 +96,6 @@ module core(clk,
 	    monitor_rsp_data_valid,
 	    monitor_rsp_data,
 	    got_break,
-	    got_syscall,
 	    got_ud,
 	    inflight);
    input logic clk;
@@ -180,7 +179,6 @@ module core(clk,
    input logic 				  monitor_rsp_data_valid;
    input logic [(`M_WIDTH-1):0] 	  monitor_rsp_data;
    output logic 			  got_break;
-   output logic 			  got_syscall;
    output logic 			  got_ud;
    output logic [`LG_ROB_ENTRIES:0] 	  inflight;
    
@@ -308,7 +306,6 @@ module core(clk,
    logic 		     n_take_br, r_take_br;
 
    logic 		     n_got_break, r_got_break;
-   logic 		     n_got_syscall, r_got_syscall;
    logic 		     n_got_ud, r_got_ud;
 
    logic 		     n_l1i_flush_complete, r_l1i_flush_complete;
@@ -424,7 +421,6 @@ module core(clk,
    assign monitor_req_valid = t_monitor_req_valid;
    
    assign got_break = r_got_break;
-   assign got_syscall = r_got_syscall;
    assign got_ud = r_got_ud;
    
 
@@ -503,7 +499,6 @@ module core(clk,
 	     r_monitor_rsp_data <= 'd0;
 	     r_monitor_rsp_data_valid <= 1'b0;
 	     r_got_break <= 1'b0;
-	     r_got_syscall <= 1'b0;
 	     r_got_ud <= 1'b0;
 	     r_ready_for_resume <= 1'b0;
 	     r_l1i_flush_complete <= 1'b0;
@@ -532,7 +527,6 @@ module core(clk,
 	     r_monitor_rsp_data <= n_monitor_rsp_data;
 	     r_monitor_rsp_data_valid <= n_monitor_rsp_data_valid;
 	     r_got_break <= n_got_break;
-	     r_got_syscall <= n_got_syscall;
 	     r_got_ud <= n_got_ud;
 	     r_ready_for_resume <= n_ready_for_resume;
 	     r_l1i_flush_complete <= n_l1i_flush_complete;
@@ -799,7 +793,6 @@ module core(clk,
 	n_flush_cl_req = 1'b0;
 	n_flush_cl_addr = r_flush_cl_addr;
 	n_got_break = r_got_break;
-	n_got_syscall = r_got_syscall;
 	n_got_ud = r_got_ud;
 	n_monitor_reason = r_monitor_reason;
 	n_got_restart_ack = r_got_restart_ack;
@@ -879,7 +872,7 @@ module core(clk,
 			   begin
 			      if(/*r_inflight*/t_rob_empty)
 				begin
-				   n_state = (t_uop.op == MONITOR || t_uop.op == SYSCALL) ? 
+				   n_state = (t_uop.op == MONITOR) ? 
 					     HANDLE_MONITOR : ALLOC_FOR_SERIALIZE;
 				   n_monitor_reason = t_uop.imm;
 				end
@@ -955,11 +948,6 @@ module core(clk,
 				  end
 			      endcase // case (t_uop.imm)
 			   end // if (t_uop.op == MONITOR)
-			 else if(t_uop.op == SYSCALL)
-			   begin
-			      n_flush_req = 1'b1;
-			      n_state = MONITOR_FLUSH_CACHE;
-			   end
 			 else
 			   begin
 			      n_state =  ALLOC_FOR_SERIALIZE;
@@ -1106,8 +1094,6 @@ module core(clk,
 		    if(n_got_restart_ack)
 		      begin
 			 t_retire = 1'b1;
-			 //$display(">>>> monitor/syscall at %x complete at cycle %d, restart to %x",
-			 //t_rob_head.pc, r_cycle, n_restart_pc);			 
 			 n_state = ACTIVE;
 		      end
 		 end
@@ -1133,7 +1119,6 @@ module core(clk,
 		    n_state = HALT_WAIT_FOR_RESTART;
 		    n_got_break = 1'b0;
 		    n_got_ud = 1'b0;
-		    n_got_syscall = 1'b0;
 		    t_clr_dq = 1'b1;			    
 		 end
 	       else
@@ -1514,7 +1499,6 @@ module core(clk,
 	t_rob_tail.is_call = 1'b0;
 	t_rob_tail.is_ret = 1'b0;
 	t_rob_tail.is_break = 1'b0;
-	t_rob_tail.is_syscall = 1'b0;
 	t_rob_tail.take_br = 1'b0;
 	t_rob_tail.is_br = 1'b0;
 	t_rob_tail.is_indirect = 1'b0;
@@ -1537,7 +1521,6 @@ module core(clk,
 	t_rob_next_tail.is_call = 1'b0;
 	t_rob_next_tail.is_ret = 1'b0;
 	t_rob_next_tail.is_break = 1'b0;
-	t_rob_next_tail.is_syscall = 1'b0;
 	t_rob_next_tail.take_br = 1'b0;
 	t_rob_next_tail.is_br = 1'b0;
 	t_rob_next_tail.is_indirect = 1'b0;
@@ -1555,7 +1538,6 @@ module core(clk,
 	     
 	     t_rob_tail.is_call = t_alloc_uop.op == JAL || t_alloc_uop.op == JALR || t_alloc_uop.op == BAL;
 	     t_rob_tail.is_ret = (t_alloc_uop.op == JR) && (t_uop.srcA == 'd31);
-	     t_rob_tail.is_syscall = (t_alloc_uop.op == SYSCALL);
 	     t_rob_tail.is_break  = (t_alloc_uop.op == BREAK);
 	     t_rob_tail.is_indirect = t_alloc_uop.op == JALR || t_alloc_uop.op == JR;
 `ifdef ENABLE_CYCLE_ACCOUNTING
@@ -1623,7 +1605,6 @@ module core(clk,
 
 	     t_rob_next_tail.is_call = t_alloc_uop2.op == JAL || t_alloc_uop2.op == JALR || t_alloc_uop2.op == BAL;
 	     t_rob_next_tail.is_ret = (t_alloc_uop2.op == JR) && (t_uop.srcA == 'd31);
-	     t_rob_next_tail.is_syscall = (t_alloc_uop2.op == SYSCALL);
 	     t_rob_next_tail.is_break  = (t_alloc_uop2.op == BREAK);
 	     t_rob_next_tail.is_indirect = t_alloc_uop2.op == JALR || t_alloc_uop2.op == JR;
 	     
