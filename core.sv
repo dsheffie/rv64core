@@ -314,7 +314,6 @@ module core(clk,
    logic 		     n_l1i_flush_complete, r_l1i_flush_complete;
    logic 		     n_l1d_flush_complete, r_l1d_flush_complete;
    
-   logic 		     t_in_32fp_reg_mode;
    logic [(`M_WIDTH-1):0]    t_cpr0_status_reg;
    
    logic [31:0] 	     r_arch_a0;
@@ -2129,8 +2128,7 @@ module core(clk,
      end // always_comb
 
    
-   decode_mips32 dec0 (.in_64b_fpreg_mode(t_in_32fp_reg_mode),
-		      .insn(insn.data), 
+   decode_mips32 dec0 (.insn(insn.data), 
 		      .pc(insn.pc), 
 		      .insn_pred(insn.pred), 
 		      .pht_idx(insn.pht_idx),
@@ -2140,8 +2138,7 @@ module core(clk,
 `endif		      
 		      .uop(t_dec_uop));
 
-   decode_mips32 dec1 (.in_64b_fpreg_mode(t_in_32fp_reg_mode),
-		      .insn(insn_two.data), 
+   decode_mips32 dec1 (.insn(insn_two.data), 
 		      .pc(insn_two.pc), 
 		      .insn_pred(insn_two.pred), 
 		      .pht_idx(insn_two.pht_idx),
@@ -2175,7 +2172,6 @@ module core(clk,
 	   .machine_clr(r_machine_clr),
 	   .restart_complete(t_restart_complete),
 	   .delayslot_rob_ptr(r_delayslot_rob_ptr),
-	   .in_32fp_reg_mode(t_in_32fp_reg_mode),
 	   .cpr0_status_reg(t_cpr0_status_reg),
 	   .mq_wait(mq_wait),
 	   .uq_wait(uq_wait),

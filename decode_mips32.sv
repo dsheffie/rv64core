@@ -2,13 +2,12 @@
 `include "rob.vh"
 `include "uop.vh"
 
-module decode_mips32(in_64b_fpreg_mode, insn, 
+module decode_mips32(insn, 
 		     pc, insn_pred, pht_idx, insn_pred_target,
 `ifdef ENABLE_CYCLE_ACCOUNTING   		     
 		     fetch_cycle,
 `endif
 		     uop);
-   input logic in_64b_fpreg_mode;
    
    input logic [31:0] insn;
    input logic [`M_WIDTH-1:0] pc;
@@ -691,17 +690,9 @@ module decode_mips32(in_64b_fpreg_mode, insn,
 		 begin /* mfc1 */
 		    uop.dst = rt;
 		    uop.dst_valid = 1'b1;
-		    if(in_64b_fpreg_mode)		      
-		      begin
-			 uop.op = MFC1;			 
-			 uop.srcB = rd;			 
-		      end		    
-		    else
-		      begin
-			 uop.op = MFC1_MERGE;
-			 uop.srcB = {{ZP{1'b0}}, rd[4:1], 1'b0};
-			 uop.jmp_imm = { {(`M_WIDTH-17){1'b0}}, rd[0]};
-		      end
+		    uop.op = MFC1_MERGE;
+		    uop.srcB = {{ZP{1'b0}}, rd[4:1], 1'b0};
+		    uop.jmp_imm = { {(`M_WIDTH-17){1'b0}}, rd[0]};
 		    uop.fp_srcB_valid = 1'b1;
 		    uop.is_mem = 1'b1;
 		 end
@@ -709,19 +700,11 @@ module decode_mips32(in_64b_fpreg_mode, insn,
 		 begin /* mtc1 */
 		    uop.srcA = rt;
 		    uop.srcA_valid = 1'b1;
-		    if(in_64b_fpreg_mode)
-		      begin
-			 uop.op = MTC1;
-			 uop.dst = rd;
-		      end
-		    else
-		      begin
-			 uop.op = MTC1_MERGE;
-			 uop.dst = {{ZP{1'b0}}, rd[4:1], 1'b0};
-			 uop.srcB = {{ZP{1'b0}}, rd[4:1], 1'b0};
-			 uop.jmp_imm = { {(`M_WIDTH-17){1'b0}}, rd[0]};
-			 uop.fp_srcB_valid = 1;			 
-		      end
+		    uop.op = MTC1_MERGE;
+		    uop.dst = {{ZP{1'b0}}, rd[4:1], 1'b0};
+		    uop.srcB = {{ZP{1'b0}}, rd[4:1], 1'b0};
+		    uop.jmp_imm = { {(`M_WIDTH-17){1'b0}}, rd[0]};
+		    uop.fp_srcB_valid = 1;			 
 		    uop.fp_dst_valid = 1'b1;
 		    uop.imm = insn[15:0];
 		    uop.is_mem = 1'b1;
@@ -744,9 +727,9 @@ module decode_mips32(in_64b_fpreg_mode, insn,
 			       begin
 				  uop.op = SP_ADD;
 				  uop.jmp_imm[0] = 1'b1;
-				  uop.jmp_imm[1] = !in_64b_fpreg_mode & fs[0];
-				  uop.jmp_imm[2] = !in_64b_fpreg_mode & ft[0];
-				  uop.jmp_imm[3] = !in_64b_fpreg_mode & fd[0];
+				  uop.jmp_imm[1] = fs[0];
+				  uop.jmp_imm[2] = ft[0];
+				  uop.jmp_imm[3] = fd[0];
 			       end
 			     5'd17: /* dbl */
 			       uop.op = DP_ADD;
@@ -768,9 +751,9 @@ module decode_mips32(in_64b_fpreg_mode, insn,
 			       begin
 				  uop.op = SP_SUB;
 				  uop.jmp_imm[0] = 1'b1;
-				  uop.jmp_imm[1] = !in_64b_fpreg_mode & fs[0];
-				  uop.jmp_imm[2] = !in_64b_fpreg_mode & ft[0];
-				  uop.jmp_imm[3] = !in_64b_fpreg_mode & fd[0];
+				  uop.jmp_imm[1] = fs[0];
+				  uop.jmp_imm[2] = ft[0];
+				  uop.jmp_imm[3] = fd[0];
 			       end
 			     5'd17: /* dbl */
 			       uop.op = DP_SUB;
@@ -792,9 +775,9 @@ module decode_mips32(in_64b_fpreg_mode, insn,
 			       begin
 				  uop.op = SP_MUL;
 				  uop.jmp_imm[0] = 1'b1;
-				  uop.jmp_imm[1] = !in_64b_fpreg_mode & fs[0];
-				  uop.jmp_imm[2] = !in_64b_fpreg_mode & ft[0];
-				  uop.jmp_imm[3] = !in_64b_fpreg_mode & fd[0];
+				  uop.jmp_imm[1] = fs[0];
+				  uop.jmp_imm[2] = ft[0];
+				  uop.jmp_imm[3] = fd[0];
 			       end
 			     5'd17: /* dbl */
 			       uop.op = DP_MUL;
@@ -816,9 +799,9 @@ module decode_mips32(in_64b_fpreg_mode, insn,
 			       begin
 				  uop.op = SP_DIV;
 				  uop.jmp_imm[0] = 1'b1;
-				  uop.jmp_imm[1] = !in_64b_fpreg_mode & fs[0];
-				  uop.jmp_imm[2] = !in_64b_fpreg_mode & ft[0];
-				  uop.jmp_imm[3] = !in_64b_fpreg_mode & fd[0];
+				  uop.jmp_imm[1] = fs[0];
+				  uop.jmp_imm[2] = ft[0];
+				  uop.jmp_imm[3] = fd[0];
 			       end
 			     5'd17: /* dbl */
 			       uop.op = DP_DIV;
@@ -838,9 +821,9 @@ module decode_mips32(in_64b_fpreg_mode, insn,
 			       begin
 				  uop.op = SP_SQRT;
 				  uop.jmp_imm[0] = 1'b1;
-				  uop.jmp_imm[1] = !in_64b_fpreg_mode & fs[0];
+				  uop.jmp_imm[1] = fs[0];
 				  uop.jmp_imm[2] = 1'b0;
-				  uop.jmp_imm[3] = !in_64b_fpreg_mode & fd[0];
+				  uop.jmp_imm[3] = fd[0];
 			       end
 			     5'd17: /* dbl */
 			       uop.op = DP_SQRT;
@@ -878,17 +861,10 @@ module decode_mips32(in_64b_fpreg_mode, insn,
 			     default:
 			       uop.op = II;
 			   endcase // case (insn[25:21])
-			   if(!in_64b_fpreg_mode)
-			     begin
-				uop.dst = {{ZP{1'b0}}, fd[4:1], 1'b0};
-				uop.srcB = {{ZP{1'b0}}, fd[4:1], ~fd[0]};
-				uop.srcC = {{ZP{1'b0}}, 4'd0, fd[0]};
-				uop.fp_srcB_valid = 1;				
-			     end
-			   else
-			     begin
-				uop.dst = fd;				
-			     end
+			   uop.dst = {{ZP{1'b0}}, fd[4:1], 1'b0};
+			   uop.srcB = {{ZP{1'b0}}, fd[4:1], ~fd[0]};
+			   uop.srcC = {{ZP{1'b0}}, 4'd0, fd[0]};
+			   uop.fp_srcB_valid = 1;				
 			end // case: 6'd13
 		      6'd17: /* fmovc */
 			begin
@@ -929,14 +905,11 @@ module decode_mips32(in_64b_fpreg_mode, insn,
 			     default:
 			       uop.op = II;
 			   endcase // case (insn[25:21])
-			   if(!in_64b_fpreg_mode)
-			     begin
-				uop.dst = {{ZP{1'b0}}, fd[4:1], 1'b0};
-				uop.srcA = {{ZP{1'b0}}, fs[4:1], 1'b0};
-				uop.srcB = {{ZP{1'b0}}, fd[4:1], ~fd[0]};
-				uop.srcC = {{ZP{1'b0}}, 3'd0, fs[0], fd[0]};
-				uop.fp_srcB_valid = 1;				
-			     end
+			   uop.dst = {{ZP{1'b0}}, fd[4:1], 1'b0};
+			   uop.srcA = {{ZP{1'b0}}, fs[4:1], 1'b0};
+			   uop.srcB = {{ZP{1'b0}}, fd[4:1], ~fd[0]};
+			   uop.srcC = {{ZP{1'b0}}, 3'd0, fs[0], fd[0]};
+			   uop.fp_srcB_valid = 1;				
 			end // case: 6'd32
 		      6'd33: /* cvt.d */
 			begin
@@ -968,8 +941,8 @@ module decode_mips32(in_64b_fpreg_mode, insn,
 			       begin
 				  uop.op = SP_CMP_EQ;
 				  uop.jmp_imm[0] = 1'b1;
-				  uop.jmp_imm[1] = !in_64b_fpreg_mode & fs[0];
-				  uop.jmp_imm[2] = !in_64b_fpreg_mode & ft[0];
+				  uop.jmp_imm[1] = fs[0];
+				  uop.jmp_imm[2] = ft[0];
 			       end
 			     5'd17:
 			       uop.op = DP_CMP_EQ;
@@ -1020,8 +993,8 @@ module decode_mips32(in_64b_fpreg_mode, insn,
 			       begin
 				  uop.op = SP_CMP_LT;
 				  uop.jmp_imm[0] = 1'b1;
-				  uop.jmp_imm[1] = !in_64b_fpreg_mode & fs[0];
-				  uop.jmp_imm[2] = !in_64b_fpreg_mode & ft[0];
+				  uop.jmp_imm[1] = fs[0];
+				  uop.jmp_imm[2] = ft[0];
 			       end
 			     5'd17:
 			       uop.op = DP_CMP_LT;
@@ -1048,8 +1021,8 @@ module decode_mips32(in_64b_fpreg_mode, insn,
 			       begin
 				  uop.op = SP_CMP_LE;
 				  uop.jmp_imm[0] = 1'b1;
-				  uop.jmp_imm[1] = !in_64b_fpreg_mode & fs[0];
-				  uop.jmp_imm[2] = !in_64b_fpreg_mode & ft[0];
+				  uop.jmp_imm[1] = fs[0];
+				  uop.jmp_imm[2] = ft[0];
 			       end
 			     5'd17:
 			       uop.op = DP_CMP_LE;
@@ -1370,19 +1343,11 @@ module decode_mips32(in_64b_fpreg_mode, insn,
 	       uop.srcA = rs;
 	       uop.srcA_valid = 1'b1;
 	       //$display("lwc1 entering machine for pc %x", pc);
-	       if(in_64b_fpreg_mode)
-		 begin
-		    uop.op = LWC1;		    
-		    uop.dst = rt;
-		 end
-	       else
-		 begin
-		    uop.op = LWC1_MERGE;
-		    uop.dst = {{ZP{1'b0}}, rt[4:1], 1'b0};
-		    uop.srcB = {{ZP{1'b0}}, rt[4:1], 1'b0};
-		    uop.fp_srcB_valid = 1;
-		    uop.jmp_imm = { {(`M_WIDTH-17){1'b0}}, rt[0]};
-		 end
+	       uop.op = LWC1_MERGE;
+	       uop.dst = {{ZP{1'b0}}, rt[4:1], 1'b0};
+	       uop.srcB = {{ZP{1'b0}}, rt[4:1], 1'b0};
+	       uop.fp_srcB_valid = 1;
+	       uop.jmp_imm = { {(`M_WIDTH-17){1'b0}}, rt[0]};
 	       uop.fp_dst_valid = 1'b1;
 	       uop.imm = insn[15:0];
 	       uop.is_mem = 1'b1;
@@ -1418,17 +1383,9 @@ module decode_mips32(in_64b_fpreg_mode, insn,
 	  
 	  6'd57: /* SWC1 */
 	    begin
-	       if(in_64b_fpreg_mode)
-		 begin
-		    uop.op = SWC1;
-		    uop.srcB = rt;		    
-		 end
-	       else
-		 begin
-		    uop.op = SWC1_MERGE;
-		    uop.srcB = {{ZP{1'b0}}, rt[4:1], 1'b0};
-		    uop.jmp_imm = { {(`M_WIDTH-17){1'b0}}, rt[0]};		    
-		 end
+	       uop.op = SWC1_MERGE;
+	       uop.srcB = {{ZP{1'b0}}, rt[4:1], 1'b0};
+	       uop.jmp_imm = { {(`M_WIDTH-17){1'b0}}, rt[0]};		    
 	       uop.srcA = rs;
 	       uop.srcA_valid = 1'b1;
 	       uop.fp_srcB_valid = 1'b1;

@@ -31,7 +31,6 @@ module exec(clk,
 	    machine_clr,
 	    restart_complete,
 	    delayslot_rob_ptr,
-	    in_32fp_reg_mode,
 	    cpr0_status_reg,
 	    uq_wait,
 	    mq_wait,
@@ -70,7 +69,6 @@ module exec(clk,
    input logic machine_clr;
    input logic restart_complete;
    input logic [`LG_ROB_ENTRIES-1:0] delayslot_rob_ptr;
-   output logic 		     in_32fp_reg_mode;
    output logic [(`M_WIDTH-1):0]     cpr0_status_reg;
    
    localparam N_ROB_ENTRIES = (1<<`LG_ROB_ENTRIES);   
@@ -136,8 +134,6 @@ module exec(clk,
    logic [N_FCR_PRF_ENTRIES-1:0]  r_fcr_prf_inflight, n_fcr_prf_inflight;
    logic [N_HILO_PRF_ENTRIES-1:0] r_hilo_inflight, n_hilo_inflight;
 
-   logic 			  n_in_32b_mode, r_in_32b_mode;
-   logic 			  n_in_32fp_reg_mode, r_in_32fp_reg_mode;
 
    logic [63:0] 		  t_fpu_result;
    logic 			  t_fpu_result_valid;
@@ -188,7 +184,7 @@ module exec(clk,
    logic [`M_WIDTH-1:0] t_simm, t_mem_simm;
    logic [`M_WIDTH-1:0] t_result;
    logic [`M_WIDTH-1:0] t_cpr0_result;
-   logic [31:0] 	t_result32;
+
    
    logic [63:0] t_hilo_result;
    
@@ -290,22 +286,6 @@ module exec(clk,
 	uq_next_full = t_uq_next_full || t_mem_uq_next_full || t_fp_uq_next_full;
 	uq_empty = t_uq_empty;
      end
-
-
-   always_ff@(posedge clk)
-     begin
-	if(reset)
-	  begin
-	     r_in_32b_mode <= 1'b1;
-	     r_in_32fp_reg_mode <= 1'b0;
-	  end
-	else
-	  begin
-	     r_in_32b_mode <= 1'b1;
-	     r_in_32fp_reg_mode <= n_in_32fp_reg_mode;
-	  end
-     end	
-
    
    always_ff@(posedge clk)
      begin
@@ -995,7 +975,6 @@ module exec(clk,
 
    assign mem_req = t_mem_head;
    assign mem_req_valid = !mem_q_empty;
-   assign in_32fp_reg_mode = r_in_32fp_reg_mode;
    assign uq_wait = r_uq_wait;
    assign mq_wait = r_mq_wait;
    assign fq_wait = r_fq_wait;   
@@ -1197,14 +1176,11 @@ module exec(clk,
       
    always_comb
      begin
-	n_in_32b_mode = r_in_32b_mode;
-	n_in_32fp_reg_mode = r_in_32fp_reg_mode;
 	t_pc = int_uop.pc;
 	t_pc4 = int_uop.pc + {{HI_EBITS{1'b0}}, 32'd4};
 	t_pc8 = int_uop.pc + {{HI_EBITS{1'b0}}, 32'd8};
 	t_result = {`M_WIDTH{1'b0}};
 	t_cpr0_result = {`M_WIDTH{1'b0}};
-	t_result32 = 32'd0;
 	t_unimp_op = 1'b0;
 	t_fault = 1'b0;
 	t_simm = {{E_BITS{int_uop.imm[15]}},int_uop.imm};
@@ -1459,9 +1435,7 @@ module exec(clk,
 	    end
 	  SLT:
 	    begin
-	       t_result = r_in_32b_mode ?
-			  (($signed(t_srcB[31:0]) <  $signed(t_srcA[31:0])) ? 'd1 : 'd0) :
-			  (($signed(t_srcB) <  $signed(t_srcA)) ? 'd1 : 'd0);
+	       t_result = (($signed(t_srcB) <  $signed(t_srcA)) ? 'd1 : 'd0);
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end // case: SLT
@@ -1519,36 +1493,28 @@ module exec(clk,
 	    end
 	  BLTZ:
 	    begin
-	       t_take_br = r_in_32b_mode ?
-			   ($signed(t_srcA[31:0]) < $signed(32'd0)) : 
-			   ($signed(t_srcA) < $signed({`M_WIDTH{1'b0}}));
+	       t_take_br = ($signed(t_srcA) < $signed({`M_WIDTH{1'b0}}));
 	       t_mispred_br = int_uop.br_pred != t_take_br;
 	       t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
 	       t_alu_valid = 1'b1;
 	    end
 	  BLEZ:
 	    begin
-	       t_take_br = r_in_32b_mode ?
-			   ($signed(t_srcA[31:0]) <= $signed(32'd0)) : 
-			   ($signed(t_srcA) <= $signed({`M_WIDTH{1'b0}}));
+	       t_take_br = ($signed(t_srcA) <= $signed({`M_WIDTH{1'b0}}));
 	       t_mispred_br = int_uop.br_pred != t_take_br;
 	       t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
 	       t_alu_valid = 1'b1;
 	    end
 	  BLEZL:
 	    begin
-	       t_take_br = r_in_32b_mode ?
-			   ($signed(t_srcA[31:0]) < $signed(32'd0)) || (t_srcA[31:0] == 32'd0) : 
-			   ($signed(t_srcA) < $signed({`M_WIDTH{1'b0}})) || (t_srcA == {`M_WIDTH{1'b0}});
+	       t_take_br = ($signed(t_srcA) < $signed({`M_WIDTH{1'b0}})) || (t_srcA == {`M_WIDTH{1'b0}});
 	       t_mispred_br = int_uop.br_pred != t_take_br || !t_take_br;
 	       t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
 	       t_alu_valid = 1'b1;
 	    end
 	  BGTZ:
 	    begin
-	       t_take_br = r_in_32b_mode ? 
-			   ($signed(t_srcA[31:0]) > $signed(32'd0)) :
-			   ($signed(t_srcA) > $signed({`M_WIDTH{1'b0}}));
+	       t_take_br = ($signed(t_srcA) > $signed({`M_WIDTH{1'b0}}));
 	       t_mispred_br = int_uop.br_pred != t_take_br;
 	       t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;	       
 	       t_alu_valid = 1'b1;
@@ -1562,27 +1528,21 @@ module exec(clk,
 	    end
 	  BLTZL:
 	    begin
-	       t_take_br = r_in_32b_mode ?
-			   $signed(t_srcA[31:0]) < $signed(32'd0) : 
-			   $signed(t_srcA) < $signed({`M_WIDTH{1'b0}});
+	       t_take_br = $signed(t_srcA) < $signed({`M_WIDTH{1'b0}});
 	       t_mispred_br = (int_uop.br_pred != t_take_br) || !t_take_br;
 	       t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
 	       t_alu_valid = 1'b1;
 	    end
 	  BGTZL:
 	    begin
-	       t_take_br = r_in_32b_mode ?
-			   ($signed(t_srcA[31:0]) > $signed(32'd0)) :			   
-			   ($signed(t_srcA) > $signed({`M_WIDTH{1'b0}}));
+	       t_take_br = ($signed(t_srcA) > $signed({`M_WIDTH{1'b0}}));
 	       t_mispred_br = (int_uop.br_pred != t_take_br) || !t_take_br;
 	       t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
 	       t_alu_valid = 1'b1;
 	    end
 	  BGEZL:
 	    begin
-	       t_take_br = r_in_32b_mode ?
-			   ($signed(t_srcA[31:0]) >= $signed(32'd0)) :
-			   ($signed(t_srcA) >= $signed({`M_WIDTH{1'b0}}));
+	       t_take_br = ($signed(t_srcA) >= $signed({`M_WIDTH{1'b0}}));
 	       t_mispred_br = (int_uop.br_pred != t_take_br) || !t_take_br;
 	       t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
 	       t_alu_valid = 1'b1;
@@ -1655,8 +1615,7 @@ module exec(clk,
 	    end
 	  ADDIU:
 	    begin
-	       t_result32 = t_srcA[31:0] + t_simm[31:0];
-	       t_result = {{HI_EBITS{t_result32[31]}}, t_result32};
+	       t_result =  t_srcA[31:0] + t_simm[31:0];
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
@@ -1668,17 +1627,13 @@ module exec(clk,
 	    end
 	  SLTI:
 	    begin
-	       t_result = r_in_32b_mode ?
-			  (($signed(t_srcA[31:0]) < $signed(t_simm[31:0])) ? 'd1 : 'd0) : 
-			  (($signed(t_srcA) < $signed(t_simm)) ? 'd1 : 'd0);
+	       t_result = (($signed(t_srcA) < $signed(t_simm)) ? 'd1 : 'd0);
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
 	  SLTIU:
 	    begin
-	       t_result = r_in_32b_mode ?
-			  (t_srcA[31:0] < t_simm[31:0] ? 'd1 : 'd0) : 
-			  (t_srcA < t_simm ? 'd1 : 'd0);
+	       t_result = (t_srcA < t_simm ? 'd1 : 'd0);
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
@@ -1693,11 +1648,6 @@ module exec(clk,
 	  MTC0:
 	    begin
 	       t_wr_cpr0 = 1'b1;	       
-	       if(int_uop.dst[4:0] == 5'd12)
-		 begin
-		    n_in_32b_mode = (t_srcA[5] == 1'b0);
-		    n_in_32fp_reg_mode = (t_srcA[26] == 1'b1);
-		 end
 	       t_cpr0_result = t_srcA;
 	       t_alu_valid = 1'b1;
 	       t_pc = t_pc4;
@@ -2461,14 +2411,12 @@ module exec(clk,
      begin
 	if(r_start_int && t_wr_int_prf)
 	  begin
-	     //$display("DS_DONE ALU writing to prf loc %d at cycle %d", uq.dst, r_cycle);
-	     
-	     r_int_prf[int_uop.dst] <= r_in_32b_mode ? {{HI_EBITS{1'b0}}, t_result[31:0]} : t_result;
+	     r_int_prf[int_uop.dst] <=  t_result;
 	  end
 	else if(t_gpr_prf_ptr_val_out)
 	  begin
 	     //$display("multiplier writing to prf loc %d at cycle %d", t_gpr_prf_ptr_out, r_cycle);
-	     r_int_prf[t_gpr_prf_ptr_out] <= r_in_32b_mode ? {{HI_EBITS{1'b0}},t_mul_result[31:0]} : {{HI_EBITS{t_mul_result[31]}},t_mul_result[31:0]};
+	     r_int_prf[t_gpr_prf_ptr_out] <= t_mul_result[31:0];
 	  end
 	//2nd write port
 	if(mem_rsp_dst_valid)
