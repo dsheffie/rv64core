@@ -1172,6 +1172,17 @@ module exec(clk,
      end
 `endif //  `ifdef VERILATOR
 
+   wire [31:0] w_add32;
+   wire [31:0] w_s_sub32, w_c_sub32;
+   csa #(.N(32)) csa0 (.a(t_srcA), .b(~t_srcB), .cin(32'd1), .s(w_s_sub32), .cout(w_c_sub32) );
+
+   wire [31:0] w_add_srcA = (int_uop.op == SUBU) ? {w_c_sub32[30:0], 1'b0} : t_srcA;
+   wire [31:0] w_add_srcB = (int_uop.op == SUBU) ? w_s_sub32 : (int_uop.op == ADDIU ? {{E_BITS{int_uop.imm[15]}},int_uop.imm} : t_srcB);
+   
+   
+      
+   ppa32 add0 (.A(w_add_srcA), .B(w_add_srcB), .Y(w_add32));
+   
 
    always_comb
      begin
@@ -1308,7 +1319,7 @@ module exec(clk,
 	    end
 	  ADDU:
 	    begin
-	       t_result = t_srcA + t_srcB;
+	       t_result = w_add32;
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
@@ -1388,7 +1399,7 @@ module exec(clk,
 	    end	  
 	  SUBU:
 	    begin
-	       t_result = t_srcA - t_srcB;
+	       t_result = w_add32;
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
@@ -1604,7 +1615,7 @@ module exec(clk,
 	    end
 	  ADDIU:
 	    begin
-	       t_result =  t_srcA[31:0] + t_simm[31:0];
+	       t_result = w_add32;
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
