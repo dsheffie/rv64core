@@ -365,7 +365,6 @@ module core(clk,
    logic 		     t_mem_req_valid;
    logic 		     t_monitor_req_valid;
    logic [(`M_WIDTH-1):0]    r_monitor_rsp_data, n_monitor_rsp_data;
-   logic 		     r_monitor_rsp_data_valid, n_monitor_rsp_data_valid;
 
    logic 		     n_machine_clr, r_machine_clr;
    logic 		     n_flush_req, r_flush_req;
@@ -497,7 +496,6 @@ module core(clk,
 	     r_has_nullifying_delay_slot <= 1'b0;
 	     r_take_br <= 1'b0;
 	     r_monitor_rsp_data <= 'd0;
-	     r_monitor_rsp_data_valid <= 1'b0;
 	     r_got_break <= 1'b0;
 	     r_got_ud <= 1'b0;
 	     r_ready_for_resume <= 1'b0;
@@ -525,7 +523,6 @@ module core(clk,
 	     r_has_nullifying_delay_slot <= n_has_nullifying_delay_slot;
 	     r_take_br <= n_take_br;
 	     r_monitor_rsp_data <= n_monitor_rsp_data;
-	     r_monitor_rsp_data_valid <= n_monitor_rsp_data_valid;
 	     r_got_break <= n_got_break;
 	     r_got_ud <= n_got_ud;
 	     r_ready_for_resume <= n_ready_for_resume;
@@ -766,7 +763,6 @@ module core(clk,
 	t_bump_rob_head = 1'b0;
 	t_monitor_req_valid = 1'b0;
 	n_monitor_rsp_data = r_monitor_rsp_data;
-	n_monitor_rsp_data_valid = r_monitor_rsp_data_valid;
 	
 	t_enough_iprfs = !((t_uop.dst_valid) && (r_prf_free == 'd0));
 	t_enough_hlprfs = !((t_uop.hilo_dst_valid) && (r_hilo_prf_free == 'd0));
@@ -1072,7 +1068,6 @@ module core(clk,
 		 begin
 		    n_state = ALLOC_FOR_MONITOR;
 		    n_monitor_rsp_data = monitor_rsp_data;
-		    n_monitor_rsp_data_valid = monitor_rsp_data_valid;
 		 end
 	    end
 	  ALLOC_FOR_MONITOR:
@@ -2180,8 +2175,7 @@ module core(clk,
 	   .mem_rsp_fp_dst_valid(core_mem_rsp.fp_dst_valid),
 	   .mem_rsp_load_data(core_mem_rsp.data),
 	   .mem_rsp_rob_ptr(core_mem_rsp.rob_ptr),
-	   .monitor_rsp_data(r_monitor_rsp_data),
-	   .monitor_rsp_data_valid(r_monitor_rsp_data_valid)
+	   .monitor_rsp_data(r_monitor_rsp_data)
 	   );
 
 

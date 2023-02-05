@@ -57,8 +57,7 @@ module exec(clk,
 	    mem_rsp_rob_ptr,
 	    mem_rsp_fp_dst_valid,
 	    mem_rsp_load_data,
-	    monitor_rsp_data,
-	    monitor_rsp_data_valid);
+	    monitor_rsp_data);
    input logic clk;
    input logic reset;
 `ifdef VERILATOR
@@ -107,7 +106,6 @@ module exec(clk,
    input logic [`LG_ROB_ENTRIES-1:0] mem_rsp_rob_ptr;
      
    input logic [`M_WIDTH-1:0] monitor_rsp_data;
-   input logic 		      monitor_rsp_data_valid;
    
    
    localparam N_MQ_ENTRIES = (1<<`LG_MQ_ENTRIES);
