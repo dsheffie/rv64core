@@ -6,7 +6,6 @@
 typedef struct packed {
    logic       faulted;
    logic       is_ii;
-   logic       take_trap;
    logic       is_ret;
    logic       is_call;
    logic       valid_dst;

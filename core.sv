@@ -1524,12 +1524,17 @@ module core(clk,
 	t_rob_next_tail.data = 'd0;
 	t_rob_next_tail.pht_idx = 'd0;
 	
+	t_rob_tail.has_delay_slot = t_alloc_uop.has_delay_slot;
+	t_rob_tail.has_nullifying_delay_slot = t_alloc_uop.has_nullifying_delay_slot;
+
+	t_rob_next_tail.has_delay_slot = t_uop2.has_delay_slot;
+	t_rob_next_tail.has_nullifying_delay_slot = t_uop2.has_nullifying_delay_slot;	
+	
 	if(t_alloc)
 	  begin
 	     t_rob_tail.pc = t_alloc_uop.pc;
 	     t_rob_tail.is_br = t_alloc_uop.is_br;
-	     t_rob_tail.has_delay_slot = t_alloc_uop.has_delay_slot;
-	     t_rob_tail.has_nullifying_delay_slot = t_alloc_uop.has_nullifying_delay_slot;
+
 	     t_rob_tail.pht_idx = t_alloc_uop.pht_idx;
 	     
 	     t_rob_tail.is_call = t_alloc_uop.op == JAL || t_alloc_uop.op == JALR || t_alloc_uop.op == BAL;
@@ -1595,8 +1600,7 @@ module core(clk,
 	  begin
 	     t_rob_next_tail.pc = t_alloc_uop2.pc;
 	     t_rob_next_tail.is_br = t_alloc_uop2.is_br;
-	     t_rob_next_tail.has_delay_slot = t_uop2.has_delay_slot;
-	     t_rob_next_tail.has_nullifying_delay_slot = t_uop2.has_nullifying_delay_slot;
+
 	     t_rob_next_tail.pht_idx = t_alloc_uop2.pht_idx;
 
 	     t_rob_next_tail.is_call = t_alloc_uop2.op == JAL || t_alloc_uop2.op == JALR || t_alloc_uop2.op == BAL;
