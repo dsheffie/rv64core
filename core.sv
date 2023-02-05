@@ -1489,19 +1489,20 @@ module core(clk,
 	t_rob_tail.ldst  = 'd0;
 	t_rob_tail.pdst  = 'd0;
 	t_rob_tail.old_pdst  = 'd0;
-	t_rob_tail.pc = 'd0;
+	t_rob_tail.pc = t_alloc_uop.pc;
 	t_rob_tail.target_pc = 'd0;
+	
+	t_rob_tail.is_call = t_alloc_uop.op == JAL || t_alloc_uop.op == JALR || t_alloc_uop.op == BAL;
+	t_rob_tail.is_ret = (t_alloc_uop.op == JR) && (t_uop.srcA == 'd31);
+	t_rob_tail.is_break  = (t_alloc_uop.op == BREAK);
+	t_rob_tail.is_indirect = t_alloc_uop.op == JALR || t_alloc_uop.op == JR;
+	
 	t_rob_tail.is_ii = 1'b0;
-	t_rob_tail.is_call = 1'b0;
-	t_rob_tail.is_ret = 1'b0;
-	t_rob_tail.is_break = 1'b0;
 	t_rob_tail.take_br = 1'b0;
-	t_rob_tail.is_br = 1'b0;
-	t_rob_tail.is_indirect = 1'b0;
+	t_rob_tail.is_br = t_alloc_uop.is_br;	
 	t_rob_tail.in_delay_slot = r_in_delay_slot;
 	t_rob_tail.data = 'd0;
-	t_rob_tail.pht_idx = 'd0;
-
+	t_rob_tail.pht_idx = t_alloc_uop.pht_idx;
 
 	t_rob_next_tail.faulted  = 1'b0;
 	t_rob_next_tail.valid_dst  = 1'b0;
@@ -1511,18 +1512,20 @@ module core(clk,
 	t_rob_next_tail.ldst  = 'd0;
 	t_rob_next_tail.pdst  = 'd0;
 	t_rob_next_tail.old_pdst  = 'd0;
-	t_rob_next_tail.pc = 'd0;
+	t_rob_next_tail.pc = t_alloc_uop2.pc;
 	t_rob_next_tail.target_pc = 'd0;
+
+	t_rob_next_tail.is_call = t_alloc_uop2.op == JAL || t_alloc_uop2.op == JALR || t_alloc_uop2.op == BAL;
+	t_rob_next_tail.is_ret = (t_alloc_uop2.op == JR) && (t_uop.srcA == 'd31);
+	t_rob_next_tail.is_break  = (t_alloc_uop2.op == BREAK);
+	t_rob_next_tail.is_indirect = t_alloc_uop2.op == JALR || t_alloc_uop2.op == JR;
+	
 	t_rob_next_tail.is_ii = 1'b0;
-	t_rob_next_tail.is_call = 1'b0;
-	t_rob_next_tail.is_ret = 1'b0;
-	t_rob_next_tail.is_break = 1'b0;
 	t_rob_next_tail.take_br = 1'b0;
-	t_rob_next_tail.is_br = 1'b0;
-	t_rob_next_tail.is_indirect = 1'b0;
+	t_rob_next_tail.is_br = t_alloc_uop2.is_br;
 	t_rob_next_tail.in_delay_slot = r_in_delay_slot;
 	t_rob_next_tail.data = 'd0;
-	t_rob_next_tail.pht_idx = 'd0;
+	t_rob_next_tail.pht_idx = t_alloc_uop2.pht_idx;
 	
 	t_rob_tail.has_delay_slot = t_alloc_uop.has_delay_slot;
 	t_rob_tail.has_nullifying_delay_slot = t_alloc_uop.has_nullifying_delay_slot;
@@ -1531,16 +1534,7 @@ module core(clk,
 	t_rob_next_tail.has_nullifying_delay_slot = t_uop2.has_nullifying_delay_slot;	
 	
 	if(t_alloc)
-	  begin
-	     t_rob_tail.pc = t_alloc_uop.pc;
-	     t_rob_tail.is_br = t_alloc_uop.is_br;
-
-	     t_rob_tail.pht_idx = t_alloc_uop.pht_idx;
-	     
-	     t_rob_tail.is_call = t_alloc_uop.op == JAL || t_alloc_uop.op == JALR || t_alloc_uop.op == BAL;
-	     t_rob_tail.is_ret = (t_alloc_uop.op == JR) && (t_uop.srcA == 'd31);
-	     t_rob_tail.is_break  = (t_alloc_uop.op == BREAK);
-	     t_rob_tail.is_indirect = t_alloc_uop.op == JALR || t_alloc_uop.op == JR;
+	  begin	     
 `ifdef ENABLE_CYCLE_ACCOUNTING
 	     t_rob_tail.missed_l1d = 1'b0;
 	     t_rob_tail.is_mem = 1'b0;
@@ -1598,15 +1592,7 @@ module core(clk,
 
 	if(t_alloc_two)
 	  begin
-	     t_rob_next_tail.pc = t_alloc_uop2.pc;
-	     t_rob_next_tail.is_br = t_alloc_uop2.is_br;
 
-	     t_rob_next_tail.pht_idx = t_alloc_uop2.pht_idx;
-
-	     t_rob_next_tail.is_call = t_alloc_uop2.op == JAL || t_alloc_uop2.op == JALR || t_alloc_uop2.op == BAL;
-	     t_rob_next_tail.is_ret = (t_alloc_uop2.op == JR) && (t_uop.srcA == 'd31);
-	     t_rob_next_tail.is_break  = (t_alloc_uop2.op == BREAK);
-	     t_rob_next_tail.is_indirect = t_alloc_uop2.op == JALR || t_alloc_uop2.op == JR;
 	     
 `ifdef ENABLE_CYCLE_ACCOUNTING
 	     t_rob_next_tail.missed_l1d = 1'b0;
