@@ -66,19 +66,10 @@ typedef enum logic [7:0]
    BGTZL,
    BLEZL,
    TEQ,
-   EXT,
-   INS,
-   MADD,
-   MADDU,
-   MUL,
-   MSUB,
-   CLZ,
    LWL,
    LWR,
    SWL,
    SWR,
-   SEB,
-   SEH,
    BAL,
    BGEZAL,
    BGEZALL,
@@ -145,12 +136,6 @@ typedef enum logic [7:0]
 function logic is_mult(opcode_t op);
    logic     x;
    case(op)
-     MUL:
-       x = 1'b1;
-     MADD:
-       x = 1'b1;
-     MSUB:
-       x = 1'b1;
      MULT:
        x = 1'b1;
      MULTU:

@@ -200,7 +200,6 @@ module exec(clk,
    logic [63:0] t_src_hilo;
    logic [`M_WIDTH-1:0] t_cpr0_srcA;
    
-   wire [5:0] 	w_clz;
    
    logic 	t_unimp_op;
    logic 	t_fault;
@@ -209,16 +208,15 @@ module exec(clk,
    logic [4:0] 	t_shift_amt;
    
    logic [31:0] t_shift_right;
-   logic [31:0] t_ext;
 
    logic 	t_start_mul;
    logic 	t_mul_complete;
    logic [63:0] t_mul_result;
    
-   logic 	t_gpr_prf_ptr_val_out;
    logic 	t_hilo_prf_ptr_val_out;
    logic [`LG_ROB_ENTRIES-1:0] t_rob_ptr_out;
-   logic [`LG_PRF_ENTRIES-1:0] t_gpr_prf_ptr_out;
+
+   
    logic [`LG_HILO_PRF_ENTRIES-1:0] t_hilo_prf_ptr_out;
    
    logic [`MAX_LAT:0] r_wb_bitvec, n_wb_bitvec;
@@ -739,12 +737,10 @@ module exec(clk,
 	//allocation forwarding
 	t_alu_alloc_srcA_match = uq.srcA_valid && (
 						   (mem_rsp_dst_valid & (mem_rsp_dst_ptr == uq.srcA)) ||
-						   (t_gpr_prf_ptr_val_out & (t_gpr_prf_ptr_out == uq.srcA)) ||
 						   (r_start_int && t_wr_int_prf & (int_uop.dst == uq.srcA))
 						   );
 	t_alu_alloc_srcB_match = uq.srcB_valid && (
 						   (mem_rsp_dst_valid & (mem_rsp_dst_ptr == uq.srcB)) ||
-						   (t_gpr_prf_ptr_val_out & (t_gpr_prf_ptr_out == uq.srcB)) ||
 						   (r_start_int && t_wr_int_prf & (int_uop.dst == uq.srcB))
 						   );
 
@@ -767,12 +763,10 @@ module exec(clk,
 	     begin
 		t_alu_srcA_match[i] = r_alu_sched_uops[i].srcA_valid && (
 									 (mem_rsp_dst_valid & (mem_rsp_dst_ptr == r_alu_sched_uops[i].srcA)) ||
-									 (t_gpr_prf_ptr_val_out & (t_gpr_prf_ptr_out == r_alu_sched_uops[i].srcA)) ||
 									 (r_start_int && t_wr_int_prf & (int_uop.dst == r_alu_sched_uops[i].srcA))
 									 );
 		t_alu_srcB_match[i] = r_alu_sched_uops[i].srcB_valid && (
 									 (mem_rsp_dst_valid & (mem_rsp_dst_ptr == r_alu_sched_uops[i].srcB)) ||
-									 (t_gpr_prf_ptr_val_out & (t_gpr_prf_ptr_out == r_alu_sched_uops[i].srcB)) ||
 									 (r_start_int && t_wr_int_prf & (int_uop.dst == r_alu_sched_uops[i].srcB))
 									 );
 		
@@ -877,14 +871,10 @@ module exec(clk,
 	  end // else: !if(reset)
      end
    
-   count_leading_zeros #(.LG_N(5)) c0(.in(t_srcA[31:0]), .y(w_clz));
-       
    
    shift_right #(.LG_W(5)) s0(.is_signed(t_signed_shift), .data(t_srcA[31:0]), 
 			      .distance(t_shift_amt), .y(t_shift_right));
    
-   ext_mask em(.x(t_shift_right), .sz(int_uop.imm[15:11]), .y(t_ext));
-  
    mul m(.clk(clk), 
 	 .reset(reset), 
 	 .opcode(int_uop.op), 
@@ -893,13 +883,10 @@ module exec(clk,
 	 .src_B(t_srcB[31:0]),
 	 .src_hilo(t_src_hilo),
 	 .rob_ptr_in(int_uop.rob_ptr),
-	 .gpr_prf_ptr_in(int_uop.dst),
 	 .hilo_prf_ptr_in(int_uop.hilo_dst),
 	 .y(t_mul_result),
 	 .complete(t_mul_complete),
 	 .rob_ptr_out(t_rob_ptr_out),
-	 .gpr_prf_ptr_val_out(t_gpr_prf_ptr_val_out),
-	 .gpr_prf_ptr_out(t_gpr_prf_ptr_out),
 	 .hilo_prf_ptr_val_out(t_hilo_prf_ptr_val_out),
 	 .hilo_prf_ptr_out(t_hilo_prf_ptr_out)
 	 );
@@ -1024,10 +1011,6 @@ module exec(clk,
 	if(mem_rsp_dst_valid)
 	  begin
 	     n_prf_inflight[mem_rsp_dst_ptr] = 1'b0;
-	  end
-	if(t_gpr_prf_ptr_val_out)
-	  begin
-	     n_prf_inflight[t_gpr_prf_ptr_out] = 1'b0;
 	  end
 	if(r_start_int && t_wr_int_prf)
 	  begin
@@ -1316,24 +1299,6 @@ module exec(clk,
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
-	  CLZ:
-	    begin
-	       t_result = {{(`M_WIDTH-6){1'b0}}, w_clz};
-	       t_wr_int_prf = 1'b1;
-	       t_alu_valid = 1'b1;
-	    end
-	  MUL:
-	    begin
-	       t_start_mul = r_start_int&!ds_done;
-	    end
-	  MADD:
-	    begin
-	       t_start_mul = r_start_int&!ds_done;
-	    end
-	  MSUB:
-	    begin
-	       t_start_mul = r_start_int&!ds_done;
-	    end
 	  MULT:
 	    begin
 	       t_start_mul = r_start_int&!ds_done;
@@ -1370,26 +1335,6 @@ module exec(clk,
 	       t_start_div32 = r_start_int&!ds_done;
 	    end
 `endif
-	  EXT:
-	    begin
-	       t_signed_shift = 1'b0;
-	       t_shift_amt = int_uop.imm[10:6];
-	       t_result ={{HI_EBITS{t_ext[31]}}, t_ext};
-	       t_alu_valid = 1'b1;
-	       t_wr_int_prf = 1'b1;
-	    end
-	  SEB:
-	    begin
-	       t_result = {{(`M_WIDTH-8){t_srcA[7]}} , t_srcA[7:0]};
-	       t_wr_int_prf = 1'b1;
-	       t_alu_valid = 1'b1;
-	    end
-	  SEH:
-	    begin
-	       t_result = {{E_BITS{t_srcA[15]}} , t_srcA[15:0]};
-	       t_wr_int_prf = 1'b1;
-	       t_alu_valid = 1'b1;
-	    end	  
 	  SUBU:
 	    begin
 	       t_result = w_add32;
@@ -2388,11 +2333,6 @@ module exec(clk,
 	if(r_start_int && t_wr_int_prf)
 	  begin
 	     r_int_prf[int_uop.dst] <=  t_result;
-	  end
-	else if(t_gpr_prf_ptr_val_out)
-	  begin
-	     //$display("multiplier writing to prf loc %d at cycle %d", t_gpr_prf_ptr_out, r_cycle);
-	     r_int_prf[t_gpr_prf_ptr_out] <= t_mul_result[31:0];
 	  end
 	//2nd write port
 	if(mem_rsp_dst_valid)

@@ -12,17 +12,18 @@ module ff(q,d,clk);
      end // always_ff@ (posedge clk)
 endmodule // dff
 
-module mul(clk,reset,opcode,go,
+module mul(clk,
+	   reset,
+	   opcode,
+	   go,
 	   src_A,
 	   src_B,
 	   src_hilo,
 	   rob_ptr_in,
-	   gpr_prf_ptr_in,
 	   hilo_prf_ptr_in,
-	   y,complete,
+	   y,
+	   complete,
 	   rob_ptr_out,
-	   gpr_prf_ptr_val_out,
-	   gpr_prf_ptr_out,
 	   hilo_prf_ptr_val_out,
 	   hilo_prf_ptr_out);
    
@@ -36,34 +37,24 @@ module mul(clk,reset,opcode,go,
    input logic [63:0] src_hilo;
    
    input logic [`LG_ROB_ENTRIES-1:0] rob_ptr_in;
-   input logic [`LG_PRF_ENTRIES-1:0] gpr_prf_ptr_in;
    input logic [`LG_HILO_PRF_ENTRIES-1:0] hilo_prf_ptr_in;
    
    
    output logic [63:0] 			  y;
    output logic 			  complete;
-   output logic [`LG_ROB_ENTRIES-1:0] rob_ptr_out;
-   output logic 		      gpr_prf_ptr_val_out;
-   output logic [`LG_PRF_ENTRIES-1:0] gpr_prf_ptr_out;
-   output logic 			   hilo_prf_ptr_val_out;
+   output logic [`LG_ROB_ENTRIES-1:0] 	  rob_ptr_out;
+   output logic 			  hilo_prf_ptr_val_out;
    output logic [`LG_HILO_PRF_ENTRIES-1:0] hilo_prf_ptr_out;
    
    logic [`MUL_LAT:0] 			   r_complete;
-   logic [`MUL_LAT:0] 			   r_do_madd;
-   logic [`MUL_LAT:0] 			   r_do_msub;
    logic [`MUL_LAT:0] 			   r_hilo_val;
    logic [`LG_HILO_PRF_ENTRIES-1:0] 	   r_hilo_ptr[`MUL_LAT:0];
-   logic [`MUL_LAT:0] 			   r_gpr_val;
-   logic [`LG_PRF_ENTRIES-1:0] 	   r_gpr_ptr[`MUL_LAT:0];
-   logic [63:0] 		   r_madd[`MUL_LAT:0];
-   logic [`LG_ROB_ENTRIES-1:0] 	   r_rob_ptr[`MUL_LAT:0];
+   logic [`LG_ROB_ENTRIES-1:0] 		   r_rob_ptr[`MUL_LAT:0];
   
    wire [63:0] 			   r_mul31;   
 
    assign complete = r_complete[`MUL_LAT];
    assign rob_ptr_out = r_rob_ptr[`MUL_LAT];
-   assign gpr_prf_ptr_val_out = r_gpr_val[`MUL_LAT];
-   assign gpr_prf_ptr_out = r_gpr_ptr[`MUL_LAT];
    
    assign hilo_prf_ptr_val_out = r_hilo_val[`MUL_LAT];
    assign hilo_prf_ptr_out = r_hilo_ptr[`MUL_LAT];
@@ -199,14 +190,9 @@ module mul(clk,reset,opcode,go,
 	     for(integer i = 0; i <= `MUL_LAT; i=i+1)
 	       begin
 		  r_rob_ptr[i] <= 'd0;
-		  r_gpr_ptr[i] <= 'd0;
 		  r_hilo_ptr[i] <= 'd0;
-		  r_madd[i] <= 'd0;
 	       end
 	     r_complete <= 'd0;
-	     r_do_madd <= 'd0;
-	     r_do_msub <= 'd0;
-	     r_gpr_val <= 'd0;
 	     r_hilo_val <= 'd0;
 	  end
 	else
@@ -215,27 +201,17 @@ module mul(clk,reset,opcode,go,
 	       begin
 		  if(i == 0)
 		    begin
-		       r_do_madd[0] <= go & (opcode == MADD);
-		       r_do_msub[0] <= go & (opcode == MSUB);
 		       r_complete[0] <= go;
 		       r_rob_ptr[0] <= rob_ptr_in;
-		       r_gpr_val[0] <= go && (opcode == MUL);
-		       r_hilo_val[0] <= go && (opcode != MUL);
-		       r_gpr_ptr[0] <= gpr_prf_ptr_in;
+		       r_hilo_val[0] <= go;
 		       r_hilo_ptr[0] <= hilo_prf_ptr_in;
-		       r_madd[0] <= src_hilo;
 		    end
 		  else
 		    begin
-		       r_do_madd[i] <= r_do_madd[i-1];
-		       r_do_msub[i] <= r_do_msub[i-1];
 		       r_complete[i] <= r_complete[i-1];
 		       r_rob_ptr[i] <= r_rob_ptr[i-1];
-		       r_gpr_val[i] <= r_gpr_val[i-1];
 		       r_hilo_val[i] <= r_hilo_val[i-1];
-		       r_gpr_ptr[i]  <= r_gpr_ptr[i-1];
 		       r_hilo_ptr[i] <= r_hilo_ptr[i-1];
-		       r_madd[i] <= r_madd[i-1];
 		    end
 	       end
 	  end
