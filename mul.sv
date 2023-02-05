@@ -18,7 +18,6 @@ module mul(clk,
 	   go,
 	   src_A,
 	   src_B,
-	   src_hilo,
 	   rob_ptr_in,
 	   hilo_prf_ptr_in,
 	   y,
@@ -34,7 +33,6 @@ module mul(clk,
    
    input logic [31:0] src_A;
    input logic [31:0] src_B;
-   input logic [63:0] src_hilo;
    
    input logic [`LG_ROB_ENTRIES-1:0] rob_ptr_in;
    input logic [`LG_HILO_PRF_ENTRIES-1:0] hilo_prf_ptr_in;

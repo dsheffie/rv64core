@@ -881,7 +881,6 @@ module exec(clk,
 	 .go(t_start_mul&r_start_int),
 	 .src_A(t_srcA[31:0]),
 	 .src_B(t_srcB[31:0]),
-	 .src_hilo(t_src_hilo),
 	 .rob_ptr_in(int_uop.rob_ptr),
 	 .hilo_prf_ptr_in(int_uop.hilo_dst),
 	 .y(t_mul_result),
@@ -1271,25 +1270,25 @@ module exec(clk,
 	    end
 	  MTLO:
 	    begin
-	       t_hilo_result = {r_hilo_prf[int_uop.hilo_src][63:32], t_srcA[31:0]};
+	       t_hilo_result = {t_src_hilo[63:32], t_srcA[31:0]};
 	       t_wr_hilo = 1'b1;
 	       t_alu_valid = 1'b1;	       
 	    end
 	  MTHI:
 	    begin
-	       t_hilo_result = {t_srcA[31:0], r_hilo_prf[int_uop.hilo_src][31:0] };
+	       t_hilo_result = {t_srcA[31:0], t_src_hilo[31:0] };
 	       t_wr_hilo = 1'b1;
 	       t_alu_valid = 1'b1;	       
 	    end
 	  MFLO:
 	    begin
-	       t_result = {{HI_EBITS{1'b0}}, r_hilo_prf[int_uop.hilo_src][31:0]};
+	       t_result = {{HI_EBITS{1'b0}}, t_src_hilo[31:0]};
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
 	  MFHI:
 	    begin
-	       t_result = {{HI_EBITS{1'b0}},r_hilo_prf[int_uop.hilo_src][63:32]};
+	       t_result = {{HI_EBITS{1'b0}},t_src_hilo[63:32]};
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
