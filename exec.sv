@@ -122,7 +122,6 @@ module exec(clk,
    logic [63:0] r_fp_prf [N_FP_PRF_ENTRIES-1:0];
    logic [63:0] r_hilo_prf[N_HILO_PRF_ENTRIES-1:0];
    logic [7:0] 	r_fcr_prf[N_FCR_PRF_ENTRIES-1:0];
-   logic [(`M_WIDTH-1):0] r_cpr0 [31:0];
    
    localparam FP_ZP = (`LG_PRF_ENTRIES-5);
    localparam Z_BITS = 64-`M_WIDTH;      
@@ -153,7 +152,6 @@ module exec(clk,
    
    
    logic 			  t_wr_int_prf, t_wr_cpr0;
-   logic [4:0] 			  t_dst_cpr0;
    
    logic 	t_wr_hilo;
    logic 	t_take_br;
@@ -622,8 +620,6 @@ module exec(clk,
 	t_fp_srcB = r_fp_prf[fp_uq.srcB];
 	t_fp_srcC = r_fp_prf[fp_uq.srcC];
 `endif
-	//non-renamed
-	t_cpr0_srcA = r_cpr0[int_uop.srcA[4:0]];
      end // always_comb
 
 
@@ -1194,7 +1190,6 @@ module exec(clk,
 	t_simm = {{E_BITS{int_uop.imm[15]}},int_uop.imm};
 	t_wr_int_prf = 1'b0;
 	t_wr_cpr0 = 1'b0;
-	t_dst_cpr0 = int_uop.dst[4:0];
 	t_take_br = 1'b0;
 	t_mispred_br = 1'b0;
 	t_jaddr = {int_uop.jmp_imm[9:0],int_uop.imm,2'd0};
@@ -1637,8 +1632,7 @@ module exec(clk,
 	    end
 	  MFC0:
 	    begin	       
-	       //t_unimp_op = 1'b1;
-	       t_result = t_cpr0_srcA;
+	       t_result = int_uop.srcA[4:0] == 'd12 ? cpr0_status_reg : 'd0;
 	       t_alu_valid = 1'b1;
 	       t_wr_int_prf = 1'b1;
 	       t_pc = t_pc4;	       
@@ -1646,7 +1640,6 @@ module exec(clk,
 	  MTC0:
 	    begin
 	       t_wr_cpr0 = 1'b1;	       
-	       t_cpr0_result = t_srcA;
 	       t_alu_valid = 1'b1;
 	       t_pc = t_pc4;
 	    end // case: MTC0
@@ -2442,37 +2435,13 @@ module exec(clk,
 	  end
 	else
 	  begin
-	     if(r_start_int && t_wr_cpr0 && (t_dst_cpr0=='d12))
+	     if(r_start_int && t_wr_cpr0)
 	       begin
-		  cpr0_status_reg <= t_cpr0_result;
+		  cpr0_status_reg <= t_srcA;
 	       end
 	  end
      end
    
-   always_ff@(posedge clk)
-     begin
-	if(reset)
-	  begin
-	     r_cpr0['d12] <= 'd4194308;
-	  end
-	else
-	  begin
-	     if(r_start_int && t_wr_cpr0)
-	       begin
-		  //$display("writing %x to cpr0 %d, pc %x, dst %d, dst valid %b", 
-		  //t_cpr0_result,
-		  //t_dst_cpr0, 
-		  //int_uop.pc,
-		  //int_uop.dst,
-		  //int_uop.dst_valid);
-		  r_cpr0[t_dst_cpr0] <= t_cpr0_result;
-	       end
-	     else if(exception_wr_cpr0_val)
-	       begin
-		  r_cpr0[exception_wr_cpr0_ptr] <= exception_wr_cpr0_data;
-	       end
-	  end	
-     end
 
 
    always_ff@(posedge clk)
