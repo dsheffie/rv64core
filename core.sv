@@ -192,9 +192,10 @@ module core(clk,
    
    localparam N_DQ_ENTRIES = (1<<`LG_DQ_ENTRIES);
    localparam HI_EBITS = `M_WIDTH-32;
+
+   logic 				  t_push_dq_one, t_push_dq_two;
    
    uop_t r_dq[N_DQ_ENTRIES-1:0];
-   uop_t n_dq[N_DQ_ENTRIES-1:0];
 
    logic [15:0] 			  r_monitor_reason, n_monitor_reason;
    
@@ -2201,7 +2202,10 @@ module core(clk,
 
    always_ff@(posedge clk)
      begin
-	r_dq <= n_dq;
+	if(t_push_dq_one)
+	  r_dq[r_dq_tail_ptr[`LG_DQ_ENTRIES-1:0]] <= t_dec_uop;
+	if(t_push_dq_two)
+	  r_dq[r_dq_next_tail_ptr[`LG_DQ_ENTRIES-1:0]] <= t_dec_uop2;
      end
 
    always_ff@(negedge clk)
@@ -2222,7 +2226,8 @@ module core(clk,
    
    always_comb
      begin
-	n_dq = r_dq;
+	t_push_dq_one = 1'b0;
+	t_push_dq_two = 1'b0;
 	n_dq_tail_ptr = r_dq_tail_ptr;
 	n_dq_head_ptr = r_dq_head_ptr;
 	n_dq_next_head_ptr = r_dq_next_head_ptr;
@@ -2252,8 +2257,8 @@ module core(clk,
 	  begin
 	     if(insn_valid && !t_dq_full && !(!t_dq_next_full && insn_valid_two))
 	       begin
-		  //push one instruction		  
-		  n_dq[r_dq_tail_ptr[`LG_DQ_ENTRIES-1:0]] = t_dec_uop;
+		  //push one instruction
+		  t_push_dq_one = 1'b1;
 		  n_dq_tail_ptr = r_dq_tail_ptr + 'd1;
 		  n_dq_next_tail_ptr = r_dq_next_tail_ptr + 'd1;
 		  n_dq_cnt = n_dq_cnt + 'd1;
@@ -2261,8 +2266,8 @@ module core(clk,
 	     else if(insn_valid && !t_dq_full && !t_dq_next_full && insn_valid_two)
 	       begin
 		  //push two instructions
-		  n_dq[r_dq_tail_ptr[`LG_DQ_ENTRIES-1:0]] = t_dec_uop;
-		  n_dq[r_dq_next_tail_ptr[`LG_DQ_ENTRIES-1:0]] = t_dec_uop2;
+		  t_push_dq_one = 1'b1;
+		  t_push_dq_two = 1'b1;		  
 		  n_dq_tail_ptr = r_dq_tail_ptr + 'd2;
 		  n_dq_next_tail_ptr = r_dq_next_tail_ptr + 'd2;
 		  n_dq_cnt = n_dq_cnt + 'd2;
