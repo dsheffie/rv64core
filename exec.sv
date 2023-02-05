@@ -1187,10 +1187,6 @@ module exec(clk,
 
 	
 	case(int_uop.op)
-	  NOP:
-	    begin
-	       t_alu_valid = 1'b1;
-	    end
 	  BREAK:
 	    begin
 	       t_alu_valid = 1'b1;
