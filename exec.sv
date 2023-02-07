@@ -687,49 +687,9 @@ module exec(clk,
 
    always_ff@(posedge clk)
      begin
-	if(reset)
-	  begin
-	     r_start_int <= 1'b0;
-	  end
-	else
-	  begin
-	     r_start_int <= (t_alu_entry_rdy != 'd0) & !ds_done;
-	  end
+	r_start_int <= reset ? 1'b0 : ((t_alu_entry_rdy != 'd0) & !ds_done);
      end // always_comb
 
-   // always_ff@(negedge clk)
-   //   begin
-   // 	for(logic [2:0] i = 0; i < N_INT_SCHED_ENTRIES; i=i+1)
-   // 	  begin
-   // 	     logic [1:0] ii = i[1:0];
-	     
-   // 	     if(r_alu_sched_uops[ii].pc == 'ha45b0 && r_alu_sched_valid[ii])
-   // 	       begin
-   // 		  if(ii == t_alu_sched_select_ptr[LG_INT_SCHED_ENTRIES-1:0])
-   // 		    begin
-   // 		       $display("picked at cycle %d, sched %b", r_cycle, t_alu_select_entry);
-   // 		    end
-   // 		  else
-   // 		    begin
-   // 		       $display("not picked at cycle %d, was ready %b :  srcA rdy %b, srcB rdy %b, this entry %d, sched %b, picked %d", 
-   // 				r_cycle,
-   // 				t_alu_entry_rdy[ii],
-   // 				(t_alu_srcA_match[ii] |r_alu_srcA_rdy[ii]),
-   // 				(t_alu_srcB_match[ii] |r_alu_srcB_rdy[ii]),
-   // 				ii,
-   // 				t_alu_entry_rdy,
-   // 				t_alu_sched_select_ptr
-   // 				);
-   // 		    end
-   // 	       end
-   // 	  end // for (logic [2:0] i = 0; i < N_INT_SCHED_ENTRIES; i=i+1)
-
-   // 	if(r_start_int && int_uop.pc == 'ha45b0)
-   // 	  begin
-   // 	     $display("starting divide , rob ptr = %d, wr_hilo = %b, t_mul_complete = %b", 
-   // 		      int_uop.rob_ptr, t_wr_hilo, t_mul_complete);
-   // 	  end
-   //   end // always_ff@ (negedge clk)
    
    
    always_comb
@@ -908,18 +868,6 @@ module exec(clk,
 
    assign divide_ready = t_div_ready;
 
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if(t_start_div32)
-   // 	  begin
-   // 	     $display("divider starts at cycle %d for pc %x, will write to hilo prf %d, r_wb_bitvec = %b", r_cycle, int_uop.pc, int_uop.hilo_dst, r_wb_bitvec[`DIV32_LAT]);
-   // 	  end
-   // 	if(t_div_complete)
-   // 	  begin
-   // 	     $display("divide completes at cycle %d, writes to hilo prf %d", r_cycle, t_div_hilo_prf_ptr_out);
-   // 	  end
-			  
-   //   end
    
    always_comb
      begin
@@ -961,16 +909,8 @@ module exec(clk,
    
    always_ff@(posedge clk)
      begin
-	if(reset)
-	  begin
-	     r_mq_head_ptr <= 'd0;
-	     r_mq_tail_ptr <= 'd0;
-	  end
-	else
-	  begin
-	     r_mq_head_ptr <= n_mq_head_ptr;
-	     r_mq_tail_ptr <= n_mq_tail_ptr;
-	  end
+				       r_mq_head_ptr <= reset ? 'd0 : n_mq_head_ptr;
+				       r_mq_tail_ptr <= reset ? 'd0 : n_mq_tail_ptr;
      end
 
    always_ff@(posedge clk)
@@ -1150,12 +1090,13 @@ module exec(clk,
 
    wire [31:0] w_add32;
    wire [31:0] w_s_sub32, w_c_sub32;
-   csa #(.N(32)) csa0 (.a(t_srcA), .b(~t_srcB), .cin(32'd1), .s(w_s_sub32), .cout(w_c_sub32) );
+   
+   csa #(.N(32)) csa0 (.a(t_srcA), 
+		       .b(int_uop.op == SUBU ? ~t_srcB : ((int_uop.op == ADDIU ? {{E_BITS{int_uop.imm[15]}},int_uop.imm} : t_srcB))), 
+		       .cin(int_uop.op == SUBU ? 32'd1 : 32'd0), .s(w_s_sub32), .cout(w_c_sub32) );
 
-   wire [31:0] w_add_srcA = (int_uop.op == SUBU) ? {w_c_sub32[30:0], 1'b0} : t_srcA;
-   wire [31:0] w_add_srcB = (int_uop.op == SUBU) ? w_s_sub32 : (int_uop.op == ADDIU ? {{E_BITS{int_uop.imm[15]}},int_uop.imm} : t_srcB);
-   
-   
+   wire [31:0] w_add_srcA = {w_c_sub32[30:0], 1'b0};
+   wire [31:0] w_add_srcB = w_s_sub32;
       
    ppa32 add0 (.A(w_add_srcA), .B(w_add_srcB), .Y(w_add32));
    
