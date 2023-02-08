@@ -196,7 +196,10 @@ module exec(clk,
    logic 	r_fwd_int_srcA, r_fwd_int_srcB;
    logic 	r_fwd_mem_srcA, r_fwd_mem_srcB;
 
-   
+   logic [63:0] r_int_hilo, r_mul_hilo, r_div_hilo;
+   logic [63:0] r_src_hilo;
+   logic 	r_fwd_hilo_int, r_fwd_hilo_mul, r_fwd_hilo_div;
+      
    logic [31:0] t_srcA, t_srcB;
    logic [31:0] t_mem_srcA, t_mem_srcB;
    
@@ -614,9 +617,6 @@ module exec(clk,
    
    always_comb
      begin
-	//t_srcA = r_int_prf[int_uop.srcA];
-	//t_srcB = r_int_prf[int_uop.srcB];
-
 	t_srcA = r_fwd_int_srcA ? r_int_result :
 		 r_fwd_mem_srcA ? r_mem_result :
 		 r_srcA;
@@ -624,11 +624,16 @@ module exec(clk,
 	t_srcB = r_fwd_int_srcB ? r_int_result :
 		 r_fwd_mem_srcB ? r_mem_result :
 		 r_srcB;
+
+	t_src_hilo = r_fwd_hilo_int ? r_int_hilo :
+		     r_fwd_hilo_mul ? r_mul_hilo :
+		     r_fwd_hilo_div ? r_div_hilo :
+		     r_src_hilo;
+
 	
 	t_mem_srcA = r_int_prf[mem_uq.srcA];
 	t_mem_srcB = r_int_prf[mem_uq.srcB];
 	
-	t_src_hilo = r_hilo_prf[int_uop.hilo_src];
 	t_mem_fp_srcB = r_fp_prf[mem_uq.srcB];
 `ifdef ENABLE_FPU
 	t_fp_srcA = r_fp_prf[fp_uq.srcA];
@@ -710,8 +715,6 @@ module exec(clk,
    always_ff@(posedge clk)
      begin
 	int_uop <= t_picked_uop;
-	r_srcA <= r_int_prf[t_picked_uop.srcA];
-	r_srcB <= r_int_prf[t_picked_uop.srcB];
      end
 
    always_ff@(posedge clk)
@@ -2287,16 +2290,16 @@ module exec(clk,
 
    initial
      begin
-	for(integer i = 0; i < N_INT_PRF_ENTRIES; i=i+1)
-	  begin
-	     r_int_prf[i] = 'd0;
-	  end
+	r_int_prf[0] = 'd0;
      end
 
    always_ff@(posedge clk)
      begin
 	r_int_result <= t_result;
 	r_mem_result <= mem_rsp_load_data[31:0];
+	r_int_hilo <= t_hilo_result;
+	r_mul_hilo <= t_mul_result;
+	r_div_hilo <= t_div_result;
      end
 
    always_ff@(posedge clk)
@@ -2305,10 +2308,17 @@ module exec(clk,
 	r_fwd_int_srcB <= r_start_int && t_wr_int_prf && (t_picked_uop.srcB == int_uop.dst);	
 	r_fwd_mem_srcA <= mem_rsp_dst_valid && (t_picked_uop.srcA == mem_rsp_dst_ptr);
 	r_fwd_mem_srcB <= mem_rsp_dst_valid && (t_picked_uop.srcB == mem_rsp_dst_ptr);
+
+	r_fwd_hilo_int <= r_start_int && t_wr_hilo && (t_picked_uop.hilo_src == int_uop.hilo_dst);
+	r_fwd_hilo_mul <= t_hilo_prf_ptr_val_out && (t_picked_uop.hilo_src == t_hilo_prf_ptr_out);
+	r_fwd_hilo_div <= t_div_complete && (t_picked_uop.hilo_src == t_div_hilo_prf_ptr_out);
      end
    
    always_ff@(posedge clk)
      begin
+	r_srcA <= r_int_prf[t_picked_uop.srcA];
+	r_srcB <= r_int_prf[t_picked_uop.srcB];
+	
 	if(r_start_int && t_wr_int_prf)
 	  begin
 	     r_int_prf[int_uop.dst] <=  t_result;
@@ -2320,16 +2330,11 @@ module exec(clk,
 	  end
      end // always_ff@ (posedge clk)
 
-   initial
-     begin
-	for(integer i = 0; i < N_HILO_PRF_ENTRIES; i=i+1)
-	  begin
-	     r_hilo_prf[i] = 'd0;
-	  end
-     end
-   
+  
    always_ff@(posedge clk)
      begin
+	r_src_hilo <= r_hilo_prf[t_picked_uop.hilo_src];
+	
 	if(r_start_int && t_wr_hilo)
 	  begin
 	     r_hilo_prf[int_uop.hilo_dst] <= t_hilo_result;
