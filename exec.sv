@@ -1093,7 +1093,6 @@ module exec(clk,
 	  end
      end
 
-
    
 `ifdef VERILATOR
    logic t_blocked_by_store;
@@ -1986,6 +1985,18 @@ module exec(clk,
 
    wire [31:0] w_agu32;
    ppa32 agu (.A(t_mem_srcA), .B({{E_BITS{mem_uq.imm[15]}},mem_uq.imm}), .Y(w_agu32));
+
+   logic       t_mem_ready, t_mem_srcA_ready, t_mem_srcB_ready;
+   
+   always_comb
+     begin
+	t_mem_srcA_ready = mem_uq.srcA_valid ? !r_prf_inflight[mem_uq.srcA] : 1'b1;
+	t_mem_srcB_ready = mem_uq.srcB_valid ? !r_prf_inflight[mem_uq.srcB] : 
+			   mem_uq.fp_srcB_valid ? !r_fp_prf_inflight[mem_uq.srcB] : 
+			   1'b1;
+	t_mem_ready = (!mem_q_full) && t_mem_srcA_ready && t_mem_srcB_ready;
+	
+     end
    
    always_comb
      begin
@@ -2010,41 +2021,41 @@ module exec(clk,
 	case(mem_uq.op)
 	  SB:
 	    begin
-	       if(!(mem_q_full || r_prf_inflight[mem_uq.srcA] || r_prf_inflight[mem_uq.srcB]))
+	       if(t_mem_ready)
 		 begin
 		    t_mem_tail.op = MEM_SB;
 		    t_mem_tail.is_store = 1'b1;
 		    t_mem_tail.data = {{Z_BITS{1'b0}}, t_mem_srcB}; /* needs byte swap */
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.dst_valid = 1'b0;
-		    t_mem_srcs_rdy = !(r_prf_inflight[mem_uq.srcA] || r_prf_inflight[mem_uq.srcB]);
-		    t_push_mq = !t_mem_uq_empty & t_mem_srcs_rdy;		    
+		    t_mem_srcs_rdy = 1'b1;
+		    t_push_mq = !t_mem_uq_empty;
 		 end
 	    end // case: SB
 	  SH:
 	    begin
-	       if(!(mem_q_full || r_prf_inflight[mem_uq.srcA] || r_prf_inflight[mem_uq.srcB]))
+	       if(t_mem_ready)
 		 begin
 		    t_mem_tail.op = MEM_SH;
 		    t_mem_tail.is_store = 1'b1;
 		    t_mem_tail.data = {{Z_BITS{1'b0}},t_mem_srcB}; /* needs byte swap */
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.dst_valid = 1'b0;
-		    t_mem_srcs_rdy = !(r_prf_inflight[mem_uq.srcA] || r_prf_inflight[mem_uq.srcB]);
-		    t_push_mq = !t_mem_uq_empty & t_mem_srcs_rdy;		    
+		    t_mem_srcs_rdy = 1'b1;
+		    t_push_mq = !t_mem_uq_empty;		    
 		 end
 	    end // case: SW
 	  SW:
 	    begin
-	       if(!(mem_q_full || r_prf_inflight[mem_uq.srcA] || r_prf_inflight[mem_uq.srcB]))
+	       if(t_mem_ready)
 		 begin
 		    t_mem_tail.op = MEM_SW;
 		    t_mem_tail.is_store = 1'b1;
 		    t_mem_tail.data = {{Z_BITS{1'b0}},t_mem_srcB}; /* needs byte swap */
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.dst_valid = 1'b0;
-		    t_mem_srcs_rdy = !(r_prf_inflight[mem_uq.srcA] || r_prf_inflight[mem_uq.srcB]);
-		    t_push_mq = !t_mem_uq_empty & t_mem_srcs_rdy;		    
+		    t_mem_srcs_rdy = 1'b1;
+		    t_push_mq = !t_mem_uq_empty;		    
 		 end
 	    end // case: SW
 	  SDC1:
@@ -2131,19 +2142,14 @@ module exec(clk,
 	    end // case: SW	  
 	  LW:
 	    begin
-	       if(!(mem_q_full || r_prf_inflight[mem_uq.srcA]))
+	       if(t_mem_ready)
 		 begin
 		    t_mem_tail.op = MEM_LW;
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.dst_valid = 1'b1;
 		    t_mem_tail.dst_ptr = mem_uq.dst;
-		    t_mem_srcs_rdy = !r_prf_inflight[mem_uq.srcA];
-		    t_push_mq = !t_mem_uq_empty & t_mem_srcs_rdy;
-		    //if(t_push_mq)
-		    //begin
-		    //$display("cycle %d pc %x, MARKING SCOREBOARD ENTRY %d inflight, srcA ptr = %d, srcA val = %x, A inflight = %b", 
-		    //r_cycle, mem_uq.pc, mem_uq.dst, mem_uq.srcA, t_mem_srcA, r_prf_inflight[mem_uq.srcA]);
-		    //end
+		    t_mem_srcs_rdy = 1'b1;
+		    t_push_mq = !t_mem_uq_empty;
 		 end
 	    end // case: LW
 	  LDC1:
@@ -2204,50 +2210,50 @@ module exec(clk,
 	    end // case: LWR
 	  LB:
 	    begin
-	       if(!(mem_q_full || r_prf_inflight[mem_uq.srcA] ))
+	       if(t_mem_ready)
 		 begin
 		    t_mem_tail.op = MEM_LB;
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.dst_valid = 1'b1;
 		    t_mem_tail.dst_ptr = mem_uq.dst;
-		    t_mem_srcs_rdy = !r_prf_inflight[mem_uq.srcA];
-		    t_push_mq = !t_mem_uq_empty & t_mem_srcs_rdy;
+		    t_mem_srcs_rdy = 1'b1;
+		    t_push_mq = !t_mem_uq_empty;
 		 end
 	    end
 	  LBU:
 	    begin
-	       if(!(mem_q_full || r_prf_inflight[mem_uq.srcA] ))
+	       if(t_mem_ready)
 		 begin
 		    t_mem_tail.op = MEM_LBU;
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.dst_valid = 1'b1;
 		    t_mem_tail.dst_ptr = mem_uq.dst;
-		    t_mem_srcs_rdy = !r_prf_inflight[mem_uq.srcA];
-		    t_push_mq = !t_mem_uq_empty & t_mem_srcs_rdy;
+		    t_mem_srcs_rdy = 1'b1;
+		    t_push_mq = !t_mem_uq_empty;
 		 end
 	    end // case: LBU
 	  LHU:
 	    begin
-	       if(!(mem_q_full || r_prf_inflight[mem_uq.srcA]))
+	       if(t_mem_ready)
 		 begin
 		    t_mem_tail.op = MEM_LHU;
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.dst_valid = 1'b1;
 		    t_mem_tail.dst_ptr = mem_uq.dst;
-		    t_mem_srcs_rdy = !r_prf_inflight[mem_uq.srcA];
-		    t_push_mq = !t_mem_uq_empty & t_mem_srcs_rdy;
+		    t_mem_srcs_rdy = 1'b1;
+		    t_push_mq = !t_mem_uq_empty;
 		 end
 	    end // case: LBU
 	  LH:
 	    begin
-	       if(!(mem_q_full || r_prf_inflight[mem_uq.srcA]))
+	       if(t_mem_ready)
 		 begin
 		    t_mem_tail.op = MEM_LH;
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.dst_valid = 1'b1;
 		    t_mem_tail.dst_ptr = mem_uq.dst;
-		    t_mem_srcs_rdy = !r_prf_inflight[mem_uq.srcA];
-		    t_push_mq = !t_mem_uq_empty & t_mem_srcs_rdy;
+		    t_mem_srcs_rdy = 1'b1;
+		    t_push_mq = !t_mem_uq_empty;
 		 end
 	    end // case: LH
 	  MFC1_MERGE:
