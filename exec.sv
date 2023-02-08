@@ -189,6 +189,13 @@ module exec(clk,
    logic 	t_fp_wr_prf;
    logic [63:0] t_fp_result;
    
+
+   logic [31:0] r_srcA, r_srcB;
+   
+   logic [31:0] r_mem_result, r_int_result;
+   logic 	r_fwd_int_srcA, r_fwd_int_srcB;
+   logic 	r_fwd_mem_srcA, r_fwd_mem_srcB;
+
    
    logic [31:0] t_srcA, t_srcB;
    logic [31:0] t_mem_srcA, t_mem_srcB;
@@ -607,11 +614,21 @@ module exec(clk,
    
    always_comb
      begin
-	t_srcA = r_int_prf[int_uop.srcA];
-	t_srcB = r_int_prf[int_uop.srcB];
-	t_src_hilo = r_hilo_prf[int_uop.hilo_src];
+	//t_srcA = r_int_prf[int_uop.srcA];
+	//t_srcB = r_int_prf[int_uop.srcB];
+
+	t_srcA = r_fwd_int_srcA ? r_int_result :
+		 r_fwd_mem_srcA ? r_mem_result :
+		 r_srcA;
+	
+	t_srcB = r_fwd_int_srcB ? r_int_result :
+		 r_fwd_mem_srcB ? r_mem_result :
+		 r_srcB;
+	
 	t_mem_srcA = r_int_prf[mem_uq.srcA];
 	t_mem_srcB = r_int_prf[mem_uq.srcB];
+	
+	t_src_hilo = r_hilo_prf[int_uop.hilo_src];
 	t_mem_fp_srcB = r_fp_prf[mem_uq.srcB];
 `ifdef ENABLE_FPU
 	t_fp_srcA = r_fp_prf[fp_uq.srcA];
@@ -633,6 +650,8 @@ module exec(clk,
    logic [N_INT_SCHED_ENTRIES-1:0] t_alu_alloc_entry, t_alu_select_entry;
 
    uop_t r_alu_sched_uops[N_INT_SCHED_ENTRIES-1:0];
+   uop_t t_picked_uop;
+
    
    logic [N_INT_SCHED_ENTRIES-1:0] t_alu_entry_rdy;
    logic [LG_INT_SCHED_ENTRIES:0]  t_alu_sched_select_ptr;
@@ -680,9 +699,19 @@ module exec(clk,
 	  end
      end // always_comb
 
+
+
+
+   always_comb
+     begin
+	t_picked_uop = r_alu_sched_uops[t_alu_sched_select_ptr[LG_INT_SCHED_ENTRIES-1:0]];
+     end
+   
    always_ff@(posedge clk)
      begin
-	int_uop <= r_alu_sched_uops[t_alu_sched_select_ptr[LG_INT_SCHED_ENTRIES-1:0]];
+	int_uop <= t_picked_uop;
+	r_srcA <= r_int_prf[t_picked_uop.srcA];
+	r_srcB <= r_int_prf[t_picked_uop.srcB];
      end
 
    always_ff@(posedge clk)
@@ -2263,6 +2292,20 @@ module exec(clk,
 	     r_int_prf[i] = 'd0;
 	  end
      end
+
+   always_ff@(posedge clk)
+     begin
+	r_int_result <= t_result;
+	r_mem_result <= mem_rsp_load_data[31:0];
+     end
+
+   always_ff@(posedge clk)
+     begin
+	r_fwd_int_srcA <= r_start_int && t_wr_int_prf && (t_picked_uop.srcA == int_uop.dst);
+	r_fwd_int_srcB <= r_start_int && t_wr_int_prf && (t_picked_uop.srcB == int_uop.dst);	
+	r_fwd_mem_srcA <= mem_rsp_dst_valid && (t_picked_uop.srcA == mem_rsp_dst_ptr);
+	r_fwd_mem_srcB <= mem_rsp_dst_valid && (t_picked_uop.srcB == mem_rsp_dst_ptr);
+     end
    
    always_ff@(posedge clk)
      begin
@@ -2273,7 +2316,6 @@ module exec(clk,
 	//2nd write port
 	if(mem_rsp_dst_valid)
 	  begin
-	     //$display("mem writing to prf loc %d at cycle %d with data %x", mem_rsp_dst_ptr, r_cycle, mem_rsp_load_data);
 	     r_int_prf[mem_rsp_dst_ptr] <= mem_rsp_load_data[31:0];
 	  end
      end // always_ff@ (posedge clk)
