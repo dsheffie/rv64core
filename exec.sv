@@ -2021,8 +2021,6 @@ module exec(clk,
 	t_mem_tail.lwc1_lo = 1'b0;
 	t_mem_tail.in_storebuf = 1'b0;
 	t_mem_tail.is_fp = 1'b0;
-	t_mem_tail.pc = mem_uq.pc;
-	t_mem_tail.uuid = r_cycle;
 	
 	case(mem_uq.op)
 	  SB:

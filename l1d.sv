@@ -201,7 +201,6 @@ endfunction
 
    logic 				  r_lock_cache, n_lock_cache;
    
-   logic [31:0] 			  rr_uuid;
    logic [`LG_MRQ_ENTRIES:0] 		  r_n_inflight;   
 
 
@@ -562,7 +561,6 @@ endfunction
 	     r_lock_cache <= 1'b0;
 	     rr_is_retry <= 1'b0;
 	     rr_did_reload <= 1'b0;
-	     rr_uuid <= 'd0;
 	     
 	     rr_last_wr <= 1'b0;
 	     r_got_non_mem <= 1'b0;
@@ -612,7 +610,6 @@ endfunction
 	     r_lock_cache <= n_lock_cache;
 	     rr_is_retry <= r_is_retry;
 	     rr_did_reload <= r_did_reload;
-	     rr_uuid <= r_req.uuid;
 	     
 	     rr_last_wr <= r_last_wr;
 	     r_got_non_mem <= t_got_non_mem;
@@ -1201,24 +1198,6 @@ endfunction
      end
 
 
-   logic t_incr_stuck, t_clr_stuck;
-   logic [11:0] r_stuck_cnt;
-   always_ff@(posedge clk)
-     begin
-	if(reset || t_clr_stuck)
-	  begin
-	     r_stuck_cnt <= 'd0;
-	  end
-	else if(t_incr_stuck)
-	  begin
-	     r_stuck_cnt <= r_stuck_cnt + 'd1;
-	  end
-	if(r_stuck_cnt == 'd1024)
-	  begin
-	     $display("op with uuid %d, rob ptr %d stuck, pc = %x", t_mem_head.uuid, t_mem_head.rob_ptr, t_mem_head.pc);
-	     $stop();
-	  end
-     end
 
    
    logic [31:0] r_fwd_cnt;
@@ -1275,7 +1254,6 @@ endfunction
 	n_core_mem_rsp.faulted = 1'b0;
 	n_core_mem_rsp.missed_l1d = 1'b0;
 	n_core_mem_rsp.was_mem = !non_mem_op(r_req.op);
-	n_core_mem_rsp.pc = r_req.pc;
 
 	n_cache_accesses = r_cache_accesses;
 	n_cache_hits = r_cache_hits;
@@ -1300,9 +1278,6 @@ endfunction
 	n_stall_store = 1'b0;
 	n_q_priority = !r_q_priority;
 	
-	t_incr_stuck = 1'b0;
-	t_clr_stuck = 1'b0;
-
 	n_reload_issue = r_reload_issue;
 	n_did_reload = 1'b0;
 	n_lock_cache = r_lock_cache;
@@ -1327,7 +1302,6 @@ endfunction
 		    n_core_mem_rsp.rob_ptr = r_req2.rob_ptr;
 		    n_core_mem_rsp.dst_ptr = r_req2.dst_ptr;
 		    n_core_mem_rsp.was_mem = !non_mem_op(r_req2.op);
-		    n_core_mem_rsp.pc = r_req2.pc;
 		    if(drain_ds_complete)
 		      begin
 			 n_core_mem_rsp.dst_valid = r_req2.dst_valid;
@@ -1515,7 +1489,6 @@ endfunction
 				 t_got_req = 1'b1;
 				 n_is_retry = 1'b1;
 				 n_last_wr = 1'b1;
-				 t_clr_stuck = 1'b1;
 			      end // if (t_mem_head.rob_ptr == head_of_rob_ptr)
 			    else if(drain_ds_complete && dead_rob_mask[t_mem_head.rob_ptr])
 			      begin
@@ -1525,7 +1498,6 @@ endfunction
 `endif
 				 t_pop_mq = 1'b1;
 				 t_force_clear_busy = 1'b1;
-				 t_clr_stuck = 1'b1;
 			      end
 			    else
 			      begin
@@ -1540,7 +1512,6 @@ endfunction
 				 	  t_mem_head.uuid,
 					  drain_ds_complete);
 `endif
-				 t_incr_stuck = 1'b1;
 				 if(mem_q_empty)
 				   begin
 				      $stop();
