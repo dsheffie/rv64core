@@ -82,9 +82,10 @@ typedef struct packed {
    logic [`LG_PRF_ENTRIES-1:0] dst_ptr;
    logic 		       dst_valid;
    logic 		       fp_dst_valid;
-   logic 		       faulted;
+`ifdef ENABLE_CYCLE_ACCOUNTING   
    logic 		       was_mem;
    logic 		       missed_l1d;
+`endif
 } mem_rsp_t;
 
 

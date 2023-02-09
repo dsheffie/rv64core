@@ -1251,7 +1251,6 @@ endfunction
 	
 	n_core_mem_rsp.dst_valid = 1'b0;
 	n_core_mem_rsp.fp_dst_valid = 1'b0;
-	n_core_mem_rsp.faulted = 1'b0;
 	n_core_mem_rsp.missed_l1d = 1'b0;
 	n_core_mem_rsp.was_mem = !non_mem_op(r_req.op);
 

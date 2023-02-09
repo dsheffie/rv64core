@@ -1727,7 +1727,7 @@ module core(clk,
 	     if(core_mem_rsp_valid)
 	       begin
 		  r_rob[core_mem_rsp.rob_ptr].data <= core_mem_rsp.data;
-		  r_rob[core_mem_rsp.rob_ptr].faulted <= core_mem_rsp.faulted;
+		  r_rob[core_mem_rsp.rob_ptr].faulted <= 1'b0;
 `ifdef ENABLE_CYCLE_ACCOUNTING
 		  r_rob[core_mem_rsp.rob_ptr].complete_cycle <= r_cycle;
 		  r_rob[core_mem_rsp.rob_ptr].is_mem <= core_mem_rsp.was_mem;
