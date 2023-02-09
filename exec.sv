@@ -163,8 +163,9 @@ module exec(clk,
    mem_req_t r_mem_q[N_MQ_ENTRIES-1:0];
    logic [`LG_MQ_ENTRIES:0] r_mq_head_ptr, n_mq_head_ptr;
    logic [`LG_MQ_ENTRIES:0] r_mq_tail_ptr, n_mq_tail_ptr;
+   logic [`LG_MQ_ENTRIES:0] r_mq_next_tail_ptr, n_mq_next_tail_ptr;
    mem_req_t t_mem_tail, t_mem_head;
-   logic 		    mem_q_full, mem_q_empty;
+   logic 		    mem_q_full,mem_q_next_full, mem_q_empty;
    
 
    logic 	t_pop_uq,t_pop_mem_uq,t_pop_fp_uq;
@@ -905,9 +906,12 @@ module exec(clk,
      begin
 	n_mq_head_ptr = r_mq_head_ptr;
 	n_mq_tail_ptr = r_mq_tail_ptr;
+	n_mq_next_tail_ptr = r_mq_next_tail_ptr;
+	
 	if(t_push_mq)
 	  begin
 	     n_mq_tail_ptr = r_mq_tail_ptr + 'd1;
+	     n_mq_next_tail_ptr = r_mq_next_tail_ptr + 'd1;
 	  end
 	if(mem_req_ack)
 	  begin
@@ -920,6 +924,9 @@ module exec(clk,
 	
 	mem_q_full = (r_mq_head_ptr != r_mq_tail_ptr) &&
 		     (r_mq_head_ptr[`LG_MQ_ENTRIES-1:0] == r_mq_tail_ptr[`LG_MQ_ENTRIES-1:0]);
+
+	mem_q_next_full = (r_mq_head_ptr != r_mq_next_tail_ptr) &&
+			  (r_mq_head_ptr[`LG_MQ_ENTRIES-1:0] == r_mq_next_tail_ptr[`LG_MQ_ENTRIES-1:0]);
 	
      end // always_comb
 
@@ -941,8 +948,9 @@ module exec(clk,
    
    always_ff@(posedge clk)
      begin
-				       r_mq_head_ptr <= reset ? 'd0 : n_mq_head_ptr;
-				       r_mq_tail_ptr <= reset ? 'd0 : n_mq_tail_ptr;
+	r_mq_head_ptr <= reset ? 'd0 : n_mq_head_ptr;
+	r_mq_tail_ptr <= reset ? 'd0 : n_mq_tail_ptr;
+	r_mq_next_tail_ptr <= reset ? 'd1 : n_mq_next_tail_ptr;
      end
 
    always_ff@(posedge clk)
@@ -1994,9 +2002,9 @@ module exec(clk,
 	t_mem_srcB_ready = mem_uq.srcB_valid ? !r_prf_inflight[mem_uq.srcB] : 
 			   mem_uq.fp_srcB_valid ? !r_fp_prf_inflight[mem_uq.srcB] : 
 			   1'b1;
-	t_mem_ready = (!t_mem_uq_empty) && (!mem_q_full) && t_mem_srcA_ready && t_mem_srcB_ready;
+	t_mem_ready = (!t_mem_uq_empty) && (!mem_q_next_full) && t_mem_srcA_ready && t_mem_srcB_ready;
      end
-   
+      
    always_comb
      begin
 	t_pop_mem_uq = 1'b0;
