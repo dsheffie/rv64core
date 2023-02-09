@@ -185,7 +185,7 @@ module exec(clk,
    
    logic [`M_WIDTH-1:0] t_pc, t_pc4, t_pc8;
    logic [27:0] t_jaddr;
-   logic 	t_srcs_rdy, t_mem_srcs_rdy, t_fp_srcs_rdy;
+   logic 	t_srcs_rdy, t_fp_srcs_rdy;
    logic 	t_fp_wr_prf;
    logic [63:0] t_fp_result;
    
@@ -2001,7 +2001,7 @@ module exec(clk,
      begin
 	t_pop_mem_uq = 1'b0;
 	t_mem_simm = {{E_BITS{mem_uq.imm[15]}},mem_uq.imm};
-	t_push_mq = 1'b0;
+	t_push_mq = t_mem_ready;
 	t_mem_tail.op = MEM_LW;
 	t_mem_tail.addr = w_agu32;
 	t_mem_tail.data = 'd0;
@@ -2015,7 +2015,6 @@ module exec(clk,
 	t_mem_tail.is_fp = 1'b0;
 	t_mem_tail.pc = mem_uq.pc;
 	t_mem_tail.uuid = r_cycle;
-	t_mem_srcs_rdy = 1'b0;
 	
 	case(mem_uq.op)
 	  SB:
@@ -2027,8 +2026,6 @@ module exec(clk,
 		    t_mem_tail.data = {{Z_BITS{1'b0}}, t_mem_srcB}; /* needs byte swap */
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.dst_valid = 1'b0;
-		    t_mem_srcs_rdy = 1'b1;
-		    t_push_mq = 1'b1;
 		 end
 	    end // case: SB
 	  SH:
@@ -2040,8 +2037,6 @@ module exec(clk,
 		    t_mem_tail.data = {{Z_BITS{1'b0}},t_mem_srcB}; /* needs byte swap */
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.dst_valid = 1'b0;
-		    t_mem_srcs_rdy = 1'b1;
-		    t_push_mq = 1'b1;
 		 end
 	    end // case: SW
 	  SW:
@@ -2053,8 +2048,6 @@ module exec(clk,
 		    t_mem_tail.data = {{Z_BITS{1'b0}},t_mem_srcB}; /* needs byte swap */
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.dst_valid = 1'b0;
-		    t_mem_srcs_rdy = 1'b1;
-		    t_push_mq = 1'b1;
 		 end
 	    end // case: SW
 	  SDC1:
@@ -2066,8 +2059,6 @@ module exec(clk,
 		    t_mem_tail.data = t_mem_fp_srcB; /* needs byte swap */
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.dst_valid = 1'b0;
-		    t_mem_srcs_rdy = 1'b1;
-		    t_push_mq = 1'b1;
 		    t_mem_tail.is_fp = 1'b1;
 		 end
 	    end // case: SDC1
@@ -2081,8 +2072,6 @@ module exec(clk,
 		    t_mem_tail.data = t_mem_fp_srcB; /* needs byte swap */
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.dst_valid = 1'b0;
-		    t_mem_srcs_rdy = 1'b1;
-		    t_push_mq = 1'b1;
 		    t_mem_tail.is_fp = 1'b1;		    
 		 end
 	    end
@@ -2094,10 +2083,8 @@ module exec(clk,
 		    t_mem_tail.is_store = 1'b1;
 		    t_mem_tail.data = {{Z_BITS{1'b0}},t_mem_srcB}; /* needs byte swap */
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
-		    t_mem_srcs_rdy = !(r_prf_inflight[mem_uq.srcA] || r_prf_inflight[mem_uq.srcB]);
 		    t_mem_tail.dst_valid = 1'b1;
 		    t_mem_tail.dst_ptr = mem_uq.dst;		    
-		    t_push_mq = 1'b1;
 		 end
 	    end // case: SW
 	  SWR:
@@ -2109,8 +2096,6 @@ module exec(clk,
 		    t_mem_tail.data = {{Z_BITS{1'b0}},t_mem_srcB}; /* needs byte swap */
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.dst_valid = 1'b0;
-		    t_mem_srcs_rdy = 1'b1;
-		    t_push_mq = 1'b1;
 		 end
 	    end // case: SW
 	  SWL:
@@ -2122,8 +2107,6 @@ module exec(clk,
 		    t_mem_tail.data = {{Z_BITS{1'b0}}, t_mem_srcB}; /* needs byte swap */
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.dst_valid = 1'b0;
-		    t_mem_srcs_rdy = 1'b1;
-		    t_push_mq = 1'b1;
 		 end
 	    end // case: SW	  
 	  LW:
@@ -2134,8 +2117,6 @@ module exec(clk,
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.dst_valid = 1'b1;
 		    t_mem_tail.dst_ptr = mem_uq.dst;
-		    t_mem_srcs_rdy = 1'b1;
-		    t_push_mq = 1'b1;
 		 end
 	    end // case: LW
 	  LDC1:
@@ -2146,8 +2127,6 @@ module exec(clk,
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.fp_dst_valid = 1'b1;
 		    t_mem_tail.dst_ptr = mem_uq.dst;
-		    t_mem_srcs_rdy = 1'b1;
-		    t_push_mq = 1'b1;
 		    t_mem_tail.is_fp = 1'b1;		    
 		 end
 	    end // case: LDC1
@@ -2161,8 +2140,6 @@ module exec(clk,
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.fp_dst_valid = 1'b1;
 		    t_mem_tail.dst_ptr = mem_uq.dst;
-		    t_mem_srcs_rdy = 1'b1;
-		    t_push_mq = 1'b1;
 		    t_mem_tail.is_fp = 1'b1;
 		 end
 	    end
@@ -2175,8 +2152,6 @@ module exec(clk,
 		    t_mem_tail.dst_valid = 1'b1;
 		    t_mem_tail.dst_ptr = mem_uq.dst;
 		    t_mem_tail.data = {{Z_BITS{1'b0}}, t_mem_srcB};
-		    t_mem_srcs_rdy = 1'b1;
-		    t_push_mq = 1'b1;
 		 end
 	    end // case: LWL
 	  LWR:
@@ -2188,8 +2163,6 @@ module exec(clk,
 		    t_mem_tail.dst_valid = 1'b1;
 		    t_mem_tail.dst_ptr = mem_uq.dst;
 		    t_mem_tail.data =  {{Z_BITS{1'b0}}, t_mem_srcB};
-		    t_mem_srcs_rdy = 1'b1;
-		    t_push_mq = 1'b1;
 		 end
 	    end // case: LWR
 	  LB:
@@ -2200,8 +2173,6 @@ module exec(clk,
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.dst_valid = 1'b1;
 		    t_mem_tail.dst_ptr = mem_uq.dst;
-		    t_mem_srcs_rdy = 1'b1;
-		    t_push_mq = 1'b1;
 		 end
 	    end
 	  LBU:
@@ -2212,8 +2183,6 @@ module exec(clk,
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.dst_valid = 1'b1;
 		    t_mem_tail.dst_ptr = mem_uq.dst;
-		    t_mem_srcs_rdy = 1'b1;
-		    t_push_mq = 1'b1;
 		 end
 	    end // case: LBU
 	  LHU:
@@ -2224,8 +2193,6 @@ module exec(clk,
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.dst_valid = 1'b1;
 		    t_mem_tail.dst_ptr = mem_uq.dst;
-		    t_mem_srcs_rdy = 1'b1;
-		    t_push_mq = 1'b1;
 		 end
 	    end // case: LBU
 	  LH:
@@ -2236,8 +2203,6 @@ module exec(clk,
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.dst_valid = 1'b1;
 		    t_mem_tail.dst_ptr = mem_uq.dst;
-		    t_mem_srcs_rdy = 1'b1;
-		    t_push_mq = 1'b1;
 		 end
 	    end // case: LH
 	  MFC1_MERGE:
@@ -2250,8 +2215,6 @@ module exec(clk,
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.dst_valid = 1'b1;
 		    t_mem_tail.dst_ptr = mem_uq.dst;
-		    t_mem_srcs_rdy = 1'b1;
-		    t_push_mq = 1'b1;
 		    t_mem_tail.is_fp = 1'b1;
 		 end
 	    end
@@ -2265,7 +2228,6 @@ module exec(clk,
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.fp_dst_valid = 1'b1;
 		    t_mem_tail.dst_ptr = mem_uq.dst;
-		    t_push_mq = 1'b1;
 		    t_mem_tail.is_fp = 1'b1;
 		 end
 	    end
