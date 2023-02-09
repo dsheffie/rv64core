@@ -1994,8 +1994,7 @@ module exec(clk,
 	t_mem_srcB_ready = mem_uq.srcB_valid ? !r_prf_inflight[mem_uq.srcB] : 
 			   mem_uq.fp_srcB_valid ? !r_fp_prf_inflight[mem_uq.srcB] : 
 			   1'b1;
-	t_mem_ready = (!mem_q_full) && t_mem_srcA_ready && t_mem_srcB_ready;
-	
+	t_mem_ready = (!t_mem_uq_empty) && (!mem_q_full) && t_mem_srcA_ready && t_mem_srcB_ready;
      end
    
    always_comb
@@ -2029,7 +2028,7 @@ module exec(clk,
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.dst_valid = 1'b0;
 		    t_mem_srcs_rdy = 1'b1;
-		    t_push_mq = !t_mem_uq_empty;
+		    t_push_mq = 1'b1;
 		 end
 	    end // case: SB
 	  SH:
@@ -2042,7 +2041,7 @@ module exec(clk,
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.dst_valid = 1'b0;
 		    t_mem_srcs_rdy = 1'b1;
-		    t_push_mq = !t_mem_uq_empty;		    
+		    t_push_mq = 1'b1;
 		 end
 	    end // case: SW
 	  SW:
@@ -2055,7 +2054,7 @@ module exec(clk,
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.dst_valid = 1'b0;
 		    t_mem_srcs_rdy = 1'b1;
-		    t_push_mq = !t_mem_uq_empty;		    
+		    t_push_mq = 1'b1;
 		 end
 	    end // case: SW
 	  SDC1:
@@ -2068,7 +2067,7 @@ module exec(clk,
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.dst_valid = 1'b0;
 		    t_mem_srcs_rdy = 1'b1;
-		    t_push_mq = !t_mem_uq_empty;
+		    t_push_mq = 1'b1;
 		    t_mem_tail.is_fp = 1'b1;
 		 end
 	    end // case: SDC1
@@ -2083,7 +2082,7 @@ module exec(clk,
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.dst_valid = 1'b0;
 		    t_mem_srcs_rdy = 1'b1;
-		    t_push_mq = !t_mem_uq_empty;
+		    t_push_mq = 1'b1;
 		    t_mem_tail.is_fp = 1'b1;		    
 		 end
 	    end
@@ -2098,7 +2097,7 @@ module exec(clk,
 		    t_mem_srcs_rdy = !(r_prf_inflight[mem_uq.srcA] || r_prf_inflight[mem_uq.srcB]);
 		    t_mem_tail.dst_valid = 1'b1;
 		    t_mem_tail.dst_ptr = mem_uq.dst;		    
-		    t_push_mq = !t_mem_uq_empty & t_mem_srcs_rdy;		    
+		    t_push_mq = 1'b1;
 		 end
 	    end // case: SW
 	  SWR:
@@ -2111,7 +2110,7 @@ module exec(clk,
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.dst_valid = 1'b0;
 		    t_mem_srcs_rdy = 1'b1;
-		    t_push_mq = !t_mem_uq_empty;		    
+		    t_push_mq = 1'b1;
 		 end
 	    end // case: SW
 	  SWL:
@@ -2124,7 +2123,7 @@ module exec(clk,
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.dst_valid = 1'b0;
 		    t_mem_srcs_rdy = 1'b1;
-		    t_push_mq = !t_mem_uq_empty;
+		    t_push_mq = 1'b1;
 		 end
 	    end // case: SW	  
 	  LW:
@@ -2136,7 +2135,7 @@ module exec(clk,
 		    t_mem_tail.dst_valid = 1'b1;
 		    t_mem_tail.dst_ptr = mem_uq.dst;
 		    t_mem_srcs_rdy = 1'b1;
-		    t_push_mq = !t_mem_uq_empty;
+		    t_push_mq = 1'b1;
 		 end
 	    end // case: LW
 	  LDC1:
@@ -2148,7 +2147,7 @@ module exec(clk,
 		    t_mem_tail.fp_dst_valid = 1'b1;
 		    t_mem_tail.dst_ptr = mem_uq.dst;
 		    t_mem_srcs_rdy = 1'b1;
-		    t_push_mq = !t_mem_uq_empty;
+		    t_push_mq = 1'b1;
 		    t_mem_tail.is_fp = 1'b1;		    
 		 end
 	    end // case: LDC1
@@ -2163,7 +2162,7 @@ module exec(clk,
 		    t_mem_tail.fp_dst_valid = 1'b1;
 		    t_mem_tail.dst_ptr = mem_uq.dst;
 		    t_mem_srcs_rdy = 1'b1;
-		    t_push_mq = !t_mem_uq_empty;
+		    t_push_mq = 1'b1;
 		    t_mem_tail.is_fp = 1'b1;
 		 end
 	    end
@@ -2177,7 +2176,7 @@ module exec(clk,
 		    t_mem_tail.dst_ptr = mem_uq.dst;
 		    t_mem_tail.data = {{Z_BITS{1'b0}}, t_mem_srcB};
 		    t_mem_srcs_rdy = 1'b1;
-		    t_push_mq = !t_mem_uq_empty;
+		    t_push_mq = 1'b1;
 		 end
 	    end // case: LWL
 	  LWR:
@@ -2190,7 +2189,7 @@ module exec(clk,
 		    t_mem_tail.dst_ptr = mem_uq.dst;
 		    t_mem_tail.data =  {{Z_BITS{1'b0}}, t_mem_srcB};
 		    t_mem_srcs_rdy = 1'b1;
-		    t_push_mq = !t_mem_uq_empty;
+		    t_push_mq = 1'b1;
 		 end
 	    end // case: LWR
 	  LB:
@@ -2202,7 +2201,7 @@ module exec(clk,
 		    t_mem_tail.dst_valid = 1'b1;
 		    t_mem_tail.dst_ptr = mem_uq.dst;
 		    t_mem_srcs_rdy = 1'b1;
-		    t_push_mq = !t_mem_uq_empty;
+		    t_push_mq = 1'b1;
 		 end
 	    end
 	  LBU:
@@ -2214,7 +2213,7 @@ module exec(clk,
 		    t_mem_tail.dst_valid = 1'b1;
 		    t_mem_tail.dst_ptr = mem_uq.dst;
 		    t_mem_srcs_rdy = 1'b1;
-		    t_push_mq = !t_mem_uq_empty;
+		    t_push_mq = 1'b1;
 		 end
 	    end // case: LBU
 	  LHU:
@@ -2226,7 +2225,7 @@ module exec(clk,
 		    t_mem_tail.dst_valid = 1'b1;
 		    t_mem_tail.dst_ptr = mem_uq.dst;
 		    t_mem_srcs_rdy = 1'b1;
-		    t_push_mq = !t_mem_uq_empty;
+		    t_push_mq = 1'b1;
 		 end
 	    end // case: LBU
 	  LH:
@@ -2238,7 +2237,7 @@ module exec(clk,
 		    t_mem_tail.dst_valid = 1'b1;
 		    t_mem_tail.dst_ptr = mem_uq.dst;
 		    t_mem_srcs_rdy = 1'b1;
-		    t_push_mq = !t_mem_uq_empty;
+		    t_push_mq = 1'b1;
 		 end
 	    end // case: LH
 	  MFC1_MERGE:
@@ -2252,7 +2251,7 @@ module exec(clk,
 		    t_mem_tail.dst_valid = 1'b1;
 		    t_mem_tail.dst_ptr = mem_uq.dst;
 		    t_mem_srcs_rdy = 1'b1;
-		    t_push_mq = !t_mem_uq_empty;
+		    t_push_mq = 1'b1;
 		    t_mem_tail.is_fp = 1'b1;
 		 end
 	    end
@@ -2266,8 +2265,7 @@ module exec(clk,
 		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 		    t_mem_tail.fp_dst_valid = 1'b1;
 		    t_mem_tail.dst_ptr = mem_uq.dst;
-		    t_mem_srcs_rdy = 1'b1;
-		    t_push_mq = !t_mem_uq_empty;
+		    t_push_mq = 1'b1;
 		    t_mem_tail.is_fp = 1'b1;
 		 end
 	    end
@@ -2275,10 +2273,10 @@ module exec(clk,
 	    begin
 	    end
 	endcase // case (mem_uq.op)
-	t_pop_mem_uq = (t_mem_uq_empty || t_flash_clear)  ? 1'b0 : t_mem_srcs_rdy;
+	t_pop_mem_uq = (t_mem_uq_empty || t_flash_clear)  ? 1'b0 : t_mem_ready;
      end // always_comb
 
-
+   
    initial
      begin
 	r_int_prf[0] = 'd0;
