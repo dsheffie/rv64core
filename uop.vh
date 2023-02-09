@@ -74,7 +74,6 @@ typedef enum logic [7:0]
    BGEZAL,
    BGEZALL,
    SC,
-   SYNC,
    BREAK,
    SDC1,
    LDC1,

@@ -212,8 +212,7 @@ module decode_mips32(insn,
 		   end
 		 6'd15: /* sync - treat as nop */
 		   begin
-		      uop.op = SYNC;
-		      uop.is_mem = 1'b1;
+		      uop.op = NOP;
 		      uop.is_int = 1'b1;
 		   end
 		 6'd16:
