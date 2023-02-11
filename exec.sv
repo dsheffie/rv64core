@@ -190,8 +190,8 @@ module exec(clk,
    logic 	t_fp_wr_prf;
    logic [63:0] t_fp_result;
    
-
    logic [31:0] r_srcA, r_srcB;
+   logic [31:0] r_mem_srcA, r_mem_srcB;
    
    logic [31:0] r_mem_result, r_int_result;
    logic 	r_fwd_int_srcA, r_fwd_int_srcB;
@@ -202,7 +202,6 @@ module exec(clk,
    logic 	r_fwd_hilo_int, r_fwd_hilo_mul, r_fwd_hilo_div;
       
    logic [31:0] t_srcA, t_srcB;
-   logic [31:0] t_mem_srcA, t_mem_srcB;
    
    logic [63:0] 	t_fp_srcA, t_fp_srcB, t_fp_srcC;
    logic [63:0] 	t_mem_fp_srcB, t_mem_fp_srcC;
@@ -256,7 +255,7 @@ module exec(clk,
 
    /* mem uop queue */
    uop_t r_mem_uq[N_MEM_UQ_ENTRIES];
-   uop_t mem_uq;
+   uop_t t_mem_uq, mem_uq;
    logic 	      t_mem_uq_read, t_mem_uq_empty, t_mem_uq_full,
 		      t_mem_uq_next_full;
    logic [`LG_MEM_UQ_ENTRIES:0]  r_mem_uq_head_ptr, n_mem_uq_head_ptr;
@@ -343,7 +342,7 @@ module exec(clk,
 			     (r_mem_uq_head_ptr[`LG_MEM_UQ_ENTRIES-1:0] == r_mem_uq_next_tail_ptr[`LG_MEM_UQ_ENTRIES-1:0]);
 
 	
-	mem_uq = r_mem_uq[r_mem_uq_head_ptr[`LG_MEM_UQ_ENTRIES-1:0]];
+	t_mem_uq = r_mem_uq[r_mem_uq_head_ptr[`LG_MEM_UQ_ENTRIES-1:0]];
 
 	t_push_two_mem = uq_push && uq_push_two && uq_uop.is_mem && uq_uop_two.is_mem;
 	t_push_one_mem = ((uq_push && uq_uop.is_mem) || (uq_push_two && uq_uop_two.is_mem)) && !t_push_two_mem;
@@ -366,6 +365,10 @@ module exec(clk,
 	  end
      end // always_comb
 
+   always_ff@(posedge clk)
+     begin
+	mem_uq <= t_mem_uq;
+     end
 
    always_ff@(posedge clk)
      begin
@@ -395,7 +398,7 @@ module exec(clk,
 	       end
 	     if(t_pop_mem_uq)
 	       begin
-		  r_mq_wait[mem_uq.rob_ptr] <= 1'b0;		  
+		  r_mq_wait[t_mem_uq.rob_ptr] <= 1'b0;		  
 	       end
 	     
 	     //int port
@@ -631,9 +634,6 @@ module exec(clk,
 		     r_fwd_hilo_div ? r_div_hilo :
 		     r_src_hilo;
 
-	
-	t_mem_srcA = r_int_prf[mem_uq.srcA];
-	t_mem_srcB = r_int_prf[mem_uq.srcB];
 	
 	t_mem_fp_srcB = r_fp_prf[mem_uq.srcB];
 `ifdef ENABLE_FPU
@@ -1992,24 +1992,35 @@ module exec(clk,
 
 
    wire [31:0] w_agu32;
-   ppa32 agu (.A(t_mem_srcA), .B({{E_BITS{mem_uq.imm[15]}},mem_uq.imm}), .Y(w_agu32));
+   ppa32 agu (.A(r_mem_srcA), .B({{E_BITS{mem_uq.imm[15]}},mem_uq.imm}), .Y(w_agu32));
 
    logic       t_mem_ready, t_mem_srcA_ready, t_mem_srcB_ready;
+   logic       r_mem_ready;
    
    always_comb
      begin
-	t_mem_srcA_ready = mem_uq.srcA_valid ? !r_prf_inflight[mem_uq.srcA] : 1'b1;
-	t_mem_srcB_ready = mem_uq.srcB_valid ? !r_prf_inflight[mem_uq.srcB] : 
-			   mem_uq.fp_srcB_valid ? !r_fp_prf_inflight[mem_uq.srcB] : 
+	t_mem_srcA_ready = t_mem_uq.srcA_valid ? !r_prf_inflight[t_mem_uq.srcA] : 1'b1;
+	t_mem_srcB_ready = t_mem_uq.srcB_valid ? !r_prf_inflight[t_mem_uq.srcB] : 
+			   t_mem_uq.fp_srcB_valid ? !r_fp_prf_inflight[t_mem_uq.srcB] : 
 			   1'b1;
-	t_mem_ready = (!t_mem_uq_empty) && (!mem_q_next_full) && t_mem_srcA_ready && t_mem_srcB_ready;
+	t_mem_ready = (!t_mem_uq_empty) && (!(mem_q_next_full||mem_q_full)) && t_mem_srcA_ready && t_mem_srcB_ready && !t_flash_clear;
+	t_pop_mem_uq = (t_mem_uq_empty || t_flash_clear)  ? 1'b0 : t_mem_ready;	
      end
-      
+
+   always_ff@(posedge clk)
+     begin
+	r_mem_ready <= reset ? 1'b0 : t_pop_mem_uq;
+     end
+
+
+
+   //$stop();
+   //end
+   
    always_comb
      begin
-	t_pop_mem_uq = 1'b0;
 	t_mem_simm = {{E_BITS{mem_uq.imm[15]}},mem_uq.imm};
-	t_push_mq = t_mem_ready;
+	t_push_mq = r_mem_ready;
 	t_mem_tail.op = MEM_LW;
 	t_mem_tail.addr = w_agu32;
 	t_mem_tail.data = 'd0;
@@ -2025,223 +2036,148 @@ module exec(clk,
 	case(mem_uq.op)
 	  SB:
 	    begin
-	       if(t_mem_ready)
-		 begin
-		    t_mem_tail.op = MEM_SB;
-		    t_mem_tail.is_store = 1'b1;
-		    t_mem_tail.data = {{Z_BITS{1'b0}}, t_mem_srcB}; /* needs byte swap */
-		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
-		    t_mem_tail.dst_valid = 1'b0;
-		 end
+	       t_mem_tail.op = MEM_SB;
+	       t_mem_tail.is_store = 1'b1;
+	       t_mem_tail.data = {{Z_BITS{1'b0}}, r_mem_srcB}; /* needs byte swap */
+	       t_mem_tail.dst_valid = 1'b0;
 	    end // case: SB
 	  SH:
 	    begin
-	       if(t_mem_ready)
-		 begin
-		    t_mem_tail.op = MEM_SH;
-		    t_mem_tail.is_store = 1'b1;
-		    t_mem_tail.data = {{Z_BITS{1'b0}},t_mem_srcB}; /* needs byte swap */
-		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
-		    t_mem_tail.dst_valid = 1'b0;
-		 end
+	       t_mem_tail.op = MEM_SH;
+	       t_mem_tail.is_store = 1'b1;
+	       t_mem_tail.data = {{Z_BITS{1'b0}},r_mem_srcB}; /* needs byte swap */
+	       t_mem_tail.dst_valid = 1'b0;
 	    end // case: SW
 	  SW:
 	    begin
-	       if(t_mem_ready)
-		 begin
-		    t_mem_tail.op = MEM_SW;
-		    t_mem_tail.is_store = 1'b1;
-		    t_mem_tail.data = {{Z_BITS{1'b0}},t_mem_srcB}; /* needs byte swap */
-		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
-		    t_mem_tail.dst_valid = 1'b0;
-		 end
+	       t_mem_tail.op = MEM_SW;
+	       t_mem_tail.is_store = 1'b1;
+	       t_mem_tail.data = {{Z_BITS{1'b0}},r_mem_srcB}; /* needs byte swap */
+	       t_mem_tail.dst_valid = 1'b0;
 	    end // case: SW
 	  SDC1:
 	    begin
-	       if(t_mem_ready)
-		 begin
-		    t_mem_tail.op = MEM_SDC1;
-		    t_mem_tail.is_store = 1'b1;
-		    t_mem_tail.data = t_mem_fp_srcB; /* needs byte swap */
-		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
-		    t_mem_tail.dst_valid = 1'b0;
-		    t_mem_tail.is_fp = 1'b1;
-		 end
+	       t_mem_tail.op = MEM_SDC1;
+	       t_mem_tail.is_store = 1'b1;
+	       t_mem_tail.data = t_mem_fp_srcB; /* needs byte swap */
+	       t_mem_tail.dst_valid = 1'b0;
+	       t_mem_tail.is_fp = 1'b1;
 	    end // case: SDC1
 	  SWC1_MERGE:
 	    begin
-	       if(t_mem_ready)
-		 begin
-		    t_mem_tail.op = MEM_SWC1_MERGE;
-		    t_mem_tail.is_store = 1'b1;
-		    t_mem_tail.lwc1_lo = mem_uq.jmp_imm[0];		    
-		    t_mem_tail.data = t_mem_fp_srcB; /* needs byte swap */
-		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
-		    t_mem_tail.dst_valid = 1'b0;
-		    t_mem_tail.is_fp = 1'b1;		    
-		 end
+	       t_mem_tail.op = MEM_SWC1_MERGE;
+	       t_mem_tail.is_store = 1'b1;
+	       t_mem_tail.lwc1_lo = mem_uq.jmp_imm[0];		    
+	       t_mem_tail.data = t_mem_fp_srcB; /* needs byte swap */
+	       t_mem_tail.dst_valid = 1'b0;
+	       t_mem_tail.is_fp = 1'b1;		    
 	    end
 	  SC:
 	    begin
-	       if(t_mem_ready)
-		 begin
-		    t_mem_tail.op = MEM_SC;
-		    t_mem_tail.is_store = 1'b1;
-		    t_mem_tail.data = {{Z_BITS{1'b0}},t_mem_srcB}; /* needs byte swap */
-		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
-		    t_mem_tail.dst_valid = 1'b1;
-		    t_mem_tail.dst_ptr = mem_uq.dst;		    
-		 end
+	       t_mem_tail.op = MEM_SC;
+	       t_mem_tail.is_store = 1'b1;
+	       t_mem_tail.data = {{Z_BITS{1'b0}},r_mem_srcB}; /* needs byte swap */
+	       t_mem_tail.dst_valid = 1'b1;
+	       t_mem_tail.dst_ptr = mem_uq.dst;		    
 	    end // case: SW
 	  SWR:
 	    begin
-	       if(t_mem_ready)
-		 begin
-		    t_mem_tail.op = MEM_SWR;
-		    t_mem_tail.is_store = 1'b1;
-		    t_mem_tail.data = {{Z_BITS{1'b0}},t_mem_srcB}; /* needs byte swap */
-		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
-		    t_mem_tail.dst_valid = 1'b0;
-		 end
+	       t_mem_tail.op = MEM_SWR;
+	       t_mem_tail.is_store = 1'b1;
+	       t_mem_tail.data = {{Z_BITS{1'b0}},r_mem_srcB}; /* needs byte swap */
+	       t_mem_tail.dst_valid = 1'b0;
 	    end // case: SW
 	  SWL:
 	    begin
-	       if(t_mem_ready)
-		 begin
-		    t_mem_tail.op = MEM_SWL;
-		    t_mem_tail.is_store = 1'b1;
-		    t_mem_tail.data = {{Z_BITS{1'b0}}, t_mem_srcB}; /* needs byte swap */
-		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
-		    t_mem_tail.dst_valid = 1'b0;
-		 end
+	       t_mem_tail.op = MEM_SWL;
+	       t_mem_tail.is_store = 1'b1;
+	       t_mem_tail.data = {{Z_BITS{1'b0}}, r_mem_srcB}; /* needs byte swap */
+	       t_mem_tail.dst_valid = 1'b0;
 	    end // case: SW	  
 	  LW:
 	    begin
-	       if(t_mem_ready)
-		 begin
-		    t_mem_tail.op = MEM_LW;
-		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
-		    t_mem_tail.dst_valid = 1'b1;
-		    t_mem_tail.dst_ptr = mem_uq.dst;
-		 end
+	       t_mem_tail.op = MEM_LW;
+	       t_mem_tail.rob_ptr = mem_uq.rob_ptr;
+	       t_mem_tail.dst_valid = 1'b1;
 	    end // case: LW
 	  LDC1:
 	    begin
-	       if(t_mem_ready)
-		 begin
-		    t_mem_tail.op = MEM_LDC1;
-		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
-		    t_mem_tail.fp_dst_valid = 1'b1;
-		    t_mem_tail.dst_ptr = mem_uq.dst;
-		    t_mem_tail.is_fp = 1'b1;		    
-		 end
+	       t_mem_tail.op = MEM_LDC1;
+	       t_mem_tail.rob_ptr = mem_uq.rob_ptr;
+	       t_mem_tail.fp_dst_valid = 1'b1;
+	       t_mem_tail.is_fp = 1'b1;		    
 	    end // case: LDC1
 	  LWC1_MERGE:
 	    begin
-	       if(t_mem_ready)
-		 begin
-		    t_mem_tail.op = MEM_LWC1_MERGE;
-		    t_mem_tail.lwc1_lo = mem_uq.jmp_imm[0];
-		    t_mem_tail.data = t_mem_fp_srcB;
-		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
-		    t_mem_tail.fp_dst_valid = 1'b1;
-		    t_mem_tail.dst_ptr = mem_uq.dst;
-		    t_mem_tail.is_fp = 1'b1;
-		 end
+	       t_mem_tail.op = MEM_LWC1_MERGE;
+	       t_mem_tail.lwc1_lo = mem_uq.jmp_imm[0];
+	       t_mem_tail.data = t_mem_fp_srcB;
+	       t_mem_tail.rob_ptr = mem_uq.rob_ptr;
+	       t_mem_tail.fp_dst_valid = 1'b1;
+	       t_mem_tail.is_fp = 1'b1;
 	    end
 	  LWL:
 	    begin
-	       if(t_mem_ready)
-		 begin
-		    t_mem_tail.op = MEM_LWL;
-		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
-		    t_mem_tail.dst_valid = 1'b1;
-		    t_mem_tail.dst_ptr = mem_uq.dst;
-		    t_mem_tail.data = {{Z_BITS{1'b0}}, t_mem_srcB};
-		 end
+	       t_mem_tail.op = MEM_LWL;
+	       t_mem_tail.rob_ptr = mem_uq.rob_ptr;
+	       t_mem_tail.dst_valid = 1'b1;
+	       t_mem_tail.dst_ptr = mem_uq.dst;
+	       t_mem_tail.data = {{Z_BITS{1'b0}}, r_mem_srcB};
 	    end // case: LWL
 	  LWR:
 	    begin
-	       if(t_mem_ready)
-		 begin
-		    t_mem_tail.op = MEM_LWR;
-		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
-		    t_mem_tail.dst_valid = 1'b1;
-		    t_mem_tail.dst_ptr = mem_uq.dst;
-		    t_mem_tail.data =  {{Z_BITS{1'b0}}, t_mem_srcB};
-		 end
+	       t_mem_tail.op = MEM_LWR;
+	       t_mem_tail.rob_ptr = mem_uq.rob_ptr;
+	       t_mem_tail.dst_valid = 1'b1;
+	       t_mem_tail.data =  {{Z_BITS{1'b0}}, r_mem_srcB};
 	    end // case: LWR
 	  LB:
 	    begin
-	       if(t_mem_ready)
-		 begin
-		    t_mem_tail.op = MEM_LB;
-		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
-		    t_mem_tail.dst_valid = 1'b1;
-		    t_mem_tail.dst_ptr = mem_uq.dst;
-		 end
+	       t_mem_tail.op = MEM_LB;
+	       t_mem_tail.rob_ptr = mem_uq.rob_ptr;
+	       t_mem_tail.dst_valid = 1'b1;
 	    end
 	  LBU:
 	    begin
-	       if(t_mem_ready)
-		 begin
-		    t_mem_tail.op = MEM_LBU;
-		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
-		    t_mem_tail.dst_valid = 1'b1;
-		    t_mem_tail.dst_ptr = mem_uq.dst;
-		 end
+	       t_mem_tail.op = MEM_LBU;
+	       t_mem_tail.rob_ptr = mem_uq.rob_ptr;
+	       t_mem_tail.dst_valid = 1'b1;
 	    end // case: LBU
 	  LHU:
 	    begin
-	       if(t_mem_ready)
-		 begin
-		    t_mem_tail.op = MEM_LHU;
-		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
-		    t_mem_tail.dst_valid = 1'b1;
-		    t_mem_tail.dst_ptr = mem_uq.dst;
-		 end
+	       t_mem_tail.op = MEM_LHU;
+	       t_mem_tail.rob_ptr = mem_uq.rob_ptr;
+	       t_mem_tail.dst_valid = 1'b1;
 	    end // case: LBU
 	  LH:
 	    begin
-	       if(t_mem_ready)
-		 begin
-		    t_mem_tail.op = MEM_LH;
-		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
-		    t_mem_tail.dst_valid = 1'b1;
-		    t_mem_tail.dst_ptr = mem_uq.dst;
-		 end
+	       t_mem_tail.op = MEM_LH;
+	       t_mem_tail.rob_ptr = mem_uq.rob_ptr;
+	       t_mem_tail.dst_valid = 1'b1;
 	    end // case: LH
 	  MFC1_MERGE:
 	    begin
-	       if(t_mem_ready)
-		 begin
-		    t_mem_tail.op = MEM_MFC1_MERGE;
-		    t_mem_tail.lwc1_lo = mem_uq.jmp_imm[0];		    
-		    t_mem_tail.data = t_mem_fp_srcB;
-		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
-		    t_mem_tail.dst_valid = 1'b1;
-		    t_mem_tail.dst_ptr = mem_uq.dst;
-		    t_mem_tail.is_fp = 1'b1;
-		 end
+	       t_mem_tail.op = MEM_MFC1_MERGE;
+	       t_mem_tail.lwc1_lo = mem_uq.jmp_imm[0];		    
+	       t_mem_tail.data = t_mem_fp_srcB;
+	       t_mem_tail.rob_ptr = mem_uq.rob_ptr;
+	       t_mem_tail.dst_valid = 1'b1;
+	       t_mem_tail.is_fp = 1'b1;
 	    end
 	  MTC1_MERGE:
 	    begin
-	       if(t_mem_ready)
-		 begin
-		    t_mem_tail.op = MEM_MTC1_MERGE;
-		    t_mem_tail.lwc1_lo = mem_uq.jmp_imm[0];
-		    t_mem_tail.data = t_mem_fp_srcB;
-		    t_mem_tail.rob_ptr = mem_uq.rob_ptr;
-		    t_mem_tail.fp_dst_valid = 1'b1;
-		    t_mem_tail.dst_ptr = mem_uq.dst;
-		    t_mem_tail.is_fp = 1'b1;
-		 end
+	       t_mem_tail.op = MEM_MTC1_MERGE;
+	       t_mem_tail.lwc1_lo = mem_uq.jmp_imm[0];
+	       t_mem_tail.data = t_mem_fp_srcB;
+	       t_mem_tail.rob_ptr = mem_uq.rob_ptr;
+	       t_mem_tail.fp_dst_valid = 1'b1;
+	       t_mem_tail.is_fp = 1'b1;
 	    end
 	  default:
 	    begin
 	    end
 	endcase // case (mem_uq.op)
-	t_pop_mem_uq = (t_mem_uq_empty || t_flash_clear)  ? 1'b0 : t_mem_ready;
+
      end // always_comb
 
    
@@ -2275,7 +2211,10 @@ module exec(clk,
      begin
 	r_srcA <= r_int_prf[t_picked_uop.srcA];
 	r_srcB <= r_int_prf[t_picked_uop.srcB];
-	
+		
+	r_mem_srcA <= r_int_prf[t_mem_uq.srcA];
+	r_mem_srcB <= r_int_prf[t_mem_uq.srcB];
+
 	if(r_start_int && t_wr_int_prf)
 	  begin
 	     r_int_prf[int_uop.dst] <=  t_result;
