@@ -1251,8 +1251,6 @@ endfunction
 	
 	n_core_mem_rsp.dst_valid = 1'b0;
 	n_core_mem_rsp.fp_dst_valid = 1'b0;
-	n_core_mem_rsp.missed_l1d = 1'b0;
-	n_core_mem_rsp.was_mem = !non_mem_op(r_req.op);
 
 	n_cache_accesses = r_cache_accesses;
 	n_cache_hits = r_cache_hits;
@@ -1300,7 +1298,6 @@ endfunction
 		    n_core_mem_rsp.data = {32'd0, r_req2.addr};
 		    n_core_mem_rsp.rob_ptr = r_req2.rob_ptr;
 		    n_core_mem_rsp.dst_ptr = r_req2.dst_ptr;
-		    n_core_mem_rsp.was_mem = !non_mem_op(r_req2.op);
 		    if(drain_ds_complete)
 		      begin
 			 n_core_mem_rsp.dst_valid = r_req2.dst_valid;
@@ -1341,11 +1338,9 @@ endfunction
 			 if(t_port2_hit_cache)
 			   begin
 			      n_cache_hits = r_cache_hits + 'd1;
-			      n_core_mem_rsp.missed_l1d = 1'b0;
 			   end
 			 else
 			   begin
-			      n_core_mem_rsp.missed_l1d = 1'b1;
 			   end
 			 n_core_mem_rsp_valid = 1'b1;
 		      end // if (r_req2.is_store)
@@ -1357,7 +1352,6 @@ endfunction
 			 n_core_mem_rsp.data = t_rsp_data2;
                          n_core_mem_rsp.dst_valid = t_rsp_dst_valid2;
                          n_core_mem_rsp.fp_dst_valid = t_rsp_fp_dst_valid2;
-                         n_core_mem_rsp.missed_l1d = 1'b0;
                          n_cache_hits = r_cache_hits + 'd1;
                          n_core_mem_rsp_valid = 1'b1;
 		      end
@@ -1387,7 +1381,6 @@ endfunction
 			      n_core_mem_rsp.data = t_rsp_data;
 			      n_core_mem_rsp.dst_valid = t_rsp_dst_valid;
 			      n_core_mem_rsp.fp_dst_valid = t_rsp_fp_dst_valid;
-			      n_core_mem_rsp.missed_l1d = r_is_retry;
 			      n_core_mem_rsp_valid = 1'b1;
 			   end // else: !if(r_req.is_store)
 		      end // if (r_valid_out && (r_tag_out == r_cache_tag))

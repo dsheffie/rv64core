@@ -645,9 +645,9 @@ module core(clk,
    			       t_rob_head.complete_cycle,
    			       r_cycle,
 			       t_rob_head.faulted ? 32'd1 : 32'd0,
-			       t_rob_head.is_mem ? 32'd1 : 32'd0,
+			       32'd0,
 			       t_rob_head.is_fp ? 32'd1 : 32'd0,
-			       t_rob_head.missed_l1d ? 32'd1 : 32'd0);
+			       32'd0);
    	  end
    	if(t_retire_two)
    	  begin
@@ -657,9 +657,9 @@ module core(clk,
    			       t_rob_next_head.complete_cycle,
    			       r_cycle,
 			       t_rob_next_head.faulted ? 32'd1 : 32'd0,
-			       t_rob_next_head.is_mem ? 32'd1 : 32'd0,
+			       32'd0,
 			       t_rob_next_head.is_fp ? 32'd1 : 32'd0,
-			       t_rob_next_head.missed_l1d ? 32'd1 : 32'd0);	     
+			       32'd0);	     
    	  end // if (t_retire_two)
 	if(r_state == RAT && n_state == ACTIVE)
 	  begin
@@ -983,7 +983,6 @@ module core(clk,
 	    begin
 	       //$display("cycle %d : r_rob_inflight = %b, r_ds_done = %b, t_rob_head_complete = %b", 
 	       //r_cycle, r_rob_inflight, r_ds_done, t_rob_head_complete);
-	       //$display("inflight is_mem %b", r_rob['d5].is_mem);
 
 	       
 	       if(r_has_nullifying_delay_slot && t_rob_head_complete && !r_ds_done)
@@ -1536,8 +1535,6 @@ module core(clk,
 	if(t_alloc)
 	  begin	     
 `ifdef ENABLE_CYCLE_ACCOUNTING
-	     t_rob_tail.missed_l1d = 1'b0;
-	     t_rob_tail.is_mem = 1'b0;
 	     t_rob_tail.is_fp = 1'b0;
 	     t_rob_tail.fetch_cycle = t_alloc_uop.fetch_cycle;
 	     t_rob_tail.alloc_cycle = r_cycle;
@@ -1595,8 +1592,6 @@ module core(clk,
 
 	     
 `ifdef ENABLE_CYCLE_ACCOUNTING
-	     t_rob_next_tail.missed_l1d = 1'b0;
-	     t_rob_next_tail.is_mem = 1'b0;
 	     t_rob_next_tail.is_fp = 1'b0;
 	     t_rob_next_tail.fetch_cycle = t_alloc_uop2.fetch_cycle;
 	     t_rob_next_tail.alloc_cycle = r_cycle;
@@ -1730,8 +1725,6 @@ module core(clk,
 		  r_rob[core_mem_rsp.rob_ptr].faulted <= 1'b0;
 `ifdef ENABLE_CYCLE_ACCOUNTING
 		  r_rob[core_mem_rsp.rob_ptr].complete_cycle <= r_cycle;
-		  r_rob[core_mem_rsp.rob_ptr].is_mem <= core_mem_rsp.was_mem;
-		  r_rob[core_mem_rsp.rob_ptr].missed_l1d <= core_mem_rsp.missed_l1d;
 `endif	    	     	     
 	       end
 	  end
