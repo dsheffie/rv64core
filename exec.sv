@@ -2097,13 +2097,11 @@ module exec(clk,
 	  LW:
 	    begin
 	       t_mem_tail.op = MEM_LW;
-	       t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 	       t_mem_tail.dst_valid = 1'b1;
 	    end // case: LW
 	  LDC1:
 	    begin
 	       t_mem_tail.op = MEM_LDC1;
-	       t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 	       t_mem_tail.fp_dst_valid = 1'b1;
 	       t_mem_tail.is_fp = 1'b1;		    
 	    end // case: LDC1
@@ -2112,14 +2110,12 @@ module exec(clk,
 	       t_mem_tail.op = MEM_LWC1_MERGE;
 	       t_mem_tail.lwc1_lo = mem_uq.jmp_imm[0];
 	       t_mem_tail.data = t_mem_fp_srcB;
-	       t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 	       t_mem_tail.fp_dst_valid = 1'b1;
 	       t_mem_tail.is_fp = 1'b1;
 	    end
 	  LWL:
 	    begin
 	       t_mem_tail.op = MEM_LWL;
-	       t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 	       t_mem_tail.dst_valid = 1'b1;
 	       t_mem_tail.dst_ptr = mem_uq.dst;
 	       t_mem_tail.data = {{Z_BITS{1'b0}}, r_mem_srcB};
@@ -2134,25 +2130,21 @@ module exec(clk,
 	  LB:
 	    begin
 	       t_mem_tail.op = MEM_LB;
-	       t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 	       t_mem_tail.dst_valid = 1'b1;
 	    end
 	  LBU:
 	    begin
 	       t_mem_tail.op = MEM_LBU;
-	       t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 	       t_mem_tail.dst_valid = 1'b1;
 	    end // case: LBU
 	  LHU:
 	    begin
 	       t_mem_tail.op = MEM_LHU;
-	       t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 	       t_mem_tail.dst_valid = 1'b1;
 	    end // case: LBU
 	  LH:
 	    begin
 	       t_mem_tail.op = MEM_LH;
-	       t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 	       t_mem_tail.dst_valid = 1'b1;
 	    end // case: LH
 	  MFC1_MERGE:
@@ -2160,7 +2152,6 @@ module exec(clk,
 	       t_mem_tail.op = MEM_MFC1_MERGE;
 	       t_mem_tail.lwc1_lo = mem_uq.jmp_imm[0];		    
 	       t_mem_tail.data = t_mem_fp_srcB;
-	       t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 	       t_mem_tail.dst_valid = 1'b1;
 	       t_mem_tail.is_fp = 1'b1;
 	    end
@@ -2169,7 +2160,6 @@ module exec(clk,
 	       t_mem_tail.op = MEM_MTC1_MERGE;
 	       t_mem_tail.lwc1_lo = mem_uq.jmp_imm[0];
 	       t_mem_tail.data = t_mem_fp_srcB;
-	       t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 	       t_mem_tail.fp_dst_valid = 1'b1;
 	       t_mem_tail.is_fp = 1'b1;
 	    end
