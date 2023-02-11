@@ -1687,6 +1687,8 @@ module exec(clk,
 	t_cvt_dp_sp = {t_fp_srcA[63], t_cvt_dp_sp_exp[7:0], t_fp_srcA[51:29]};
  `endif
      end
+
+
    
    fpu #(.LG_PRF_WIDTH(`LG_PRF_ENTRIES), 
 	 .LG_ROB_WIDTH(`LG_ROB_ENTRIES),
@@ -1741,6 +1743,7 @@ module exec(clk,
 	t_pop_fp_uq = 1'b0;
 	t_fp_srcs_rdy = 1'b0;
 	t_fp_result = 64'd0;
+	
 	case(fp_uq.op)
 	  SP_MOV:
 	    begin
@@ -1986,7 +1989,21 @@ module exec(clk,
 	t_fp_wr_prf = 1'b0;
 	t_pop_fp_uq = 1'b0;
 	t_fp_srcs_rdy = 1'b0;
-	t_fp_result = 64'd0;
+	t_fp_result = 'd0;
+	t_fpu_result = 'd0;
+	t_fpu_result_valid = 1'b0;
+	t_fpu_fcr_valid = 1'b0;
+	t_fpu_fcr_ptr = 'd0;
+	t_sp_div_valid = 1'b0;
+	t_dp_div_valid = 1'b0;
+	t_sp_div_dst_ptr = 'd0;
+	t_dp_div_dst_ptr = 'd0;
+	t_sp_div_rob_ptr = 'd0;
+	t_dp_div_rob_ptr = 'd0;
+	t_dp_div_result = 'd0;
+	t_sp_div_result = 'd0;
+	t_fpu_rob_ptr = 'd0;
+	t_fpu_dst_ptr = 'd0;
      end
 `endif // !`ifdef ENABLE_FPU
 
