@@ -118,8 +118,9 @@ module exec(clk,
    localparam N_MEM_UQ_ENTRIES = (1<<`LG_MEM_UQ_ENTRIES);
    localparam N_FP_UQ_ENTRIES = (1<<`LG_FP_UQ_ENTRIES);
       
-   logic [(`M_WIDTH-1):0] r_int_prf [N_INT_PRF_ENTRIES-1:0];
-   logic [63:0] r_fp_prf [N_FP_PRF_ENTRIES-1:0];
+   logic [31:0] r_int_prf [N_INT_PRF_ENTRIES-1:0];
+   
+   
    logic [63:0] r_hilo_prf[N_HILO_PRF_ENTRIES-1:0];
    logic [7:0] 	r_fcr_prf[N_FCR_PRF_ENTRIES-1:0];
    
@@ -635,12 +636,11 @@ module exec(clk,
 		     r_src_hilo;
 
 	
-	t_mem_fp_srcB = r_fp_prf[mem_uq.srcB];
-`ifdef ENABLE_FPU
-	t_fp_srcA = r_fp_prf[fp_uq.srcA];
-	t_fp_srcB = r_fp_prf[fp_uq.srcB];
-	t_fp_srcC = r_fp_prf[fp_uq.srcC];
-`endif
+	t_mem_fp_srcB = 64'd0;
+	t_fp_srcA = 64'd0;
+	t_fp_srcB = 64'd0;
+	t_fp_srcC = 64'd0;
+
      end // always_comb
 
 
@@ -2072,23 +2072,6 @@ module exec(clk,
 	       t_mem_tail.data = {{Z_BITS{1'b0}},r_mem_srcB}; /* needs byte swap */
 	       t_mem_tail.dst_valid = 1'b0;
 	    end // case: SW
-	  SDC1:
-	    begin
-	       t_mem_tail.op = MEM_SDC1;
-	       t_mem_tail.is_store = 1'b1;
-	       t_mem_tail.data = t_mem_fp_srcB; /* needs byte swap */
-	       t_mem_tail.dst_valid = 1'b0;
-	       t_mem_tail.is_fp = 1'b1;
-	    end // case: SDC1
-	  SWC1_MERGE:
-	    begin
-	       t_mem_tail.op = MEM_SWC1_MERGE;
-	       t_mem_tail.is_store = 1'b1;
-	       t_mem_tail.lwc1_lo = mem_uq.jmp_imm[0];		    
-	       t_mem_tail.data = t_mem_fp_srcB; /* needs byte swap */
-	       t_mem_tail.dst_valid = 1'b0;
-	       t_mem_tail.is_fp = 1'b1;		    
-	    end
 	  SC:
 	    begin
 	       t_mem_tail.op = MEM_SC;
@@ -2116,20 +2099,6 @@ module exec(clk,
 	       t_mem_tail.op = MEM_LW;
 	       t_mem_tail.dst_valid = 1'b1;
 	    end // case: LW
-	  LDC1:
-	    begin
-	       t_mem_tail.op = MEM_LDC1;
-	       t_mem_tail.fp_dst_valid = 1'b1;
-	       t_mem_tail.is_fp = 1'b1;		    
-	    end // case: LDC1
-	  LWC1_MERGE:
-	    begin
-	       t_mem_tail.op = MEM_LWC1_MERGE;
-	       t_mem_tail.lwc1_lo = mem_uq.jmp_imm[0];
-	       t_mem_tail.data = t_mem_fp_srcB;
-	       t_mem_tail.fp_dst_valid = 1'b1;
-	       t_mem_tail.is_fp = 1'b1;
-	    end
 	  LWL:
 	    begin
 	       t_mem_tail.op = MEM_LWL;
@@ -2164,22 +2133,6 @@ module exec(clk,
 	       t_mem_tail.op = MEM_LH;
 	       t_mem_tail.dst_valid = 1'b1;
 	    end // case: LH
-	  MFC1_MERGE:
-	    begin
-	       t_mem_tail.op = MEM_MFC1_MERGE;
-	       t_mem_tail.lwc1_lo = mem_uq.jmp_imm[0];		    
-	       t_mem_tail.data = t_mem_fp_srcB;
-	       t_mem_tail.dst_valid = 1'b1;
-	       t_mem_tail.is_fp = 1'b1;
-	    end
-	  MTC1_MERGE:
-	    begin
-	       t_mem_tail.op = MEM_MTC1_MERGE;
-	       t_mem_tail.lwc1_lo = mem_uq.jmp_imm[0];
-	       t_mem_tail.data = t_mem_fp_srcB;
-	       t_mem_tail.fp_dst_valid = 1'b1;
-	       t_mem_tail.is_fp = 1'b1;
-	    end
 	  default:
 	    begin
 	    end
@@ -2267,32 +2220,7 @@ module exec(clk,
 	       end
 	  end
      end
-   
 
-
-   always_ff@(posedge clk)
-     begin
-	if(t_fp_wr_prf)
-	  begin
-	     r_fp_prf[fp_uq.dst] <= t_fp_result;
-	  end
-	else if(t_fpu_result_valid)
-	  begin
-	     r_fp_prf[t_fpu_dst_ptr] <= t_fpu_result;
-	  end
-	else if(t_sp_div_valid)
-	  begin
-	     r_fp_prf[t_sp_div_dst_ptr] <= {32'd0, t_sp_div_result};
-	  end
-	else if(t_dp_div_valid)
-	  begin
-	     r_fp_prf[t_dp_div_dst_ptr] <= t_dp_div_result;
-	  end
-	if(mem_rsp_fp_dst_valid)
-	  begin
-	     r_fp_prf[mem_rsp_dst_ptr] <= mem_rsp_load_data;
-	  end
-     end
    
    always_ff@(posedge clk)
      begin

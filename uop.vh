@@ -75,12 +75,6 @@ typedef enum logic [7:0]
    BGEZALL,
    SC,
    BREAK,
-   SDC1,
-   LDC1,
-   SWC1,
-   LWC1,
-   LWC1_MERGE,
-   SWC1_MERGE,
    SP_ABS,
    DP_ABS,
    SP_NEG,
@@ -166,10 +160,6 @@ function logic is_store(opcode_t op);
      SH:
        x = 1'b1;
      SW:
-       x = 1'b1;
-     SDC1:
-       x = 1'b1;
-     SWC1_MERGE:
        x = 1'b1;
      SC:
        x = 1'b1;

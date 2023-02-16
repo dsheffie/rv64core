@@ -1242,72 +1242,12 @@ module decode_mips32(insn,
 	       uop.imm = insn[15:0];
 	       uop.is_mem = 1'b1;
 	    end
-	  6'd49:
-	    begin
-	       uop.srcA = rs;
-	       uop.srcA_valid = 1'b1;
-	       //$display("lwc1 entering machine for pc %x", pc);
-	       uop.op = LWC1_MERGE;
-	       uop.dst = {{ZP{1'b0}}, rt[4:1], 1'b0};
-	       uop.srcB = {{ZP{1'b0}}, rt[4:1], 1'b0};
-	       uop.fp_srcB_valid = 1;
-	       uop.jmp_imm = { {(`M_WIDTH-17){1'b0}}, rt[0]};
-	       uop.fp_dst_valid = 1'b1;
-	       uop.imm = insn[15:0];
-	       uop.is_mem = 1'b1;
-	    end
 	  6'd51: /* PREF */
 	    begin
 	       uop.op = NOP;
 	       uop.is_int = 1'b1;
 	    end
-	  6'd53: /* LDC1 */
-	    begin
-	       uop.op = LDC1;
-	       uop.srcA = rs;
-	       uop.srcA_valid = 1'b1;
-	       uop.dst = rt;
-	       uop.fp_dst_valid = 1'b1;
-	       uop.imm = insn[15:0];
-	       uop.is_mem = 1'b1;
-	    end
-	  // 6'd56: /* SC */
-	  //   begin
-	  //      uop.op = SC;
-	  //      uop.dst = rt;
-	  //      uop.dst_valid = 1'b1;
-	  //      uop.srcA = rs;
-	  //      uop.srcA_valid = 1'b1;
-	  //      uop.srcB = rt;
-	  //      uop.srcB_valid = 1'b1;
-	  //      uop.imm = insn[15:0];
-	  //      uop.is_mem = 1'b1;
-	  //      uop.is_store = 1'b1;
-	  //   end // case: 6'd56
 	  
-	  6'd57: /* SWC1 */
-	    begin
-	       uop.op = SWC1_MERGE;
-	       uop.srcB = {{ZP{1'b0}}, rt[4:1], 1'b0};
-	       uop.jmp_imm = { {(`M_WIDTH-17){1'b0}}, rt[0]};		    
-	       uop.srcA = rs;
-	       uop.srcA_valid = 1'b1;
-	       uop.fp_srcB_valid = 1'b1;
-	       uop.imm = insn[15:0];
-	       uop.is_mem = 1'b1;
-	       uop.is_store = 1'b1;
-	    end
-	  6'd61: /* SDC1 */
-	    begin
-	       uop.op = SDC1;
-	       uop.srcA = rs;
-	       uop.srcA_valid = 1'b1;
-	       uop.srcB = rt;
-	       uop.fp_srcB_valid = 1'b1;
-	       uop.imm = insn[15:0];
-	       uop.is_mem = 1'b1;
-	       uop.is_store = 1'b1;
-	    end
 	  default:
 	    begin
 	    end
