@@ -128,7 +128,7 @@ module exec(clk,
    localparam Z_BITS = 64-`M_WIDTH;      
    
    logic [N_INT_PRF_ENTRIES-1:0]  r_prf_inflight, n_prf_inflight;
-   logic [N_FP_PRF_ENTRIES-1:0]   r_fp_prf_inflight, n_fp_prf_inflight;
+  
    logic [N_FCR_PRF_ENTRIES-1:0]  r_fcr_prf_inflight, n_fcr_prf_inflight;
    logic [N_HILO_PRF_ENTRIES-1:0] r_hilo_inflight, n_hilo_inflight;
 
@@ -169,7 +169,7 @@ module exec(clk,
    logic 		    mem_q_full,mem_q_next_full, mem_q_empty;
    
 
-   logic 	t_pop_uq,t_pop_mem_uq,t_pop_fp_uq;
+   logic 	t_pop_uq,t_pop_mem_uq;
    logic 	t_push_mq;
 
    logic 	t_start_fpu;
@@ -187,9 +187,8 @@ module exec(clk,
    
    logic [`M_WIDTH-1:0] t_pc, t_pc4, t_pc8;
    logic [27:0] t_jaddr;
-   logic 	t_srcs_rdy, t_fp_srcs_rdy;
-   logic 	t_fp_wr_prf;
-   logic [63:0] t_fp_result;
+   logic 	t_srcs_rdy;
+
    
    logic [31:0] r_srcA, r_srcB;
    logic [31:0] r_mem_srcA, r_mem_srcB;
@@ -203,9 +202,6 @@ module exec(clk,
    logic 	r_fwd_hilo_int, r_fwd_hilo_mul, r_fwd_hilo_div;
       
    logic [31:0] t_srcA, t_srcB;
-   
-   logic [63:0] 	t_fp_srcA, t_fp_srcB, t_fp_srcC;
-   logic [63:0] 	t_mem_fp_srcB, t_mem_fp_srcC;
    
    
    logic [63:0] t_src_hilo;
@@ -231,7 +227,6 @@ module exec(clk,
    logic [`LG_HILO_PRF_ENTRIES-1:0] t_hilo_prf_ptr_out;
    
    logic [`MAX_LAT:0] r_wb_bitvec, n_wb_bitvec;
-   logic [`FP_MAX_LAT:0] r_fp_wb_bitvec, n_fp_wb_bitvec;
 
    /* divider */
    logic 	t_div_ready, t_signed_div, t_start_div32;
@@ -264,19 +259,9 @@ module exec(clk,
    logic [`LG_MEM_UQ_ENTRIES:0] r_mem_uq_next_head_ptr, n_mem_uq_next_head_ptr;
    logic [`LG_MEM_UQ_ENTRIES:0] r_mem_uq_next_tail_ptr, n_mem_uq_next_tail_ptr;
 
-   /* fp uop queue */
-   uop_t r_fp_uq[N_FP_UQ_ENTRIES];
-   uop_t fp_uq;
-   logic 	      t_fp_uq_read, t_fp_uq_empty, t_fp_uq_full, 
-		      t_fp_uq_next_full;
-   logic 	      t_push_two_mem, t_push_two_fp, t_push_two_int;
-   logic 	      t_push_one_mem, t_push_one_fp, t_push_one_int;
+   logic             t_push_two_mem,  t_push_two_int;
+   logic             t_push_one_mem,  t_push_one_int;
    
-   logic [`LG_FP_UQ_ENTRIES:0]  r_fp_uq_head_ptr, n_fp_uq_head_ptr;
-   logic [`LG_FP_UQ_ENTRIES:0]  r_fp_uq_tail_ptr, n_fp_uq_tail_ptr;
-   logic [`LG_FP_UQ_ENTRIES:0]  r_fp_uq_next_head_ptr, n_fp_uq_next_head_ptr;
-   logic [`LG_FP_UQ_ENTRIES:0]  r_fp_uq_next_tail_ptr, n_fp_uq_next_tail_ptr;
-
    logic 			t_flash_clear;
    always_comb
      begin
@@ -286,8 +271,8 @@ module exec(clk,
 
    always_comb
      begin
-	uq_full = t_uq_full || t_mem_uq_full || t_fp_uq_full;
-	uq_next_full = t_uq_next_full || t_mem_uq_next_full || t_fp_uq_next_full;
+	uq_full = t_uq_full || t_mem_uq_full;
+	uq_next_full = t_uq_next_full || t_mem_uq_next_full;
 	uq_empty = t_uq_empty;
      end
    
@@ -417,20 +402,7 @@ module exec(clk,
 	       begin
 		  r_uq_wait[int_uop.rob_ptr] <= 1'b0;
 	       end
-	     //fp port
-	     if(t_push_two_fp)
-	       begin
-		  r_fq_wait[uq_uop.rob_ptr] <= 1'b1;
-		  r_fq_wait[uq_uop_two.rob_ptr] <= 1'b1;		  
-	       end
-	     else if(t_push_one_fp)
-	       begin
-		  r_fq_wait[uq_uop.is_fp ? uq_uop.rob_ptr : uq_uop_two.rob_ptr] <= 1'b1;
-	       end
-	     if(t_pop_fp_uq)
-	       begin
-		  r_fq_wait[fp_uq.rob_ptr] <= 1'b0;
-	       end
+
 	  end // else: !if(reset)
      end // always_ff@ (posedge clk)
 
@@ -451,73 +423,6 @@ module exec(clk,
      end // always_ff@ (posedge clk)
 
    
-   always_ff@(posedge clk)
-     begin
-	if(reset || t_flash_clear)
-	  begin
-	     r_fp_uq_head_ptr <= 'd0;
-	     r_fp_uq_tail_ptr <= 'd0;
-	     r_fp_uq_next_head_ptr <= 'd1;
-	     r_fp_uq_next_tail_ptr <= 'd1;
-	     
-	  end
-	else
-	  begin
-	     r_fp_uq_head_ptr <= n_fp_uq_head_ptr;
-	     r_fp_uq_tail_ptr <= n_fp_uq_tail_ptr;
-	     r_fp_uq_next_head_ptr <= n_fp_uq_next_head_ptr;
-	     r_fp_uq_next_tail_ptr <= n_fp_uq_next_tail_ptr;
-	  end
-     end
-   
-   always_comb
-     begin
-	n_fp_uq_head_ptr = r_fp_uq_head_ptr;
-	n_fp_uq_tail_ptr = r_fp_uq_tail_ptr;
-	n_fp_uq_next_head_ptr = r_fp_uq_next_head_ptr;
-	n_fp_uq_next_tail_ptr = r_fp_uq_next_tail_ptr;
-	
-	t_fp_uq_empty = (r_fp_uq_head_ptr == r_fp_uq_tail_ptr);
-	t_fp_uq_full = (r_fp_uq_head_ptr != r_fp_uq_tail_ptr) && (r_fp_uq_head_ptr[`LG_FP_UQ_ENTRIES-1:0] == r_fp_uq_tail_ptr[`LG_FP_UQ_ENTRIES-1:0]);
-	t_fp_uq_next_full = (r_fp_uq_head_ptr != r_fp_uq_next_tail_ptr) && 
-			    (r_fp_uq_head_ptr[`LG_FP_UQ_ENTRIES-1:0] == r_fp_uq_next_tail_ptr[`LG_FP_UQ_ENTRIES-1:0]);
-	
-	fp_uq = r_fp_uq[r_fp_uq_head_ptr[`LG_FP_UQ_ENTRIES-1:0]];
-
-	t_push_two_fp = uq_push && uq_push_two && uq_uop.is_fp && uq_uop_two.is_fp;
-	t_push_one_fp = ((uq_push && uq_uop.is_fp) || (uq_push_two && uq_uop_two.is_fp)) && !t_push_two_fp;
-	
-	if(t_push_two_fp)
-	  begin
-	     n_fp_uq_tail_ptr = r_fp_uq_tail_ptr + 'd2;
-	     n_fp_uq_next_tail_ptr = r_fp_uq_next_tail_ptr + 'd2;
-	  end
-	else if(uq_push_two && uq_uop_two.is_fp || uq_push && uq_uop.is_fp)
-	  begin
-	     n_fp_uq_tail_ptr = r_fp_uq_tail_ptr + 'd1;
-	     n_fp_uq_next_tail_ptr = r_fp_uq_next_tail_ptr + 'd1;
-	  end
-	
-	if(t_pop_fp_uq)
-	  begin
-	     n_fp_uq_head_ptr = r_fp_uq_head_ptr + 'd1;
-	  end
-     end // always_comb
-
-
-   always_ff@(posedge clk)
-     begin
-	if(t_push_two_fp)
-	  begin
-	     r_fp_uq[r_fp_uq_tail_ptr[`LG_FP_UQ_ENTRIES-1:0]] <= uq_uop;
-	     r_fp_uq[r_fp_uq_next_tail_ptr[`LG_FP_UQ_ENTRIES-1:0]] <= uq_uop_two;
-	  end
-	else if(t_push_one_fp)
-	  begin
-	     r_fp_uq[r_fp_uq_tail_ptr[`LG_FP_UQ_ENTRIES-1:0]] <= uq_uop.is_fp ? uq_uop : uq_uop_two;	     
-	  end
-	
-     end
 
    
    always_comb
@@ -606,19 +511,6 @@ module exec(clk,
 	  end
      end // always_comb
 
-   always_ff@(posedge clk)
-     begin
-	r_fp_wb_bitvec <= reset ? 'd0 : n_fp_wb_bitvec;
-     end
-   
-   always_comb
-     begin
-	for(integer i = (`FP_MAX_LAT-1); i > -1; i = i-1)
-	  begin
-	     n_fp_wb_bitvec[i] = r_fp_wb_bitvec[i+1];
-	  end
-	n_fp_wb_bitvec[`FPU_LAT-1] = t_start_fpu;
-     end
    
    always_comb
      begin
@@ -634,13 +526,6 @@ module exec(clk,
 		     r_fwd_hilo_mul ? r_mul_hilo :
 		     r_fwd_hilo_div ? r_div_hilo :
 		     r_src_hilo;
-
-	
-	t_mem_fp_srcB = 64'd0;
-	t_fp_srcA = 64'd0;
-	t_fp_srcB = 64'd0;
-	t_fp_srcC = 64'd0;
-
      end // always_comb
 
 
@@ -958,14 +843,12 @@ module exec(clk,
 	if(reset)
 	  begin
 	     r_prf_inflight <= 'd0;
-	     r_fp_prf_inflight <= 'd0;
 	     r_hilo_inflight <= 'd0;
 	     r_fcr_prf_inflight <= 'd0;
 	  end
 	else
 	  begin
 	     r_prf_inflight <= ds_done ? 'd0 : n_prf_inflight;
-	     r_fp_prf_inflight <= ds_done ? 'd0 : n_fp_prf_inflight;
 	     r_hilo_inflight <= ds_done ? 'd0 : n_hilo_inflight;
 	     r_fcr_prf_inflight <= ds_done ? 'd0 : n_fcr_prf_inflight;
 	  end
@@ -1049,42 +932,6 @@ module exec(clk,
 	  end
      end
 
-   always_comb
-     begin
-	n_fp_prf_inflight = r_fp_prf_inflight;
-	
-	if(uq_push && uq_uop.fp_dst_valid)
-	  begin
-	     n_fp_prf_inflight[uq_uop.dst] = 1'b1;
-	  end
-
-	if(uq_push_two && uq_uop_two.fp_dst_valid)
-	  begin
-	     n_fp_prf_inflight[uq_uop_two.dst] = 1'b1;
-	  end
-	
-	if(mem_rsp_fp_dst_valid)
-	  begin
-	     n_fp_prf_inflight[mem_rsp_dst_ptr] = 1'b0;
-	  end
-
-	if(t_fpu_result_valid)
-	  begin
-	     n_fp_prf_inflight[t_fpu_dst_ptr] = 1'b0;
-	  end
-	else if(t_sp_div_valid)
-	  begin
-	     n_fp_prf_inflight[t_sp_div_dst_ptr] = 1'b0;
-	  end
-	else if(t_dp_div_valid)
-	  begin
-	     n_fp_prf_inflight[t_dp_div_dst_ptr] = 1'b0;
-	  end	
-	if(t_fp_wr_prf)
-	  begin
-	     n_fp_prf_inflight[fp_uq.dst] = 1'b0;
-	  end
-     end // always_comb
    
    always_ff@(posedge clk)
      begin
@@ -1116,11 +963,11 @@ module exec(clk,
 		    t_pop_uq ? 32'd1 : 32'd0,
 		    t_mem_uq_empty ? 32'd0 : 32'd1,
 		    t_pop_mem_uq ? 32'd1 : 32'd0,
-		    t_fp_uq_empty ? 32'd0 : 32'd1,
-		    t_pop_fp_uq ? 32'd1 : 32'd0,
+		    32'd1,
+		    32'd0,
 		    t_uq_full ? 32'd1 : 32'd0,
 		    t_mem_uq_full ? 32'd1 : 32'd0,
-		    t_fp_uq_full ? 32'd1 : 32'd0,
+		    32'd0,
 		    t_blocked_by_store ? 32'd1 : 32'd0,
 		    {28'd0, t_alu_entry_rdy}
 		    );
@@ -1607,390 +1454,10 @@ module exec(clk,
      end // always_comb
 
 
-`ifdef ENABLE_FPU
-   logic [31:0] t_sp_trunc, t_w_sp_cvt;
-   logic [63:0] t_dp_trunc, t_w_dp_cvt;
 
-   logic 	t_fp_div_sp_active, t_fp_div_dp_active,t_fp_div_active;
-
-   logic 	t_start_dp_div, t_start_sp_div, t_is_fp_sqrt;
-   
-   fp_trunc_to_int32 #(.W(32)) sp_trunc (.clk(clk),
-				.in(t_fp_srcA[31:0]),
-				.en((fp_uq.op == TRUNC_SP_W) && t_fp_srcs_rdy),
-				.out(t_sp_trunc));
-   
-   fp_trunc_to_int32 #(.W(64)) dp_trunc (.clk(clk),
-				.in(t_fp_srcA),
-				.en((fp_uq.op == TRUNC_DP_W) && t_fp_srcs_rdy),
-				.out(t_dp_trunc));
-   
-   fp_convert #(.W(32)) int_sp_convert (.clk(clk),
-					.in(t_fp_srcA[31:0]),
-					.en((fp_uq.op == CVT_W_SP) && t_fp_srcs_rdy),					.out(t_w_sp_cvt));
-   
-   fp_convert #(.W(64)) int_dp_convert (.clk(clk),
-					.in({{32{t_fp_srcA[31]}},t_fp_srcA[31:0]}),
-					.en((fp_uq.op == CVT_W_DP) && t_fp_srcs_rdy),					.out(t_w_dp_cvt));
-
-   always_comb
-     begin
-	t_fp_div_active = t_fp_div_sp_active|t_fp_div_dp_active|t_sp_div_valid|t_dp_div_valid;
-     end
-
-   
-   fp_div #(.LG_PRF_WIDTH(`LG_PRF_ENTRIES), 
-	    .LG_ROB_WIDTH(`LG_ROB_ENTRIES),
-	    .W(32)) sp_fpu_div(
-			       .y(t_sp_div_result),
-			       .valid(t_sp_div_valid),
-			       .dst_ptr_out(t_sp_div_dst_ptr),
-			       .rob_ptr_out(t_sp_div_rob_ptr),
-			       .active(t_fp_div_sp_active),
-			       .is_sqrt(t_is_fp_sqrt),
-			       .clk(clk), 
-			       .reset(reset), 
-			       .a(t_fp_srcA[31:0]), 
-			       .b(t_fp_srcB[31:0]),
-			       .start(t_start_sp_div),
-			       .rob_ptr_in(fp_uq.rob_ptr),
-			       .dst_ptr_in(fp_uq.dst)
-			       );
-   
-
-   fp_div #(.LG_PRF_WIDTH(`LG_PRF_ENTRIES), 
-	    .LG_ROB_WIDTH(`LG_ROB_ENTRIES),
-	    .W(64)) dp_fpu_div(.y(t_dp_div_result),
-			       .valid(t_dp_div_valid),
-			       .dst_ptr_out(t_dp_div_dst_ptr),
-			       .rob_ptr_out(t_dp_div_rob_ptr),
-			       .active(t_fp_div_dp_active),
-			       .is_sqrt(t_is_fp_sqrt),
-			       .clk(clk), 
-			       .reset(reset), 
-			       .a(t_fp_srcA), 
-			       .b(t_fp_srcB),
-			       .start(t_start_dp_div),
-			       .rob_ptr_in(fp_uq.rob_ptr),
-			       .dst_ptr_in(fp_uq.dst)
-			       );
-
-
-   logic [31:0] t_cvt_dp_sp;
-   logic [10:0] t_cvt_dp_sp_exp;
-   always_comb
-     begin
- `ifdef DEBUG_FPU
-	t_cvt_dp_sp = fp64_to_fp32(t_fp_srcA);
- `else
-	t_cvt_dp_sp_exp = t_fp_srcA[62:52] - 11'd896;
-	t_cvt_dp_sp = {t_fp_srcA[63], t_cvt_dp_sp_exp[7:0], t_fp_srcA[51:29]};
- `endif
-     end
-
-
-   
-   fpu #(.LG_PRF_WIDTH(`LG_PRF_ENTRIES), 
-	 .LG_ROB_WIDTH(`LG_ROB_ENTRIES),
-	 .LG_FCR_WIDTH(`LG_FCR_PRF_ENTRIES),
-	 .FPU_LAT(`FPU_LAT)) 
-   fpu0(
-	.y(t_fpu_result),
-	.val(t_fpu_result_valid),
-	.cmp_val(t_fpu_fcr_valid),
-	.dst_ptr_out(t_fpu_dst_ptr),
-	.rob_ptr_out(t_fpu_rob_ptr),
-	.fcr_ptr_out(t_fpu_fcr_ptr),
-	.clk(clk),
-	.reset(reset),
-	.pc(fp_uq.pc),
-	.opcode(fp_uq.op),
-	.src_a(t_fp_srcA),
-	.src_b(t_fp_srcB),
-	.src_c(t_fp_srcC),
-	.src_fcr(r_fcr_prf[fp_uq.hilo_src]),
-	.start(t_start_fpu && t_pop_fp_uq),
-	.rob_ptr_in(fp_uq.rob_ptr),
-	.dst_ptr_in(fp_uq.dst),
-	.fcr_ptr_in(fp_uq.hilo_dst),
-	.fcr_sel(fp_uq.imm[2:0])
-	);
-
-
-   logic t_fpu_srcA_rdy;
-   logic t_fpu_srcB_rdy;
-   logic t_fpu_srcC_rdy;
-   logic t_fpu_fcr_rdy;
-   logic t_fpu_srcs_rdy;
-   
-   always_comb
-     begin
-	t_fpu_srcA_rdy = fp_uq.fp_srcA_valid ? !r_fp_prf_inflight[fp_uq.srcA] : 1'b1;
-	t_fpu_srcB_rdy = fp_uq.fp_srcB_valid ? !r_fp_prf_inflight[fp_uq.srcB] : 1'b1;
-	t_fpu_srcC_rdy = fp_uq.fp_srcC_valid ? !r_fp_prf_inflight[fp_uq.srcC] : 1'b1;
-	t_fpu_fcr_rdy = fp_uq.fcr_src_valid ? !r_fcr_prf_inflight[fp_uq.hilo_src] : 1'b1;
-	t_fpu_srcs_rdy = t_fpu_srcA_rdy && t_fpu_srcB_rdy && t_fpu_srcC_rdy && t_fpu_fcr_rdy;
-     end // always_comb
-
-   
    always_comb
      begin
 	t_start_fpu = 1'b0;
-	t_start_dp_div = 1'b0;
-	t_start_sp_div = 1'b0;
-	t_is_fp_sqrt = 1'b0;
-	t_fp_wr_prf = 1'b0;
-	t_pop_fp_uq = 1'b0;
-	t_fp_srcs_rdy = 1'b0;
-	t_fp_result = 64'd0;
-	
-	case(fp_uq.op)
-	  SP_MOV:
-	    begin
-	       t_fp_result = {32'd0, t_fp_srcA[31:0]};
-	       t_fp_srcs_rdy = t_fpu_srcs_rdy
-			       && !t_fp_uq_empty
-			       && !t_fp_div_active
-			       && !r_fp_wb_bitvec[0];
-	       //$display("cycle %d, fp move sources ready %b, wb bitvec %b", 
-	       //r_cycle, t_fp_srcs_rdy, r_fp_wb_bitvec);
-	       t_fp_wr_prf = t_fp_srcs_rdy; 
-	    end // case: FP_MOV	    
-	  DP_MOV:
-	    begin
-	       t_fp_result = t_fp_srcA;
-	       t_fp_srcs_rdy = t_fpu_srcs_rdy
-			       && !t_fp_uq_empty
-			       && !t_fp_div_active
-			       && !r_fp_wb_bitvec[0];
-	       //$display("cycle %d, fp move sources ready %b, wb bitvec %b", 
-	       //r_cycle, t_fp_srcs_rdy, r_fp_wb_bitvec);
-	       t_fp_wr_prf = t_fp_srcs_rdy; 
-	    end // case: FP_MOV
-	  FP_MOVT:
-	    begin
-	       if(r_fcr_prf[fp_uq.hilo_src][fp_uq.srcC[2:0]]==1'b1)
-		 begin
-		    t_fp_result = t_fp_srcA;
-		 end
-	       else
-		 begin
-		    t_fp_result = t_fp_srcB;
-		 end
-	       t_fp_srcs_rdy = t_fpu_srcs_rdy
-			       && !t_fp_uq_empty
-			       && !t_fp_div_active
-			       && !r_fp_wb_bitvec[0];
-	       t_fp_wr_prf = t_fp_srcs_rdy; 
-	    end // case: FP_MOVZ
-	  FP_MOVF:
-	    begin
-	       if(r_fcr_prf[fp_uq.hilo_src][fp_uq.srcC[2:0]]==1'b0)
-		 begin
-		    t_fp_result = t_fp_srcA;
-		 end
-	       else
-		 begin
-		    t_fp_result = t_fp_srcB;
-		 end
-	       
-	       t_fp_srcs_rdy = t_fpu_srcs_rdy
-			       && !t_fp_uq_empty
-			       && !t_fp_div_active
-			       && !r_fp_wb_bitvec[0];
-	       t_fp_wr_prf = t_fp_srcs_rdy; 
-	    end
-	  
-	  TRUNC_DP_W:
-	    begin
-	       t_fp_result = t_dp_trunc;
-	       t_fp_srcs_rdy = t_fpu_srcs_rdy
-			       && !t_fp_uq_empty
-			       && !t_fp_div_active
-			       && !r_fp_wb_bitvec[0];
-	       t_fp_wr_prf = t_fp_srcs_rdy; 	       
-	    end
-
-	  TRUNC_SP_W:
-	    begin
-	       t_fp_result = {32'd0, t_sp_trunc};
-	       t_fp_srcs_rdy = t_fpu_srcs_rdy
-			       && !t_fp_uq_empty
-			       && !t_fp_div_active
-			       && !r_fp_wb_bitvec[0];
-	       t_fp_wr_prf = t_fp_srcs_rdy; 
-	    end
-	  
-	  CVT_SP_DP:
-	    begin
- `ifdef DEBUG_FPU
-	       t_fp_result = fp32_to_fp64(t_fp_srcA[31:0]);
- `else
-	       t_fp_result = {t_fp_srcA[31], (11'd896 + {3'd0, t_fp_srcA[30:23]}),
-			      t_fp_srcA[22:0], 29'd0};
- `endif
-	       t_fp_srcs_rdy = t_fpu_srcs_rdy
-			       && !t_fp_uq_empty
-			       && !t_fp_div_active
-			       && !r_fp_wb_bitvec[0];
-	       t_fp_wr_prf = t_fp_srcs_rdy;
-	    end
-	  CVT_DP_SP:
-	    begin
-	       t_fp_result = {32'd0, t_cvt_dp_sp};
-	       t_fp_srcs_rdy = t_fpu_srcs_rdy 
-			       && !t_fp_uq_empty
-			       && !t_fp_div_active
-			       && !r_fp_wb_bitvec[0];
-	       t_fp_wr_prf = t_fp_srcs_rdy;
-	    end
-	  CVT_W_DP:
-	    begin
-	       t_fp_result = t_w_dp_cvt;
-	       t_fp_srcs_rdy = t_fpu_srcs_rdy
-			       && !t_fp_uq_empty
-			       && !t_fp_div_active
-			       && !r_fp_wb_bitvec[0];
-	       t_fp_wr_prf = t_fp_srcs_rdy; 	       
-	    end
-	  CVT_W_SP:
-	    begin
-	       t_fp_result = {32'd0, t_w_sp_cvt};
-	       t_fp_srcs_rdy = t_fpu_srcs_rdy
-			       && !t_fp_uq_empty
-			       && !t_fp_div_active
-			       && !r_fp_wb_bitvec[0];
-	       t_fp_wr_prf = t_fp_srcs_rdy; 	       
-	    end
-	  SP_ADD:
-	    begin
-	       t_fp_srcs_rdy = t_fpu_srcs_rdy;
-	       t_start_fpu = t_fp_srcs_rdy
-			     && !t_fp_div_active
-			     && !t_fp_uq_empty;	       
-	    end
-	  SP_SUB:
-	    begin
-	       t_fp_srcs_rdy = t_fpu_srcs_rdy;
-	       t_start_fpu = t_fp_srcs_rdy
-			     && !t_fp_div_active
-			     && !t_fp_uq_empty;	       	       
-	    end
-	  SP_MUL:
-	    begin
-	       t_fp_srcs_rdy = t_fpu_srcs_rdy;
-	       t_start_fpu = t_fp_srcs_rdy
-			     && !t_fp_div_active
-			     && !t_fp_uq_empty;	       
-	    end
-	  DP_ADD:
-	    begin
-	       t_fp_srcs_rdy = t_fpu_srcs_rdy;
-	       t_start_fpu = t_fp_srcs_rdy
-			     && !t_fp_div_active
-			     && !t_fp_uq_empty;	       
-	    end
-	  DP_SUB:
-	    begin
-	       t_fp_srcs_rdy = t_fpu_srcs_rdy;
-	       t_start_fpu = t_fp_srcs_rdy
-			     && !t_fp_div_active
-			     && !t_fp_uq_empty;	       
-	    end
-	  
-	  DP_MUL:
-	    begin
-	       t_fp_srcs_rdy = t_fpu_srcs_rdy;
-	       t_start_fpu = t_fp_srcs_rdy
-			     && !t_fp_div_active
-			     && !t_fp_uq_empty;	       
-	    end
-
-	  DP_DIV:
-	    begin
-	       t_fp_srcs_rdy = t_fpu_srcs_rdy && (r_fp_wb_bitvec == 'd0);
-	       t_start_dp_div = t_fp_srcs_rdy
-				&& !t_fp_div_active
-				&& !t_fp_uq_empty;
-	       
-	    end
-	  SP_DIV:
-	    begin
-	       t_fp_srcs_rdy = t_fpu_srcs_rdy && (r_fp_wb_bitvec == 'd0);;
-	       t_start_sp_div = t_fp_srcs_rdy
-				&& !t_fp_div_active
-				&& !t_fp_uq_empty;
-	    end
-
-	  DP_SQRT:
-	    begin
-	       t_fp_srcs_rdy = t_fpu_srcs_rdy && (r_fp_wb_bitvec == 'd0);
-	       t_start_dp_div = t_fp_srcs_rdy
-				&& !t_fp_div_active
-				&& !t_fp_uq_empty;
-	       t_is_fp_sqrt = 1'b1;
-	    end
-	  SP_SQRT:
-	    begin
-	       t_fp_srcs_rdy = t_fpu_srcs_rdy && (r_fp_wb_bitvec == 'd0);
-	       t_start_sp_div = t_fp_srcs_rdy
-				&& !t_fp_div_active
-				&& !t_fp_uq_empty;
-	       t_is_fp_sqrt = 1'b1;				   
-	    end
-	  
-	  DP_CMP_LT:
-	    begin
-	       t_fp_srcs_rdy =!t_fp_uq_empty && t_fpu_srcs_rdy;
-	       t_start_fpu = t_fp_srcs_rdy && !t_fp_div_active;
-	    end
-	  
-	  SP_CMP_LT:
-	    begin
-	       t_fp_srcs_rdy =!t_fp_uq_empty && t_fpu_srcs_rdy;	       
-	       t_start_fpu = t_fp_srcs_rdy && !t_fp_div_active;
-	    end
-
-	  DP_CMP_LE:
-	    begin
-	       t_fp_srcs_rdy =!t_fp_uq_empty && t_fpu_srcs_rdy;
-	       t_start_fpu = t_fp_srcs_rdy && !t_fp_div_active;
-	    end
-	  
-	  SP_CMP_LE:
-	    begin
-	       t_fp_srcs_rdy =!t_fp_uq_empty && t_fpu_srcs_rdy;
-	       t_start_fpu = t_fp_srcs_rdy && !t_fp_div_active;
-	    end
-
-	  DP_CMP_EQ:
-	    begin
-	       t_fp_srcs_rdy =!t_fp_uq_empty && t_fpu_srcs_rdy;
-	       t_start_fpu = t_fp_srcs_rdy && !t_fp_div_active;
-	    end
-	  
-	  SP_CMP_EQ:
-	    begin
-	       t_fp_srcs_rdy =!t_fp_uq_empty && t_fpu_srcs_rdy;
-	       t_start_fpu = t_fp_srcs_rdy && !t_fp_div_active;
-	    end
-
-	  
-	  default:
-	    begin
-	    end
-	endcase // case (fp_uq.op)
-	t_pop_fp_uq = t_fp_uq_empty || t_flash_clear ? 1'b0 : t_fp_srcs_rdy && (!t_fp_div_active);
-     end
-`else
-   always_comb
-     begin
-	t_start_fpu = 1'b0;
-	t_fp_wr_prf = 1'b0;
-	t_pop_fp_uq = 1'b0;
-	t_fp_srcs_rdy = 1'b0;
-	t_fp_result = 'd0;
-	t_fpu_result = 'd0;
 	t_fpu_result_valid = 1'b0;
 	t_fpu_fcr_valid = 1'b0;
 	t_fpu_fcr_ptr = 'd0;
@@ -2005,7 +1472,6 @@ module exec(clk,
 	t_fpu_rob_ptr = 'd0;
 	t_fpu_dst_ptr = 'd0;
      end
-`endif // !`ifdef ENABLE_FPU
 
 
    wire [31:0] w_agu32;
@@ -2018,7 +1484,6 @@ module exec(clk,
      begin
 	t_mem_srcA_ready = t_mem_uq.srcA_valid ? !r_prf_inflight[t_mem_uq.srcA] : 1'b1;
 	t_mem_srcB_ready = t_mem_uq.srcB_valid ? !r_prf_inflight[t_mem_uq.srcB] : 
-			   t_mem_uq.fp_srcB_valid ? !r_fp_prf_inflight[t_mem_uq.srcB] : 
 			   1'b1;
 	t_mem_ready = (!t_mem_uq_empty) && (!(mem_q_next_full||mem_q_full)) && t_mem_srcA_ready && t_mem_srcB_ready && !t_flash_clear;
 	t_pop_mem_uq = (t_mem_uq_empty || t_flash_clear)  ? 1'b0 : t_mem_ready;	
@@ -2269,7 +1734,7 @@ module exec(clk,
 	 end
        else
 	 begin
-	    complete_valid_2 <= t_fp_wr_prf || t_fpu_result_valid || t_fpu_fcr_valid || t_sp_div_valid || t_dp_div_valid;
+	    complete_valid_2 <= 1'b0;
 	 end
     end // always_ff@ (posedge clk)
 
@@ -2277,45 +1742,12 @@ module exec(clk,
    //t_fpu_fcr_valid
    always_ff@(posedge clk)
      begin
-	if(t_fpu_result_valid || t_fpu_fcr_valid)
-	  begin
-	     complete_bundle_2.rob_ptr <= t_fpu_rob_ptr;
-	     complete_bundle_2.complete <= 1'b1;
-	     complete_bundle_2.faulted <= 1'b0;	
-	     complete_bundle_2.restart_pc <= 'd0;
-	     complete_bundle_2.is_ii <= 1'b0;
-	     complete_bundle_2.take_br <= 1'b0;
-	     complete_bundle_2.data <= t_fpu_result;
-	  end // if (t_fpu_result_valid )
-	else if(t_sp_div_valid)
-	  begin
-	     complete_bundle_2.rob_ptr <= t_sp_div_rob_ptr;
-	     complete_bundle_2.complete <= 1'b1;
-	     complete_bundle_2.faulted <= 1'b0;	
-	     complete_bundle_2.restart_pc <= 'd0;
-	     complete_bundle_2.is_ii <= 1'b0;
-	     complete_bundle_2.take_br <= 1'b0;
-	     complete_bundle_2.data <= {32'd0, t_sp_div_result};	     
-	  end
-	else if(t_dp_div_valid)
-	  begin
-	     complete_bundle_2.rob_ptr <= t_dp_div_rob_ptr;
-	     complete_bundle_2.complete <= 1'b1;
-	     complete_bundle_2.faulted <= 1'b0;	
-	     complete_bundle_2.restart_pc <= 'd0;
-	     complete_bundle_2.is_ii <= 1'b0;
-	     complete_bundle_2.take_br <= 1'b0;
-	     complete_bundle_2.data <= t_dp_div_result;
-	  end
-	else
-	  begin
-	     complete_bundle_2.rob_ptr <= fp_uq.rob_ptr;
-	     complete_bundle_2.complete <= 1'b1;
-	     complete_bundle_2.faulted <= 1'b0;	
-	     complete_bundle_2.restart_pc <= 'd0;
-	     complete_bundle_2.is_ii <= 1'b0;
-	     complete_bundle_2.take_br <= 1'b0;
-	     complete_bundle_2.data <= t_fp_result;
-	  end
+	complete_bundle_2.rob_ptr <= 'd0;
+	complete_bundle_2.complete <= 1'b1;
+	complete_bundle_2.faulted <= 1'b0;	
+	complete_bundle_2.restart_pc <= 'd0;
+	complete_bundle_2.is_ii <= 1'b0;
+	complete_bundle_2.take_br <= 1'b0;
+	complete_bundle_2.data <= 'd0;
      end
 endmodule
