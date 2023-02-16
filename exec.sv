@@ -133,22 +133,9 @@ module exec(clk,
    logic [N_HILO_PRF_ENTRIES-1:0] r_hilo_inflight, n_hilo_inflight;
 
 
-   logic [63:0] 		  t_fpu_result;
-   logic 			  t_fpu_result_valid;
    logic 			  t_fpu_fcr_valid;
    logic [`LG_FCR_PRF_ENTRIES-1:0] t_fpu_fcr_ptr;
    
-
-   logic [`LG_PRF_ENTRIES-1:0] t_fpu_dst_ptr;
-   logic [`LG_ROB_ENTRIES-1:0] t_fpu_rob_ptr;
-
-   logic 		       t_sp_div_valid, t_dp_div_valid;
-   logic [63:0] 	       t_dp_div_result;
-   logic [31:0] 	       t_sp_div_result;
-   logic [`LG_PRF_ENTRIES-1:0] t_sp_div_dst_ptr;
-   logic [`LG_ROB_ENTRIES-1:0] t_sp_div_rob_ptr;
-   logic [`LG_PRF_ENTRIES-1:0] t_dp_div_dst_ptr;
-   logic [`LG_ROB_ENTRIES-1:0] t_dp_div_rob_ptr;
 
    
    
@@ -171,8 +158,6 @@ module exec(clk,
 
    logic 	t_pop_uq,t_pop_mem_uq;
    logic 	t_push_mq;
-
-   logic 	t_start_fpu;
    
    
    localparam E_BITS = `M_WIDTH-16;
@@ -942,10 +927,6 @@ module exec(clk,
 		  r_fcr_prf[i] <= 'd0;
 	       end
 	  end
-	else if(t_fpu_fcr_valid)
-	  begin
-	     r_fcr_prf[t_fpu_fcr_ptr] <= t_fpu_result[7:0];
-	  end
      end
 
    
@@ -1457,20 +1438,8 @@ module exec(clk,
 
    always_comb
      begin
-	t_start_fpu = 1'b0;
-	t_fpu_result_valid = 1'b0;
 	t_fpu_fcr_valid = 1'b0;
 	t_fpu_fcr_ptr = 'd0;
-	t_sp_div_valid = 1'b0;
-	t_dp_div_valid = 1'b0;
-	t_sp_div_dst_ptr = 'd0;
-	t_dp_div_dst_ptr = 'd0;
-	t_sp_div_rob_ptr = 'd0;
-	t_dp_div_rob_ptr = 'd0;
-	t_dp_div_result = 'd0;
-	t_sp_div_result = 'd0;
-	t_fpu_rob_ptr = 'd0;
-	t_fpu_dst_ptr = 'd0;
      end
 
 
