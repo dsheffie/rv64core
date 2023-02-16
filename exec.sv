@@ -870,7 +870,7 @@ module exec(clk,
    
    mul m(.clk(clk), 
 	 .reset(reset), 
-	 .opcode(int_uop.op), 
+	 .is_signed(int_uop.op != MULTU), 
 	 .go(t_start_mul&r_start_int),
 	 .src_A(t_srcA[31:0]),
 	 .src_B(t_srcB[31:0]),

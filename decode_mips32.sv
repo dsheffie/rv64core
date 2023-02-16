@@ -19,25 +19,25 @@ module decode_mips32(insn,
 `endif
    output 	uop_t uop;
 
-   logic [5:0] 	opcode = insn[31:26];
-   logic 	is_nop = (insn == 32'd0);
-   logic 	is_ehb = (insn == 32'd192);
+   wire [5:0] 	opcode = insn[31:26];
+   wire 	is_nop = (insn == 32'd0);
+   wire 	is_ehb = (insn == 32'd192);
    
    
    /* how many zero pad bits for reg specifiers */
    localparam ZP = (`LG_PRF_ENTRIES-5);
    localparam FCR_ZP = (`LG_PRF_ENTRIES-3);
    
-   logic [`LG_PRF_ENTRIES-1:0]	rs = {{ZP{1'b0}},insn[25:21]};
-   logic [`LG_PRF_ENTRIES-1:0] 	rt = {{ZP{1'b0}},insn[20:16]};
-   logic [`LG_PRF_ENTRIES-1:0] 	rd = {{ZP{1'b0}},insn[15:11]};
+   wire [`LG_PRF_ENTRIES-1:0]	rs = {{ZP{1'b0}},insn[25:21]};
+   wire [`LG_PRF_ENTRIES-1:0] 	rt = {{ZP{1'b0}},insn[20:16]};
+   wire [`LG_PRF_ENTRIES-1:0] 	rd = {{ZP{1'b0}},insn[15:11]};
 
-   logic [`LG_PRF_ENTRIES-1:0] 	fs = {{ZP{1'b0}},insn[15:11]};
-   logic [`LG_PRF_ENTRIES-1:0] 	ft = {{ZP{1'b0}},insn[20:16]};
-   logic [`LG_PRF_ENTRIES-1:0] 	fd = {{ZP{1'b0}},insn[10:6]};
+   wire [`LG_PRF_ENTRIES-1:0] 	fs = {{ZP{1'b0}},insn[15:11]};
+   wire [`LG_PRF_ENTRIES-1:0] 	ft = {{ZP{1'b0}},insn[20:16]};
+   wire [`LG_PRF_ENTRIES-1:0] 	fd = {{ZP{1'b0}},insn[10:6]};
 
    
-   logic [`LG_PRF_ENTRIES-1:0] shamt = {{ZP{1'b0}},insn[10:6]};
+   wire [`LG_PRF_ENTRIES-1:0] shamt = {{ZP{1'b0}},insn[10:6]};
    
    always_comb
      begin

@@ -1,5 +1,4 @@
-`include "uop.vh"
-
+`include "machine.vh"
 
 module ff(q,d,clk);
    parameter N = 1;
@@ -14,7 +13,7 @@ endmodule // dff
 
 module mul(clk,
 	   reset,
-	   opcode,
+	   is_signed,
 	   go,
 	   src_A,
 	   src_B,
@@ -28,7 +27,7 @@ module mul(clk,
    
    input logic clk;
    input logic reset;
-   input opcode_t opcode;   
+   input logic is_signed;
    input logic go;
    
    input logic [31:0] src_A;
@@ -57,11 +56,10 @@ module mul(clk,
    assign hilo_prf_ptr_val_out = r_hilo_val[`MUL_LAT];
    assign hilo_prf_ptr_out = r_hilo_ptr[`MUL_LAT];
 
-   logic 			   t_signed, r_signed;
+   logic 			   r_signed;
    
    always_comb
      begin
-	t_signed = opcode != MULTU;
 	y = r_mul31;
      end // always_comb
 
@@ -74,7 +72,7 @@ module mul(clk,
      begin
 	rA <= src_A;
 	rB <= src_B;
-	r_signed <= t_signed;
+	r_signed <= is_signed;
      end
    
    //compute unsigned partial products
