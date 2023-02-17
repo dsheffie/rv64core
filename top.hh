@@ -8,7 +8,6 @@
 #include <cmath>
 #include <tuple>
 #include <map>
-#include <cfenv>
 
 #include <sys/time.h>
 #include <boost/version.hpp>

@@ -392,24 +392,6 @@ int main(int argc, char **argv) {
      load_elf(mips_binary.c_str(), ss);
      mkMonitorVectors(ss);
    }
-
-   switch (fegetround())
-     {
-     case FE_DOWNWARD:
-       printf ("FPU round to downward\n");
-       break;
-     case FE_TONEAREST:
-       printf ("FPU round to to-nearest\n");
-       break;
-     case FE_TOWARDZERO:
-       printf ("FPU round to toward-zero\n");
-       break;
-     case FE_UPWARD:
-       printf ("FPU round to upward\n");
-       break;
-     default:
-       printf ("FPU round to unknown\n");
-  }
   
   // Create an instance of our module under test
    //Vcore_l1d_l1i *tb = new Vcore_l1d_l1i;
