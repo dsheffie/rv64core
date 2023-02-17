@@ -29,7 +29,6 @@ typedef struct packed {
    logic [`LG_PHT_SZ-1:0] 	 pht_idx;
 
 `ifdef ENABLE_CYCLE_ACCOUNTING
-   logic 			 is_fp;
    logic [63:0] 	    fetch_cycle;
    logic [63:0] 	    alloc_cycle;
    logic [63:0] 	    complete_cycle;
@@ -62,7 +61,6 @@ typedef struct packed {
    logic [(`M_WIDTH-1):0] addr;
    logic 		  in_storebuf;
    logic 		  is_store;
-   logic 		  is_fp;
    /* for merging */
    logic 		  lwc1_lo;
    mem_op_t op;

@@ -1360,7 +1360,6 @@ module exec(clk,
 	t_mem_tail.is_store = 1'b0;
 	t_mem_tail.lwc1_lo = 1'b0;
 	t_mem_tail.in_storebuf = 1'b0;
-	t_mem_tail.is_fp = 1'b0;
 	
 	case(mem_uq.op)
 	  SB:

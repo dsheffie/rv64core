@@ -44,7 +44,6 @@ module decode_mips32(insn,
 	uop.srcA = 'd0;
 	uop.srcB = 'd0;
 	uop.dst = 'd0;
-	uop.is_fp = 1'b0;
 	uop.srcA_valid = 1'b0;
 	uop.srcB_valid = 1'b0;
 	uop.fp_srcA_valid = 1'b0;

@@ -618,7 +618,7 @@ module core(clk,
    			       r_cycle,
 			       t_rob_head.faulted ? 32'd1 : 32'd0,
 			       32'd0,
-			       t_rob_head.is_fp ? 32'd1 : 32'd0,
+			       32'd0,
 			       32'd0);
    	  end
    	if(t_retire_two)
@@ -630,7 +630,7 @@ module core(clk,
    			       r_cycle,
 			       t_rob_next_head.faulted ? 32'd1 : 32'd0,
 			       32'd0,
-			       t_rob_next_head.is_fp ? 32'd1 : 32'd0,
+			       32'd0,
 			       32'd0);	     
    	  end // if (t_retire_two)
 	if(r_state == RAT && n_state == ACTIVE)
@@ -1403,7 +1403,6 @@ module core(clk,
 	if(t_alloc)
 	  begin	     
 `ifdef ENABLE_CYCLE_ACCOUNTING
-	     t_rob_tail.is_fp = 1'b0;
 	     t_rob_tail.fetch_cycle = t_alloc_uop.fetch_cycle;
 	     t_rob_tail.alloc_cycle = r_cycle;
 	     t_rob_tail.complete_cycle = 'd0;
@@ -1447,7 +1446,6 @@ module core(clk,
 
 	     
 `ifdef ENABLE_CYCLE_ACCOUNTING
-	     t_rob_next_tail.is_fp = 1'b0;
 	     t_rob_next_tail.fetch_cycle = t_alloc_uop2.fetch_cycle;
 	     t_rob_next_tail.alloc_cycle = r_cycle;
 	     t_rob_next_tail.complete_cycle = 'd0;
