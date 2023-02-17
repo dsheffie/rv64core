@@ -44,8 +44,6 @@ module exec(clk,
 	    uq_push_two,
 	    complete_bundle_1,
 	    complete_valid_1,
-	    complete_bundle_2,
-	    complete_valid_2,
 	    exception_wr_cpr0_val,
 	    exception_wr_cpr0_ptr,
 	    exception_wr_cpr0_data,
@@ -88,8 +86,6 @@ module exec(clk,
    output 	complete_t complete_bundle_1;
    output logic complete_valid_1;
 
-   output 	complete_t complete_bundle_2;
-   output logic complete_valid_2;   
 
    input logic 	exception_wr_cpr0_val;
    input logic [4:0] exception_wr_cpr0_ptr;
@@ -1695,28 +1691,4 @@ module exec(clk,
      end
 
 
-  always_ff@(posedge clk)
-    begin
-       if(reset)
-	 begin
-	    complete_valid_2 <= 1'b0;
-	 end
-       else
-	 begin
-	    complete_valid_2 <= 1'b0;
-	 end
-    end // always_ff@ (posedge clk)
-
-
-   //t_fpu_fcr_valid
-   always_ff@(posedge clk)
-     begin
-	complete_bundle_2.rob_ptr <= 'd0;
-	complete_bundle_2.complete <= 1'b1;
-	complete_bundle_2.faulted <= 1'b0;	
-	complete_bundle_2.restart_pc <= 'd0;
-	complete_bundle_2.is_ii <= 1'b0;
-	complete_bundle_2.take_br <= 1'b0;
-	complete_bundle_2.data <= 'd0;
-     end
 endmodule

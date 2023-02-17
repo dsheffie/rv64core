@@ -1982,8 +1982,6 @@ module core(clk,
 	   	   
 	   .complete_bundle_1(t_complete_bundle_1),
 	   .complete_valid_1(t_complete_valid_1),
-	   .complete_bundle_2(),
-	   .complete_valid_2(),
 	   .exception_wr_cpr0_val(t_exception_wr_cpr0_val),
 	   .exception_wr_cpr0_ptr(t_exception_wr_cpr0_ptr),
 	   .exception_wr_cpr0_data(t_exception_wr_cpr0_data[31:0]),
