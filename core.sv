@@ -311,8 +311,6 @@ module core(clk,
    
    complete_t t_complete_bundle_1;
    logic 		     t_complete_valid_1;
-   complete_t t_complete_bundle_2;
-   logic 		     t_complete_valid_2;
    
    logic 		     t_any_complete;
    
@@ -1580,11 +1578,7 @@ module core(clk,
 		  //$display("rob entry %d marked complete by port 1", t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]);
 		  r_rob_complete[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]] <= t_complete_bundle_1.complete;
 	       end
-	     if(t_complete_valid_2)
-	       begin
-		  //$display("rob entry %d marked complete by port 2", t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]);
-                  r_rob_complete[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]] <= t_complete_bundle_2.complete;
-	       end
+
 	     if(core_mem_rsp_valid)
 	       begin
 		  //$display("rob entry %d marked complete by mem port", core_mem_rsp.rob_ptr);
@@ -1622,18 +1616,6 @@ module core(clk,
 `ifdef ENABLE_CYCLE_ACCOUNTING
 		  r_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].complete_cycle <= r_cycle;
 `endif	    
-	       end
-	     if(t_complete_valid_2)
-	       begin
-		  r_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].faulted <= t_complete_bundle_2.faulted;
-		  r_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].target_pc <= t_complete_bundle_2.restart_pc;
-		  r_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].is_ii <= t_complete_bundle_2.is_ii;
-		  r_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].take_br <= t_complete_bundle_2.take_br;
-		  r_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].data <= t_complete_bundle_2.data;
-`ifdef ENABLE_CYCLE_ACCOUNTING
-		  r_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].complete_cycle <= r_cycle;
-		  r_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].is_fp <= 1'b1;
-`endif	    	     
 	       end
 	     if(core_mem_rsp_valid)
 	       begin
@@ -1682,10 +1664,6 @@ module core(clk,
 	  begin
 	     t_clr_mask[t_complete_bundle_1.rob_ptr] = 1'b1;
 	  end
-	if(t_complete_valid_2)
-	  begin
-	     t_clr_mask[t_complete_bundle_2.rob_ptr] = 1'b1;
-	  end
 	if(core_mem_rsp_valid)
 	  begin
 	     t_clr_mask[core_mem_rsp.rob_ptr] = 1'b1;
@@ -1710,11 +1688,6 @@ module core(clk,
 		    begin
 		       //$display("cycle %d, 1 rob ptr %d complete\n", r_cycle, t_complete_bundle_1.rob_ptr);		  
 		       r_rob_inflight[t_complete_bundle_1.rob_ptr] <= 1'b0;		  
-		    end
-		  if(t_complete_valid_2)
-		    begin
-		       //$display("cycle %d, 2 rob ptr %d complete\n", r_cycle, t_complete_bundle_2.rob_ptr);
-		       r_rob_inflight[t_complete_bundle_2.rob_ptr] <= 1'b0;
 		    end
 		  if(core_mem_rsp_valid)
 		    begin
@@ -1977,7 +1950,7 @@ module core(clk,
    
    always_comb
      begin
-	t_any_complete = t_complete_valid_1 | t_complete_valid_2 | core_mem_rsp_valid;
+	t_any_complete = t_complete_valid_1 | core_mem_rsp_valid;
 	t_push_1 = t_alloc && !t_fold_uop;
 	t_push_2 = t_alloc_two && !t_fold_uop2;
      end
@@ -2009,8 +1982,8 @@ module core(clk,
 	   	   
 	   .complete_bundle_1(t_complete_bundle_1),
 	   .complete_valid_1(t_complete_valid_1),
-	   .complete_bundle_2(t_complete_bundle_2),
-	   .complete_valid_2(t_complete_valid_2),
+	   .complete_bundle_2(),
+	   .complete_valid_2(),
 	   .exception_wr_cpr0_val(t_exception_wr_cpr0_val),
 	   .exception_wr_cpr0_ptr(t_exception_wr_cpr0_ptr),
 	   .exception_wr_cpr0_data(t_exception_wr_cpr0_data[31:0]),
