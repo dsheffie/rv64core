@@ -219,9 +219,10 @@ module core(clk,
    
    rob_entry_t t_rob_head, t_rob_next_head, t_rob_tail, t_rob_next_tail;
 
-   logic [N_PRF_ENTRIES-1:0] n_prf_free, r_prf_free, t_prf_free;   
+   logic [N_PRF_ENTRIES-1:0] n_prf_free, r_prf_free;
+   wire [N_PRF_ENTRIES-1:0]  w_prf_free_even, w_prf_free_odd;
+   
    logic [N_PRF_ENTRIES-1:0] n_retire_prf_free, r_retire_prf_free;
-   logic [`LG_PRF_ENTRIES:0] t_prf_free_cnt;
       
    logic [N_HILO_ENTRIES-1:0] n_hilo_prf_free,r_hilo_prf_free;
    logic [N_HILO_ENTRIES-1:0] n_retire_hilo_prf_free, r_retire_hilo_prf_free;
@@ -229,7 +230,6 @@ module core(clk,
    logic [`LG_HILO_PRF_ENTRIES:0]   t_hilo_prf_idx;
    
    logic [`LG_PRF_ENTRIES-1:0]  n_prf_entry, n_prf_entry2;
-   logic [`LG_PRF_ENTRIES-1:0] 	n_fp_prf_entry, n_fp_prf_entry2;
 
    logic [`LG_ROB_ENTRIES:0] r_rob_head_ptr, n_rob_head_ptr;
    logic [`LG_ROB_ENTRIES:0] r_rob_next_head_ptr, n_rob_next_head_ptr;
@@ -308,22 +308,16 @@ module core(clk,
    
    logic 		       t_free_reg_two;
    logic [`LG_PRF_ENTRIES-1:0] t_free_reg_two_ptr;
-
-   logic 		     t_free_fp_reg;
-   logic [`LG_PRF_ENTRIES-1:0] t_free_fp_reg_ptr;
-
-   logic 		     t_free_fp_two_reg;
-   logic [`LG_PRF_ENTRIES-1:0] t_free_fp_reg_two_ptr;
    
    logic 			   t_free_hilo;
    logic [`LG_HILO_PRF_ENTRIES-1:0] t_free_hilo_ptr;
    
 
    logic [`LG_HILO_PRF_ENTRIES:0]   t_hilo_ffs;
-   logic [`LG_PRF_ENTRIES:0] 	    t_fp_ffs;
-   logic [`LG_PRF_ENTRIES:0] 	    t_fp_ffs2;
-   logic [`LG_PRF_ENTRIES:0] 	    t_gpr_ffs;
-   logic [`LG_PRF_ENTRIES:0] 	    t_gpr_ffs2;
+
+   
+   logic [`LG_PRF_ENTRIES:0] 	    t_gpr_ffs, t_gpr_ffs2;
+   wire [`LG_PRF_ENTRIES:0] 	    w_gpr_ffs_even, w_gpr_ffs_odd;
    
    logic 		     t_uq_full, t_uq_empty, t_uq_next_full;
    
@@ -737,10 +731,10 @@ module core(clk,
 	t_monitor_req_valid = 1'b0;
 	n_monitor_rsp_data = r_monitor_rsp_data;
 	
-	t_enough_iprfs = !((t_uop.dst_valid) && (r_prf_free == 'd0));
+	t_enough_iprfs = !((t_uop.dst_valid) && (w_prf_free_even == 'd0));
 	t_enough_hlprfs = !((t_uop.hilo_dst_valid) && (r_hilo_prf_free == 'd0));
 
-	t_enough_next_iprfs = !((t_uop2.dst_valid) && (t_prf_free_cnt == 'd1));
+	t_enough_next_iprfs = !((t_uop2.dst_valid) && (w_prf_free_odd == 'd0));
 	t_enough_next_hlprfs = !((t_uop2.hilo_dst_valid) /*&& (r_hilo_prf_free == 'd0)*/);
 
 
@@ -1753,21 +1747,27 @@ module core(clk,
 	
      end // always_comb
 
-   popcount #(`LG_PRF_ENTRIES) cnt_gpr (.in(r_prf_free), .out(t_prf_free_cnt));
+   generate
+      for(genvar i = 0; i < N_PRF_ENTRIES; i=i+2)
+	begin
+	   assign w_prf_free_even[i] = r_prf_free[i];
+	   assign w_prf_free_even[i+1] = 1'b0;
+	   assign w_prf_free_odd[i] = 1'b0;	   
+	   assign w_prf_free_odd[i+1] = r_prf_free[i+1];
+	end
+   endgenerate
    
-   
-   find_first_set#(`LG_PRF_ENTRIES) ffs_gpr(.in(r_prf_free),
-					    .y(t_gpr_ffs));
+   find_first_set#(`LG_PRF_ENTRIES) ffs_gpr(.in(w_prf_free_even),
+					    .y(w_gpr_ffs_even));
+
+   find_first_set#(`LG_PRF_ENTRIES) ffs_gpr2(.in(w_prf_free_odd),
+					     .y(w_gpr_ffs_odd));
 
    always_comb
      begin
-	t_prf_free = r_prf_free;
-	t_prf_free[t_gpr_ffs[`LG_PRF_ENTRIES-1:0]] = 1'b0;
+	t_gpr_ffs  = w_gpr_ffs_even;
+	t_gpr_ffs2 = w_gpr_ffs_odd;
      end
-   
-   find_first_set#(`LG_PRF_ENTRIES) ffs_gpr2(.in(t_prf_free),
-					     .y(t_gpr_ffs2));
-
    
    always_comb
      begin
