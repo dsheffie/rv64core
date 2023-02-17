@@ -107,7 +107,6 @@ module exec(clk,
    localparam N_MQ_ENTRIES = (1<<`LG_MQ_ENTRIES);
    localparam N_INT_PRF_ENTRIES = (1<<`LG_PRF_ENTRIES);
    localparam N_HILO_PRF_ENTRIES = (1<<`LG_HILO_PRF_ENTRIES);
-   localparam N_FCR_PRF_ENTRIES = (1<<`LG_FCR_PRF_ENTRIES);
    
    localparam N_FP_PRF_ENTRIES = (1<<`LG_PRF_ENTRIES);
    localparam N_UQ_ENTRIES = (1<<`LG_UQ_ENTRIES);
@@ -118,22 +117,12 @@ module exec(clk,
    
    
    logic [63:0] r_hilo_prf[N_HILO_PRF_ENTRIES-1:0];
-   logic [7:0] 	r_fcr_prf[N_FCR_PRF_ENTRIES-1:0];
    
    localparam FP_ZP = (`LG_PRF_ENTRIES-5);
    localparam Z_BITS = 64-`M_WIDTH;      
    
    logic [N_INT_PRF_ENTRIES-1:0]  r_prf_inflight, n_prf_inflight;
-  
-   logic [N_FCR_PRF_ENTRIES-1:0]  r_fcr_prf_inflight, n_fcr_prf_inflight;
    logic [N_HILO_PRF_ENTRIES-1:0] r_hilo_inflight, n_hilo_inflight;
-
-
-   logic 			  t_fpu_fcr_valid;
-   logic [`LG_FCR_PRF_ENTRIES-1:0] t_fpu_fcr_ptr;
-   
-
-   
    
    logic 			  t_wr_int_prf, t_wr_cpr0;
    
@@ -531,18 +520,18 @@ module exec(clk,
 	
    logic [N_INT_SCHED_ENTRIES-1:0] r_alu_srcA_rdy, 
 				   r_alu_srcB_rdy, 
-				   r_alu_hilo_rdy,
-				   r_alu_fcr_rdy;
-
+				   r_alu_hilo_rdy;
+   
    logic [N_INT_SCHED_ENTRIES-1:0] t_alu_srcA_match, 
 				   t_alu_srcB_match, 
-				   t_alu_hilo_match,
-				   t_alu_fcr_match;
+				   t_alu_hilo_match;
+   
+
 
    logic t_alu_alloc_srcA_match, 
 	 t_alu_alloc_srcB_match, 
-	 t_alu_alloc_hilo_match,
-	 t_alu_alloc_fcr_match;
+	 t_alu_alloc_hilo_match;
+   
 
    
    find_first_set#(LG_INT_SCHED_ENTRIES) ffs_int_sched_alloc( .in(~r_alu_sched_valid),
@@ -609,9 +598,6 @@ module exec(clk,
 						       (r_start_int && t_wr_hilo && (int_uop.hilo_dst == uq.hilo_src))
 						       );
 	
-	t_alu_alloc_fcr_match = uq.fcr_src_valid && (
-						     (t_fpu_fcr_valid & (t_fpu_fcr_ptr == uq.hilo_src))
-						     );		
      end // always_comb
   
    
@@ -635,9 +621,6 @@ module exec(clk,
 									     (r_start_int && t_wr_hilo && (int_uop.hilo_dst == r_alu_sched_uops[i].hilo_src))
 									     );
 		
-		t_alu_fcr_match[i] = r_alu_sched_uops[i].fcr_src_valid && (
-									   (t_fpu_fcr_valid & (t_fpu_fcr_ptr == r_alu_sched_uops[i].hilo_src))
-									   );
 
 		//is_mult(r_alu_sched_uops[i].op);
 		
@@ -650,8 +633,7 @@ module exec(clk,
 				     ? (
 					(t_alu_srcA_match[i] |r_alu_srcA_rdy[i]) & 
 					(t_alu_srcB_match[i] |r_alu_srcB_rdy[i]) &
-					(t_alu_hilo_match[i] |r_alu_hilo_rdy[i]) & 
-					(t_alu_fcr_match[i] | r_alu_fcr_rdy[i])) : 1'b0;
+					(t_alu_hilo_match[i] |r_alu_hilo_rdy[i]) ) : 1'b0;
 	     end // always_comb
 	   
 	   always_ff@(posedge clk)
@@ -661,7 +643,6 @@ module exec(clk,
 		     r_alu_srcA_rdy[i] <= 1'b0;
 		     r_alu_srcB_rdy[i] <= 1'b0;
 		     r_alu_hilo_rdy[i] <= 1'b0;
-		     r_alu_fcr_rdy[i] <= 1'b0;
 		  end
 		else
 		  begin
@@ -670,21 +651,18 @@ module exec(clk,
 			  r_alu_srcA_rdy[i] <= uq.srcA_valid ? (!r_prf_inflight[uq.srcA] | t_alu_alloc_srcA_match) : 1'b1;
 			  r_alu_srcB_rdy[i] <= uq.srcB_valid ? (!r_prf_inflight[uq.srcB] | t_alu_alloc_srcB_match) : 1'b1;
 			  r_alu_hilo_rdy[i] <= uq.hilo_src_valid ? (!r_hilo_inflight[uq.hilo_src] | t_alu_alloc_hilo_match) : 1'b1;
-			  r_alu_fcr_rdy[i] <= uq.fcr_src_valid ? (!r_fcr_prf_inflight[uq.hilo_src] | t_alu_alloc_fcr_match): 1'b1;
 		       end
 		     else if(t_alu_select_entry[i])
 		       begin
 			  r_alu_srcA_rdy[i] <= 1'b0;
 			  r_alu_srcB_rdy[i] <= 1'b0;
 			  r_alu_hilo_rdy[i] <= 1'b0;
-			  r_alu_fcr_rdy[i] <= 1'b0;
 		       end
 		     else if(r_alu_sched_valid[i])
 		       begin
 			  r_alu_srcA_rdy[i] <= r_alu_srcA_rdy[i] | t_alu_srcA_match[i];
 			  r_alu_srcB_rdy[i] <= r_alu_srcB_rdy[i] | t_alu_srcB_match[i];
 			  r_alu_hilo_rdy[i] <= r_alu_hilo_rdy[i] | t_alu_hilo_match[i];
-			  r_alu_fcr_rdy[i] <= r_alu_fcr_rdy[i] | t_alu_fcr_match[i];
 		       end // else: !if(t_pop_uq&&(t_alu_sched_alloc_ptr == i))
 		     
 		  end // else: !if(reset)
@@ -825,13 +803,11 @@ module exec(clk,
 	  begin
 	     r_prf_inflight <= 'd0;
 	     r_hilo_inflight <= 'd0;
-	     r_fcr_prf_inflight <= 'd0;
 	  end
 	else
 	  begin
 	     r_prf_inflight <= ds_done ? 'd0 : n_prf_inflight;
 	     r_hilo_inflight <= ds_done ? 'd0 : n_hilo_inflight;
-	     r_fcr_prf_inflight <= ds_done ? 'd0 : n_fcr_prf_inflight;
 	  end
      end // always_ff@ (posedge clk)
 
@@ -890,40 +866,6 @@ module exec(clk,
      end // always_comb
 
    
-   always_comb
-     begin
-
-	n_fcr_prf_inflight = r_fcr_prf_inflight;
-
-	if(uq_push && uq_uop.fcr_dst_valid)
-	  begin
-	     //$display("at cycle %d marking fcr %d inflight for rob ptr %d", 
-	     //      r_cycle, uq_uop.hilo_dst, uq_uop.rob_ptr);
-	     n_fcr_prf_inflight[uq_uop.hilo_dst] = 1'b1;
-	  end
-	if(uq_push_two && uq_uop_two.fcr_dst_valid)
-	  begin
-	     //$display("at cycle %d marking fcr %d inflight for rob ptr %d", 
-	     //      r_cycle, uq_uop.hilo_dst, uq_uop.rob_ptr);
-	     n_fcr_prf_inflight[uq_uop_two.hilo_dst] = 1'b1;
-	  end
-	if(t_fpu_fcr_valid)
-	  begin
-	     n_fcr_prf_inflight[t_fpu_fcr_ptr] = 1'b0;
-	  end
-     end
-
-   
-   always_ff@(posedge clk)
-     begin
-	if(reset)
-	  begin
-	     for(integer i = 0; i < N_FCR_PRF_ENTRIES; i=i+1)
-	       begin
-		  r_fcr_prf[i] <= 'd0;
-	       end
-	  end
-     end
 
    
 `ifdef VERILATOR
@@ -1004,32 +946,6 @@ module exec(clk,
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 
-	    end
-	  MOVT:
-	    begin
-	       if(r_fcr_prf[int_uop.hilo_src][int_uop.srcC[2:0]]==1'b1)
-		 begin
-		    t_result = t_srcA;
-		 end
-	       else
-		 begin
-		    t_result = t_srcB;
-		 end
-	       t_wr_int_prf = 1'b1;
-	       t_alu_valid = 1'b1;
-	    end
-	  MOVF:
-	    begin
-	       if(r_fcr_prf[int_uop.hilo_src][int_uop.srcC[2:0]]==1'b1)
-		 begin
-		    t_result = t_srcB;
-		 end
-	       else
-		 begin
-		    t_result = t_srcA;
-		 end
-	       t_wr_int_prf = 1'b1;
-	       t_alu_valid = 1'b1;
 	    end
 	  SRA:
 	    begin
@@ -1392,34 +1308,6 @@ module exec(clk,
 	       t_unimp_op = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
-	   BC1TL:
-	     begin
-		t_take_br = r_fcr_prf[int_uop.hilo_src][int_uop.srcC[2:0]];
-		t_mispred_br = int_uop.br_pred != t_take_br;
-		t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
-		t_alu_valid = 1'b1;
-	     end
-	  BC1F:
-	    begin
-	       t_take_br = r_fcr_prf[int_uop.hilo_src][int_uop.srcC[2:0]]==1'b0;
-	       t_mispred_br = int_uop.br_pred != t_take_br;
-	       t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
-	       t_alu_valid = 1'b1;	       
-	    end
-	  BC1FL:
-	    begin
-	       t_take_br = r_fcr_prf[int_uop.hilo_src][int_uop.srcC[2:0]]==1'b0;
-	       t_mispred_br = int_uop.br_pred != t_take_br;
-	       t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
-	       t_alu_valid = 1'b1;
-	    end
-	  BC1T:
-	    begin
-	       t_take_br = r_fcr_prf[int_uop.hilo_src][int_uop.srcC[2:0]];
-	       t_mispred_br = int_uop.br_pred != t_take_br;
-	       t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
-	       t_alu_valid = 1'b1;
-	    end
 	  default:
 	    begin
 	       t_unimp_op = 1'b1;
@@ -1431,12 +1319,6 @@ module exec(clk,
      end // always_comb
 
 
-
-   always_comb
-     begin
-	t_fpu_fcr_valid = 1'b0;
-	t_fpu_fcr_ptr = 'd0;
-     end
 
 
    wire [31:0] w_agu32;

@@ -95,10 +95,6 @@ typedef enum logic [7:0]
    DP_DIV,
    SP_MOV,
    DP_MOV,
-   BC1TL,
-   BC1T,
-   BC1FL,
-   BC1F,
    SP_CMP_LT,
    DP_CMP_LT,
    SP_CMP_EQ,
@@ -111,8 +107,6 @@ typedef enum logic [7:0]
    CVT_W_SP,
    CVT_SP_DP,
    CVT_DP_SP,
-   MOVF,
-   MOVT,
    FP_MOVN,
    FP_MOVZ,
    FP_MOVF,
@@ -184,18 +178,13 @@ typedef struct packed {
    logic [`LG_PRF_ENTRIES-1:0] srcB;
    logic 		       srcB_valid;
    logic 		       fp_srcB_valid;   
-   logic [`LG_PRF_ENTRIES-1:0] srcC;
-   logic 		       fp_srcC_valid;      
    logic [`LG_PRF_ENTRIES-1:0] dst;
    logic 		       dst_valid;
    logic 		       fp_dst_valid;
 
-   logic 		       fcr_dst_valid;
-   
    logic 		       hilo_dst_valid;
    logic [`LG_HILO_PRF_ENTRIES-1:0] hilo_dst;
 
-   logic 			    fcr_src_valid;
    logic 			    hilo_src_valid;
    logic [`LG_HILO_PRF_ENTRIES-1:0] hilo_src;
      

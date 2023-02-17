@@ -188,7 +188,6 @@ module core(clk,
    localparam N_ROB_ENTRIES = (1<<`LG_ROB_ENTRIES);
    localparam N_UQ_ENTRIES = (1<<`LG_UQ_ENTRIES);
    localparam N_HILO_ENTRIES = (1<<`LG_HILO_PRF_ENTRIES);
-   localparam N_FCR_ENTRIES = (1<<`LG_FCR_PRF_ENTRIES);
    
    localparam N_DQ_ENTRIES = (1<<`LG_DQ_ENTRIES);
    localparam HI_EBITS = `M_WIDTH-32;
@@ -228,11 +227,6 @@ module core(clk,
    logic [N_HILO_ENTRIES-1:0] n_retire_hilo_prf_free, r_retire_hilo_prf_free;
    logic [`LG_HILO_PRF_ENTRIES-1:0] n_hilo_prf_entry;
    logic [`LG_HILO_PRF_ENTRIES:0]   t_hilo_prf_idx;
-
-   logic [N_FCR_ENTRIES-1:0] n_fcr_prf_free,r_fcr_prf_free;
-   logic [N_FCR_ENTRIES-1:0] n_retire_fcr_prf_free, r_retire_fcr_prf_free;
-   logic [`LG_FCR_PRF_ENTRIES-1:0] n_fcr_prf_entry;
-   logic [`LG_FCR_PRF_ENTRIES:0]   t_fcr_prf_idx;
    
    logic [`LG_PRF_ENTRIES-1:0]  n_prf_entry, n_prf_entry2;
    logic [`LG_PRF_ENTRIES-1:0] 	n_fp_prf_entry, n_fp_prf_entry2;
@@ -253,11 +247,6 @@ module core(clk,
    logic [`LG_HILO_PRF_ENTRIES-1:0] r_hilo_retire_rat;
    logic [`LG_HILO_PRF_ENTRIES-1:0] n_hilo_retire_rat;
 
-   logic [`LG_FCR_PRF_ENTRIES-1:0] r_fcr_alloc_rat;
-   logic [`LG_FCR_PRF_ENTRIES-1:0] n_fcr_alloc_rat;
-   logic [`LG_FCR_PRF_ENTRIES-1:0] r_fcr_retire_rat;
-   logic [`LG_FCR_PRF_ENTRIES-1:0] n_fcr_retire_rat;
-   
    logic [N_ROB_ENTRIES-1:0] 	    uq_wait, mq_wait, fq_wait;
    
    logic 		     t_rob_empty, t_rob_full, t_rob_next_full, t_rob_next_empty;
@@ -272,12 +261,11 @@ module core(clk,
    logic 		     n_in_delay_slot, r_in_delay_slot;
    
    logic 		     t_clr_dq;
-   logic 		     t_enough_iprfs, t_enough_hlprfs, 
-			     t_enough_fcrprfs;
+   logic 		     t_enough_iprfs, t_enough_hlprfs;
+   logic 		     t_enough_next_iprfs, t_enough_next_hlprfs;
+   
 
-   logic 		     t_enough_next_iprfs, t_enough_next_hlprfs, t_enough_next_fprfs, 
-			     t_enough_next_fcrprfs;
-
+   
    
    logic 		     t_bump_rob_head;
    
@@ -330,12 +318,8 @@ module core(clk,
    logic 			   t_free_hilo;
    logic [`LG_HILO_PRF_ENTRIES-1:0] t_free_hilo_ptr;
    
-   logic 			    t_free_fcr;
-   logic [`LG_FCR_PRF_ENTRIES-1:0]  t_free_fcr_ptr;
-   
 
    logic [`LG_HILO_PRF_ENTRIES:0]   t_hilo_ffs;
-   logic [`LG_FCR_PRF_ENTRIES:0]    t_fcr_ffs;
    logic [`LG_PRF_ENTRIES:0] 	    t_fp_ffs;
    logic [`LG_PRF_ENTRIES:0] 	    t_fp_ffs2;
    logic [`LG_PRF_ENTRIES:0] 	    t_gpr_ffs;
@@ -755,11 +739,9 @@ module core(clk,
 	
 	t_enough_iprfs = !((t_uop.dst_valid) && (r_prf_free == 'd0));
 	t_enough_hlprfs = !((t_uop.hilo_dst_valid) && (r_hilo_prf_free == 'd0));
-	t_enough_fcrprfs = !((t_uop.fcr_dst_valid) && (r_fcr_prf_free == 'd0));
 
 	t_enough_next_iprfs = !((t_uop2.dst_valid) && (t_prf_free_cnt == 'd1));
 	t_enough_next_hlprfs = !((t_uop2.hilo_dst_valid) /*&& (r_hilo_prf_free == 'd0)*/);
-	t_enough_next_fcrprfs = !((t_uop2.fcr_dst_valid) /*&& (r_fcr_prf_free == 'd0)*/);
 
 
 
@@ -871,10 +853,7 @@ module core(clk,
 					&& !t_uq_full
 					&& !t_dq_empty					
 					&& t_enough_iprfs
-					&& t_enough_hlprfs
-					&& t_enough_fcrprfs;
-			      
-					
+					&& t_enough_hlprfs;
 			      
 			      t_alloc_two = t_alloc
 					    && !t_uop2.serializing_op
@@ -882,9 +861,8 @@ module core(clk,
 					    && !t_rob_next_full
 					    && !t_uq_next_full
 					    && t_enough_next_iprfs
-					    && t_enough_next_hlprfs
-					    && t_enough_next_fcrprfs
-					    ;
+					    && t_enough_next_hlprfs;
+
 			      //&& (t_uop2.op == NOP || t_uop2.op == J);
 			   end // else: !if(t_uop.serializing_op && !t_dq_empty)
 		      end // if (!t_dq_empty)
@@ -897,7 +875,6 @@ module core(clk,
 				   && !t_rob_head.is_br
 				   && !t_rob_next_head.is_ret
 				   && !t_rob_next_head.is_call
-				   && !t_rob_next_head.valid_fcr_dst
 		    		   && !t_rob_next_head.valid_hilo_dst;
 		 end // if (t_can_retire_rob_head)
 	       else if(!t_dq_empty)
@@ -946,8 +923,7 @@ module core(clk,
 				   && !t_uq_full
 				   && !t_dq_empty
 				   && t_enough_iprfs
-				   && t_enough_hlprfs
-				   && t_enough_fcrprfs;
+				   && t_enough_hlprfs;
 
 			 t_alloc_two = t_alloc
 				       && !t_uop2.serializing_op
@@ -955,10 +931,8 @@ module core(clk,
 				       && !t_rob_next_full
 				       && !t_uq_next_full
 				       && t_enough_next_iprfs
-				       && t_enough_next_hlprfs
-				       && t_enough_next_fcrprfs
-				       ;
-			 //&& (t_uop2.op == NOP || t_uop2.op == J);
+				       && t_enough_next_hlprfs;
+
 		      end
 		 end
 	    end // case: ACTIVE
@@ -1176,15 +1150,11 @@ module core(clk,
 	  begin
 	     r_hilo_alloc_rat <= 'd0;
 	     r_hilo_retire_rat <= 'd0;
-	     r_fcr_alloc_rat <= 'd0;
-	     r_fcr_retire_rat <= 'd0;	     
 	  end
 	else
 	  begin
 	     r_hilo_alloc_rat <= t_rat_copy ? r_hilo_retire_rat : n_hilo_alloc_rat;
 	     r_hilo_retire_rat <= n_hilo_retire_rat;
-	     r_fcr_alloc_rat <= t_rat_copy ? r_fcr_retire_rat : n_fcr_alloc_rat;
-	     r_fcr_retire_rat <= n_fcr_retire_rat;
 	  end
      end
 
@@ -1242,7 +1212,6 @@ module core(clk,
      begin
 	n_alloc_rat = r_alloc_rat;
 	n_hilo_alloc_rat = r_hilo_alloc_rat;
-	n_fcr_alloc_rat = r_fcr_alloc_rat;
 	
 	t_alloc_uop = t_uop;
 	t_alloc_uop2 = t_uop2;
@@ -1264,10 +1233,6 @@ module core(clk,
 	  begin
 	     t_alloc_uop.hilo_src = r_hilo_alloc_rat;
 	  end
-	else if(t_uop.fcr_src_valid)
-	  begin
-	     t_alloc_uop.hilo_src = r_fcr_alloc_rat;
-	  end
 	
 	//2nd uop begins here
 	if(t_uop2.srcA_valid)
@@ -1286,11 +1251,6 @@ module core(clk,
 	     t_alloc_uop2.hilo_src = t_uop.hilo_dst_valid ? n_hilo_prf_entry : 
 				     r_hilo_alloc_rat;
 	  end
-	else if(t_uop2.fcr_src_valid)
-	  begin
-	     t_alloc_uop2.hilo_src = t_uop.fcr_dst_valid ? n_fcr_prf_entry :
-				     r_fcr_alloc_rat;
-	  end
 	
 
 	if(t_alloc)
@@ -1305,11 +1265,6 @@ module core(clk,
 		  n_hilo_alloc_rat = n_hilo_prf_entry;
 		  t_alloc_uop.hilo_dst = n_hilo_prf_entry;
 	       end
-	     else if(t_uop.fcr_dst_valid)
-	       begin
-		  n_fcr_alloc_rat = n_fcr_prf_entry;
-		  t_alloc_uop.hilo_dst = n_fcr_prf_entry;
-	       end	     
 	     
 	     t_alloc_uop.rob_ptr = r_rob_tail_ptr[`LG_ROB_ENTRIES-1:0];
 	  end // if (t_alloc)
@@ -1336,7 +1291,6 @@ module core(clk,
      begin
 	n_retire_rat = r_retire_rat;
 	n_hilo_retire_rat = r_hilo_retire_rat;
-	n_fcr_retire_rat = r_fcr_retire_rat;
 	
 	t_free_reg = 1'b0;
 	t_free_reg_ptr = 'd0;
@@ -1346,12 +1300,9 @@ module core(clk,
 	
 	t_free_hilo = 1'b0;
 	t_free_hilo_ptr = 'd0;
-	t_free_fcr = 1'b0;
-	t_free_fcr_ptr = 'd0;
 	
 	n_retire_prf_free = r_retire_prf_free;
 	n_retire_hilo_prf_free = r_retire_hilo_prf_free;
-	n_retire_fcr_prf_free = r_retire_fcr_prf_free;
 	
 	n_branch_pc = {{HI_EBITS{1'b0}}, 32'd0};
 	n_took_branch = 1'b0;
@@ -1376,14 +1327,6 @@ module core(clk,
 		  n_hilo_retire_rat = t_rob_head.pdst[`LG_HILO_PRF_ENTRIES-1:0];
 		  n_retire_hilo_prf_free[t_rob_head.pdst[`LG_HILO_PRF_ENTRIES-1:0]] = 1'b0;
 		  n_retire_hilo_prf_free[t_rob_head.old_pdst[`LG_HILO_PRF_ENTRIES-1:0]] = 1'b1;
-	       end
-	     else if(t_rob_head.valid_fcr_dst)
-	       begin
-		  t_free_fcr = 1'b1;
-		  t_free_fcr_ptr = t_rob_head.old_pdst[`LG_FCR_PRF_ENTRIES-1:0];
-		  n_fcr_retire_rat = t_rob_head.pdst[`LG_FCR_PRF_ENTRIES-1:0];
-		  n_retire_fcr_prf_free[t_rob_head.pdst[`LG_FCR_PRF_ENTRIES-1:0]] = 1'b0;
-		  n_retire_fcr_prf_free[t_rob_head.old_pdst[`LG_FCR_PRF_ENTRIES-1:0]] = 1'b1;
 	       end
 
 	     if(t_retire_two && t_rob_next_head.valid_dst)
@@ -1410,7 +1353,6 @@ module core(clk,
 	t_rob_tail.faulted  = 1'b0;
 	t_rob_tail.valid_dst  = 1'b0;
 	t_rob_tail.valid_hilo_dst = 1'b0;
-	t_rob_tail.valid_fcr_dst = 1'b0;
 	t_rob_tail.valid_fp_dst = 1'b0;
 	t_rob_tail.ldst  = 'd0;
 	t_rob_tail.pdst  = 'd0;
@@ -1433,7 +1375,6 @@ module core(clk,
 	t_rob_next_tail.faulted  = 1'b0;
 	t_rob_next_tail.valid_dst  = 1'b0;
 	t_rob_next_tail.valid_hilo_dst = 1'b0;
-	t_rob_next_tail.valid_fcr_dst = 1'b0;
 	t_rob_next_tail.valid_fp_dst = 1'b0;
 	t_rob_next_tail.ldst  = 'd0;
 	t_rob_next_tail.pdst  = 'd0;
@@ -1480,12 +1421,6 @@ module core(clk,
 		  t_rob_tail.valid_hilo_dst = 1'b1;
 		  t_rob_tail.pdst = {{(`LG_PRF_ENTRIES-`LG_HILO_PRF_ENTRIES){1'b0}}, n_hilo_prf_entry};
 		  t_rob_tail.old_pdst = {{(`LG_PRF_ENTRIES-`LG_HILO_PRF_ENTRIES){1'b0}}, r_hilo_alloc_rat};
-	       end
-	     else if(t_uop.fcr_dst_valid)
-	       begin
-		  t_rob_tail.valid_fcr_dst = 1'b1;
-		  t_rob_tail.pdst = {{(`LG_PRF_ENTRIES-`LG_FCR_PRF_ENTRIES){1'b0}}, n_fcr_prf_entry};
-		  t_rob_tail.old_pdst = {{(`LG_PRF_ENTRIES-`LG_FCR_PRF_ENTRIES){1'b0}}, r_fcr_alloc_rat};
 	       end
 	     
 	     if(t_fold_uop)
@@ -1779,29 +1714,6 @@ module core(clk,
 	     r_retire_hilo_prf_free <= n_retire_hilo_prf_free;
 	  end
      end // always_ff@ (posedge clk)
-
-
-   always_ff@(posedge clk)
-     begin
-	if(reset)
-	  begin
-	     for(integer i = 0; i < N_FCR_ENTRIES; i = i + 1)
-	       begin
-		  r_fcr_prf_free[i] <= (i==0) ? 1'b0 : 1'b1;
-		  r_retire_fcr_prf_free[i] <= (i==0) ? 1'b0 : 1'b1;
-	       end
-	  end
-	else
-	  begin
-	     r_fcr_prf_free <= t_rat_copy ? r_retire_fcr_prf_free : n_fcr_prf_free;
-	     r_retire_fcr_prf_free <= n_retire_fcr_prf_free;
-	  end
-     end // always_ff@ (posedge clk)
-   
-
-
-
-   
    
    
    always_ff@(posedge clk)
@@ -1843,48 +1755,8 @@ module core(clk,
 	
      end // always_comb
 
-   find_first_set#(`LG_FCR_PRF_ENTRIES) ffs_fcr(.in(r_fcr_prf_free),
-						 .y(t_fcr_ffs));
-
-   always_comb
-     begin
-	n_fcr_prf_free = r_fcr_prf_free;
-	n_fcr_prf_entry = t_fcr_ffs[`LG_FCR_PRF_ENTRIES-1:0];
-	
-	if(t_alloc & t_uop.fcr_dst_valid)
-	  begin
-	     n_fcr_prf_free[n_fcr_prf_entry] = 1'b0;
-	  end
-	if(t_free_fcr)
-	  begin
-	     n_fcr_prf_free[t_free_fcr_ptr] = 1'b1;
-	  end
-	
-     end // always_comb
-
-
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if(t_alloc && t_uop.fp_dst_valid)
-   // 	  begin
-   // 	     $display("cycle %d : allocating n_fp_prf_entry = %d, %d, %d, %d, pc = %x", r_cycle, n_fp_prf_entry, 
-   // 		      t_alloc_uop.srcA, t_alloc_uop.srcB, t_alloc_uop.srcC, t_uop.pc);	     
-   // 	  end
-   // 	if(t_alloc_two && t_uop2.fp_dst_valid)
-   // 	  begin
-   // 	     $display("cycle %d : allocating n_fp_prf_entry2 = %d, %d, %d, %d, pc = %x", r_cycle, n_fp_prf_entry2, 
-   // 		      t_alloc_uop2.srcA, t_alloc_uop2.srcB, t_alloc_uop2.srcC, t_uop2.pc);
-   // 	  end
-   //   end
-   
-
-
    popcount #(`LG_PRF_ENTRIES) cnt_gpr (.in(r_prf_free), .out(t_prf_free_cnt));
    
-   //always_ff@(negedge clk)
-   //begin
-   //$display("%d free gpr prf entries", t_prf_free_cnt);
-   //end
    
    find_first_set#(`LG_PRF_ENTRIES) ffs_gpr(.in(r_prf_free),
 					    .y(t_gpr_ffs));

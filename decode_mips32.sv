@@ -26,7 +26,6 @@ module decode_mips32(insn,
    
    /* how many zero pad bits for reg specifiers */
    localparam ZP = (`LG_PRF_ENTRIES-5);
-   localparam FCR_ZP = (`LG_PRF_ENTRIES-3);
    
    wire [`LG_PRF_ENTRIES-1:0]	rs = {{ZP{1'b0}},insn[25:21]};
    wire [`LG_PRF_ENTRIES-1:0] 	rt = {{ZP{1'b0}},insn[20:16]};
@@ -44,16 +43,12 @@ module decode_mips32(insn,
 	uop.op = II;
 	uop.srcA = 'd0;
 	uop.srcB = 'd0;
-	uop.srcC = 'd0;
 	uop.dst = 'd0;
 	uop.is_fp = 1'b0;
 	uop.srcA_valid = 1'b0;
 	uop.srcB_valid = 1'b0;
 	uop.fp_srcA_valid = 1'b0;
 	uop.fp_srcB_valid = 1'b0;
-	uop.fp_srcC_valid = 1'b0;
-	uop.fcr_dst_valid = 1'b0;
-	uop.fcr_src_valid = 1'b0;
 	uop.hilo_dst_valid = 1'b0;
 	uop.hilo_src_valid = 1'b0;
 	uop.hilo_dst = 'd0;
@@ -92,27 +87,6 @@ module decode_mips32(insn,
 		      uop.dst_valid = (rd != 'd0);
 		      uop.op = is_nop||is_ehb ? NOP :SLL;
 		      uop.is_int = 1'b1;		      
-		   end
-		 6'd1: /* movf and movt */
-		   begin
-		      if(rd == 'd0)
-			begin
-			   uop.op = NOP;
-			   uop.dst_valid = 1'b0;
-			end
-		      else
-			begin
-			   uop.dst = rd;
-			   uop.srcA = rs;
-			   uop.srcA_valid = 1'b1;
-			   uop.srcB = rd;
-			   uop.srcB_valid = 1'b1;
-			   uop.srcC = {{FCR_ZP{1'b0}}, insn[20:18]};
-			   uop.fcr_src_valid = 1'b1;			   
-			   uop.op = insn[16] ? MOVT : MOVF;
-			   uop.dst_valid = 1'b1;
-			end
-		      uop.is_int = 1'b1;
 		   end
 		 6'd2: /* srl */
 		   begin
@@ -645,42 +619,7 @@ module decode_mips32(insn,
 	    end // case: 6'd16
 	  6'd17: /* coproc1 */
 	    begin
-	       if((insn[25:21]==5'd8))
-		 begin
-		    //uop.srcA = {{`LG_PRF_ENTRIES-3}
-		    //$display("decoding floating point branch instruction for %x", 
-		    //uop.pc);
-		    uop.fcr_src_valid = 1'b1;
-		    uop.has_delay_slot = 1'b1;
-		    uop.imm = insn[15:0];
-		    uop.br_pred = insn_pred;
-		    uop.is_br = 1'b1;
-		    uop.is_int = 1'b1;
-		    uop.srcC = {{FCR_ZP{1'b0}}, insn[20:18]};
-		    //insn[17]; //likely
-		    //insn[16]; //true or false
-		    case(insn[17:16])
-		      2'b00: //bc1f
-			begin
-			   uop.op = BC1F;
-			end
-		      2'b01: //bc1t
-			begin
-			   uop.op = BC1T;
-			end
-		      2'b10: //bc1fl;
-			begin
-			   uop.op = BC1FL;
-			   uop.has_nullifying_delay_slot = 1'b1;
-			end
-		      2'b11: //bc1tl
-			begin
-			   uop.op = BC1TL;
-			   uop.has_nullifying_delay_slot = 1'b1;
-			end
-		    endcase // case (insn[17:16])
-		 end // if ((insn[25:21]==5'd8))
-	       else if((insn[25:21]==5'd0) && (insn[10:0] == 11'd0))
+	       if((insn[25:21]==5'd0) && (insn[10:0] == 11'd0))
 		 begin /* mfc1 */
 		    uop.dst = rt;
 		    uop.dst_valid = 1'b1;
