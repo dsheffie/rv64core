@@ -903,10 +903,10 @@ module exec(clk,
    always_comb
      begin
 	t_pc = int_uop.pc;
-	t_pc4 = int_uop.pc + {{HI_EBITS{1'b0}}, 32'd4};
-	t_pc8 = int_uop.pc + {{HI_EBITS{1'b0}}, 32'd8};
-	t_result = {`M_WIDTH{1'b0}};
-	t_cpr0_result = {`M_WIDTH{1'b0}};
+	t_pc4 = int_uop.pc + 32'd4;
+	t_pc8 = int_uop.pc + 32'd8;
+	t_result = 32'd0;
+	t_cpr0_result = 32'd0;
 	t_unimp_op = 1'b0;
 	t_fault = 1'b0;
 	t_simm = {{E_BITS{int_uop.imm[15]}},int_uop.imm};
