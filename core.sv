@@ -221,6 +221,9 @@ module core(clk,
 
    logic [N_PRF_ENTRIES-1:0] n_prf_free, r_prf_free;
    wire [N_PRF_ENTRIES-1:0]  w_prf_free_even, w_prf_free_odd;
+   wire  w_prf_free_even_full, w_prf_free_odd_full;
+   logic r_bank_sel;
+   
    
    logic [N_PRF_ENTRIES-1:0] n_retire_prf_free, r_retire_prf_free;
       
@@ -317,6 +320,7 @@ module core(clk,
 
    
    logic [`LG_PRF_ENTRIES:0] 	    t_gpr_ffs, t_gpr_ffs2;
+   logic 			    t_gpr_ffs_full, t_gpr_ffs2_full;
    wire [`LG_PRF_ENTRIES:0] 	    w_gpr_ffs_even, w_gpr_ffs_odd;
    
    logic 		     t_uq_full, t_uq_empty, t_uq_next_full;
@@ -731,10 +735,10 @@ module core(clk,
 	t_monitor_req_valid = 1'b0;
 	n_monitor_rsp_data = r_monitor_rsp_data;
 	
-	t_enough_iprfs = !((t_uop.dst_valid) && (w_prf_free_even == 'd0));
+	t_enough_iprfs = !((t_uop.dst_valid) && t_gpr_ffs_full);
 	t_enough_hlprfs = !((t_uop.hilo_dst_valid) && (r_hilo_prf_free == 'd0));
 
-	t_enough_next_iprfs = !((t_uop2.dst_valid) && (w_prf_free_odd == 'd0));
+	t_enough_next_iprfs = !((t_uop2.dst_valid) && t_gpr_ffs2_full);
 	t_enough_next_hlprfs = !((t_uop2.hilo_dst_valid) /*&& (r_hilo_prf_free == 'd0)*/);
 
 
@@ -1756,17 +1760,28 @@ module core(clk,
 	   assign w_prf_free_odd[i+1] = r_prf_free[i+1];
 	end
    endgenerate
+
+
+   assign w_prf_free_even_full = (|w_prf_free_even) == 1'b0;
+   assign w_prf_free_odd_full = (|w_prf_free_odd) == 1'b0;
+   
    
    find_first_set#(`LG_PRF_ENTRIES) ffs_gpr(.in(w_prf_free_even),
 					    .y(w_gpr_ffs_even));
 
    find_first_set#(`LG_PRF_ENTRIES) ffs_gpr2(.in(w_prf_free_odd),
 					     .y(w_gpr_ffs_odd));
-
+   always_ff@(posedge clk)
+     begin
+	r_bank_sel <= reset ? 1'b0 : ~r_bank_sel;
+     end
+   
    always_comb
      begin
-	t_gpr_ffs  = w_gpr_ffs_even;
-	t_gpr_ffs2 = w_gpr_ffs_odd;
+	t_gpr_ffs  = r_bank_sel ? w_gpr_ffs_even : w_gpr_ffs_odd;
+	t_gpr_ffs2 = r_bank_sel ? w_gpr_ffs_odd : w_gpr_ffs_even;
+	t_gpr_ffs_full = r_bank_sel ? w_prf_free_even_full : w_prf_free_odd_full;
+	t_gpr_ffs2_full = r_bank_sel ? w_prf_free_odd_full : w_prf_free_even_full;
      end
    
    always_comb
