@@ -10,8 +10,6 @@ typedef struct packed {
    logic       is_call;
    logic       valid_dst;
    logic       valid_hilo_dst;
-   logic       valid_fcr_dst;
-   logic       valid_fp_dst;
    logic       has_delay_slot;
    logic       has_nullifying_delay_slot;
    logic       in_delay_slot;

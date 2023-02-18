@@ -25,11 +25,9 @@ module core_l1d_l1i(clk,
 		    retire_reg_ptr,
 		    retire_reg_data,
 		    retire_reg_valid,
-		    retire_reg_fp_valid,
 		    retire_reg_two_ptr,
 		    retire_reg_two_data,
 		    retire_reg_two_valid,
-		    retire_reg_fp_two_valid,
 		    retire_valid,
 		    retire_two_valid,
 		    retire_pc,
@@ -115,12 +113,10 @@ module core_l1d_l1i(clk,
    output logic [4:0] 			  retire_reg_ptr;
    output logic [31:0] 			  retire_reg_data;
    output logic 			  retire_reg_valid;
-   output logic 			  retire_reg_fp_valid;
 
    output logic [4:0] 			  retire_reg_two_ptr;
    output logic [31:0] 			  retire_reg_two_data;
    output logic 			  retire_reg_two_valid;
-   output logic 			  retire_reg_fp_two_valid;
    
    output logic 			  retire_valid;
    output logic 			  retire_two_valid;
@@ -505,11 +501,9 @@ module core_l1d_l1i(clk,
 	     .retire_reg_ptr(retire_reg_ptr),
 	     .retire_reg_data(retire_reg_data),
 	     .retire_reg_valid(retire_reg_valid),
-	     .retire_reg_fp_valid(retire_reg_fp_valid),
 	     .retire_reg_two_ptr(retire_reg_two_ptr),
 	     .retire_reg_two_data(retire_reg_two_data),
 	     .retire_reg_two_valid(retire_reg_two_valid),
-	     .retire_reg_fp_two_valid(retire_reg_fp_two_valid),
 	     .retire_valid(retire_valid),
 	     .retire_two_valid(retire_two_valid),
 	     .retire_delay_slot(t_retire_delay_slot),

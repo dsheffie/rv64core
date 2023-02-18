@@ -34,7 +34,6 @@ module exec(clk,
 	    cpr0_status_reg,
 	    uq_wait,
 	    mq_wait,
-	    fq_wait,
 	    uq_empty,
 	    uq_full,
 	    uq_next_full,
@@ -70,7 +69,6 @@ module exec(clk,
    localparam N_ROB_ENTRIES = (1<<`LG_ROB_ENTRIES);   
    output logic [N_ROB_ENTRIES-1:0]  uq_wait;   
    output logic [N_ROB_ENTRIES-1:0]  mq_wait;
-   output logic [N_ROB_ENTRIES-1:0]  fq_wait;
    
    output logic 		     uq_empty;
    output logic 			     uq_full;
@@ -110,9 +108,7 @@ module exec(clk,
    localparam N_MEM_UQ_ENTRIES = (1<<`LG_MEM_UQ_ENTRIES);
 
    logic [63:0] r_hilo_prf[N_HILO_PRF_ENTRIES-1:0];
-   
-   localparam Z_BITS = 64-`M_WIDTH;      
-   
+      
    logic [N_INT_PRF_ENTRIES-1:0]  r_prf_inflight, n_prf_inflight;
    logic [N_HILO_PRF_ENTRIES-1:0] r_hilo_inflight, n_hilo_inflight;
    
@@ -197,7 +193,7 @@ module exec(clk,
    logic [`LG_HILO_PRF_ENTRIES-1:0] t_div_hilo_prf_ptr_out;
    logic 			    t_div_complete;
 
-   logic [N_ROB_ENTRIES-1:0] 	    r_uq_wait, r_mq_wait, r_fq_wait;
+   logic [N_ROB_ENTRIES-1:0] 	    r_uq_wait, r_mq_wait;
    /* non mem uop queue */
    uop_t r_uq[N_UQ_ENTRIES];
    uop_t uq, int_uop;
@@ -324,13 +320,11 @@ module exec(clk,
 	  begin
 	     r_mq_wait <= 'd0;
 	     r_uq_wait <= 'd0;
-	     r_fq_wait <= 'd0;
 	  end
 	else if(restart_complete)
 	  begin
 	     r_mq_wait <= 'd0;
 	     r_uq_wait <= 'd0;
-	     r_fq_wait <= 'd0;
 	  end
 	else
 	  begin
@@ -779,7 +773,6 @@ module exec(clk,
    assign mem_req_valid = !mem_q_empty;
    assign uq_wait = r_uq_wait;
    assign mq_wait = r_mq_wait;
-   assign fq_wait = r_fq_wait;   
    
    
    always_ff@(posedge clk)

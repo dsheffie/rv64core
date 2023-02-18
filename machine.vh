@@ -26,8 +26,6 @@
 
 `define LG_HILO_PRF_ENTRIES 2
 
-`define LG_FCR_PRF_ENTRIES 2
-
 //queue between decode and alloc
 `define LG_DQ_ENTRIES 2
 
@@ -59,13 +57,6 @@
 
 `define MAX_LAT (`DIV64_LAT)
 
-`define FP_MACC_LAT 8
-
-`define FPU_LAT 4
-
-`define FP_MAX_LAT (`FP_MACC_LAT)
-
-//lg2 
 
 // cacheline length (in bytes)
 `define LG_L1D_CL_LEN 4
@@ -74,7 +65,6 @@
 `define LG_L1D_NUM_SETS 8
 
 `define LG_MEM_TAG_ENTRIES 2
-
 
 `define M_WIDTH (1 << `LG_M_WIDTH)
 

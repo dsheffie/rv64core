@@ -72,12 +72,10 @@ module core(clk,
 	    retire_reg_ptr,
 	    retire_reg_data,
 	    retire_reg_valid,
-	    retire_reg_fp_valid,
 	    
 	    retire_reg_two_ptr,
 	    retire_reg_two_data,
 	    retire_reg_two_valid,
-	    retire_reg_fp_two_valid,	    
 	    retire_valid,
 	    retire_two_valid,
 	    retire_delay_slot,
@@ -149,12 +147,10 @@ module core(clk,
    output logic [4:0] 			  retire_reg_ptr;
    output logic [31:0] 			  retire_reg_data;
    output logic 			  retire_reg_valid;
-   output logic 			  retire_reg_fp_valid;
 
    output logic [4:0] 			  retire_reg_two_ptr;
    output logic [31:0] 			  retire_reg_two_data;
    output logic 			  retire_reg_two_valid;
-   output logic 			  retire_reg_fp_two_valid;
    
    output logic 			  retire_valid;
    output logic 			  retire_two_valid;
@@ -250,7 +246,7 @@ module core(clk,
    logic [`LG_HILO_PRF_ENTRIES-1:0] r_hilo_retire_rat;
    logic [`LG_HILO_PRF_ENTRIES-1:0] n_hilo_retire_rat;
 
-   logic [N_ROB_ENTRIES-1:0] 	    uq_wait, mq_wait, fq_wait;
+   logic [N_ROB_ENTRIES-1:0] 	    uq_wait, mq_wait;
    
    logic 		     t_rob_empty, t_rob_full, t_rob_next_full, t_rob_next_empty;
    logic 		     t_alloc, t_alloc_two, t_retire, t_retire_two,
@@ -546,7 +542,6 @@ module core(clk,
    	     retire_reg_ptr <= 'd0;
    	     retire_reg_data <= 'd0;
    	     retire_reg_valid <= 1'b0;
-	     retire_reg_fp_valid <= 1'b0;
    	     retire_reg_two_ptr <= 'd0;
    	     retire_reg_two_data <= 'd0;
    	     retire_reg_two_valid <= 1'b0;
@@ -570,11 +565,9 @@ module core(clk,
    	     retire_reg_ptr <= t_rob_head.ldst;
    	     retire_reg_data <= t_rob_head.data;
    	     retire_reg_valid <= t_rob_head.valid_dst && t_retire;
-	     retire_reg_fp_valid <= t_rob_head.valid_fp_dst && t_retire;
    	     retire_reg_two_ptr <= t_rob_next_head.ldst;
    	     retire_reg_two_data <= t_rob_next_head.data;
    	     retire_reg_two_valid <= t_rob_next_head.valid_dst && t_retire_two;
-	     retire_reg_fp_two_valid <= t_rob_next_head.valid_fp_dst && t_retire_two;
 	     
    	     retire_valid <= t_retire;
 	     retire_two_valid <= t_retire_two;
@@ -1351,7 +1344,6 @@ module core(clk,
 	t_rob_tail.faulted  = 1'b0;
 	t_rob_tail.valid_dst  = 1'b0;
 	t_rob_tail.valid_hilo_dst = 1'b0;
-	t_rob_tail.valid_fp_dst = 1'b0;
 	t_rob_tail.ldst  = 'd0;
 	t_rob_tail.pdst  = 'd0;
 	t_rob_tail.old_pdst  = 'd0;
@@ -1373,7 +1365,6 @@ module core(clk,
 	t_rob_next_tail.faulted  = 1'b0;
 	t_rob_next_tail.valid_dst  = 1'b0;
 	t_rob_next_tail.valid_hilo_dst = 1'b0;
-	t_rob_next_tail.valid_fp_dst = 1'b0;
 	t_rob_next_tail.ldst  = 'd0;
 	t_rob_next_tail.pdst  = 'd0;
 	t_rob_next_tail.old_pdst  = 'd0;
@@ -1590,7 +1581,7 @@ module core(clk,
 
    always_comb
      begin
-	t_clr_mask = uq_wait|mq_wait|fq_wait;
+	t_clr_mask = uq_wait|mq_wait;
 	if(t_complete_valid_1)
 	  begin
 	     t_clr_mask[t_complete_bundle_1.rob_ptr] = 1'b1;
@@ -1856,7 +1847,6 @@ module core(clk,
 	   .cpr0_status_reg(t_cpr0_status_reg),
 	   .mq_wait(mq_wait),
 	   .uq_wait(uq_wait),
-	   .fq_wait(fq_wait),
 	   .uq_empty(t_uq_empty),
 	   .uq_full(t_uq_full),
 	   .uq_next_full(t_uq_next_full),

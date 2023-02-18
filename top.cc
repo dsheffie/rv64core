@@ -445,37 +445,6 @@ int main(int argc, char **argv) {
 
 
   uint32_t pos = s->pc;
-  //write out initialization instructions for the FP regisers  
-  for(int i = 0; i < 32; i++) {
-    uint32_t r = *reinterpret_cast<uint32_t*>(&s->cpr1[i]);
-    if(r == 0)
-      continue;
-    itype z,y;
-    mtc1 m(i, 1);
-    z.uu.op = 15;
-    z.uu.rt = 1;
-    z.uu.rs = 1;
-    z.uu.imm = (r >> 16);    
-    y.uu.op = 13;
-    y.uu.rt = 1;
-    y.uu.rs = 1;
-    y.uu.imm = r & 0xffff;
-    s->mem.set<uint32_t>(pos, bswap<IS_LITTLE_ENDIAN>(z.u));
-    s->mem.set<uint32_t>(pos+4, bswap<IS_LITTLE_ENDIAN>(y.u));
-    s->mem.set<uint32_t>(pos+8, bswap<IS_LITTLE_ENDIAN>(m.u));
-    pos += 12;    
-  }
-
-  if(s->fcr1[CP1_CR25]) {
-    //std::cout << "need to set to " << s->fcr1[CP1_CR25] << "\n";
-    for(int i = 0; i < 8; i++) {
-      if(s->fcr1[CP1_CR25] & (1<<i)) {
-	ceqs z(1, 1, i);
-	s->mem.set<uint32_t>(pos, bswap<IS_LITTLE_ENDIAN>(0x46000032U));
-	pos += 4;	
-      }
-    }
-  }
   
   
   if(s->lo) {
@@ -852,26 +821,6 @@ int main(int argc, char **argv) {
     // 		<< "\n";
     // }
     
-    if(tb->retire_reg_fp_valid) {
-
-      if((tb->retire_reg_ptr & 1)) {
-	std::cout << "FP WTF "
-		  << std::hex
-		  << tb->retire_pc
-		  << " " << std::dec
-		  << getAsmString(get_insn(tb->retire_pc, s), tb->retire_pc)
-		  << " retire valid = "
-		  << static_cast<int>(tb->retire_valid)
-		  << "\n";
-
-      }
-
-      *reinterpret_cast<uint64_t*>(s->cpr1+tb->retire_reg_ptr) = tb->retire_reg_data;
-      //std::cerr << std::hex << tb->retire_pc << std::dec << " writing fp reg " << static_cast<int>(tb->retire_reg_ptr)
-      //<< std::hex << " with data " << tb->retire_reg_data << std::dec << "\n";
-      last_retired_fp_pc = tb->retire_pc;
-    }
-
     
 #ifdef BRANCH_DEBUG
     if(tb->branch_pc_valid) {
@@ -994,14 +943,6 @@ int main(int argc, char **argv) {
 		
 	      }
 	    }
-	    for(int i = 0; i < 32; i+=2) {
-	      uint64_t rtl = *reinterpret_cast<uint64_t*>(&s->cpr1[i]);
-	      uint64_t sim = *reinterpret_cast<uint64_t*>(&ss->cpr1[i]);
-	      if(rtl != sim) {
-		diverged = true;
-		std::cout << "fp reg " << i <<" : rtl = " << std::hex << rtl << ", sim = " << sim << std::dec << "\n";
-	      }
-	    }
 
 	    
 	  }
@@ -1091,10 +1032,6 @@ int main(int argc, char **argv) {
       //std::cout << std::hex << "insn two with pc " << tb->retire_two_pc << " updates a0 \n"
       //<< std::dec;
       //}
-    }
-    if(tb->retire_reg_fp_two_valid) {
-      assert((tb->retire_reg_two_ptr & 1) == 0);
-      *reinterpret_cast<uint64_t*>(s->cpr1+tb->retire_reg_two_ptr) = tb->retire_reg_two_data;      
     }
     
 
