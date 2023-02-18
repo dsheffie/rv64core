@@ -95,19 +95,10 @@ typedef enum logic [4:0] {
    MEM_LWL = 5'd11,
    MEM_LL  = 5'd12,
    MEM_SC  = 5'd13,
-   MEM_SDC1 = 5'd14,
-   MEM_LDC1 = 5'd15,
-   MEM_SWC1 = 5'd16,
-   MEM_LWC1 = 5'd17,
-   MEM_MFC1 = 5'd18,			  
-   MEM_LWC1_MERGE = 5'd19,
-   MEM_SWC1_MERGE = 5'd20,			  
-   MEM_MTC1_MERGE = 5'd21,
-   MEM_MFC1_MERGE = 5'd22,			  			  
-   MEM_DEAD_LD = 5'd23,
-   MEM_DEAD_ST = 5'd24,
-   MEM_DEAD_SC = 5'd25,
-   MEM_NOP = 5'd26			  
+   MEM_DEAD_LD = 5'd14,
+   MEM_DEAD_ST = 5'd15,
+   MEM_DEAD_SC = 5'd16,
+   MEM_NOP = 5'd27			  
 } mem_op_t;
 
 /* MIPS R10000 exception ordering 

@@ -85,18 +85,18 @@ module l1i(clk,
    input logic 	      flush_req;
    output logic       flush_complete;
    //restart signals
-   input logic [(`M_WIDTH-1):0] restart_pc;
-   input logic [(`M_WIDTH-1):0] restart_src_pc;
-   input logic 			restart_src_is_indirect;
-   input logic 			restart_valid;
-   output logic 		restart_ack;
+   input logic [31:0] restart_pc;
+   input logic [31:0] restart_src_pc;
+   input logic 	      restart_src_is_indirect;
+   input logic 	      restart_valid;
+   output logic       restart_ack;
    //return stack signals
    input logic 			retire_valid;
    input logic 			retired_call;
    input logic 			retired_ret;
 
    input logic [4:0] 		retire_reg_ptr;
-   input logic [63:0] 		retire_reg_data;
+   input logic [31:0] 		retire_reg_data;
    input logic 			retire_reg_valid;
 
    input logic 			branch_pc_valid;
@@ -1139,7 +1139,7 @@ endfunction
      begin
 	if(retire_reg_valid && retire_valid && retired_call)
 	  begin
-	     r_arch_return_stack[r_arch_rs_tos] <= retire_reg_data[31:0];
+	     r_arch_return_stack[r_arch_rs_tos] <= retire_reg_data;
 	  end
      end
    always_comb

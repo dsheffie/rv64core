@@ -113,12 +113,12 @@ module core_l1d_l1i(clk,
 
 
    output logic [4:0] 			  retire_reg_ptr;
-   output logic [63:0] 	  retire_reg_data;
+   output logic [31:0] 			  retire_reg_data;
    output logic 			  retire_reg_valid;
    output logic 			  retire_reg_fp_valid;
 
    output logic [4:0] 			  retire_reg_two_ptr;
-   output logic [63:0] 			  retire_reg_two_data;
+   output logic [31:0] 			  retire_reg_two_data;
    output logic 			  retire_reg_two_valid;
    output logic 			  retire_reg_fp_two_valid;
    

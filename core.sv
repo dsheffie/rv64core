@@ -147,12 +147,12 @@ module core(clk,
    input logic 	 core_mem_rsp_valid;
 
    output logic [4:0] 			  retire_reg_ptr;
-   output logic [63:0] 			  retire_reg_data;
+   output logic [31:0] 			  retire_reg_data;
    output logic 			  retire_reg_valid;
    output logic 			  retire_reg_fp_valid;
 
    output logic [4:0] 			  retire_reg_two_ptr;
-   output logic [63:0] 			  retire_reg_two_data;
+   output logic [31:0] 			  retire_reg_two_data;
    output logic 			  retire_reg_two_valid;
    output logic 			  retire_reg_fp_two_valid;
    
@@ -1101,7 +1101,7 @@ module core(clk,
 	    begin
 	       t_exception_wr_cpr0_val = 1'b1;
 	       t_exception_wr_cpr0_ptr = 5'd8;
-	       t_exception_wr_cpr0_data = t_rob_head.data;
+	       t_exception_wr_cpr0_data = {32'd0, t_rob_head.data};
 	       n_state = WRITE_EPC;
 	    end
 	  default:
@@ -1875,7 +1875,6 @@ module core(clk,
 	   .mem_req_ack(core_mem_req_ack),
 	   .mem_rsp_dst_ptr(core_mem_rsp.dst_ptr),
 	   .mem_rsp_dst_valid(core_mem_rsp.dst_valid),
-	   .mem_rsp_fp_dst_valid(core_mem_rsp.fp_dst_valid),
 	   .mem_rsp_load_data(core_mem_rsp.data),
 	   .mem_rsp_rob_ptr(core_mem_rsp.rob_ptr),
 	   .monitor_rsp_data(r_monitor_rsp_data)

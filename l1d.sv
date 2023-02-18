@@ -182,10 +182,6 @@ endfunction
 	  x = 1'b1;
 	MEM_DEAD_SC:
 	  x = 1'b1;
-	MEM_MTC1_MERGE:
-	  x = 1'b1;
-	MEM_MFC1_MERGE:
-	  x = 1'b1;
 	default:
 	  x = 1'b0;
       endcase // case (op)
@@ -870,23 +866,6 @@ endfunction
 	       t_rsp_data2 = {{32{t_bswap_w32_2[31]}}, t_bswap_w32_2};
 	       t_rsp_dst_valid2 = r_req2.dst_valid & t_hit_cache2;
 	    end
-	  MEM_LWC1_MERGE:
-	    begin
-	       if(r_req2.lwc1_lo)
-		 begin
-		    t_rsp_data2 = {t_bswap_w32_2, r_req2.data[31:0]};
-		 end
-	       else
-		 begin
-		    t_rsp_data2 = {r_req2.data[63:32], t_bswap_w32_2};
-		 end
-	       t_rsp_fp_dst_valid2 = r_req2.fp_dst_valid & t_hit_cache2; 
-	    end 
-	  MEM_LDC1:
-	    begin
-	       t_rsp_data2 = t_bswap_w64_2;
-	       t_rsp_fp_dst_valid2 = r_req2.fp_dst_valid & t_hit_cache2;
-	    end
 	  MEM_LWR:
 	    begin
 	       case(r_req2.addr[1:0])
@@ -1023,23 +1002,6 @@ endfunction
 	       t_rsp_data = {{32{t_bswap_w32[31]}}, t_bswap_w32};
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
 	    end
-	  MEM_LWC1_MERGE:
-	    begin
-	       if(r_req.lwc1_lo)
-		 begin
-		    t_rsp_data = {t_bswap_w32, r_req.data[31:0]};
-		 end
-	       else
-		 begin
-		    t_rsp_data = {r_req.data[63:32], t_bswap_w32};
-		 end
-	       t_rsp_fp_dst_valid = r_req.fp_dst_valid & t_hit_cache; 
-	    end 
-	  MEM_LDC1:
-	    begin
-	       t_rsp_data = t_bswap_w64;
-	       t_rsp_fp_dst_valid = r_req.fp_dst_valid & t_hit_cache;
-	    end
 	  MEM_LWR:
 	    begin
 	       case(r_req.addr[1:0])
@@ -1126,19 +1088,6 @@ endfunction
 	       t_array_data = merge_cl32(t_data, bswap32(r_req.data[31:0]), r_req.addr[WORD_STOP-1:WORD_START]);
 	       //t_wr_array = t_hit_cache && t_can_release_store;
 	       t_wr_array = t_hit_cache && (r_is_retry || r_did_reload);	       
-	    end
-	  MEM_SWC1_MERGE:
-	    begin
-	       t_array_data = merge_cl32(t_data, bswap32(r_req.lwc1_lo ? r_req.data[63:32] : r_req.data[31:0]), r_req.addr[WORD_STOP-1:WORD_START]);
-	       //t_wr_array = t_hit_cache && t_can_release_store;
-	       t_wr_array = t_hit_cache && (r_is_retry || r_did_reload);	       
-	    end
-	  MEM_SDC1:
-	    begin
-	       //$display("SDC for rob slot %d", n_core_mem_rsp.rob_ptr);
-	       t_array_data = merge_cl64(t_data, bswap64(r_req.data[63:0]), r_req.addr[DWORD_START]);
-	       //t_wr_array = t_hit_cache && t_can_release_store;
-	       t_wr_array = t_hit_cache && (r_is_retry || r_did_reload);
 	    end
 	  MEM_SC:
 	    begin
@@ -1244,13 +1193,11 @@ endfunction
 	t_pop_mq = 1'b0;
 	n_core_mem_rsp_valid = 1'b0;
 	
-	n_core_mem_rsp.op = r_req.op;
-	n_core_mem_rsp.data = {32'd0, r_req.addr};
+	n_core_mem_rsp.data = r_req.addr;
 	n_core_mem_rsp.rob_ptr = r_req.rob_ptr;
 	n_core_mem_rsp.dst_ptr = r_req.dst_ptr;
 	
 	n_core_mem_rsp.dst_valid = 1'b0;
-	n_core_mem_rsp.fp_dst_valid = 1'b0;
 
 	n_cache_accesses = r_cache_accesses;
 	n_cache_hits = r_cache_hits;
@@ -1294,33 +1241,14 @@ endfunction
 	    begin
 	       if(r_got_req2)
 		 begin
-		    n_core_mem_rsp.op = r_req2.op;
-		    n_core_mem_rsp.data = {32'd0, r_req2.addr};
+		    n_core_mem_rsp.data = r_req2.addr;
 		    n_core_mem_rsp.rob_ptr = r_req2.rob_ptr;
 		    n_core_mem_rsp.dst_ptr = r_req2.dst_ptr;
 		    if(drain_ds_complete)
 		      begin
 			 n_core_mem_rsp.dst_valid = r_req2.dst_valid;
-			 n_core_mem_rsp.fp_dst_valid = r_req2.fp_dst_valid;
 			 n_core_mem_rsp_valid = 1'b1;
 		      end
-		    else if(r_req2.op == MEM_MTC1_MERGE)
-		      begin
-
-			 n_core_mem_rsp.data = r_req2.lwc1_lo ? 
-					       {r_req2.addr[31:0], r_req2.data[31:0]} : 
-					       {r_req2.data[63:32], r_req2.addr[31:0]};
-			 n_core_mem_rsp.fp_dst_valid = r_req2.fp_dst_valid;
-			 n_core_mem_rsp_valid = 1'b1;
-		      end // if (r_req.op == MEM_MTC1_MERGE)
-		    else if(r_req2.op == MEM_MFC1_MERGE)
-		      begin
-			 n_core_mem_rsp.data = r_req2.lwc1_lo ? 
-					       {32'd0, r_req2.data[63:32]} :
-					       {32'd0, r_req2.data[31:0]};
-			 n_core_mem_rsp.dst_valid = r_req2.dst_valid;
-			 n_core_mem_rsp_valid = 1'b1;
-		      end // if (r_req.op == MEM_MFC1_MERGE)
 		    else if(r_req2.is_store)
 		      begin
 			 t_push_miss = 1'b1;
@@ -1328,7 +1256,6 @@ endfunction
 			 n_stall_store = 1'b1;
 			 //ack early
 			 n_core_mem_rsp.dst_valid = 1'b0;
-			 n_core_mem_rsp.fp_dst_valid = 1'b0;
 			  
 			 if(r_req2.in_storebuf) 
 			   begin
@@ -1349,9 +1276,8 @@ endfunction
 `ifdef VERBOSE_L1D
 			 $display("cycle %d port2 hit for uuid %d, addr %x, data %x", r_cycle, r_req2.uuid, r_req2.addr, t_rsp_data2);
 `endif
-			 n_core_mem_rsp.data = t_rsp_data2;
+			 n_core_mem_rsp.data = t_rsp_data2[31:0];
                          n_core_mem_rsp.dst_valid = t_rsp_dst_valid2;
-                         n_core_mem_rsp.fp_dst_valid = t_rsp_fp_dst_valid2;
                          n_cache_hits = r_cache_hits + 'd1;
                          n_core_mem_rsp_valid = 1'b1;
 		      end
@@ -1378,9 +1304,8 @@ endfunction
 			   end
 			 else
 			   begin
-			      n_core_mem_rsp.data = t_rsp_data;
+			      n_core_mem_rsp.data = t_rsp_data[31:0];
 			      n_core_mem_rsp.dst_valid = t_rsp_dst_valid;
-			      n_core_mem_rsp.fp_dst_valid = t_rsp_fp_dst_valid;
 			      n_core_mem_rsp_valid = 1'b1;
 			   end // else: !if(r_req.is_store)
 		      end // if (r_valid_out && (r_tag_out == r_cache_tag))

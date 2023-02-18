@@ -25,7 +25,7 @@ typedef struct packed {
    logic 			 is_indirect;
    logic 			 take_br;
    logic 			 is_break;
-   logic [63:0] 		 data;
+   logic [31:0] 		 data;
    logic [`LG_PHT_SZ-1:0] 	 pht_idx;
 
 `ifdef ENABLE_CYCLE_ACCOUNTING
@@ -43,7 +43,7 @@ typedef struct packed {
    logic [`M_WIDTH-1:0]        restart_pc;
    logic 		       take_br;
    logic 		       is_ii;
-   logic [63:0] 	       data;
+   logic [31:0] 	       data;
 } complete_t;
 
 typedef struct packed {
@@ -58,26 +58,23 @@ typedef struct packed {
 } insn_fetch_t;
 
 typedef struct packed {
-   logic [(`M_WIDTH-1):0] addr;
-   logic 		  in_storebuf;
-   logic 		  is_store;
+   logic [31:0] addr;
+   logic 	in_storebuf;
+   logic 	is_store;
    /* for merging */
-   logic 		  lwc1_lo;
+   logic 	lwc1_lo;
    mem_op_t op;
-   logic [63:0] 	  data;
+   logic [31:0] data;
    logic [`LG_ROB_ENTRIES-1:0] rob_ptr;
    logic [`LG_PRF_ENTRIES-1:0] dst_ptr;
    logic 		       dst_valid;
-   logic 		       fp_dst_valid;
 } mem_req_t;
 
 typedef struct packed {
-   mem_op_t op;
-   logic [63:0] data;
+   logic [31:0] data;
    logic [`LG_ROB_ENTRIES-1:0] rob_ptr;
    logic [`LG_PRF_ENTRIES-1:0] dst_ptr;
    logic 		       dst_valid;
-   logic 		       fp_dst_valid;
 } mem_rsp_t;
 
 

@@ -53,7 +53,6 @@ module exec(clk,
 	    mem_rsp_dst_ptr,
 	    mem_rsp_dst_valid,
 	    mem_rsp_rob_ptr,
-	    mem_rsp_fp_dst_valid,
 	    mem_rsp_load_data,
 	    monitor_rsp_data);
    input logic clk;
@@ -97,10 +96,9 @@ module exec(clk,
    
    input logic [`LG_PRF_ENTRIES-1:0] mem_rsp_dst_ptr;
    input logic 			     mem_rsp_dst_valid;
-   input logic 			     mem_rsp_fp_dst_valid;
-   input logic [63:0] 		     mem_rsp_load_data;
+   input logic [31:0] 		     mem_rsp_load_data;
    input logic [`LG_ROB_ENTRIES-1:0] mem_rsp_rob_ptr;
-     
+   
    input logic [`M_WIDTH-1:0] monitor_rsp_data;
    
    
@@ -1346,10 +1344,9 @@ module exec(clk,
 	t_push_mq = r_mem_ready;
 	t_mem_tail.op = MEM_LW;
 	t_mem_tail.addr = w_agu32;
-	t_mem_tail.data = 'd0;
+	t_mem_tail.data = 32'd0;
 	t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 	t_mem_tail.dst_valid = 1'b0;
-	t_mem_tail.fp_dst_valid = 1'b0;
 	t_mem_tail.dst_ptr = mem_uq.dst;
 	t_mem_tail.is_store = 1'b0;
 	t_mem_tail.lwc1_lo = 1'b0;
@@ -1360,28 +1357,28 @@ module exec(clk,
 	    begin
 	       t_mem_tail.op = MEM_SB;
 	       t_mem_tail.is_store = 1'b1;
-	       t_mem_tail.data = {{Z_BITS{1'b0}}, w_mem_srcB}; /* needs byte swap */
+	       t_mem_tail.data = w_mem_srcB; /* needs byte swap */
 	       t_mem_tail.dst_valid = 1'b0;
 	    end // case: SB
 	  SH:
 	    begin
 	       t_mem_tail.op = MEM_SH;
 	       t_mem_tail.is_store = 1'b1;
-	       t_mem_tail.data = {{Z_BITS{1'b0}},w_mem_srcB}; /* needs byte swap */
+	       t_mem_tail.data = w_mem_srcB; /* needs byte swap */
 	       t_mem_tail.dst_valid = 1'b0;
 	    end // case: SW
 	  SW:
 	    begin
 	       t_mem_tail.op = MEM_SW;
 	       t_mem_tail.is_store = 1'b1;
-	       t_mem_tail.data = {{Z_BITS{1'b0}},w_mem_srcB}; /* needs byte swap */
+	       t_mem_tail.data = w_mem_srcB; /* needs byte swap */
 	       t_mem_tail.dst_valid = 1'b0;
 	    end // case: SW
 	  SC:
 	    begin
 	       t_mem_tail.op = MEM_SC;
 	       t_mem_tail.is_store = 1'b1;
-	       t_mem_tail.data = {{Z_BITS{1'b0}},w_mem_srcB}; /* needs byte swap */
+	       t_mem_tail.data = w_mem_srcB; /* needs byte swap */	       
 	       t_mem_tail.dst_valid = 1'b1;
 	       t_mem_tail.dst_ptr = mem_uq.dst;		    
 	    end // case: SW
@@ -1389,14 +1386,14 @@ module exec(clk,
 	    begin
 	       t_mem_tail.op = MEM_SWR;
 	       t_mem_tail.is_store = 1'b1;
-	       t_mem_tail.data = {{Z_BITS{1'b0}},w_mem_srcB}; /* needs byte swap */
+	       t_mem_tail.data = w_mem_srcB; /* needs byte swap */
 	       t_mem_tail.dst_valid = 1'b0;
 	    end // case: SW
 	  SWL:
 	    begin
 	       t_mem_tail.op = MEM_SWL;
 	       t_mem_tail.is_store = 1'b1;
-	       t_mem_tail.data = {{Z_BITS{1'b0}}, w_mem_srcB}; /* needs byte swap */
+	       t_mem_tail.data = w_mem_srcB; /* needs byte swap */
 	       t_mem_tail.dst_valid = 1'b0;
 	    end // case: SW	  
 	  LW:
@@ -1409,14 +1406,14 @@ module exec(clk,
 	       t_mem_tail.op = MEM_LWL;
 	       t_mem_tail.dst_valid = 1'b1;
 	       t_mem_tail.dst_ptr = mem_uq.dst;
-	       t_mem_tail.data = {{Z_BITS{1'b0}}, w_mem_srcB};
+	       t_mem_tail.data = w_mem_srcB;
 	    end // case: LWL
 	  LWR:
 	    begin
 	       t_mem_tail.op = MEM_LWR;
 	       t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 	       t_mem_tail.dst_valid = 1'b1;
-	       t_mem_tail.data =  {{Z_BITS{1'b0}}, w_mem_srcB};
+	       t_mem_tail.data = w_mem_srcB;
 	    end // case: LWR
 	  LB:
 	    begin
@@ -1548,7 +1545,7 @@ module exec(clk,
 	     complete_bundle_1.restart_pc <= 'd0;
 	     complete_bundle_1.is_ii <= 1'b0;
 	     complete_bundle_1.take_br <= 1'b0;
-	     complete_bundle_1.data <= {32'd0, t_mul_result[`M_WIDTH-1:0]};
+	     complete_bundle_1.data <= t_mul_result[`M_WIDTH-1:0];
 	  end
 	else
 	  begin
@@ -1558,7 +1555,7 @@ module exec(clk,
 	     complete_bundle_1.restart_pc <= t_pc;
 	     complete_bundle_1.is_ii <= t_unimp_op;
 	     complete_bundle_1.take_br <= t_take_br;
-	     complete_bundle_1.data <=  {32'd0, t_result};
+	     complete_bundle_1.data <= t_result;
 	  end
 	//(uq.rob_ptr == 'd5) ? 1'b1 : 1'b0;
      end
