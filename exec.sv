@@ -1,11 +1,6 @@
 `include "uop.vh"
 `include "rob.vh"
 
-`ifdef DEBUG_FPU
-import "DPI-C" function int fp64_to_fp32(input longint a);
-import "DPI-C" function longint fp32_to_fp64(input int a);
-`endif
-
 `ifdef VERILATOR
 import "DPI-C" function void report_exec(input int int_valid, 
 					 input int int_blocked,
@@ -611,11 +606,7 @@ module exec(clk,
 		//is_mult(r_alu_sched_uops[i].op);
 		
 		t_alu_entry_rdy[i] = r_alu_sched_valid[i] &&
-`ifdef SINGLE_CYCLE_INT_DIVIDE
-				     ( (is_mult(r_alu_sched_uops[i].op) ?  !r_wb_bitvec[`MUL_LAT+1] : !r_wb_bitvec[1]) )
-`else
 				     (is_div(r_alu_sched_uops[i].op) ?  t_div_ready :  (is_mult(r_alu_sched_uops[i].op) ?  !r_wb_bitvec[`MUL_LAT+1] : !r_wb_bitvec[1]))
-`endif
 				     ? (
 					(t_alu_srcA_match[i] |r_alu_srcA_rdy[i]) & 
 					(t_alu_srcB_match[i] |r_alu_srcB_rdy[i]) &
@@ -1007,24 +998,6 @@ module exec(clk,
 	    begin
 	       t_start_mul = r_start_int&!ds_done;
 	    end
-`ifdef SINGLE_CYCLE_INT_DIVIDE
-	  DIV:
-	    begin
-	       t_alu_valid = 1'b1;	       
-	       t_hilo_result[31:0] = $signed(t_srcA[31:0]) / $signed(t_srcB[31:0]);
-	       t_hilo_result[63:32] = $signed(t_srcA[31:0]) % $signed(t_srcB[31:0]);
-	       t_wr_hilo = 1'b1;
-	       t_alu_valid = 1'b1;
-	    end
-	  DIVU:
-	    begin
-	       t_alu_valid = 1'b1;	       
-	       t_hilo_result[31:0] = t_srcA[31:0] / t_srcB[31:0];
-	       t_hilo_result[63:32] = t_srcA[31:0] % t_srcB[31:0];
-	       t_wr_hilo = 1'b1;
-	       t_alu_valid = 1'b1;
-	    end
-`else // !`ifdef VERILATOR
 	  DIV:
 	    begin
 	       t_signed_div = 1'b1;
@@ -1034,7 +1007,6 @@ module exec(clk,
 	    begin
 	       t_start_div32 = r_start_int&!ds_done;
 	    end
-`endif
 	  SUBU:
 	    begin
 	       t_result = w_add32;
