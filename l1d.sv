@@ -115,22 +115,7 @@ module l1d(clk,
   
    localparam N_MQ_ENTRIES = (1<<`LG_MRQ_ENTRIES);
 
-   
-function logic [L1D_CL_LEN_BITS-1:0] merge_cl64(logic [L1D_CL_LEN_BITS-1:0] cl, logic [63:0] w64, logic pos);
-   logic [L1D_CL_LEN_BITS-1:0] 		 cl_out;
-   case(pos)
-     1'b0:
-       begin
-	  cl_out = {cl[127:64], w64};
-       end
-     1'b1:
-       begin
-	  cl_out = {w64, cl[63:0]};
-       end
-   endcase // case (pos)
-   return cl_out;
-endfunction // merge_cl64
-      
+         
 function logic [L1D_CL_LEN_BITS-1:0] merge_cl32(logic [L1D_CL_LEN_BITS-1:0] cl, logic [31:0] w32, logic[LG_WORDS_PER_CL-1:0] pos);
    logic [L1D_CL_LEN_BITS-1:0] 		 cl_out;
    case(pos)
@@ -160,33 +145,22 @@ function logic [31:0] select_cl32(logic [L1D_CL_LEN_BITS-1:0] cl, logic[LG_WORDS
    endcase // case (pos)
    return w32;
 endfunction
-   
-function logic [63:0] select_cl64(logic [L1D_CL_LEN_BITS-1:0] cl, logic pos);
-   logic [63:0] 			 w64;
-   case(pos)
-     1'b0:
-       w64 = cl[63:0];
-     1'b1:
-       w64 = cl[127:64];
-   endcase // case (pos)
-   return w64;
-endfunction
-   
+      
 
-   function logic non_mem_op(mem_op_t op);
-      logic 				 x;
-      case(op)
-	MEM_DEAD_ST:
-	  x = 1'b1;
-	MEM_DEAD_LD:
-	  x = 1'b1;
-	MEM_DEAD_SC:
-	  x = 1'b1;
-	default:
-	  x = 1'b0;
-      endcase // case (op)
+function logic non_mem_op(mem_op_t op);
+   logic 				 x;
+   case(op)
+     MEM_DEAD_ST:
+       x = 1'b1;
+     MEM_DEAD_LD:
+       x = 1'b1;
+     MEM_DEAD_SC:
+       x = 1'b1;
+     default:
+       x = 1'b0;
+   endcase // case (op)
       return x;
-   endfunction
+endfunction
    
    logic 				  r_got_req, r_last_wr, n_last_wr;
    logic 				  r_last_rd, n_last_rd;
@@ -232,10 +206,7 @@ endfunction
 
    logic [31:0] 			  t_array_out_b32[WORDS_PER_CL-1:0];
    logic [31:0] 			  t_w32, t_bswap_w32;
-   logic [63:0] 			  t_w64, t_bswap_w64;
-
    logic [31:0] 			  t_w32_2, t_bswap_w32_2;
-   logic [63:0] 			  t_w64_2, t_bswap_w64_2;
 
    logic 				  t_got_rd_retry, t_port2_hit_cache;
       
@@ -785,11 +756,8 @@ endfunction
    always_comb
      begin
 	t_data2 = r_got_req2 && r_must_forward2 ? r_array_wr_data : r_array_out2;
-	
 	t_w32_2 = (select_cl32(t_data2, r_req2.addr[WORD_STOP-1:WORD_START]));
-	t_w64_2 = select_cl64(t_data2, r_req2.addr[DWORD_START]);
 	t_bswap_w32_2 = bswap32(t_w32_2);
-	t_bswap_w64_2 = bswap64(t_w64_2);
 
 	t_hit_cache2 = r_valid_out2 && (r_tag_out2 == r_cache_tag2) && r_got_req2 && 
 		      (r_state == ACTIVE);
@@ -922,9 +890,7 @@ endfunction
 	t_data = r_got_req && r_must_forward ? r_array_wr_data : r_array_out;
 	
 	t_w32 = (select_cl32(t_data, r_req.addr[WORD_STOP-1:WORD_START]));
-	t_w64 = select_cl64(t_data, r_req.addr[DWORD_START]);
 	t_bswap_w32 = bswap32(t_w32);
-	t_bswap_w64 = bswap64(t_w64);
 	t_hit_cache = r_valid_out && (r_tag_out == r_cache_tag) && r_got_req && 
 		      (r_state == ACTIVE || r_state == INJECT_RELOAD);
 	t_array_data = 'd0;
