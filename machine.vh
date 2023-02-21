@@ -137,14 +137,6 @@ typedef enum logic [4:0] {
 } exception_t;
 
 
-function logic [63:0] bswap64(logic [63:0] in);
-`ifdef BIG_ENDIAN
-   return {in[7:0], in[15:8], in[23:16], in[31:24], in[39:32], in[47:40], in[55:48], in[63:56]};
-`else
-   return in;
-`endif
-endfunction
-
 function logic [31:0] bswap32(logic [31:0] in);
 `ifdef BIG_ENDIAN
    return {in[7:0], in[15:8], in[23:16], in[31:24]};
