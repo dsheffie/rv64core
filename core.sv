@@ -91,7 +91,6 @@ module core(clk,
 	    monitor_req_reason,
 	    monitor_req_valid,
 	    monitor_rsp_valid,
-	    monitor_rsp_data_valid,
 	    monitor_rsp_data,
 	    got_break,
 	    got_ud,
@@ -172,7 +171,6 @@ module core(clk,
    output logic [15:0] 			  monitor_req_reason;
    output logic 			  monitor_req_valid;
    input logic 				  monitor_rsp_valid;
-   input logic 				  monitor_rsp_data_valid;
    input logic [(`M_WIDTH-1):0] 	  monitor_rsp_data;
    output logic 			  got_break;
    output logic 			  got_ud;
