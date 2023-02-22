@@ -11,7 +11,6 @@ module core_l1d_l1i(clk,
 		    resume,
 		    resume_pc,
 		    ready_for_resume,
-		    mem_req_ack,
 		    mem_req_valid, 
 		    mem_req_addr, 
 		    mem_req_store_data,
@@ -96,7 +95,6 @@ module core_l1d_l1i(clk,
 `endif
    
    /* mem port */
-   input logic 			 mem_req_ack;
    output logic 		 mem_req_valid;
    output logic [`M_WIDTH-1:0] 	 mem_req_addr;
    output logic [L1D_CL_LEN_BITS-1:0] mem_req_store_data;

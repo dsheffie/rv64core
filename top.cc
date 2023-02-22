@@ -407,7 +407,6 @@ int main(int argc, char **argv) {
     contextp->timeInc(1);  // 1 timeprecision period passes...
     tb->mem_rsp_valid = 0;
     tb->mem_rsp_opcode = 0;
-    tb->mem_req_ack = 0;
     tb->monitor_rsp_valid = 0;
     tb->monitor_rsp_data_valid = 0;
     tb->monitor_rsp_data = 0;    
@@ -1117,7 +1116,6 @@ int main(int argc, char **argv) {
     tb->clk = 0;
     tb->eval();
     if(got_mem_req) {
-      tb->mem_req_ack = 0;
       got_mem_req = false;
     }
     if(got_mem_rsp) {
