@@ -45,8 +45,6 @@ module l1d(clk,
 	   //reply from memory system
 	   mem_rsp_valid,
 	   mem_rsp_load_data,
-	   mem_rsp_tag,
-	   mem_rsp_opcode,
 	   cache_accesses,
 	   cache_hits,
 	   cache_hits_under_miss
@@ -91,9 +89,6 @@ module l1d(clk,
 
    input logic 				  mem_rsp_valid;
    input logic [L1D_CL_LEN_BITS-1:0] 	  mem_rsp_load_data;
-   input logic [`LG_MEM_TAG_ENTRIES-1:0]  mem_rsp_tag;
-
-   input logic [4:0] 			 mem_rsp_opcode;
 
    
    output logic [63:0] 			 cache_accesses;

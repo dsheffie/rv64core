@@ -406,7 +406,6 @@ int main(int argc, char **argv) {
   for(globals::cycle = 0; (globals::cycle < 4) && !Verilated::gotFinish(); ++globals::cycle) {
     contextp->timeInc(1);  // 1 timeprecision period passes...
     tb->mem_rsp_valid = 0;
-    tb->mem_rsp_opcode = 0;
     tb->monitor_rsp_valid = 0;
     tb->monitor_rsp_data = 0;    
     tb->reset = 1;

@@ -19,8 +19,6 @@ module core_l1d_l1i(clk,
 		    mem_req_opcode,
 		    mem_rsp_valid,
 		    mem_rsp_load_data,
-		    mem_rsp_tag,
-		    mem_rsp_opcode,
 		    retire_reg_ptr,
 		    retire_reg_data,
 		    retire_reg_valid,
@@ -103,9 +101,6 @@ module core_l1d_l1i(clk,
    
    input logic  			  mem_rsp_valid;
    input logic [L1D_CL_LEN_BITS-1:0] 	  mem_rsp_load_data;
-   input logic [`LG_MEM_TAG_ENTRIES-1:0]  mem_rsp_tag;
-   input logic [4:0] 			  mem_rsp_opcode;
-
 
    output logic [4:0] 			  retire_reg_ptr;
    output logic [31:0] 			  retire_reg_data;
@@ -407,8 +402,6 @@ module core_l1d_l1i(clk,
 	       
 	       .mem_rsp_valid(l1d_mem_rsp_valid),
 	       .mem_rsp_load_data(mem_rsp_load_data),
-	       .mem_rsp_tag(mem_rsp_tag),
-	       .mem_rsp_opcode(mem_rsp_opcode),
 
 	       .cache_accesses(t_l1d_cache_accesses),
 	       .cache_hits(t_l1d_cache_hits),
@@ -447,8 +440,6 @@ module core_l1d_l1i(clk,
 	      .mem_req_opcode(l1i_mem_req_opcode),
 	      .mem_rsp_valid(l1i_mem_rsp_valid),
 	      .mem_rsp_load_data(mem_rsp_load_data),
-	      .mem_rsp_tag(mem_rsp_tag),
-	      .mem_rsp_opcode(mem_rsp_opcode),
 	      .cache_accesses(t_l1i_cache_accesses),
 	      .cache_hits(t_l1i_cache_hits)	      
 	      );
