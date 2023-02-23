@@ -14,7 +14,6 @@ module core_l1d_l1i(clk,
 		    mem_req_valid, 
 		    mem_req_addr, 
 		    mem_req_store_data,
-		    mem_req_insn,
 		    mem_req_tag,
 		    mem_req_opcode,
 		    mem_rsp_valid,
@@ -96,7 +95,6 @@ module core_l1d_l1i(clk,
    output logic [`M_WIDTH-1:0] 	 mem_req_addr;
    output logic [L1D_CL_LEN_BITS-1:0] mem_req_store_data;
    output logic [`LG_MEM_TAG_ENTRIES-1:0] mem_req_tag;
-   output logic 			  mem_req_insn;
    output logic [4:0] 			  mem_req_opcode;
    
    input logic  			  mem_rsp_valid;
@@ -292,7 +290,6 @@ module core_l1d_l1i(clk,
 	mem_req_store_data = l1d_mem_req_store_data;
 	mem_req_tag = (r_state == GNT_L1I) ? l1i_mem_req_tag : l1d_mem_req_tag;
 	mem_req_opcode = (r_state == GNT_L1I) ? l1i_mem_req_opcode : l1d_mem_req_opcode;
-	mem_req_insn = (r_state == GNT_L1I);
 	l1d_mem_rsp_valid = 1'b0;
 	l1i_mem_rsp_valid = 1'b0;
 	

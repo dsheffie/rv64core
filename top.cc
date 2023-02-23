@@ -1066,7 +1066,7 @@ int main(int argc, char **argv) {
 
     if(tb->mem_req_valid && (mem_reply_cycle == -1)) {
 
-      mem_reply_cycle = globals::cycle + (tb->mem_req_insn ? 0 : mem_lat);
+      mem_reply_cycle = globals::cycle +  mem_lat;
       
     }
     
