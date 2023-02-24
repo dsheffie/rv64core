@@ -94,6 +94,7 @@ module exec(clk,
    
    input logic [`M_WIDTH-1:0] monitor_rsp_data;
    
+   localparam N_INT_SCHED_ENTRIES = 1<<`LG_INT_SCHED_ENTRIES;
    
    localparam N_MQ_ENTRIES = (1<<`LG_MQ_ENTRIES);
    localparam N_INT_PRF_ENTRIES = (1<<`LG_PRF_ENTRIES);
@@ -481,12 +482,10 @@ module exec(clk,
 
 
 
-   localparam LG_INT_SCHED_ENTRIES = 2;
-   localparam N_INT_SCHED_ENTRIES = 1<<LG_INT_SCHED_ENTRIES;
 
    //does this scheduler entry contain a valid uop?
    logic [N_INT_SCHED_ENTRIES-1:0] r_alu_sched_valid;
-   logic [LG_INT_SCHED_ENTRIES:0] t_alu_sched_alloc_ptr;
+   logic [`LG_INT_SCHED_ENTRIES:0] t_alu_sched_alloc_ptr;
    logic 			  t_alu_sched_full;
    
    logic [N_INT_SCHED_ENTRIES-1:0] t_alu_alloc_entry, t_alu_select_entry;
@@ -496,7 +495,7 @@ module exec(clk,
 
    
    logic [N_INT_SCHED_ENTRIES-1:0] t_alu_entry_rdy;
-   logic [LG_INT_SCHED_ENTRIES:0]  t_alu_sched_select_ptr;
+   logic [`LG_INT_SCHED_ENTRIES:0]  t_alu_sched_select_ptr;
    
 	
    logic [N_INT_SCHED_ENTRIES-1:0] r_alu_srcA_rdy, 
@@ -515,13 +514,13 @@ module exec(clk,
    
 
    
-   find_first_set#(LG_INT_SCHED_ENTRIES) ffs_int_sched_alloc( .in(~r_alu_sched_valid),
+   find_first_set#(`LG_INT_SCHED_ENTRIES) ffs_int_sched_alloc( .in(~r_alu_sched_valid),
 							      .y(t_alu_sched_alloc_ptr));
 
    //find_first_set#(LG_INT_SCHED_ENTRIES) ffs_int_sched_select( .in(t_alu_entry_rdy),
 //							       .y(t_alu_sched_select_ptr//));
 
-   fair_sched#(LG_INT_SCHED_ENTRIES) ffs_int_sched_select( .clk(clk),
+   fair_sched#(`LG_INT_SCHED_ENTRIES) ffs_int_sched_select( .clk(clk),
 							   .rst(reset),
 							   .in(t_alu_entry_rdy),
 							   .y(t_alu_sched_select_ptr));
@@ -533,11 +532,11 @@ module exec(clk,
 	t_alu_select_entry = 'd0;
 	if(t_pop_uq)
 	  begin
-	     t_alu_alloc_entry[t_alu_sched_alloc_ptr[LG_INT_SCHED_ENTRIES-1:0]] = 1'b1;
+	     t_alu_alloc_entry[t_alu_sched_alloc_ptr[`LG_INT_SCHED_ENTRIES-1:0]] = 1'b1;
 	  end
 	if(t_alu_entry_rdy != 'd0)
 	  begin
-	     t_alu_select_entry[t_alu_sched_select_ptr[LG_INT_SCHED_ENTRIES-1:0]] = 1'b1;
+	     t_alu_select_entry[t_alu_sched_select_ptr[`LG_INT_SCHED_ENTRIES-1:0]] = 1'b1;
 	  end
      end // always_comb
 
@@ -546,7 +545,7 @@ module exec(clk,
 
    always_comb
      begin
-	t_picked_uop = r_alu_sched_uops[t_alu_sched_select_ptr[LG_INT_SCHED_ENTRIES-1:0]];
+	t_picked_uop = r_alu_sched_uops[t_alu_sched_select_ptr[`LG_INT_SCHED_ENTRIES-1:0]];
      end
    
    always_ff@(posedge clk)
@@ -675,12 +674,12 @@ module exec(clk,
 	  begin
 	     if(t_pop_uq)
 	       begin
-		  r_alu_sched_valid[t_alu_sched_alloc_ptr[LG_INT_SCHED_ENTRIES-1:0]] <= 1'b1;
-		  r_alu_sched_uops[t_alu_sched_alloc_ptr[LG_INT_SCHED_ENTRIES-1:0]] <= uq;
+		  r_alu_sched_valid[t_alu_sched_alloc_ptr[`LG_INT_SCHED_ENTRIES-1:0]] <= 1'b1;
+		  r_alu_sched_uops[t_alu_sched_alloc_ptr[`LG_INT_SCHED_ENTRIES-1:0]] <= uq;
 	       end
 	     if(t_alu_entry_rdy != 'd0)
 	       begin
-		  r_alu_sched_valid[t_alu_sched_select_ptr[LG_INT_SCHED_ENTRIES-1:0]] <= 1'b0;
+		  r_alu_sched_valid[t_alu_sched_select_ptr[`LG_INT_SCHED_ENTRIES-1:0]] <= 1'b0;
 	       end
 	  end // else: !if(reset)
      end
@@ -864,7 +863,7 @@ module exec(clk,
 		    t_mem_uq_full ? 32'd1 : 32'd0,
 		    32'd0,
 		    t_blocked_by_store ? 32'd1 : 32'd0,
-		    {28'd0, t_alu_entry_rdy}
+		    {{(32-N_INT_SCHED_ENTRIES){1'b0}}, t_alu_entry_rdy}
 		    );
      end
 `endif //  `ifdef VERILATOR

@@ -40,7 +40,11 @@ module unsigned_divider(clk,
    logic [LG_W-1:0] 		    r_idx, n_idx;
    logic 			    t_bit,t_valid;
 
-   logic [31:0] 		    n_bits = W-1;
+   logic [31:0] 		    n_bits;
+   always_comb
+     begin
+	n_bits = W-1;
+     end
       
    always_ff@(posedge clk)
      begin

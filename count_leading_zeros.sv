@@ -5,8 +5,8 @@ module count_leading_zeros#(parameter LG_N = 2)(in, y);
    output logic [LG_N:0] y;
 
    logic [LG_N-1:0] 	 t0, t1;
-   logic 		 lo_z = in[N2-1:0]=='d0;
-   logic 		 hi_z = in[N-1:N2]=='d0;
+   wire 		 lo_z = in[N2-1:0]=='d0;
+   wire 		 hi_z = in[N-1:N2]=='d0;
    
    //always_comb
      //begin

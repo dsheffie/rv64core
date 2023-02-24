@@ -943,13 +943,14 @@ endfunction
 `endif
      end // always_comb
    
-   logic t_wr_valid_ram_en = mem_rsp_valid || r_state == FLUSH_CACHE;
-   logic t_valid_ram_value = (r_state != FLUSH_CACHE);
-   logic [`LG_L1D_NUM_SETS-1:0] t_valid_ram_idx = mem_rsp_valid ? r_mem_req_addr[IDX_STOP-1:IDX_START] : r_cache_idx;
-
+   logic t_wr_valid_ram_en, t_valid_ram_value;
+   logic [`LG_L1D_NUM_SETS-1:0] t_valid_ram_idx;
 
    always_comb
      begin
+	t_wr_valid_ram_en = mem_rsp_valid || r_state == FLUSH_CACHE;
+	t_valid_ram_value = (r_state != FLUSH_CACHE);
+	t_valid_ram_idx = mem_rsp_valid ? r_mem_req_addr[IDX_STOP-1:IDX_START] : r_cache_idx;
 	t_xor_pc_hist = {n_cache_pc[`GBL_HIST_LEN-7:2], 8'd0} ^ r_spec_gbl_hist;	
      end
 

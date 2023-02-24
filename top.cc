@@ -38,7 +38,6 @@ static uint64_t n_rdy[3] = {0};
 
 static uint64_t n_int_exec[2] = {0};
 static uint64_t n_mem_exec[3] = {0};
-static uint64_t n_fp_exec[2] = {0};
 
 static uint64_t q_full[3] = {0};
 static uint64_t dq_empty =  0;
@@ -99,11 +98,7 @@ void report_exec(int int_valid, int int_ready,
   n_mem_exec[0] += mem_valid;
   n_mem_exec[1] += mem_ready;
   n_mem_exec[2] += blocked_by_store;
-  
-  n_fp_exec[0] += fp_valid;
-  n_fp_exec[1] += fp_ready;
-
-  
+    
   q_full[0] += intq_full;
   q_full[1] += memq_full;
   q_full[2] += fpq_full;
@@ -1197,12 +1192,9 @@ int main(int argc, char **argv) {
     out << n_mem_exec[0] << " cycles where mem exec queue is not empty\n";
     out << n_mem_exec[1] << " cycles where mem exec queue dispatches\n";
     out << n_mem_exec[2] << " cycles where mem exec queue is blocked by a store\n";
-    out << n_fp_exec[0] << " cycles where fp exec queue is not empty\n";
-    out << n_fp_exec[1] << " cycles where fp exec queue dispatches\n";
 
     out << q_full[0] << " cycles with int queue full\n";
     out << q_full[1] << " cycles with mem queue full\n";
-    out << q_full[2] << " cycles with fp  queue full\n";
     out << dq_empty  << " cycles with an empty decode queue\n";
     out << uq_full   << " cycles with a  full uop queue\n";
     out << n_active << " cycles where the machine is in active state\n";
@@ -1287,11 +1279,6 @@ int main(int argc, char **argv) {
     avg_mem_lat = histo_mean_median(non_mem_lat_map, median_mem_lat);
     out << "avg non-mem alloc to complete = " << avg_mem_lat << "\n";
     out << "median non-mem alloc to complete = " << median_mem_lat << "\n";
-
-
-    avg_mem_lat = histo_mean_median(fp_lat_map, median_mem_lat);
-    out << "avg fp alloc to complete = " << avg_mem_lat << "\n";
-    out << "median fp alloc to complete = " << median_mem_lat << "\n";
 
     
     out << "l1d_reqs = " << l1d_reqs << "\n";
