@@ -259,7 +259,9 @@ endfunction
    mem_req_t t_mem_tail, t_mem_head;
    logic 	mem_q_full, mem_q_empty, mem_q_almost_full;
    
-   typedef enum logic [3:0] {ACTIVE,
+   typedef enum logic [3:0] {INITIALIZE,
+			     INIT_CACHE,
+			     ACTIVE,
                              INJECT_RELOAD,
 			     WAIT_INJECT_RELOAD,
                              FLUSH_CACHE,
@@ -530,7 +532,7 @@ endfunction
 	     r_last_rd <= 1'b0;
 	     r_last_wr2 <= 1'b0;
 	     r_last_rd2 <= 1'b0;	     
-	     r_state <= ACTIVE;
+	     r_state <= INITIALIZE;
 	     r_mem_req_valid <= 1'b0;
 	     r_mem_req_addr <= 'd0;
 	     r_mem_req_store_data <= 'd0;
@@ -682,7 +684,11 @@ endfunction
 	t_dirty_value = 1'b0;
 	t_write_dirty_en = 1'b0;
 	t_dirty_wr_addr = r_cache_idx;
-	if(mem_rsp_valid)
+	if(t_mark_invalid)
+	  begin
+	     t_write_dirty_en = 1'b1;	     
+	  end
+	else if(mem_rsp_valid)
 	  begin
 	     t_dirty_wr_addr = r_mem_req_addr[IDX_STOP-1:IDX_START];
 	     t_write_dirty_en = 1'b1;
@@ -1198,6 +1204,26 @@ endfunction
 	t_cm_block_stall = t_cm_block && !(r_did_reload||r_is_retry);//1'b0;
 	
 	case(r_state)
+	  INITIALIZE:
+	    begin
+	       n_state = INIT_CACHE;
+	       t_cache_idx = 'd0;	       
+	    end
+	  INIT_CACHE:
+	    begin
+	       t_cache_idx = r_cache_idx + 'd1;
+	       if(r_cache_idx == (L1D_NUM_SETS-1))
+		 begin
+		    //$display("flush done at cycle %d", r_cycle);
+		    n_state = ACTIVE;
+		    n_flush_complete = 1'b1;
+		 end
+	       else
+		 begin
+		    t_mark_invalid = 1'b1;
+		    t_cache_idx = r_cache_idx + 'd1;		    
+		 end
+	    end
 	  ACTIVE:
 	    begin
 	       if(r_got_req2)

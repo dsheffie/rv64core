@@ -342,6 +342,7 @@ module core(clk,
    logic [`LG_ROB_ENTRIES-1:0] n_delayslot_rob_ptr, r_delayslot_rob_ptr;
    
    typedef enum logic [4:0] {
+			     INITIALIZE,
 			     HALT,
 			     ACTIVE,
 			     DRAIN,
@@ -503,7 +504,7 @@ module core(clk,
      begin
 	if(reset)
 	  begin
-	     r_state <= HALT;
+	     r_state <= INITIALIZE;
 	     r_restart_cycles <= 'd0;
 	     r_machine_clr <= 1'b0;
 	     r_delayslot_rob_ptr <= 'd0;
@@ -1040,6 +1041,16 @@ module core(clk,
 		 end
 	    end // case: WAIT_FOR_MONITOR
 	  FLUSH_FOR_HALT:
+	    begin
+	       if(n_l1i_flush_complete && n_l1d_flush_complete)
+		 begin
+		    n_state = HALT;
+		    n_ready_for_resume = 1'b1;		    		    
+		    n_l1i_flush_complete = 1'b0;
+		    n_l1d_flush_complete = 1'b0;
+		 end	       
+	    end
+	  INITIALIZE:
 	    begin
 	       if(n_l1i_flush_complete && n_l1d_flush_complete)
 		 begin

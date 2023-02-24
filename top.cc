@@ -419,9 +419,19 @@ int main(int argc, char **argv) {
   tb->eval();
   tb->clk = 0;
   tb->eval();
+
+  tb->resume_pc = s->pc;
+  while(!tb->ready_for_resume) {
+    ++globals::cycle;  
+    tb->clk = 1;
+    tb->eval();
+    tb->clk = 0;
+    tb->eval();
+  }
+  
   ++globals::cycle;
   tb->resume = 1;
-  tb->resume_pc = s->pc;
+
   tb->clk = 1;
   tb->eval();
   tb->clk = 0;

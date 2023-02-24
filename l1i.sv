@@ -356,12 +356,13 @@ function jump_t predecode(logic [31:0] insn);
 endfunction
    
    
-   typedef enum logic [2:0] {IDLE = 'd0,
-                             ACTIVE = 'd1,
-                             INJECT_RELOAD = 'd2,
-			     RELOAD_TURNAROUND = 'd3,
-                             FLUSH_CACHE = 'd4,
-			     WAIT_FOR_NOT_FULL = 'd5
+   typedef enum logic [2:0] {INITIALIZE = 'd0,
+			     IDLE = 'd1,
+                             ACTIVE = 'd2,
+                             INJECT_RELOAD = 'd3,
+			     RELOAD_TURNAROUND = 'd4,
+                             FLUSH_CACHE = 'd5,
+			     WAIT_FOR_NOT_FULL = 'd6
 			    } state_t;
    
    logic [(`M_WIDTH-1):0] r_pc, n_pc, r_miss_pc, n_miss_pc;
@@ -627,6 +628,11 @@ endfunction
 	t_is_ret = 1'b0;
 	
 	case(r_state)
+	  INITIALIZE:
+	    begin
+	       n_state = FLUSH_CACHE;
+	       t_cache_idx = 0;
+	    end
 	  IDLE:
 	    begin
 	       if(n_restart_req)
@@ -1179,7 +1185,7 @@ endfunction
      begin
 	if(reset)
 	  begin
-	     r_state <= IDLE;
+	     r_state <= INITIALIZE;
 	     r_pc <= 'd0;
 	     r_miss_pc <= 'd0;
 	     r_cache_pc <= 'd0;
