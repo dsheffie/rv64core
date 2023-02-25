@@ -10,32 +10,6 @@ import "DPI-C" function void record_fetch(int push1, int push2, int push3, int p
 `endif
 
 
-module xor_fold#(parameter IN_W = 32, parameter OUT_W = 16)(in,out);
-   localparam W = (IN_W/2);
-
-   input [IN_W-1:0]    in;      
-   output [W-1:0]   out;
-
-
-   logic [W-1:0]    t;
-   always_comb
-     begin
-	t = in[IN_W-1:W]  ^ in[W-1:0];
-     end
-      
-   generate
-      if((2*W) == OUT_W)
-	begin
-	   assign out = t;
-	end
-      else
-	begin
-	   xor_fold#(W, OUT_W) f(.in(t), .out(out));
-	end
-   endgenerate
-   
-endmodule // xor_fold
-
 
 
 module l1i(clk,
@@ -986,11 +960,10 @@ endfunction
 	t_wr_valid_ram_en = mem_rsp_valid || r_state == FLUSH_CACHE;
 	t_valid_ram_value = (r_state != FLUSH_CACHE);
 	t_valid_ram_idx = mem_rsp_valid ? r_mem_req_addr[IDX_STOP-1:IDX_START] : r_cache_idx;
-	t_xor_pc_hist = {n_cache_pc[`GBL_HIST_LEN-7:2], 8'd0} ^ r_spec_gbl_hist;	
+	t_xor_pc_hist = {n_cache_pc[`GBL_HIST_LEN-7:2], 8'd0} ^ r_spec_gbl_hist;
+	n_pht_idx = t_xor_pc_hist[`LG_PHT_SZ-1:0];
      end
 
-   xor_fold #(`GBL_HIST_LEN, `GBL_HIST_LEN) f0 (.in(t_xor_pc_hist), .out(n_pht_idx));
- 
    
    always_comb
      begin
