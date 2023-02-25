@@ -9,6 +9,128 @@ import "DPI-C" function void record_fetch(int push1, int push2, int push3, int p
 
 `endif
 
+module predecode(insn_, pd);
+   input logic [31:0] insn_;
+   output logic [3:0] pd;
+
+   logic [31:0]       insn;
+   
+   always_comb
+     begin
+	pd = 4'd0;
+	insn = bswap32(insn_);
+	case(insn[31:26])
+	  6'd0: /* rtype */
+	    begin
+	       if(insn[5:0] == 6'd8) /* pdr */
+		 begin
+		    pd = (insn[25:21] == 5'd31) ? 4'd7 : 4'd4;
+		 end
+	       else if(insn[5:0] == 6'd9)
+		 begin
+		    pd = 4'd6;
+		 end
+	    end
+	  6'd1:
+	    begin
+	       case(insn[20:16])
+		 'd0:
+		   begin
+		      pd = 4'd1;
+		   end
+		 'd1:
+		   begin
+		      pd = 4'd1;
+		   end
+		 'd2:
+		   begin
+		      pd = 4'd2;
+		   end
+		 'd3:
+		   begin
+		      pd = 4'd2;
+		   end
+		 'd17:
+		   begin
+		      pd = 4'd9;
+		   end
+		 default:
+		   begin
+		   end
+	       endcase // case (rt)	  
+	    end
+	  6'd2:
+	    begin
+	       pd = 4'd3;
+	    end   
+	  6'd3:
+	    begin
+	       pd = 4'd5;
+	    end
+	  6'd4:
+	    begin
+	       pd = ((insn[25:21] == 'd0) && (insn[20:16] == 'd0)) ? 4'd8 : 4'd1;
+	    end
+	  6'd5:
+	    begin
+	       pd = 4'd1;
+	    end
+	  6'd6:
+	    begin
+	       pd = 4'd1;
+	    end
+	  6'd7:
+	    begin
+	       pd = 4'd1;
+	    end
+	  6'd17:
+	    begin
+	       if(insn[25:21]==5'd8)
+		 begin
+		    case(insn[17:16])
+		      2'b00: //bc1f
+			begin
+			   pd = 4'd1;
+			end
+		      2'b01: //bc1t
+			begin
+			   pd = 4'd1;
+			end
+		      2'b10: //bc1fl;
+			begin
+			   pd = 4'd2;
+			end
+		      2'b11: //bc1tl
+			begin
+			   pd = 4'd2;
+			end	       
+		    endcase // case (insn[17:16])
+		 end // if (insn[25:21]==5'd8)
+	    end
+	  6'd20:
+	    begin
+	       pd = 4'd2;
+	    end
+	  6'd21:
+	    begin
+	       pd = 4'd2;
+	    end
+	  6'd22:
+	    begin
+	       pd = 4'd2;
+	    end
+	  6'd23:
+	    begin
+	       pd = 4'd2;
+	    end     
+	  default:
+	    begin
+	       pd = 4'd0;
+	    end
+	endcase // case (opcode)   
+     end // always_comb
+endmodule // predecode
+
 
 
 
@@ -108,20 +230,7 @@ module l1i(clk,
    input logic [L1I_CL_LEN_BITS-1:0] 	  mem_rsp_load_data;
    output logic [63:0] 			  cache_accesses;
    output logic [63:0] 			  cache_hits;
-   
-   typedef enum 			  logic [3:0] {
-						       NOT_CFLOW = 'd0,
-						       IS_COND_BR = 'd1,
-						       IS_L_COND_BR = 'd2,
-						       IS_J = 'd3,
-						       IS_JR = 'd4,
-						       IS_JAL = 'd5,
-						       IS_JALR = 'd6,
-						       IS_JR_R31 = 'd7,
-						       IS_BR = 'd8,
-						       IS_BR_AND_LINK = 'd9
-						       } jump_t;
-   
+      
    logic [N_TAG_BITS-1:0] 		  t_cache_tag, r_cache_tag, r_tag_out;
 
    logic 				  r_pht_update;
@@ -137,7 +246,7 @@ module l1i(clk,
    logic [BTB_ENTRIES-1:0] 		  r_btb_valid;
    
    
-   logic [($bits(jump_t)*WORDS_PER_CL)-1:0] r_jump_out;
+   logic [(4*WORDS_PER_CL)-1:0] 	  r_jump_out;
    
    logic [`LG_L1D_NUM_SETS-1:0] 	    t_cache_idx, r_cache_idx;   
    logic [L1I_CL_LEN_BITS-1:0] 		    r_array_out;   
@@ -191,17 +300,17 @@ function logic [31:0] select_cl32(logic [L1I_CL_LEN_BITS-1:0] cl, logic[LG_WORDS
    return w32;
 endfunction
 
-function jump_t select_pd(jump_t [WORDS_PER_CL-1:0] cl, logic[LG_WORDS_PER_CL-1:0] pos);
-   jump_t j;
+function logic [3:0] select_pd(logic [15:0] cl, logic[LG_WORDS_PER_CL-1:0] pos);
+   logic [3:0] j;
    case(pos)
      2'd0:
-       j = cl[0];
+       j = cl[3:0];
      2'd1:
-       j = cl[1];
+       j = cl[7:4];
      2'd2:
-       j = cl[2];
+       j = cl[11:8];
      2'd3:
-       j = cl[3];
+       j = cl[15:12];
    endcase // case (pos)
    return j;
 endfunction
@@ -210,123 +319,7 @@ function logic is_nop(logic [31:0] insn);
    return (insn == 32'd0);
 endfunction // is_nop
       
-   
-function jump_t predecode(logic [31:0] insn);
-   jump_t j = NOT_CFLOW;
-   
-   case(insn[31:26])
-     6'd0: /* rtype */
-       begin
-	  if(insn[5:0] == 6'd8) /* jr */
-	    begin
-	       j = (insn[25:21] == 5'd31) ? IS_JR_R31 : IS_JR;
-	    end
-	  else if(insn[5:0] == 6'd9)
-	    begin
-	       j = IS_JALR;
-	    end
-       end
-     6'd1:
-       begin
-	  case(insn[20:16])
-	    'd0:
-	      begin
-		 j = IS_COND_BR;
-	      end
-	    'd1:
-	      begin
-		 j = IS_COND_BR;
-	      end
-	    'd2:
-	      begin
-		 j = IS_L_COND_BR;
-	      end
-	    'd3:
-	      begin
-		 j = IS_L_COND_BR;
-	      end
-	    'd17:
-	      begin
-		 j = IS_BR_AND_LINK;
-	      end
-	    default:
-	      begin
-	      end
-	  endcase // case (rt)	  
-       end
-     6'd2:
-       begin
-	  j = IS_J;
-       end   
-     6'd3:
-       begin
-	  j = IS_JAL;
-       end
-     6'd4:
-       begin
-	  j = ((insn[25:21] == 'd0) && (insn[20:16] == 'd0)) ? IS_BR : IS_COND_BR;
-       end
-     6'd5:
-       begin
-	  j = IS_COND_BR;
-       end
-     6'd6:
-       begin
-	  j = IS_COND_BR;
-       end
-     6'd7:
-       begin
-	  j = IS_COND_BR;
-       end
-     6'd17:
-       begin
-	  if(insn[25:21]==5'd8)
-	    begin
-	       case(insn[17:16])
-		 2'b00: //bc1f
-		   begin
-		      j = IS_COND_BR;
-		   end
-		 2'b01: //bc1t
-		   begin
-		      j = IS_COND_BR;
-		   end
-		 2'b10: //bc1fl;
-		   begin
-		      j = IS_L_COND_BR;
-		   end
-		 2'b11: //bc1tl
-		   begin
-		      j = IS_L_COND_BR;
-		   end	       
-	       endcase // case (insn[17:16])
-	    end // if (insn[25:21]==5'd8)
-       end
-     6'd20:
-       begin
-	  j = IS_L_COND_BR;
-       end
-     6'd21:
-       begin
-	  j = IS_L_COND_BR;
-       end
-     6'd22:
-       begin
-	  j = IS_L_COND_BR;
-       end
-     6'd23:
-       begin
-	  j = IS_L_COND_BR;
-       end     
-     default:
-       begin
-	  j = NOT_CFLOW;
-       end
-   endcase // case (opcode)   
-
-   return j;
-endfunction
-   
+      
    
    typedef enum logic [2:0] {INITIALIZE = 'd0,
 			     IDLE = 'd1,
@@ -380,7 +373,7 @@ endfunction
    
    localparam SEXT = `M_WIDTH-16;
    insn_fetch_t t_insn, t_insn2, t_insn3, t_insn4;
-   jump_t t_pd;
+   logic [3:0] t_pd;
 
    
    logic [63:0] 	  r_cycle;
@@ -570,19 +563,19 @@ endfunction
 
 
 	t_branch_marker = {1'b1,
-			   select_pd(r_jump_out, 'd3) != NOT_CFLOW,
-                           select_pd(r_jump_out, 'd2) != NOT_CFLOW,
-                           select_pd(r_jump_out, 'd1) != NOT_CFLOW,
-                           select_pd(r_jump_out, 'd0) != NOT_CFLOW
+			   select_pd(r_jump_out, 'd3) != 4'd0,
+                           select_pd(r_jump_out, 'd2) != 4'd0,
+                           select_pd(r_jump_out, 'd1) != 4'd0,
+                           select_pd(r_jump_out, 'd0) != 4'd0
                            } >> t_insn_idx;
 
 	t_spec_branch_marker = ({1'b1,
-				select_pd(r_jump_out, 'd3) != NOT_CFLOW,
-				select_pd(r_jump_out, 'd2) != NOT_CFLOW,
-				select_pd(r_jump_out, 'd1) != NOT_CFLOW,
-				select_pd(r_jump_out, 'd0) != NOT_CFLOW
+				select_pd(r_jump_out, 'd3) != 4'd0,
+				select_pd(r_jump_out, 'd2) != 4'd0,
+				select_pd(r_jump_out, 'd1) != 4'd0,
+				select_pd(r_jump_out, 'd0) != 4'd0
 				} >> t_insn_idx) & 
-			       {4'b1111, !((t_pd == IS_COND_BR) && !r_pht_out[1])};
+			       {4'b1111, !((t_pd == 4'd1) && !r_pht_out[1])};
 
 	
 	t_first_branch = 'd7;
@@ -601,10 +594,10 @@ endfunction
 	    t_first_branch = 'd7;
 	endcase
 
-	t_branch_cnt = {2'd0, select_pd(r_jump_out, 'd0) != NOT_CFLOW} +
-		       {2'd0, select_pd(r_jump_out, 'd1) != NOT_CFLOW} +
-		       {2'd0, select_pd(r_jump_out, 'd2) != NOT_CFLOW} +
-		       {2'd0, select_pd(r_jump_out, 'd3) != NOT_CFLOW};
+	t_branch_cnt = {2'd0, select_pd(r_jump_out, 'd0) != 4'd0} +
+		       {2'd0, select_pd(r_jump_out, 'd1) != 4'd0} +
+		       {2'd0, select_pd(r_jump_out, 'd2) != 4'd0} +
+		       {2'd0, select_pd(r_jump_out, 'd3) != 4'd0};
 	
 		
 	t_simm = {{SEXT{t_insn_data[15]}},t_insn_data[15:0]};
@@ -686,25 +679,25 @@ endfunction
 		 end
 	       else if(t_hit && !fq_full)
 		 begin
-		    t_update_spec_hist = (t_pd != NOT_CFLOW);
-		    if(t_pd == IS_JAL || t_pd == IS_J)
+		    t_update_spec_hist = (t_pd != 4'd0);
+		    if(t_pd == 4'd5 || t_pd == 4'd3)
 		      begin
 			 t_is_cflow = 1'b1;
 			 n_delay_slot = 1'b1;
 			 t_take_br = 1'b1;
-			 t_is_call = (t_pd == IS_JAL);
+			 t_is_call = (t_pd == 4'd5);
 			 //if(t_is_call) $display("predict jal at %x will return to %x",
 			 //r_cache_pc, r_cache_pc+'d8);
 			 n_pc = {r_cache_pc[`M_WIDTH-1:28], t_insn_data[25:0], 2'd0};
 		      end
-		    else if(t_pd == IS_BR)
+		    else if(t_pd == 4'd8)
 		      begin
 			 t_is_cflow = 1'b1;			 
 			 n_delay_slot = 1'b1;
 			 t_take_br = 1'b1;
 			 n_pc = ((r_cache_pc + 'd4) + {t_simm[`M_WIDTH-3:0], 2'd0});
 		      end
-		    else if(t_pd == IS_L_COND_BR)
+		    else if(t_pd == 4'd2)
 		      begin
 			 //$display("decoded likely branch @ %x", r_cache_pc);
 			 //treat as always taken for simplicity
@@ -713,7 +706,7 @@ endfunction
 			 t_take_br = 1'b1;
 			 n_pc = ((r_cache_pc + 'd4) + {t_simm[`M_WIDTH-3:0], 2'd0});
 		      end
-		    else if(t_pd == IS_BR_AND_LINK)
+		    else if(t_pd == 4'd9)
 		      begin
 			 //check if insn is bal or cond branch thinks its gonna be taken
 			 if(r_pht_out[1] || t_insn_data[25:21] == 5'd0)
@@ -726,7 +719,7 @@ endfunction
 			      //$display("some flavor of branch and link, predicting target %x", n_pc);
 			   end
 		      end
-		    else if(t_pd == IS_COND_BR && r_pht_out[1])
+		    else if(t_pd == 4'd1 && r_pht_out[1])
 		      begin
 			 t_is_cflow = 1'b1;			 
 			 n_delay_slot = 1'b1;
@@ -739,20 +732,20 @@ endfunction
 			 //n_delay_slot = 1'b0;
 			 // end
 		      end
-		    else if(t_pd == IS_JR_R31)
+		    else if(t_pd == 4'd7)
 		      begin
 			 t_is_cflow = 1'b1;
 			 t_is_ret = 1'b1;
 			 n_delay_slot = 1'b1;
 			 t_take_br = 1'b1;
 			 n_pc = r_spec_return_stack[t_next_spec_rs_tos];
-		      end // if (t_pd == IS_JR_R31)
-		    else if(t_pd == IS_JR || t_pd == IS_JALR)
+		      end // if (t_pd == 4'd7)
+		    else if(t_pd == 4'd4 || t_pd == 4'd6)
 		      begin
 			 t_is_cflow = 1'b1;			 
 			 n_delay_slot = 1'b1;
 			 t_take_br = 1'b1;
-			 t_is_call = (t_pd == IS_JALR);
+			 t_is_call = (t_pd == 4'd6);
 			 n_pc = r_btb_pc;
 			 //$display("predicted target for %x is %x", r_cache_pc, n_pc);			 
 		      end
@@ -1096,16 +1089,20 @@ endfunction
 	   .wr_en(mem_rsp_valid),
 	   .rd_data(r_array_out)
 	   );
+
+   wire [3:0] w_pd0, w_pd1, w_pd2, w_pd3;
+   predecode pd0 (.insn_(mem_rsp_load_data[31:0]),   .pd(w_pd0));
+   predecode pd1 (.insn_(mem_rsp_load_data[63:32]),  .pd(w_pd1));
+   predecode pd2 (.insn_(mem_rsp_load_data[95:64]),  .pd(w_pd2));
+   predecode pd3 (.insn_(mem_rsp_load_data[127:96]), .pd(w_pd3));   
    
-   ram1r1w #(.WIDTH($bits(jump_t)*WORDS_PER_CL), .LG_DEPTH(`LG_L1D_NUM_SETS))
+   
+   ram1r1w #(.WIDTH(4*WORDS_PER_CL), .LG_DEPTH(`LG_L1D_NUM_SETS))
    pd_data (
 	    .clk(clk),
 	    .rd_addr(t_cache_idx),
 	    .wr_addr(r_mem_req_addr[IDX_STOP-1:IDX_START]),
-	    .wr_data({predecode(bswap32(mem_rsp_load_data[127:96])),
-		      predecode(bswap32(mem_rsp_load_data[95:64])),
-		      predecode(bswap32(mem_rsp_load_data[63:32])),
-		      predecode(bswap32(mem_rsp_load_data[31:0]))}),
+	    .wr_data({w_pd3,w_pd2,w_pd1,w_pd0}),
 	    .wr_en(mem_rsp_valid),
 	    .rd_data(r_jump_out)
 	    );

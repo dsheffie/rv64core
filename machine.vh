@@ -12,7 +12,7 @@
 `define LG_INT_SCHED_ENTRIES 3
 
 //gshare branch predictor
-`define LG_PHT_SZ 8
+`define LG_PHT_SZ 16
 
 `define GBL_HIST_LEN 32
 
