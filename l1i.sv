@@ -160,6 +160,7 @@ module l1i(clk,
    logic 				  r_take_br;
    
    logic [(`M_WIDTH-1):0] 		  r_btb[BTB_ENTRIES-1:0];
+   logic [BTB_ENTRIES-1:0] 		  r_btb_valid;
    
    
    logic [($bits(jump_t)*WORDS_PER_CL)-1:0] r_jump_out;
@@ -238,16 +239,13 @@ endfunction // is_nop
    
 function jump_t predecode(logic [31:0] insn);
    jump_t j = NOT_CFLOW;
-   logic [5:0] 				 opcode = insn[31:26];
-   logic [4:0] 				 rt = insn[20:16];
-   logic [4:0] 				 rs = insn[25:21];
    
-   case(opcode)
+   case(insn[31:26])
      6'd0: /* rtype */
        begin
 	  if(insn[5:0] == 6'd8) /* jr */
 	    begin
-	       j = (rs == 5'd31) ? IS_JR_R31 : IS_JR;
+	       j = (insn[25:21] == 5'd31) ? IS_JR_R31 : IS_JR;
 	    end
 	  else if(insn[5:0] == 6'd9)
 	    begin
@@ -256,7 +254,7 @@ function jump_t predecode(logic [31:0] insn);
        end
      6'd1:
        begin
-	  case(rt)
+	  case(insn[20:16])
 	    'd0:
 	      begin
 		 j = IS_COND_BR;
@@ -292,7 +290,7 @@ function jump_t predecode(logic [31:0] insn);
        end
      6'd4:
        begin
-	  j = ((rs == 'd0) && (rt == 'd0)) ? IS_BR : IS_COND_BR;
+	  j = ((insn[25:21] == 'd0) && (insn[20:16] == 'd0)) ? IS_BR : IS_COND_BR;
        end
      6'd5:
        begin
@@ -362,7 +360,8 @@ endfunction
                              INJECT_RELOAD = 'd3,
 			     RELOAD_TURNAROUND = 'd4,
                              FLUSH_CACHE = 'd5,
-			     WAIT_FOR_NOT_FULL = 'd6
+			     WAIT_FOR_NOT_FULL = 'd6,
+			     INIT_PHT = 'd7
 			    } state_t;
    
    logic [(`M_WIDTH-1):0] r_pc, n_pc, r_miss_pc, n_miss_pc;
@@ -392,6 +391,11 @@ endfunction
    logic [2:0] 		  t_branch_cnt;
    logic [4:0] 		  t_branch_marker, t_spec_branch_marker;
    logic [2:0] 		  t_first_branch;
+
+   logic 		  t_init_pht;
+   logic [`LG_PHT_SZ-1:0] r_init_pht_idx, n_init_pht_idx;
+   
+
    
    //always_ff@(negedge clk)
    //begin
@@ -531,6 +535,18 @@ endfunction
 	  end
      end // always_ff@ (posedge clk)
 
+   always_ff@(posedge clk)
+     begin
+	if(reset) 
+	  begin
+	     r_btb_valid <= 'd0;
+	  end
+	else if(restart_valid && restart_src_is_indirect)
+	  begin
+	     r_btb_valid[restart_src_pc[(`LG_BTB_SZ+1):2]] <= 1'b1;
+	  end
+     end // always_ff@ (posedge clk)
+
    
    always_ff@(posedge clk)
      begin
@@ -542,7 +558,9 @@ endfunction
 
    always_ff@(posedge clk)
      begin
-	r_btb_pc <= reset ? 'd0 : r_btb[n_cache_pc[(`LG_BTB_SZ+1):2]];;
+	r_btb_pc <= reset ? 'd0 : 
+		    r_btb_valid[n_cache_pc[(`LG_BTB_SZ+1):2]] ? r_btb[n_cache_pc[(`LG_BTB_SZ+1):2]] : 32'd0;
+	
      end
 
       
@@ -626,12 +644,23 @@ endfunction
 	t_update_spec_hist = 1'b0;
 	t_is_call = 1'b0;
 	t_is_ret = 1'b0;
+	t_init_pht = 1'b0;
+	n_init_pht_idx = r_init_pht_idx;
 	
 	case(r_state)
 	  INITIALIZE:
 	    begin
-	       n_state = FLUSH_CACHE;
-	       t_cache_idx = 0;
+	       n_state = INIT_PHT;
+	    end
+	  INIT_PHT:
+	    begin
+	       t_init_pht = 1'b1;
+	       n_init_pht_idx = r_init_pht_idx + 'd1;
+	       if(r_init_pht_idx == (PHT_ENTRIES-1))
+		 begin
+		    n_state = FLUSH_CACHE;	       
+		    t_cache_idx = 0;
+		 end
 	    end
 	  IDLE:
 	    begin
@@ -1054,9 +1083,9 @@ endfunction
       .clk(clk),
       .rd_addr0(n_pht_idx),
       .rd_addr1(branch_pht_idx),
-      .wr_addr(r_pht_update_idx),
-      .wr_data(t_pht_val),
-      .wr_en(t_do_pht_wr),
+      .wr_addr(t_init_pht ? r_init_pht_idx : r_pht_update_idx),
+      .wr_data(t_init_pht ? 2'd1 : t_pht_val),
+      .wr_en(t_init_pht || t_do_pht_wr),
       .rd_data0(r_pht_out),
       .rd_data1(r_pht_update_out)
       );
@@ -1186,6 +1215,7 @@ endfunction
 	if(reset)
 	  begin
 	     r_state <= INITIALIZE;
+	     r_init_pht_idx <= 'd0;
 	     r_pc <= 'd0;
 	     r_miss_pc <= 'd0;
 	     r_cache_pc <= 'd0;
@@ -1216,6 +1246,7 @@ endfunction
 	else
 	  begin
 	     r_state <= n_state;
+	     r_init_pht_idx <= n_init_pht_idx;
 	     r_pc <= n_pc;
 	     r_miss_pc <= n_miss_pc;
 	     r_cache_pc <= n_cache_pc;
