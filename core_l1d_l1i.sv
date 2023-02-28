@@ -196,19 +196,16 @@ module core_l1d_l1i(clk,
 	    begin
 	       if(flush_req_l1i && flush_req_l1d)
 		 begin
-		    $display("flush l1d &&  l1i");
 		    n_flush_state = WAIT_FOR_L1D_L1I;
 		    n_flush = 1'b1;
 		 end
 	       else if(flush_req_l1i && !flush_req_l1d)
 		 begin
-		    $display("just flush l1i");
 		    n_flush_state = GOT_L1D;
 		    n_flush = 1'b1;
 		 end
 	       else if(!flush_req_l1i && flush_req_l1d)
 		 begin
-		    $display("just flush l1d");
 		    n_flush_state = GOT_L1I;
 		    n_flush = 1'b1;
 		 end
