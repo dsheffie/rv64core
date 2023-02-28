@@ -140,7 +140,7 @@ module core_l1d_l1i(clk,
    logic 				  head_of_rob_ptr_valid;   
    logic [`LG_ROB_ENTRIES-1:0] 		  head_of_rob_ptr;
 
-   logic 				  flush_req;
+   logic 				  flush_req_l1i, flush_req_l1d;
    logic 				  flush_cl_req;
    logic [`M_WIDTH-1:0] 		  flush_cl_addr;
    logic 				  l1d_flush_complete;
@@ -194,11 +194,24 @@ module core_l1d_l1i(clk,
 	case(r_flush_state)
 	  FLUSH_IDLE:
 	    begin
-	       if(flush_req)
+	       if(flush_req_l1i && flush_req_l1d)
 		 begin
+		    $display("flush l1d &&  l1i");
 		    n_flush_state = WAIT_FOR_L1D_L1I;
 		    n_flush = 1'b1;
-		 end 
+		 end
+	       else if(flush_req_l1i && !flush_req_l1d)
+		 begin
+		    $display("just flush l1i");
+		    n_flush_state = GOT_L1D;
+		    n_flush = 1'b1;
+		 end
+	       else if(!flush_req_l1i && flush_req_l1d)
+		 begin
+		    $display("just flush l1d");
+		    n_flush_state = GOT_L1I;
+		    n_flush = 1'b1;
+		 end
 	    end
 	  WAIT_FOR_L1D_L1I:
 	    begin
@@ -379,7 +392,7 @@ module core_l1d_l1i(clk,
 	       .memq_empty(memq_empty),
 	       .drain_ds_complete(drain_ds_complete),
 	       .dead_rob_mask(dead_rob_mask),
-	       .flush_req(flush_req),
+	       .flush_req(flush_req_l1d),
 	       .flush_cl_req(flush_cl_req),
 	       .flush_cl_addr(flush_cl_addr),
 	       .flush_complete(l1d_flush_complete),
@@ -408,7 +421,7 @@ module core_l1d_l1i(clk,
    l1i icache(
 	      .clk(clk),
 	      .reset(reset),
-	      .flush_req(flush_req),
+	      .flush_req(flush_req_l1i),
 	      .flush_complete(l1i_flush_complete),
 	      .restart_pc(restart_pc),
 	      .restart_src_pc(restart_src_pc),
@@ -453,7 +466,8 @@ module core_l1d_l1i(clk,
 	     .head_of_rob_ptr(head_of_rob_ptr),
 	     .resume_pc(resume_pc),
 	     .ready_for_resume(ready_for_resume),  
-	     .flush_req(flush_req),
+	     .flush_req_l1d(flush_req_l1d),
+	     .flush_req_l1i(flush_req_l1i),	     
 	     .flush_cl_req(flush_cl_req),
 	     .flush_cl_addr(flush_cl_addr),	     
 	     .l1d_flush_complete(l1d_flush_complete),

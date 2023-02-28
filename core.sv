@@ -41,7 +41,8 @@ module core(clk,
 	    dead_rob_mask,
 	    resume_pc,
 	    ready_for_resume,
-	    flush_req,
+	    flush_req_l1d,
+	    flush_req_l1i,
 	    flush_cl_req,
 	    flush_cl_addr,
 	    l1d_flush_complete,
@@ -107,7 +108,8 @@ module core(clk,
    
    input logic [(`M_WIDTH-1):0] resume_pc;
    output logic 		ready_for_resume;
-   output logic flush_req;
+   output logic 		flush_req_l1d;
+   output logic 		flush_req_l1i;
    output logic flush_cl_req;
    output logic [(`M_WIDTH-1):0] flush_cl_addr;
    input logic 	l1d_flush_complete;
@@ -332,7 +334,8 @@ module core(clk,
    logic [(`M_WIDTH-1):0]    r_monitor_rsp_data, n_monitor_rsp_data;
 
    logic 		     n_machine_clr, r_machine_clr;
-   logic 		     n_flush_req, r_flush_req;
+   logic 		     n_flush_req_l1d, r_flush_req_l1d;
+   logic 		     n_flush_req_l1i, r_flush_req_l1i;
    logic 		     n_flush_cl_req, r_flush_cl_req;
    logic [(`M_WIDTH-1):0]    n_flush_cl_addr, r_flush_cl_addr;
    logic 		     r_ds_done, n_ds_done;
@@ -376,7 +379,8 @@ module core(clk,
    assign ready_for_resume = r_ready_for_resume;
    assign head_of_rob_ptr_valid = (r_state == ACTIVE) || (r_state==DRAIN) && !r_ds_done;
    assign head_of_rob_ptr = r_rob_head_ptr[`LG_ROB_ENTRIES-1:0];
-   assign flush_req = r_flush_req;
+   assign flush_req_l1d = r_flush_req_l1d;
+   assign flush_req_l1i = r_flush_req_l1i;
    assign flush_cl_req = r_flush_cl_req;
    assign flush_cl_addr = r_flush_cl_addr;
    
@@ -444,7 +448,8 @@ module core(clk,
      begin
 	if(reset)
 	  begin
-	     r_flush_req <= 1'b0;
+	     r_flush_req_l1i <= 1'b0;
+	     r_flush_req_l1d <= 1'b0;
 	     r_flush_cl_req <= 1'b0;
 	     r_flush_cl_addr <= 'd0;
 	     r_restart_pc <= 'd0;
@@ -471,7 +476,8 @@ module core(clk,
 	  end
 	else
 	  begin
-	     r_flush_req <= n_flush_req;
+	     r_flush_req_l1d <= n_flush_req_l1d;
+	     r_flush_req_l1i <= n_flush_req_l1i;
 	     r_flush_cl_req <= n_flush_cl_req;
 	     r_flush_cl_addr <= n_flush_cl_addr;
 	     r_restart_pc <= n_restart_pc;
@@ -744,7 +750,8 @@ module core(clk,
 		       t_uop2.op == II);
 	
 	n_ds_done = r_ds_done;
-	n_flush_req = 1'b0;
+	n_flush_req_l1d = 1'b0;
+	n_flush_req_l1i = 1'b0;
 	n_flush_cl_req = 1'b0;
 	n_flush_cl_addr = r_flush_cl_addr;
 	n_got_break = r_got_break;
@@ -792,14 +799,16 @@ module core(clk,
 			 if(t_rob_head.is_break)
 			   begin
 			      n_got_break = 1'b1;
-			      n_flush_req = 1'b1;
+			      n_flush_req_l1i = 1'b1;
+			      n_flush_req_l1d = 1'b1;
 			      n_cause = 5'd9;
 			      n_state = WRITE_EPC;
 			   end
 			 else if(t_rob_head.is_ii)
 			   begin
 			      n_got_ud = 1'b1;
-			      n_flush_req = 1'b1;
+			      n_flush_req_l1i = 1'b1;
+			      n_flush_req_l1d = 1'b1;			      
 			      n_cause = 5'd10;
 			      n_state = WRITE_EPC;
 			   end
@@ -891,7 +900,8 @@ module core(clk,
 				  end
 				default:
 				  begin
-				     n_flush_req = 1'b1;
+				     n_flush_req_l1i = 1'b0;
+				     n_flush_req_l1d = 1'b1;			      				     
 				     n_state = MONITOR_FLUSH_CACHE;
 				  end
 			      endcase // case (t_uop.imm)
@@ -1000,7 +1010,7 @@ module core(clk,
 	  MONITOR_FLUSH_CACHE:
 	    begin
 	       //$display("%d : %b %b", r_cycle, n_l1i_flush_complete, n_l1d_flush_complete);
-	       if(n_l1i_flush_complete && n_l1d_flush_complete)
+	       if(/*n_l1i_flush_complete &&*/ n_l1d_flush_complete)
 		 begin
 		    n_state = HANDLE_MONITOR;
 		    n_l1i_flush_complete = 1'b0;
