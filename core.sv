@@ -341,6 +341,8 @@ module core(clk,
    logic 		     r_ds_done, n_ds_done;
    
    logic 		     t_can_retire_rob_head;
+   logic 		     t_faulted_head_and_serializing_delay;
+   
    
    logic [`LG_ROB_ENTRIES-1:0] n_delayslot_rob_ptr, r_delayslot_rob_ptr;
    
@@ -361,7 +363,9 @@ module core(clk,
 			     WRITE_EPC,
 			     WRITE_CAUSE,
 			     WRITE_BADVADDR,
-			     EXCEPTION_DRAIN
+			     EXCEPTION_DRAIN,
+			     SERIALIZE_IN_FAULTED_DELAY_SLOT,
+			     WAIT_FOR_SERIALIZE_IN_FAULTED_DELAY_SLOT
 			     } state_t;
    
    state_t r_state, n_state;
@@ -647,9 +651,9 @@ module core(clk,
 `ifdef DUMP_ROB
    always_ff@(negedge clk)
      begin
-	if(r_cycle >= 'd520401)
+	if(1)
 	  begin
-	     $display("cycle %d : state = %d, alu complete %b, mem complete %b,head_ptr %d, inflight %d, complete %b,  can_retire_rob_head %b, head pc %x, empty %b, full %b", 
+	     $display("cycle %d : state = %d, alu complete %b, mem complete %b,head_ptr %d, inflight %d, complete %b,  can_retire_rob_head %b, t_faulted_head_and_serializing_delay %b, head pc %x, empty %b, full %b", 
 		      r_cycle,
 		      r_state,
 		      t_complete_valid_1,
@@ -658,6 +662,7 @@ module core(clk,
 		      r_rob_inflight,
 		      t_rob_head_complete && !t_rob_empty, 
 		      t_can_retire_rob_head,
+		      t_faulted_head_and_serializing_delay,
 		      t_rob_head.pc,
 		      t_rob_empty, 
 		      t_rob_full);
@@ -773,10 +778,13 @@ module core(clk,
 	  end	
 	
 	t_can_retire_rob_head = 1'b0;
+	t_faulted_head_and_serializing_delay = 1'b0;
 	
 	if(t_rob_head_complete && !t_rob_empty)
 	  begin
 	     t_can_retire_rob_head = (t_rob_head.has_delay_slot || t_rob_head.has_nullifying_delay_slot) && t_rob_head.faulted ? !t_rob_next_empty : 1'b1;
+	     t_faulted_head_and_serializing_delay = (t_rob_head.has_delay_slot || t_rob_head.has_nullifying_delay_slot) && t_rob_head.faulted && !t_dq_empty 
+						    && t_rob_next_empty && t_uop.serializing_op;
 	  end
 
 	       
@@ -791,7 +799,11 @@ module core(clk,
 		    n_ds_done = 1'b1;
 		    t_clr_extern_irq = 1'b1;
 		    n_restart_valid = 1'b1;
-		 end	       
+		 end
+	       else if(t_faulted_head_and_serializing_delay)
+		 begin
+		    n_state = SERIALIZE_IN_FAULTED_DELAY_SLOT;
+		 end
 	       else if(t_can_retire_rob_head)
 		 begin
 		    if(t_rob_head.faulted)
@@ -832,6 +844,11 @@ module core(clk,
 		      end // if (t_rob_head.faulted)
 		    else if(!t_dq_empty)
 		      begin
+			// if(t_faulted_head_and_serializing_delay)
+			 //begin
+			 //$display("situation where we need to allocate after fault due to serializing insn");
+			 //end
+			 
 			 if(t_uop.serializing_op)
 			   begin
 			      if(/*r_inflight*/t_rob_empty)
@@ -937,8 +954,8 @@ module core(clk,
 	    end // case: ACTIVE
 	  DRAIN:	    
 	    begin
-	       //$display("cycle %d : r_rob_inflight = %b, r_ds_done = %b, t_rob_head_complete = %b", 
-	       //r_cycle, r_rob_inflight, r_ds_done, t_rob_head_complete);
+	       //$display("cycle %d : r_rob_inflight = %b, r_ds_done = %b, t_rob_head_complete = %b, has delay slot", 
+	       //r_cycle, r_rob_inflight, r_ds_done, t_rob_head_complete, r_has_delay_slot);
 
 	       
 	       if(r_has_nullifying_delay_slot && t_rob_head_complete && !r_ds_done)
@@ -1105,6 +1122,35 @@ module core(clk,
 	       t_exception_wr_cpr0_data = {32'd0, t_rob_head.data};
 	       n_state = WRITE_EPC;
 	    end
+	  SERIALIZE_IN_FAULTED_DELAY_SLOT:
+	    begin
+	       t_alloc = !t_rob_full && !t_uq_full 
+			 && (r_prf_free != 'd0) 
+			   && !t_dq_empty;
+	       n_state = t_alloc ? WAIT_FOR_SERIALIZE_IN_FAULTED_DELAY_SLOT : 
+			 SERIALIZE_IN_FAULTED_DELAY_SLOT;
+	    end
+	 WAIT_FOR_SERIALIZE_IN_FAULTED_DELAY_SLOT:
+	   begin
+	      if(t_rob_next_head_complete)
+		begin
+		   if(t_rob_next_head.faulted)
+		     begin
+			 if(t_rob_next_head.is_break)
+			   begin
+			      n_got_break = 1'b1;
+			      n_flush_req_l1i = 1'b1;
+			      n_flush_req_l1d = 1'b1;
+			      n_cause = 5'd9;
+			      n_state = WRITE_EPC;
+			   end
+		     end
+		   else
+		     begin
+			n_state = ACTIVE;
+		     end
+		end
+	   end
 	  default:
 	    begin
 	    end
