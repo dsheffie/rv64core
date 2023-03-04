@@ -55,6 +55,7 @@ public:
     return error;
   }
   uint8_t *get_raw_ptr(uint64_t byte_addr) {
+    byte_addr &= ((1UL<<32) - 1);
     return mem+byte_addr;
   }
   template <typename T>
