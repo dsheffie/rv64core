@@ -343,9 +343,6 @@ module core(clk,
    logic 		     t_can_retire_rob_head;
    logic 		     t_faulted_head_and_serializing_delay;
    
-   
-   logic [`LG_ROB_ENTRIES-1:0] n_delayslot_rob_ptr, r_delayslot_rob_ptr;
-   
    typedef enum logic [4:0] {
 			     FLUSH_FOR_HALT,			     
 			     HALT,
@@ -516,7 +513,6 @@ module core(clk,
 	     r_state <= FLUSH_FOR_HALT;
 	     r_restart_cycles <= 'd0;
 	     r_machine_clr <= 1'b0;
-	     r_delayslot_rob_ptr <= 'd0;
 	     r_got_restart_ack <= 1'b0;
 	     r_cause <= 5'd0;
 	  end
@@ -525,7 +521,6 @@ module core(clk,
 	     r_state <= n_state;
 	     r_restart_cycles <= n_restart_cycles;
 	     r_machine_clr <= n_machine_clr;
-	     r_delayslot_rob_ptr <= n_delayslot_rob_ptr;
 	     r_got_restart_ack <= n_got_restart_ack;
 	     r_cause <= n_cause;
 	  end
@@ -712,7 +707,6 @@ module core(clk,
 	n_cause = r_cause;
 	
 	n_machine_clr = r_machine_clr;
-	n_delayslot_rob_ptr = r_delayslot_rob_ptr;
 	t_alloc = 1'b0;
 	t_alloc_two = 1'b0;
 	t_possible_to_alloc = 1'b0;
@@ -832,7 +826,6 @@ module core(clk,
 			      n_restart_valid = 1'b1;
 			   end // else: !if(t_rob_head.is_ii)
 			 n_machine_clr = 1'b1;
-			 n_delayslot_rob_ptr = r_rob_next_head_ptr[`LG_ROB_ENTRIES-1:0];
 			 n_restart_pc = t_rob_head.target_pc;
 			 n_restart_src_pc = t_rob_head.pc;
 			 n_restart_src_is_indirect = t_rob_head.is_indirect && !t_rob_head.is_ret;
@@ -1897,7 +1890,6 @@ module core(clk,
 	   .ds_done(r_ds_done),
 	   .machine_clr(r_machine_clr),
 	   .restart_complete(t_restart_complete),
-	   .delayslot_rob_ptr(r_delayslot_rob_ptr),
 	   .cpr0_status_reg(t_cpr0_status_reg),
 	   .mq_wait(mq_wait),
 	   .uq_wait(uq_wait),

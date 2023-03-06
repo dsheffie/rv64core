@@ -25,7 +25,6 @@ module exec(clk,
 	    ds_done,
 	    machine_clr,
 	    restart_complete,
-	    delayslot_rob_ptr,
 	    cpr0_status_reg,
 	    uq_wait,
 	    mq_wait,
@@ -58,7 +57,6 @@ module exec(clk,
    input logic ds_done;
    input logic machine_clr;
    input logic restart_complete;
-   input logic [`LG_ROB_ENTRIES-1:0] delayslot_rob_ptr;
    output logic [(`M_WIDTH-1):0]     cpr0_status_reg;
    
    localparam N_ROB_ENTRIES = (1<<`LG_ROB_ENTRIES);   
