@@ -225,7 +225,7 @@ module l1i(clk,
 
    output logic [(`M_WIDTH-1):0] mem_req_addr;
    output logic [`LG_MEM_TAG_ENTRIES-1:0] mem_req_tag;
-   output logic [4:0] 			  mem_req_opcode;
+   output logic [3:0] 			  mem_req_opcode;
    input logic 				  mem_rsp_valid;
    input logic [L1I_CL_LEN_BITS-1:0] 	  mem_rsp_load_data;
    output logic [63:0] 			  cache_accesses;

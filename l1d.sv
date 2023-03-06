@@ -85,7 +85,7 @@ module l1d(clk,
    output logic [(`M_WIDTH-1):0] mem_req_addr;
    output logic [L1D_CL_LEN_BITS-1:0] mem_req_store_data;
    output logic [`LG_MEM_TAG_ENTRIES-1:0] mem_req_tag;
-   output logic [4:0] 		      mem_req_opcode;
+   output logic [3:0] 			  mem_req_opcode;
 
    input logic 				  mem_rsp_valid;
    input logic [L1D_CL_LEN_BITS-1:0] 	  mem_rsp_load_data;
@@ -142,20 +142,6 @@ function logic [31:0] select_cl32(logic [L1D_CL_LEN_BITS-1:0] cl, logic[LG_WORDS
 endfunction
       
 
-function logic non_mem_op(mem_op_t op);
-   logic 				 x;
-   case(op)
-     MEM_DEAD_ST:
-       x = 1'b1;
-     MEM_DEAD_LD:
-       x = 1'b1;
-     MEM_DEAD_SC:
-       x = 1'b1;
-     default:
-       x = 1'b0;
-   endcase // case (op)
-      return x;
-endfunction
    
    logic 				  r_got_req, r_last_wr, n_last_wr;
    logic 				  r_last_rd, n_last_rd;
@@ -243,7 +229,7 @@ endfunction
    logic 				  n_core_mem_rsp_valid, r_core_mem_rsp_valid;
    mem_rsp_t n_core_mem_rsp, r_core_mem_rsp;
       
-   mem_req_t n_req, r_req, t_req, tt_req;
+   mem_req_t n_req, r_req, t_req;
    mem_req_t n_req2, r_req2;
 
    mem_req_t r_mem_q[N_MQ_ENTRIES-1:0];
@@ -283,12 +269,12 @@ endfunction
    logic [(`M_WIDTH-1):0] r_mem_req_addr, n_mem_req_addr;
    logic [L1D_CL_LEN_BITS-1:0] r_mem_req_store_data, n_mem_req_store_data;
    
-   logic [4:0] r_mem_req_opcode, n_mem_req_opcode;
-   logic [63:0] 			 n_cache_accesses, r_cache_accesses;
-   logic [63:0] 			 n_cache_hits, r_cache_hits;
-   logic [63:0] 			 n_cache_hits_under_miss, r_cache_hits_under_miss;
-      
-   logic [63:0] 			 r_store_stalls, n_store_stalls;
+   logic [3:0] 		       r_mem_req_opcode, n_mem_req_opcode;
+   logic [63:0] 	       n_cache_accesses, r_cache_accesses;
+   logic [63:0] 	       n_cache_hits, r_cache_hits;
+   logic [63:0] 	       n_cache_hits_under_miss, r_cache_hits_under_miss;
+   
+   logic [63:0] 	       r_store_stalls, n_store_stalls;
    
    
    logic [31:0] 			 r_cycle;
@@ -389,12 +375,10 @@ endfunction
 	n_mq_head_ptr = r_mq_head_ptr;
 	n_mq_tail_ptr = r_mq_tail_ptr;
 	t_mq_tail_ptr_plus_one = r_mq_tail_ptr + 'd1;
-	tt_req = r_req2;
 	
 	if(t_push_miss)
 	  begin
 	     n_mq_tail_ptr = r_mq_tail_ptr + 'd1;
-	     tt_req.in_storebuf = t_incr_busy;
 	  end
 	
 	if(t_pop_mq)
@@ -419,8 +403,8 @@ endfunction
      begin
 	if(t_push_miss)
 	  begin
-	     r_mem_q[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0] ] <= tt_req;
-	     r_mq_addr[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]] <= tt_req.addr[IDX_STOP-1:IDX_START];
+	     r_mem_q[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0] ] <= r_req2;
+	     r_mq_addr[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]] <= r_req2.addr[IDX_STOP-1:IDX_START];
 	  end
      end
 
@@ -481,7 +465,7 @@ endfunction
       if(t_push_miss)
    	begin
 	   $display("pushing uuid %d rob ptr %d at cycle %d", 
-		    tt_req.uuid, tt_req.rob_ptr, r_cycle);  
+		    r_req2.uuid, r_req2.rob_ptr, r_cycle);  
 	end
       if(t_pop_mq)
 	begin
@@ -879,7 +863,6 @@ endfunction
 	       endcase // case (r_req.addr[1:0])
 	       t_rsp_dst_valid2 = r_req2.dst_valid & t_hit_cache2;	       
 	    end // case: MEM_LWL
-	  
 	  default:
 	    begin
 	    end
@@ -1244,11 +1227,7 @@ endfunction
 			 //ack early
 			 n_core_mem_rsp.dst_valid = 1'b0;
 			  
-			 if(r_req2.in_storebuf) 
-			   begin
-			    $display("hit store buf, was retry = %b", r_is_retry);
-			    $stop();
-			   end
+
 			 if(t_port2_hit_cache)
 			   begin
 			      n_cache_hits = r_cache_hits + 'd1;
@@ -1477,7 +1456,7 @@ endfunction
 		  n_last_wr2 = core_mem_req.is_store;
 		  n_last_rd2 = !core_mem_req.is_store;
 		  
-		  n_cache_accesses = non_mem_op(core_mem_req.op) ? r_cache_accesses : r_cache_accesses + 'd1;
+		  n_cache_accesses =  r_cache_accesses + 'd1;
 	       end // if (core_mem_req_valid &&...
 	       else if(r_flush_req && mem_q_empty && !(r_got_req && r_last_wr))
 		 begin

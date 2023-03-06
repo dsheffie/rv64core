@@ -67,25 +67,20 @@
 
 `define LG_BTB_SZ 7
 
-typedef enum logic [4:0] {
-   MEM_LB  = 5'd0,
-   MEM_LBU = 5'd1,
-   MEM_LH  = 5'd2,
-   MEM_LHU = 5'd3,
-   MEM_LW  = 5'd4,
-   MEM_SB  = 5'd5,
-   MEM_SH  = 5'd6,
-   MEM_SW  = 5'd7,
-   MEM_SWR = 5'd8,
-   MEM_SWL = 5'd9,
-   MEM_LWR = 5'd10,
-   MEM_LWL = 5'd11,
-   MEM_LL  = 5'd12,
-   MEM_SC  = 5'd13,
-   MEM_DEAD_LD = 5'd14,
-   MEM_DEAD_ST = 5'd15,
-   MEM_DEAD_SC = 5'd16,
-   MEM_NOP = 5'd27			  
+typedef enum logic [3:0] {
+   MEM_LB  = 4'd0,
+   MEM_LBU = 4'd1,
+   MEM_LH  = 4'd2,
+   MEM_LHU = 4'd3,
+   MEM_LW  = 4'd4,
+   MEM_SB  = 4'd5,
+   MEM_SH  = 4'd6,
+   MEM_SW  = 4'd7,
+   MEM_SWR = 4'd8,
+   MEM_SWL = 4'd9,
+   MEM_LWR = 4'd10,
+   MEM_LWL = 4'd11,
+   MEM_SC  = 4'd12
 } mem_op_t;
 
 /* MIPS R10000 exception ordering 

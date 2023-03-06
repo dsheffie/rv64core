@@ -57,10 +57,7 @@ typedef struct packed {
 
 typedef struct packed {
    logic [31:0] addr;
-   logic 	in_storebuf;
    logic 	is_store;
-   /* for merging */
-   logic 	lwc1_lo;
    mem_op_t op;
    logic [31:0] data;
    logic [`LG_ROB_ENTRIES-1:0] rob_ptr;

@@ -1280,16 +1280,14 @@ module exec(clk,
    wire [31:0] w_agu32;
    ppa32 agu (.A(w_mem_srcA), .B({{E_BITS{mem_uq.imm[15]}},mem_uq.imm}), .Y(w_agu32));
 
-   logic       t_mem_ready, t_mem_srcA_ready, t_mem_srcB_ready;
+   wire w_mem_srcA_ready = t_mem_uq.srcA_valid ? !r_prf_inflight[t_mem_uq.srcA] : 1'b1;
+   wire w_mem_srcB_ready = t_mem_uq.srcB_valid ? !r_prf_inflight[t_mem_uq.srcB] : 1'b1;
+
    logic       r_mem_ready;
    
    always_comb
      begin
-	t_mem_srcA_ready = t_mem_uq.srcA_valid ? !r_prf_inflight[t_mem_uq.srcA] : 1'b1;
-	t_mem_srcB_ready = t_mem_uq.srcB_valid ? !r_prf_inflight[t_mem_uq.srcB] : 
-			   1'b1;
-	t_mem_ready = (!t_mem_uq_empty) && (!(mem_q_next_full||mem_q_full)) && t_mem_srcA_ready && t_mem_srcB_ready && !t_flash_clear;
-	t_pop_mem_uq = (t_mem_uq_empty || t_flash_clear)  ? 1'b0 : t_mem_ready;	
+	t_pop_mem_uq = (!t_mem_uq_empty) && (!(mem_q_next_full||mem_q_full)) && w_mem_srcA_ready && w_mem_srcB_ready && !t_flash_clear; 
      end
 
    always_ff@(posedge clk)
@@ -1313,8 +1311,6 @@ module exec(clk,
 	t_mem_tail.dst_valid = 1'b0;
 	t_mem_tail.dst_ptr = mem_uq.dst;
 	t_mem_tail.is_store = 1'b0;
-	t_mem_tail.lwc1_lo = 1'b0;
-	t_mem_tail.in_storebuf = 1'b0;
 	
 	case(mem_uq.op)
 	  SB:
