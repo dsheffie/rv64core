@@ -754,7 +754,7 @@ module exec(clk,
      begin
 	if(t_push_mq)
 	  begin
-	     r_mem_q[r_mq_tail_ptr[`LG_MQ_ENTRIES-1:0]] = t_mem_tail;
+	     r_mem_q[r_mq_tail_ptr[`LG_MQ_ENTRIES-1:0]] <= t_mem_tail;
 	  end
      end
 

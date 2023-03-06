@@ -298,8 +298,8 @@ endfunction
    assign mem_req_opcode = r_mem_req_opcode;
    assign mem_req_valid = r_mem_req_valid;
 
-   assign core_mem_rsp_valid = n_core_mem_rsp_valid;
-   assign core_mem_rsp = n_core_mem_rsp;
+   assign core_mem_rsp_valid = r_core_mem_rsp_valid;
+   assign core_mem_rsp = r_core_mem_rsp;
    
    assign cache_accesses = r_cache_accesses;
    assign cache_hits = r_cache_hits;
