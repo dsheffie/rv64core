@@ -126,7 +126,7 @@ module exec(clk,
    
 
    logic 	t_pop_uq,t_pop_mem_uq;
-   logic 	t_push_mq;
+   logic 	r_mem_ready;
    
    
    localparam E_BITS = `M_WIDTH-16;
@@ -728,7 +728,7 @@ module exec(clk,
 	n_mq_tail_ptr = r_mq_tail_ptr;
 	n_mq_next_tail_ptr = r_mq_next_tail_ptr;
 	
-	if(t_push_mq)
+	if(r_mem_ready)
 	  begin
 	     n_mq_tail_ptr = r_mq_tail_ptr + 'd1;
 	     n_mq_next_tail_ptr = r_mq_next_tail_ptr + 'd1;
@@ -752,7 +752,7 @@ module exec(clk,
 
    always_ff@(posedge clk)
      begin
-	if(t_push_mq)
+	if(r_mem_ready)
 	  begin
 	     r_mem_q[r_mq_tail_ptr[`LG_MQ_ENTRIES-1:0]] <= t_mem_tail;
 	  end
@@ -1283,7 +1283,6 @@ module exec(clk,
    wire w_mem_srcA_ready = t_mem_uq.srcA_valid ? !r_prf_inflight[t_mem_uq.srcA] : 1'b1;
    wire w_mem_srcB_ready = t_mem_uq.srcB_valid ? !r_prf_inflight[t_mem_uq.srcB] : 1'b1;
 
-   logic       r_mem_ready;
    
    always_comb
      begin
@@ -1303,7 +1302,6 @@ module exec(clk,
    always_comb
      begin
 	t_mem_simm = {{E_BITS{mem_uq.imm[15]}},mem_uq.imm};
-	t_push_mq = r_mem_ready;
 	t_mem_tail.op = MEM_LW;
 	t_mem_tail.addr = w_agu32;
 	t_mem_tail.data = 32'd0;
