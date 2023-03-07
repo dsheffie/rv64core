@@ -208,14 +208,14 @@ module l1i(clk,
    input logic 	mem_req_ack;
    output logic mem_req_valid;
    
-   localparam L1I_NUM_SETS = 1 << `LG_L1D_NUM_SETS;
+   localparam L1I_NUM_SETS = 1 << `LG_L1I_NUM_SETS;
    localparam L1I_CL_LEN = 1 << `LG_L1D_CL_LEN;
    localparam L1I_CL_LEN_BITS = 1 << (`LG_L1D_CL_LEN + 3);
    localparam LG_WORDS_PER_CL = `LG_L1D_CL_LEN - 2;
    localparam WORDS_PER_CL = 1<<LG_WORDS_PER_CL;
-   localparam N_TAG_BITS = `M_WIDTH - `LG_L1D_NUM_SETS - `LG_L1D_CL_LEN;
+   localparam N_TAG_BITS = `M_WIDTH - `LG_L1I_NUM_SETS - `LG_L1D_CL_LEN;
    localparam IDX_START = `LG_L1D_CL_LEN;
-   localparam IDX_STOP  = `LG_L1D_CL_LEN + `LG_L1D_NUM_SETS;
+   localparam IDX_STOP  = `LG_L1D_CL_LEN + `LG_L1I_NUM_SETS;
    localparam WORD_START = 2;
    localparam WORD_STOP = WORD_START+LG_WORDS_PER_CL;
    localparam N_FQ_ENTRIES = 1 << `LG_FQ_ENTRIES;
@@ -248,7 +248,7 @@ module l1i(clk,
    
    logic [(4*WORDS_PER_CL)-1:0] 	  r_jump_out;
    
-   logic [`LG_L1D_NUM_SETS-1:0] 	    t_cache_idx, r_cache_idx;   
+   logic [`LG_L1I_NUM_SETS-1:0] 	    t_cache_idx, r_cache_idx;   
    logic [L1I_CL_LEN_BITS-1:0] 		    r_array_out;   
    logic 				    r_mem_req_valid, n_mem_req_valid;
    logic [(`M_WIDTH-1):0] 		    r_mem_req_addr, n_mem_req_addr;
@@ -946,7 +946,7 @@ endfunction // is_nop
      end // always_comb
    
    logic t_wr_valid_ram_en, t_valid_ram_value;
-   logic [`LG_L1D_NUM_SETS-1:0] t_valid_ram_idx;
+   logic [`LG_L1I_NUM_SETS-1:0] t_valid_ram_idx;
 
    always_comb
      begin
@@ -1056,7 +1056,7 @@ endfunction // is_nop
       .rd_data1(r_pht_update_out)
       );
          
-   ram1r1w #(.WIDTH(1), .LG_DEPTH(`LG_L1D_NUM_SETS))
+   ram1r1w #(.WIDTH(1), .LG_DEPTH(`LG_L1I_NUM_SETS))
    valid_array (
 	   .clk(clk),
 	   .rd_addr(t_cache_idx),
@@ -1067,7 +1067,7 @@ endfunction // is_nop
 	   );
 
    
-   ram1r1w #(.WIDTH(N_TAG_BITS), .LG_DEPTH(`LG_L1D_NUM_SETS))
+   ram1r1w #(.WIDTH(N_TAG_BITS), .LG_DEPTH(`LG_L1I_NUM_SETS))
    tag_array (
 	   .clk(clk),
 	   .rd_addr(t_cache_idx),
@@ -1077,7 +1077,7 @@ endfunction // is_nop
 	   .rd_data(r_tag_out)
 	   );
    
-   ram1r1w #(.WIDTH(L1I_CL_LEN_BITS), .LG_DEPTH(`LG_L1D_NUM_SETS)) 
+   ram1r1w #(.WIDTH(L1I_CL_LEN_BITS), .LG_DEPTH(`LG_L1I_NUM_SETS)) 
    insn_array (
 	   .clk(clk),
 	   .rd_addr(t_cache_idx),
@@ -1097,7 +1097,7 @@ endfunction // is_nop
    predecode pd3 (.insn_(mem_rsp_load_data[127:96]), .pd(w_pd3));   
    
    
-   ram1r1w #(.WIDTH(4*WORDS_PER_CL), .LG_DEPTH(`LG_L1D_NUM_SETS))
+   ram1r1w #(.WIDTH(4*WORDS_PER_CL), .LG_DEPTH(`LG_L1I_NUM_SETS))
    pd_data (
 	    .clk(clk),
 	    .rd_addr(t_cache_idx),
