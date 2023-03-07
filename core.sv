@@ -362,7 +362,8 @@ module core(clk,
 			     WRITE_BADVADDR,
 			     EXCEPTION_DRAIN,
 			     SERIALIZE_IN_FAULTED_DELAY_SLOT,
-			     WAIT_FOR_SERIALIZE_IN_FAULTED_DELAY_SLOT
+			     WAIT_FOR_SERIALIZE_IN_FAULTED_DELAY_SLOT,
+			     GET_TICKS
 			     } state_t;
    
    state_t r_state, n_state;
@@ -895,7 +896,7 @@ module core(clk,
 			      case(t_uop.imm)
 				'd50: /* get cycle */
 				  begin
-				     n_state = HANDLE_MONITOR;
+				     n_state = GET_TICKS;
 				  end
 				'd52: /* flush line in data cache */
 				  begin
@@ -1026,6 +1027,11 @@ module core(clk,
 		    n_l1i_flush_complete = 1'b0;
 		    n_l1d_flush_complete = 1'b0;
 		 end
+	    end
+	  GET_TICKS:
+	    begin
+	       n_state = ALLOC_FOR_MONITOR;
+	       n_monitor_rsp_data = r_cycle[31:0];
 	    end
 	  HANDLE_MONITOR:
 	    begin
