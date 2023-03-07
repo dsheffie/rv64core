@@ -2,8 +2,6 @@
 `include "rob.vh"
 `include "uop.vh"
 
-`define BRANCH_DEBUG 1
-`define CACHE_STATS 1
 module core_l1d_l1i(clk, 
 		    reset,
 		    extern_irq,
@@ -32,18 +30,14 @@ module core_l1d_l1i(clk,
 		    monitor_req_valid,
 		    monitor_rsp_valid,
 		    monitor_rsp_data,
-`ifdef BRANCH_DEBUG
 		    branch_pc,
 		    branch_pc_valid,		    
 		    branch_fault,
-`endif
-`ifdef CACHE_STATS
 		    l1i_cache_accesses,
 		    l1i_cache_hits,
 		    l1d_cache_accesses,
 		    l1d_cache_hits,
 		    l1d_cache_hits_under_miss,
-`endif
 		    got_break,
 		    got_ud,
 		    inflight);
@@ -73,22 +67,18 @@ module core_l1d_l1i(clk,
    logic 			t_branch_pc_valid;
    logic 			t_branch_fault;
 
-`ifdef BRANCH_DEBUG
    output logic [(`M_WIDTH-1):0] branch_pc;
    output logic 		 branch_pc_valid;
    output logic 		 branch_fault;
    assign branch_pc = t_branch_pc;
    assign branch_pc_valid = t_branch_pc_valid;   
    assign branch_fault = t_branch_fault;
-`endif
 
-`ifdef CACHE_STATS
    output logic [63:0] 			l1i_cache_accesses;
    output logic [63:0] 			l1i_cache_hits;
    output logic [63:0] 			l1d_cache_accesses;
    output logic [63:0] 			l1d_cache_hits;
    output logic [63:0] 			l1d_cache_hits_under_miss;
-`endif
    
    /* mem port */
    output logic 		 mem_req_valid;
@@ -164,14 +154,6 @@ module core_l1d_l1i(clk,
    logic 	memq_empty;   
    assign in_flush_mode = r_flush;
 
-
-// `ifdef VERILATOR
-//    initial 
-//      begin
-// 	$dumpfile("l1d.vcd");
-// 	$dumpvars();
-//      end
-// `endif
 
  
    always_ff@(posedge clk)
@@ -251,14 +233,11 @@ module core_l1d_l1i(clk,
       GNT_L1I = 'd2			    
    } state_t;
 
-`ifdef CACHE_STATS
    assign l1d_cache_accesses = t_l1d_cache_accesses;
    assign l1d_cache_hits = t_l1d_cache_hits;
    assign l1d_cache_hits_under_miss = t_l1d_cache_hits_under_miss;
    assign l1i_cache_accesses = t_l1i_cache_accesses;
    assign l1i_cache_hits = t_l1i_cache_hits;
-`endif
-   
    
    logic 				  l1d_mem_req_ack;
    logic 				  l1d_mem_req_valid;
