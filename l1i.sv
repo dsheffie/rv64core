@@ -132,7 +132,17 @@ module predecode(insn_, pd);
 endmodule // predecode
 
 
+module compute_pht_idx(pc, hist, idx);
+   input logic [31:0] pc;
+   input logic [`GBL_HIST_LEN-1:0] hist;
+   output logic [`LG_PHT_SZ-1:0]   idx;
 
+   wire [31:0] 			   w_fold_0 = hist[31:0] ^ hist[63:32];
+   wire [15:0] 			   w_fold_1 = w_fold_0[31:16] ^ w_fold_0[15:0];
+
+   assign idx = w_fold_1  ^ pc[18:3];
+   
+endmodule
 
 module l1i(clk,
 	   reset,
@@ -150,7 +160,9 @@ module l1i(clk,
 	   retire_reg_data,
 	   retire_reg_valid,
 	   branch_pc_valid,
+	   branch_pc,
 	   took_branch,
+	   branch_fault,
 	   branch_pht_idx,
 	   
 	   insn,
@@ -194,8 +206,13 @@ module l1i(clk,
    input logic 			retire_reg_valid;
 
    input logic 			branch_pc_valid;
+   input logic [31:0] 		branch_pc;
+   
    input logic 			took_branch;
+   input logic 			branch_fault;
+   
    input logic [`LG_PHT_SZ-1:0] branch_pht_idx;
+
    
    output insn_fetch_t insn;
    output logic insn_valid;
@@ -240,6 +257,8 @@ module l1i(clk,
    
    logic [`LG_PHT_SZ-1:0] 		  n_pht_idx,r_pht_idx;
    logic [`LG_PHT_SZ-1:0] 		  r_pht_update_idx;
+   logic [`LG_PHT_SZ-1:0] 		  t_retire_pht_idx;
+   
    logic 				  r_take_br;
    
    logic [(`M_WIDTH-1):0] 		  r_btb[BTB_ENTRIES-1:0];
@@ -277,8 +296,9 @@ module l1i(clk,
    
    logic [`GBL_HIST_LEN-1:0] 	     n_arch_gbl_hist, r_arch_gbl_hist;
    logic [`GBL_HIST_LEN-1:0] 	     n_spec_gbl_hist, r_spec_gbl_hist;
-   logic [`GBL_HIST_LEN-1:0] 	     t_xor_pc_hist;
 
+   logic [`GBL_HIST_LEN-1:0] 	     r_last_spec_gbl_hist;
+   
 
    logic [LG_WORDS_PER_CL-1:0] 	     t_insn_idx;
    
@@ -373,7 +393,7 @@ endfunction // is_nop
    
    localparam SEXT = `M_WIDTH-16;
    insn_fetch_t t_insn, t_insn2, t_insn3, t_insn4;
-   logic [3:0] t_pd;
+   logic [3:0] t_pd, r_pd;
 
    
    logic [63:0] 	  r_cycle;
@@ -948,30 +968,44 @@ endfunction // is_nop
    logic t_wr_valid_ram_en, t_valid_ram_value;
    logic [`LG_L1I_NUM_SETS-1:0] t_valid_ram_idx;
 
+   
+   compute_pht_idx cpi0 (.pc(n_cache_pc), .hist(r_spec_gbl_hist), .idx(n_pht_idx));
+
+   
+
    always_comb
      begin
-	t_wr_valid_ram_en = mem_rsp_valid || r_state == FLUSH_CACHE;
-	t_valid_ram_value = (r_state != FLUSH_CACHE);
-	t_valid_ram_idx = mem_rsp_valid ? r_mem_req_addr[IDX_STOP-1:IDX_START] : r_cache_idx;
-	t_xor_pc_hist = {n_cache_pc[`GBL_HIST_LEN-7:2], 8'd0} ^ r_spec_gbl_hist;
-	n_pht_idx = t_xor_pc_hist[`LG_PHT_SZ-1:0];
+	t_retire_pht_idx = branch_pht_idx;
      end
 
    
    always_comb
      begin
-	//t_xor_pc_hist = {n_cache_pc[`GBL_HIST_LEN-7:2], 8'd0} ^ r_spec_gbl_hist;	
-	//n_pht_idx = t_xor_pc_hist[31:16] ^  t_xor_pc_hist[15:0];
-	//n_pht_idx = t_xor_pc_hist[`LG_PHT_SZ-1:0];
+	t_wr_valid_ram_en = mem_rsp_valid || r_state == FLUSH_CACHE;
+	t_valid_ram_value = (r_state != FLUSH_CACHE);
+	t_valid_ram_idx = mem_rsp_valid ? r_mem_req_addr[IDX_STOP-1:IDX_START] : r_cache_idx;
+     end
 
-	//n_pht_idx = r_spec_gbl_hist[15:0];
-	
-	//n_pht_idx = (n_cache_pc[15:0] ^ r_spec_gbl_hist[15:0]) ^
-        //(n_cache_pc[31:16] ^ r_spec_gbl_hist[31:16]);
-	
+      
+     // always_ff@(negedge clk)
+     //   begin
+     // 	  if((t_push_insn | t_push_insn2 | t_push_insn3 | t_push_insn4) && (t_pd != 'd0))
+     // 	    begin
+     // 	       $display("spec %x : cycle %d n_pht_idx = %d, hist = %b, pred = %b",
+     // 			t_insn.pc, r_cycle, t_insn.pht_idx, r_last_spec_gbl_hist, t_insn.pred);
+     // 	    end
+     // 	  if(branch_pc_valid)
+     // 	    begin
+     // 	       $display("arch %x : cycle %d n_pht_idx = %d, hist = %b, took branch %b, mispred %b, comp_pht %d", 
+     // 			branch_pc, r_cycle, branch_pht_idx, n_arch_gbl_hist, took_branch, branch_fault, t_retire_pht_idx);
+     // 	    end
+     //   end
+   
+   always_comb
+     begin
 	t_pht_val = r_pht_update_out;
 	t_do_pht_wr = r_pht_update;
-	
+
 	case(r_pht_update_out)
 	  2'd0:
 	    begin
@@ -1011,16 +1045,20 @@ endfunction // is_nop
 	if(reset)
 	  begin
 	     r_pht_idx <= 'd0;
+	     r_last_spec_gbl_hist <= 'd0;
 	     r_pht_update <= 1'b0;
 	     r_pht_update_idx <= 'd0;
 	     r_take_br <= 1'b0;
+	     r_pd <= 'd0;
 	  end
 	else
 	  begin
 	     r_pht_idx <= n_pht_idx;
+	     r_last_spec_gbl_hist <= r_spec_gbl_hist;
 	     r_pht_update <= branch_pc_valid;
-	     r_pht_update_idx <= branch_pht_idx;
+	     r_pht_update_idx <= t_retire_pht_idx;
 	     r_take_br <= took_branch;
+	     r_pd <= t_pd;
 	  end
      end // always_ff@
 
@@ -1048,7 +1086,7 @@ endfunction // is_nop
      (
       .clk(clk),
       .rd_addr0(n_pht_idx),
-      .rd_addr1(branch_pht_idx),
+      .rd_addr1(t_retire_pht_idx),
       .wr_addr(t_init_pht ? r_init_pht_idx : r_pht_update_idx),
       .wr_data(t_init_pht ? 2'd1 : t_pht_val),
       .wr_en(t_init_pht || t_do_pht_wr),
@@ -1162,13 +1200,31 @@ endfunction // is_nop
 	n_spec_gbl_hist = r_spec_gbl_hist;
 	if(n_restart_ack)
 	  begin
-	     n_spec_gbl_hist = r_arch_gbl_hist;
+	     n_spec_gbl_hist = n_arch_gbl_hist;
 	  end
 	else if(t_update_spec_hist)
 	  begin
 	     n_spec_gbl_hist = {r_spec_gbl_hist[`GBL_HIST_LEN-2:0], t_take_br};
 	  end
-     end
+     end // always_comb
+
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if(n_restart_ack)
+   // 	  begin
+   // 	     $display("fix = %b, r_cycle %d", n_spec_gbl_hist, r_cycle);
+   // 	  end
+	
+   // 	if(t_update_spec_hist)
+   // 	  begin
+   // 	     $display("take_br = %b, cycle %d", t_take_br, r_cycle);
+   // 	     $display("old = %b", r_spec_gbl_hist);
+   // 	     $display("new = %b", n_spec_gbl_hist);
+	     
+   // 	  end
+   //   end
+      
+
 
    always_comb
      begin

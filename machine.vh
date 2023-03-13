@@ -14,7 +14,7 @@
 //gshare branch predictor
 `define LG_PHT_SZ 16
 
-`define GBL_HIST_LEN 32
+`define GBL_HIST_LEN 64
 
 //page size
 `define LG_PG_SZ 12

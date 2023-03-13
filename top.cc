@@ -1070,8 +1070,8 @@ int main(int argc, char **argv) {
     tb->mem_rsp_valid = 0;
 
     if(tb->mem_req_valid && (mem_reply_cycle == -1)) {
-
-      mem_reply_cycle = globals::cycle +  mem_lat;
+      
+      mem_reply_cycle = globals::cycle + (tb->mem_req_opcode == 4 ? 1 : 2)*mem_lat;
       
     }
     
