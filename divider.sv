@@ -37,12 +37,11 @@ module divider(clk,
    output logic        ready;
    output logic        complete;
    
-   typedef enum logic [2:0] {IDLE = 'd0,
-			     INPUT_SIGN = 'd1,
-			     DIVIDE = 'd2,
-			     PACK_OUTPUT = 'd3,
-			     OUTPUT_SIGN = 'd4,
-			     WAIT_FOR_WB = 'd5} state_t;
+   typedef enum logic [1:0] {IDLE = 'd0,
+			     DIVIDE = 'd1,
+			     PACK_OUTPUT = 'd2,
+			     WAIT_FOR_WB = 'd3
+			     } state_t;
 
    
    state_t r_state, n_state;
@@ -123,32 +122,16 @@ module divider(clk,
 	unique case (r_state)
 	  IDLE:
 	    begin
-	       if(start_div)
-		 begin
-		    n_rob_ptr = rob_ptr_in;
-		    n_hilo_prf_ptr = hilo_prf_ptr_in;
-		    n_is_signed = is_signed_div;
-		    n_state = INPUT_SIGN;
-		    n_A = srcA;
-		    n_B = srcB;
-		 end
-	    end
-	  INPUT_SIGN:
-	    begin
-	       if(r_is_signed)
-		 begin
-		    n_sign = r_A[W-1] ^ r_B[W-1];
-		    n_A = r_A[W-1] ? ((~r_A) + 'd1) : r_A;
-		    n_B = r_B[W-1] ? ((~r_B) + 'd1) : r_B;
-		 end
-	       else
-		 begin
-		    n_sign = 1'b0;
-		 end
+	       n_rob_ptr = rob_ptr_in;
+	       n_hilo_prf_ptr = hilo_prf_ptr_in;
+	       n_is_signed = is_signed_div;
+	       n_state = start_div ? DIVIDE : IDLE;
+	       n_idx = W-1;
+	       n_sign = srcA[W-1] ^ srcB[W-1];
+	       n_A = srcA[W-1] ? ((~srcA) + 'd1) : srcA;
+	       n_B = srcB[W-1] ? ((~srcB) + 'd1) : srcB;
 	       n_D = {n_B, {W{1'b0}}};
 	       n_R = {{W{1'b0}}, n_A};
-	       n_idx = W-1;
-	       n_state = DIVIDE;
 	    end
 	  DIVIDE:
 	    begin
@@ -166,21 +149,18 @@ module divider(clk,
 		 end
 	       n_state = (r_idx == 'd0) ? PACK_OUTPUT : DIVIDE;
 	       n_idx = r_idx - 'd1;
+	       
 	    end // case: DIVIDE
 	  PACK_OUTPUT:
 	    begin
-	       n_state = OUTPUT_SIGN;
+	       n_state = WAIT_FOR_WB;	       
 	       n_Y[W-1:0] = t_ss;
 	       n_Y[W2-1:W] = n_R[W2-1:W];
-	    end
-	  OUTPUT_SIGN:
-	    begin
 	       if(r_is_signed && r_sign)
 		 begin
-		    n_Y[W-1:0] = ((~r_Y[W-1:0]) +'d1);
-		    n_Y[W2-1:W] = ((~r_Y[W2-1:W]) + 'd1);
-		 end
-	       n_state = WAIT_FOR_WB;
+		    n_Y[W-1:0] = ((~n_Y[W-1:0]) +'d1);
+		    n_Y[W2-1:W] = ((~n_Y[W2-1:W]) + 'd1);		    
+		 end	       
 	    end
 	  WAIT_FOR_WB:
 	    begin

@@ -48,11 +48,9 @@
 
 `define MUL_LAT 3
 
-`define DIV32_LAT 35
+`define DIV32_LAT 33
 
-`define DIV64_LAT 67
-
-`define MAX_LAT (`DIV64_LAT)
+`define MAX_LAT (`DIV32_LAT)
 
 
 // cacheline length (in bytes)
