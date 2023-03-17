@@ -38,10 +38,10 @@
 `define LG_UQ_ENTRIES 3
 /* mem uop queue */
 `define LG_MEM_UQ_ENTRIES 3
-/* fp uop queue */
-`define LG_FP_UQ_ENTRIES 3
+/* mem data queue */
+`define LG_MEM_DQ_ENTRIES 4
 /* mem uop queue */
-`define LG_MQ_ENTRIES 1
+`define LG_MQ_ENTRIES 2
 
 /* mem retry queue */
 `define LG_MRQ_ENTRIES 3

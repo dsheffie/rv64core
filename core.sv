@@ -66,7 +66,10 @@ module core(clk,
 	    core_mem_req_ack,
 	    core_mem_req,
 	    core_mem_req_valid,
-	
+
+	    core_store_data_valid,
+	    core_store_data,
+	    
 	    core_mem_rsp,
 	    core_mem_rsp_valid,
 	    
@@ -142,6 +145,9 @@ module core(clk,
    output logic  core_mem_req_valid;
    output 	 mem_req_t core_mem_req;
 
+   output logic  core_store_data_valid;
+   output 	 mem_data_t core_store_data;
+   
    input 	 mem_rsp_t core_mem_rsp;
    input logic 	 core_mem_rsp_valid;
 
@@ -319,7 +325,7 @@ module core(clk,
    logic 			    t_gpr_ffs_full, t_gpr_ffs2_full;
    wire [`LG_PRF_ENTRIES:0] 	    w_gpr_ffs_even, w_gpr_ffs_odd;
    
-   logic 		     t_uq_full, t_uq_empty, t_uq_next_full;
+   logic 		     t_uq_full, t_uq_next_full;
    
    logic 		     t_uq_read;
    logic 		     n_ready_for_resume, r_ready_for_resume;
@@ -1899,7 +1905,6 @@ module core(clk,
 	   .cpr0_status_reg(t_cpr0_status_reg),
 	   .mq_wait(mq_wait),
 	   .uq_wait(uq_wait),
-	   .uq_empty(t_uq_empty),
 	   .uq_full(t_uq_full),
 	   .uq_next_full(t_uq_next_full),
 	   .uq_uop(t_push_1 ? t_alloc_uop : t_alloc_uop2),
@@ -1915,6 +1920,8 @@ module core(clk,
 	   .mem_req(t_mem_req),
 	   .mem_req_valid(t_mem_req_valid),
 	   .mem_req_ack(core_mem_req_ack),
+	   .core_store_data_valid(core_store_data_valid),
+	   .core_store_data(core_store_data),
 	   .mem_rsp_dst_ptr(core_mem_rsp.dst_ptr),
 	   .mem_rsp_dst_valid(core_mem_rsp.dst_valid),
 	   .mem_rsp_load_data(core_mem_rsp.data),

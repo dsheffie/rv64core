@@ -31,6 +31,9 @@ module l1d(clk,
 	   //inputs from core
 	   core_mem_req_valid,
 	   core_mem_req,
+	   //store data (and lwl/lwr data)
+	   core_store_data_valid,
+	   core_store_data,
 	   //outputs to core
 	   core_mem_req_ack,
 	   core_mem_rsp,
@@ -75,6 +78,10 @@ module l1d(clk,
    
    input logic core_mem_req_valid;
    input       mem_req_t core_mem_req;
+
+   input logic core_store_data_valid;
+   input       mem_data_t core_store_data;
+      
    output logic core_mem_req_ack;
    output 	mem_rsp_t core_mem_rsp;
    output logic core_mem_rsp_valid;
@@ -314,9 +321,53 @@ endfunction
 
    localparam N_ROB_ENTRIES = (1<<`LG_ROB_ENTRIES);
    logic [1:0] r_graduated [N_ROB_ENTRIES-1:0];
-
+   logic       r_store_data_valid[N_ROB_ENTRIES-1:0];
+   logic [31:0] r_store_data [N_ROB_ENTRIES-1:0];
    
    logic t_reset_graduated;
+
+   always_ff@(posedge clk)
+     begin
+	//r_store_data[store_data_ptr] 
+     end
+   
+   always_ff@(negedge clk)
+     begin
+	if(core_store_data_valid)
+	  begin
+	     $display("cycle %d : got core store data valid for rob ptr %d", 
+		      r_cycle, core_store_data.rob_ptr);
+	  end
+	//$display("cycle %d : r_store_data_valid[0] = %b", r_cycle, r_store_data_valid[0]);
+     end
+   
+   always_ff@(posedge clk)
+     begin
+	if(reset /*|| restart_valid*/)
+	  begin
+	     for(integer i = 0; i < N_ROB_ENTRIES; i = i+1)
+	       begin
+		  r_store_data_valid[i] <= 1'b0;
+	       end
+	  end
+	else
+	  begin
+	     if(core_store_data_valid)
+	       begin
+		  r_store_data_valid[core_store_data.rob_ptr] <= 1'b1;
+	       end
+	     if(t_reset_graduated)
+               begin
+		  $display("cycle %d, reset store ptr %d", r_cycle, r_req.rob_ptr);
+		  r_store_data_valid[r_req.rob_ptr] <= 1'b0;
+	       end
+	     if(t_force_clear_busy)
+	       begin
+		  r_store_data_valid[t_mem_head.rob_ptr] <= 1'b0;
+	       end
+	  end
+     end // always_ff@ (posedge clk)
+   
    
    always_ff@(posedge clk)
      begin
@@ -1358,7 +1409,9 @@ endfunction
 		    begin
 		       if(t_mem_head.is_store)
 			 begin
-			    if(r_graduated[t_mem_head.rob_ptr] == 2'b10 /* && n_state == ACTIVE */ )
+			    //$display("t_mem_head.rob_ptr = %d", t_mem_head.rob_ptr);
+			    
+			    if(r_graduated[t_mem_head.rob_ptr] == 2'b10 && r_store_data_valid[t_mem_head.rob_ptr] )
 			      begin
 `ifdef VERBOSE_L1D
 				 $display("firing store for %x with data %x at cycle %d for rob ptr %d, uuid %d", 
@@ -1375,10 +1428,10 @@ endfunction
 			      end // if (t_mem_head.rob_ptr == head_of_rob_ptr)
 			    else if(drain_ds_complete && dead_rob_mask[t_mem_head.rob_ptr])
 			      begin
-`ifdef VERBOSE_L1D
+//`ifdef VERBOSE_L1D
 				 $display("CLEARING EVERYTHING OUT, should clear line %d for rob ptr %d, data %x", 
 					  t_mem_head.addr[IDX_STOP-1:IDX_START], t_mem_head.rob_ptr, t_mem_head.data);
-`endif
+//`endif
 				 t_pop_mq = 1'b1;
 				 t_force_clear_busy = 1'b1;
 			      end

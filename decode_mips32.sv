@@ -723,7 +723,7 @@ module decode_mips32(insn,
 	    end
 	  6'd34: /* LWL */
 	    begin
-	       uop.op = LWL;
+	       uop.op = II; //LWL;
 	       uop.srcA = rs;
 	       uop.srcA_valid = 1'b1;
 	       uop.srcB = rt;
@@ -765,7 +765,7 @@ module decode_mips32(insn,
 	    end
 	  6'd38: /* LWR */
 	    begin
-	       uop.op = LWR;
+	       uop.op = II;//LWR;
 	       uop.srcA = rs;
 	       uop.srcA_valid = 1'b1;
 	       uop.srcB = rt;
