@@ -350,7 +350,7 @@ endfunction
 	       end
 	     if(t_incr_busy)
 	       begin
-		  $display("cycle %d : incr busy for ptr %d", r_cycle, r_req2.rob_ptr);
+		  //$display("cycle %d : incr busy for ptr %d", r_cycle, r_req2.rob_ptr);
 		  r_graduated[r_req2.rob_ptr] <= 2'b01;
 	       end
 	     if(t_reset_graduated)
@@ -1373,9 +1373,9 @@ endfunction
 		    begin
 		       if(t_mem_head.is_store)
 			 begin
-			    $display("t_mem_head.rob_ptr = %d, grad %b, dq ptr %d valid %b", 
-				     t_mem_head.rob_ptr, r_graduated[t_mem_head.rob_ptr], 
-				     core_store_data.rob_ptr, core_store_data_valid);
+			    //$display("t_mem_head.rob_ptr = %d, grad %b, dq ptr %d valid %b", 
+			    //t_mem_head.rob_ptr, r_graduated[t_mem_head.rob_ptr], 
+			    //core_store_data.rob_ptr, core_store_data_valid);
 			    
 			    if(r_graduated[t_mem_head.rob_ptr] == 2'b10 && (core_store_data_valid ? (t_mem_head.rob_ptr == core_store_data.rob_ptr) : 1'b0) )
 			      begin
@@ -1395,10 +1395,10 @@ endfunction
 			      end // if (t_mem_head.rob_ptr == head_of_rob_ptr)
 			    else if(drain_ds_complete && dead_rob_mask[t_mem_head.rob_ptr])
 			      begin
-//`ifdef VERBOSE_L1D
+`ifdef VERBOSE_L1D
 				 $display("CLEARING EVERYTHING OUT, should clear line %d for rob ptr %d, data %x", 
 					  t_mem_head.addr[IDX_STOP-1:IDX_START], t_mem_head.rob_ptr, t_mem_head.data);
-//`endif
+`endif
 				 t_pop_mq = 1'b1;
 				 t_force_clear_busy = 1'b1;
 			      end

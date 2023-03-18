@@ -365,7 +365,7 @@ module exec(clk,
 
 	t_push_two_dq = uq_push && uq_push_two && 
 			uq_uop.is_mem && uq_uop.srcB_valid && 
-			uq_uop_two.is_mem && uq_uop.srcB_valid;
+			uq_uop_two.is_mem && uq_uop_two.srcB_valid;
 	
 	t_push_one_dq = (uq_push_two && uq_uop_two.is_mem && uq_uop_two.srcB_valid) || 
 			(uq_push && uq_uop.is_mem && uq_uop.srcB_valid);
@@ -499,10 +499,21 @@ module exec(clk,
 	  begin
 	     r_mem_dq[r_mem_dq_next_tail_ptr[`LG_MEM_DQ_ENTRIES-1:0]] <= t_dq1;
 	     r_mem_dq[r_mem_dq_tail_ptr[`LG_MEM_DQ_ENTRIES-1:0]] <= t_dq0;
+	     if(!(uq_uop.is_store && uq_uop_two.is_store))
+	       begin
+		  $display("uop 0 is store %b, uop 1 is store %b", 
+			   uq_uop.is_store, uq_uop_two.is_store);
+		  
+		  $stop();
+	       end
 	  end
 	else if(t_push_one_dq)
 	  begin
-	     r_mem_dq[r_mem_dq_tail_ptr[`LG_MEM_DQ_ENTRIES-1:0]] <= uq_uop.is_mem && uq_uop.srcB_valid ? t_dq0 : t_dq1;
+	     r_mem_dq[r_mem_dq_tail_ptr[`LG_MEM_DQ_ENTRIES-1:0]] <= uq_uop.is_mem && uq_uop.is_store && uq_uop.srcB_valid ? t_dq0 : t_dq1;
+	     if(!(uq_uop.is_store && uq_uop.srcB_valid ? uq_uop.is_store: uq_uop_two.is_store))
+	       begin
+		  $stop();
+	       end
 	  end	
      end
    
@@ -1494,17 +1505,17 @@ module exec(clk,
    
    
    
-   always_ff@(negedge clk)
-     begin
-	if(r_dq_ready)
-	  begin
-	     $display("cycle %d : popping dq, rob ptr %d, src ptr %d, pc %x, tag %d", r_cycle, mem_dq.rob_ptr, mem_dq.src_ptr, mem_dq.pc, mem_dq.tag);
-	  end
+   //always_ff@(negedge clk)
+     //begin
+   //if(r_dq_ready)
+   //begin
+   //$display("cycle %d : popping dq, rob ptr %d, src ptr %d, pc %x, tag %d", r_cycle, mem_dq.rob_ptr, mem_dq.src_ptr, mem_dq.pc, mem_dq.tag);
+   //	  end
 	//if(r_mem_ready)
 	  //begin
 	    // $display("cycle %d, popping aq , rob ptr %d, srcb ptr %d, srcB val %b", r_cycle, mem_uq.rob_ptr, mem_uq.srcB, mem_uq.srcB_valid);
 	  //end
-     end
+   //end
 
    //always_ff@(posedge clk)
    //begin

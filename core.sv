@@ -979,9 +979,9 @@ module core(clk,
 		 begin
 		    //$display("%d : wait for drain and memq_empty  took  %d cycles",r_cycle, r_restart_cycles);		    
 		    n_state = RAT;
-//`ifdef REPORT_FAULTS		    
+`ifdef REPORT_FAULTS		    
 		    $display(">>> restarting after fault at cycle %d", r_cycle);
-//`endif
+`endif
 		 end // if (r_rob_inflight == 'd0 && r_ds_done && memq_empty)
 
 
@@ -1557,12 +1557,12 @@ module core(clk,
 	     if(t_alloc)
 	       begin
 		  r_rob_complete[r_rob_tail_ptr[`LG_ROB_ENTRIES-1:0]] <= t_fold_uop;
-		  r_rob_sd_complete[r_rob_tail_ptr[`LG_ROB_ENTRIES-1:0]] <= !t_uop.is_store;
+		  r_rob_sd_complete[r_rob_tail_ptr[`LG_ROB_ENTRIES-1:0]] <= !(t_uop.is_mem & t_uop.srcB_valid);
 	       end
 	     if(t_alloc_two)
 	       begin
 		  r_rob_complete[r_rob_next_tail_ptr[`LG_ROB_ENTRIES-1:0]] <= t_fold_uop2;
-		  r_rob_sd_complete[r_rob_next_tail_ptr[`LG_ROB_ENTRIES-1:0]] <= !t_uop2.is_store;				    
+		  r_rob_sd_complete[r_rob_next_tail_ptr[`LG_ROB_ENTRIES-1:0]] <= !(t_uop2.is_mem & t_uop2.srcB_valid);				    
 	       end
 	     if(t_complete_valid_1)
 	       begin
