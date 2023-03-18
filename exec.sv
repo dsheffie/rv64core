@@ -493,21 +493,10 @@ module exec(clk,
 	  begin
 	     r_mem_dq[r_mem_dq_next_tail_ptr[`LG_MEM_DQ_ENTRIES-1:0]] <= t_dq1;
 	     r_mem_dq[r_mem_dq_tail_ptr[`LG_MEM_DQ_ENTRIES-1:0]] <= t_dq0;
-	     if(!(uq_uop.is_store && uq_uop_two.is_store))
-	       begin
-		  $display("uop 0 is store %b, uop 1 is store %b", 
-			   uq_uop.is_store, uq_uop_two.is_store);
-		  
-		  $stop();
-	       end
 	  end
 	else if(t_push_one_dq)
 	  begin
-	     r_mem_dq[r_mem_dq_tail_ptr[`LG_MEM_DQ_ENTRIES-1:0]] <= uq_uop.is_mem && uq_uop.is_store && uq_uop.srcB_valid ? t_dq0 : t_dq1;
-	     if(!(uq_uop.is_store && uq_uop.srcB_valid ? uq_uop.is_store: uq_uop_two.is_store))
-	       begin
-		  $stop();
-	       end
+	     r_mem_dq[r_mem_dq_tail_ptr[`LG_MEM_DQ_ENTRIES-1:0]] <= uq_uop.is_mem && uq_uop.srcB_valid ? t_dq0 : t_dq1;
 	  end	
      end
    

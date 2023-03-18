@@ -1247,11 +1247,12 @@ endfunction
 			   begin
 			      n_cache_hits = r_cache_hits + 'd1;
 			   end
-			 else
-			   begin
-			   end
 			 n_core_mem_rsp_valid = 1'b1;
 		      end // if (r_req2.is_store)
+		    else if(r_req2.op == MEM_LWL || r_req2.op == MEM_LWR)
+		      begin
+			 t_push_miss = 1'b1;
+		      end
 		    else if(t_port2_hit_cache && !r_hit_busy_addr2)
 		      begin
 `ifdef VERBOSE_L1D
@@ -1425,11 +1426,28 @@ endfunction
 				      $stop();
 				   end
 			      end
-			 end // if (t_mem_head.is_store && n_state == ACTIVE)
+			 end // if (t_mem_head.is_store)
+		       else if(t_mem_head.op == MEM_LWL || t_mem_head.op == MEM_LWR)
+			 begin
+			    if((core_store_data_valid ? (t_mem_head.rob_ptr == core_store_data.rob_ptr) : 1'b0))
+			      begin
+				 t_pop_mq = 1'b1;
+				 n_req = t_mem_head;
+				 n_req.data = core_store_data.data;
+				 core_store_data_ack = 1'b1;
+				 t_cache_idx = t_mem_head.addr[IDX_STOP-1:IDX_START];
+				 t_cache_tag = t_mem_head.addr[`M_WIDTH-1:IDX_STOP];
+				 t_addr = t_mem_head.addr;
+				 t_got_req = 1'b1;
+				 n_is_retry = 1'b1;
+				 n_last_rd = 1'b1;
+				 t_got_rd_retry = 1'b1;
+			      end
+			 end
 		       else
 			 begin
 			    t_pop_mq = 1'b1;
-			    n_req = t_mem_head;			    
+			    n_req = t_mem_head;
 			    t_cache_idx = t_mem_head.addr[IDX_STOP-1:IDX_START];
 			    t_cache_tag = t_mem_head.addr[`M_WIDTH-1:IDX_STOP];
 			    t_addr = t_mem_head.addr;
