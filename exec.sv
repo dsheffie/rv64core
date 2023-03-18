@@ -23,7 +23,7 @@ module exec(clk,
 `endif
 	    divide_ready,
 	    ds_done,
-	    machine_clr,
+	    mem_dq_clr,
 	    restart_complete,
 	    cpr0_status_reg,
 	    uq_wait,
@@ -44,6 +44,10 @@ module exec(clk,
 	    mem_req_ack,
 	    core_store_data_valid,
 	    core_store_data,
+	    core_store_data_ack,
+	    //tell rob store data has been read
+	    core_store_data_ptr,
+	    core_store_data_ptr_valid,
 	    mem_rsp_dst_ptr,
 	    mem_rsp_dst_valid,
 	    mem_rsp_rob_ptr,
@@ -56,7 +60,7 @@ module exec(clk,
 `endif
    output logic       divide_ready;
    input logic ds_done;
-   input logic machine_clr;
+   input logic mem_dq_clr;
    input logic restart_complete;
    output logic [(`M_WIDTH-1):0]     cpr0_status_reg;
    
@@ -87,6 +91,11 @@ module exec(clk,
 
    output logic 	      core_store_data_valid;
    output 		      mem_data_t core_store_data;
+   input logic 		      core_store_data_ack;
+   
+   output logic [`LG_ROB_ENTRIES-1:0] core_store_data_ptr;
+   output logic 		      core_store_data_ptr_valid;
+   
    
    input logic [`LG_PRF_ENTRIES-1:0] mem_rsp_dst_ptr;
    input logic 			     mem_rsp_dst_valid;
@@ -119,12 +128,24 @@ module exec(clk,
    logic 	t_got_break;
 
       
+   
    mem_req_t r_mem_q[N_MQ_ENTRIES-1:0];
    logic [`LG_MQ_ENTRIES:0] r_mq_head_ptr, n_mq_head_ptr;
    logic [`LG_MQ_ENTRIES:0] r_mq_tail_ptr, n_mq_tail_ptr;
    logic [`LG_MQ_ENTRIES:0] r_mq_next_tail_ptr, n_mq_next_tail_ptr;
    mem_req_t t_mem_tail, t_mem_head;
    logic 		    mem_q_full,mem_q_next_full, mem_q_empty;
+
+
+   mem_data_t r_mdq[N_MQ_ENTRIES-1:0];
+   mem_data_t t_mdq_tail, t_mdq_head;
+   
+   logic [`LG_MQ_ENTRIES:0] r_mdq_head_ptr, n_mdq_head_ptr;
+   logic [`LG_MQ_ENTRIES:0] r_mdq_tail_ptr, n_mdq_tail_ptr;
+   logic [`LG_MQ_ENTRIES:0] r_mdq_next_tail_ptr, n_mdq_next_tail_ptr;
+   logic 		    mem_mdq_full,mem_mdq_next_full, mem_mdq_empty;
+   
+   
    
 
    logic 	t_pop_uq,t_pop_mem_uq,t_pop_mem_dq;
@@ -245,7 +266,6 @@ module exec(clk,
    always_comb
      begin
 	t_flash_clear = ds_done;
-	
      end
 
    always_comb
@@ -280,10 +300,6 @@ module exec(clk,
 	     r_mem_uq_tail_ptr <= 'd0;
 	     r_mem_uq_next_head_ptr <= 'd1;
 	     r_mem_uq_next_tail_ptr <= 'd1;
-	     r_mem_dq_head_ptr <= 'd0;
-	     r_mem_dq_tail_ptr <= 'd0;
-	     r_mem_dq_next_head_ptr <= 'd1;
-	     r_mem_dq_next_tail_ptr <= 'd1;
 	  end
 	else
 	  begin
@@ -291,13 +307,28 @@ module exec(clk,
 	     r_mem_uq_tail_ptr <= n_mem_uq_tail_ptr;
 	     r_mem_uq_next_head_ptr <= n_mem_uq_next_head_ptr;
 	     r_mem_uq_next_tail_ptr <= n_mem_uq_next_tail_ptr;
+	  end
+     end // always_ff@ (posedge clk// )
+   
+   always_ff@(posedge clk)
+     begin
+	if(reset  || mem_dq_clr)
+	  begin
+	     r_mem_dq_head_ptr <= 'd0;
+	     r_mem_dq_tail_ptr <= 'd0;
+	     r_mem_dq_next_head_ptr <= 'd1;
+	     r_mem_dq_next_tail_ptr <= 'd1;
+	  end
+	else
+	  begin
 	     r_mem_dq_head_ptr <= n_mem_dq_head_ptr;
 	     r_mem_dq_tail_ptr <= n_mem_dq_tail_ptr;
 	     r_mem_dq_next_head_ptr <= n_mem_dq_next_head_ptr;
 	     r_mem_dq_next_tail_ptr <= n_mem_dq_next_tail_ptr;
 	  end
      end // always_ff@ (posedge clk// )
-
+   
+   
 
    always_comb
      begin
@@ -449,9 +480,14 @@ module exec(clk,
      begin
 	t_dq0.rob_ptr = uq_uop.rob_ptr;	
 	t_dq0.src_ptr = uq_uop.srcB;
-
+	t_dq0.pc = uq_uop.pc;
+	t_dq0.tag = r_cycle[31:0];
+	
 	t_dq1.rob_ptr = uq_uop_two.rob_ptr;
 	t_dq1.src_ptr = uq_uop_two.srcB;
+	t_dq1.pc = uq_uop_two.pc;
+	t_dq1.tag = r_cycle[31:0];
+	
      end
 
        
@@ -825,6 +861,9 @@ module exec(clk,
 
    assign divide_ready = t_div_ready;
 
+
+
+
    
    always_comb
      begin
@@ -853,7 +892,7 @@ module exec(clk,
 			  (r_mq_head_ptr[`LG_MQ_ENTRIES-1:0] == r_mq_next_tail_ptr[`LG_MQ_ENTRIES-1:0]);
 	
      end // always_comb
-
+   
    always_ff@(posedge clk)
      begin
 	if(r_mem_ready)
@@ -863,10 +902,42 @@ module exec(clk,
      end
 
 
+   
+   always_comb
+     begin
+	n_mdq_head_ptr = r_mdq_head_ptr;
+	n_mdq_tail_ptr = r_mdq_tail_ptr;
+	n_mdq_next_tail_ptr = r_mdq_next_tail_ptr;
+	
+	if(r_dq_ready)
+	  begin
+	     n_mdq_tail_ptr = r_mdq_tail_ptr + 'd1;
+	     n_mdq_next_tail_ptr = r_mdq_next_tail_ptr + 'd1;
+	  end
+	
+	if(core_store_data_ack)
+	  begin
+	     n_mdq_head_ptr = r_mdq_head_ptr + 'd1;
+	  end
+
+	core_store_data = r_mdq[r_mdq_head_ptr[`LG_MQ_ENTRIES-1:0]];
+			       
+	mem_mdq_empty = (r_mdq_head_ptr == r_mdq_tail_ptr);
+	
+	mem_mdq_full = (r_mdq_head_ptr != r_mdq_tail_ptr) &&
+		     (r_mdq_head_ptr[`LG_MQ_ENTRIES-1:0] == r_mdq_tail_ptr[`LG_MQ_ENTRIES-1:0]);
+
+	mem_mdq_next_full = (r_mdq_head_ptr != r_mdq_next_tail_ptr) &&
+			    (r_mdq_head_ptr[`LG_MQ_ENTRIES-1:0] == r_mdq_next_tail_ptr[`LG_MQ_ENTRIES-1:0]);
+     end // always_comb
+   
+
+   
    assign mem_req = t_mem_head;
    assign mem_req_valid = !mem_q_empty;
    assign uq_wait = r_uq_wait;
    assign mq_wait = r_mq_wait;
+   assign core_store_data_valid = !mem_mdq_empty;
    
    
    always_ff@(posedge clk)
@@ -874,6 +945,10 @@ module exec(clk,
 	r_mq_head_ptr <= reset ? 'd0 : n_mq_head_ptr;
 	r_mq_tail_ptr <= reset ? 'd0 : n_mq_tail_ptr;
 	r_mq_next_tail_ptr <= reset ? 'd1 : n_mq_next_tail_ptr;
+
+	r_mdq_head_ptr <= (reset || mem_dq_clr) ? 'd0 : n_mdq_head_ptr;
+	r_mdq_tail_ptr <= (reset || mem_dq_clr) ? 'd0 : n_mdq_tail_ptr;
+	r_mdq_next_tail_ptr <= (reset || mem_dq_clr) ? 'd1 : n_mdq_next_tail_ptr;	
      end
 
    always_ff@(posedge clk)
@@ -1393,32 +1468,48 @@ module exec(clk,
      begin
 	t_pop_mem_uq = (!t_mem_uq_empty) && (!(mem_q_next_full||mem_q_full)) && w_mem_srcA_ready && w_mem_srcB_ready && !t_flash_clear;
 
-	t_pop_mem_dq = (!t_mem_dq_empty) && !t_flash_clear && w_dq_ready;
+	t_pop_mem_dq = (!t_mem_dq_empty) && !mem_dq_clr && w_dq_ready
+		       && (!(mem_mdq_next_full||mem_mdq_full)) ;
      end
 
 
+   //need another queue to hold store data
+   
    always_comb
      begin
 	t_core_store_data.rob_ptr = mem_dq.rob_ptr;
 	t_core_store_data.data = 32'hbeefbabe;
-     end
-
-   always_ff@(negedge clk)
-     begin
-	if(r_dq_ready)
-	  begin
-	     $display("cycle %d : popping uq, rob ptr %d, src ptr %d", r_cycle, mem_dq.rob_ptr, mem_dq.src_ptr);
-	  end
-	if(r_mem_ready)
-	  begin
-	     $display("cycle %d, popping mq , rob ptr %d, srcb ptr %d, srcB val %b", r_cycle, mem_uq.rob_ptr, mem_uq.srcB, mem_uq.srcB_valid);
-	  end
+	core_store_data_ptr = mem_dq.rob_ptr;
+	core_store_data_ptr_valid = r_dq_ready;
      end
 
    always_ff@(posedge clk)
      begin
-	core_store_data <= t_core_store_data;
+	if(r_dq_ready)
+	  begin
+	     r_mdq[r_mdq_tail_ptr[`LG_MQ_ENTRIES-1:0]] <= t_core_store_data;
+	  end
      end
+
+   
+   
+   
+   always_ff@(negedge clk)
+     begin
+	if(r_dq_ready)
+	  begin
+	     $display("cycle %d : popping dq, rob ptr %d, src ptr %d, pc %x, tag %d", r_cycle, mem_dq.rob_ptr, mem_dq.src_ptr, mem_dq.pc, mem_dq.tag);
+	  end
+	//if(r_mem_ready)
+	  //begin
+	    // $display("cycle %d, popping aq , rob ptr %d, srcb ptr %d, srcB val %b", r_cycle, mem_uq.rob_ptr, mem_uq.srcB, mem_uq.srcB_valid);
+	  //end
+     end
+
+   //always_ff@(posedge clk)
+   //begin
+   //core_store_data <= t_core_store_data;
+   //end
    
    always_ff@(posedge clk)
      begin
@@ -1426,13 +1517,11 @@ module exec(clk,
 	  begin
 	     r_mem_ready <= 1'b0;
 	     r_dq_ready <= 1'b0;
-	     core_store_data_valid <= 1'b0;
 	  end
 	else
 	  begin
 	     r_mem_ready <= t_pop_mem_uq;
 	     r_dq_ready <= t_pop_mem_dq;
-	     core_store_data_valid <= r_dq_ready;
 	  end
      end // always_ff@ (posedge clk)
 

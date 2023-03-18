@@ -34,6 +34,7 @@ module l1d(clk,
 	   //store data (and lwl/lwr data)
 	   core_store_data_valid,
 	   core_store_data,
+	   core_store_data_ack,
 	   //outputs to core
 	   core_mem_req_ack,
 	   core_mem_rsp,
@@ -81,7 +82,8 @@ module l1d(clk,
 
    input logic core_store_data_valid;
    input       mem_data_t core_store_data;
-      
+   output logic core_store_data_ack;
+   
    output logic core_mem_req_ack;
    output 	mem_rsp_t core_mem_rsp;
    output logic core_mem_rsp_valid;
@@ -321,52 +323,10 @@ endfunction
 
    localparam N_ROB_ENTRIES = (1<<`LG_ROB_ENTRIES);
    logic [1:0] r_graduated [N_ROB_ENTRIES-1:0];
-   logic       r_store_data_valid[N_ROB_ENTRIES-1:0];
-   logic [31:0] r_store_data [N_ROB_ENTRIES-1:0];
    
    logic t_reset_graduated;
 
-   always_ff@(posedge clk)
-     begin
-	//r_store_data[store_data_ptr] 
-     end
    
-   always_ff@(negedge clk)
-     begin
-	if(core_store_data_valid)
-	  begin
-	     $display("cycle %d : got core store data valid for rob ptr %d", 
-		      r_cycle, core_store_data.rob_ptr);
-	  end
-	//$display("cycle %d : r_store_data_valid[0] = %b", r_cycle, r_store_data_valid[0]);
-     end
-   
-   always_ff@(posedge clk)
-     begin
-	if(reset /*|| restart_valid*/)
-	  begin
-	     for(integer i = 0; i < N_ROB_ENTRIES; i = i+1)
-	       begin
-		  r_store_data_valid[i] <= 1'b0;
-	       end
-	  end
-	else
-	  begin
-	     if(core_store_data_valid)
-	       begin
-		  r_store_data_valid[core_store_data.rob_ptr] <= 1'b1;
-	       end
-	     if(t_reset_graduated)
-               begin
-		  $display("cycle %d, reset store ptr %d", r_cycle, r_req.rob_ptr);
-		  r_store_data_valid[r_req.rob_ptr] <= 1'b0;
-	       end
-	     if(t_force_clear_busy)
-	       begin
-		  r_store_data_valid[t_mem_head.rob_ptr] <= 1'b0;
-	       end
-	  end
-     end // always_ff@ (posedge clk)
    
    
    always_ff@(posedge clk)
@@ -390,6 +350,7 @@ endfunction
 	       end
 	     if(t_incr_busy)
 	       begin
+		  $display("cycle %d : incr busy for ptr %d", r_cycle, r_req2.rob_ptr);
 		  r_graduated[r_req2.rob_ptr] <= 2'b01;
 	       end
 	     if(t_reset_graduated)
@@ -403,6 +364,8 @@ endfunction
 	  end
      end // always_ff@ (posedge clk)
 
+
+   
 
    always_ff@(posedge clk)
      begin
@@ -1186,7 +1149,8 @@ endfunction
 	n_req2 = r_req2;
 	
 	core_mem_req_ack = 1'b0;
-
+	core_store_data_ack = 1'b0;
+	
 	n_mem_req_valid = 1'b0;
 	n_mem_req_addr = r_mem_req_addr;
 	n_mem_req_store_data = r_mem_req_store_data;
@@ -1409,15 +1373,18 @@ endfunction
 		    begin
 		       if(t_mem_head.is_store)
 			 begin
-			    //$display("t_mem_head.rob_ptr = %d", t_mem_head.rob_ptr);
+			    $display("t_mem_head.rob_ptr = %d, grad %b, dq ptr %d valid %b", 
+				     t_mem_head.rob_ptr, r_graduated[t_mem_head.rob_ptr], 
+				     core_store_data.rob_ptr, core_store_data_valid);
 			    
-			    if(r_graduated[t_mem_head.rob_ptr] == 2'b10 && r_store_data_valid[t_mem_head.rob_ptr] )
+			    if(r_graduated[t_mem_head.rob_ptr] == 2'b10 && (core_store_data_valid ? (t_mem_head.rob_ptr == core_store_data.rob_ptr) : 1'b0) )
 			      begin
 `ifdef VERBOSE_L1D
 				 $display("firing store for %x with data %x at cycle %d for rob ptr %d, uuid %d", 
 					  t_mem_head.addr, t_mem_head.data, r_cycle, t_mem_head.rob_ptr, t_mem_head.uuid);
 `endif
 				 t_pop_mq = 1'b1;
+				 core_store_data_ack = 1'b1;
 				 n_req = t_mem_head;
 				 t_cache_idx = t_mem_head.addr[IDX_STOP-1:IDX_START];
 				 t_cache_tag = t_mem_head.addr[`M_WIDTH-1:IDX_STOP];
@@ -1484,7 +1451,7 @@ endfunction
 		  !t_got_rd_retry &&
 		  !(r_last_wr2 && (r_cache_idx2 == core_mem_req.addr[IDX_STOP-1:IDX_START]) && !core_mem_req.is_store) && 
 		  !t_cm_block_stall &&
-		  r_graduated[core_mem_req.rob_ptr] == 2'b00
+		  (r_graduated[core_mem_req.rob_ptr] == 2'b00) 
 		  )
 	       begin
 		  //use 2nd read port

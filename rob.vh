@@ -68,6 +68,8 @@ typedef struct packed {
 typedef struct packed {
    logic [`LG_ROB_ENTRIES-1:0] rob_ptr;
    logic [`LG_PRF_ENTRIES-1:0] src_ptr;
+   logic [31:0] 	       pc;
+   logic [31:0] 	       tag;
 } dq_t;
 
 typedef struct packed {

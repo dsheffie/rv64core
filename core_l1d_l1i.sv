@@ -144,6 +144,7 @@ module core_l1d_l1i(clk,
    logic 				  core_mem_req_ack;
    logic 				  core_mem_rsp_valid;
    logic 				  core_store_data_valid;
+   logic 				  core_store_data_ack;
    
    
    typedef enum logic [1:0] {
@@ -381,6 +382,7 @@ module core_l1d_l1i(clk,
 
 	       .core_store_data_valid(core_store_data_valid),
 	       .core_store_data(core_store_data),
+	       .core_store_data_ack(core_store_data_ack),
 	       
 	       .core_mem_rsp_valid(core_mem_rsp_valid),
 	       .core_mem_rsp(core_mem_rsp),
@@ -479,6 +481,7 @@ module core_l1d_l1i(clk,
 	     
 	     .core_store_data_valid(core_store_data_valid),
 	     .core_store_data(core_store_data),
+	     .core_store_data_ack(core_store_data_ack),
 	     
 	     .core_mem_rsp_valid(core_mem_rsp_valid),
 	     .core_mem_rsp(core_mem_rsp),

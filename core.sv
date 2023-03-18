@@ -69,6 +69,7 @@ module core(clk,
 
 	    core_store_data_valid,
 	    core_store_data,
+	    core_store_data_ack,
 	    
 	    core_mem_rsp,
 	    core_mem_rsp_valid,
@@ -147,7 +148,8 @@ module core(clk,
 
    output logic  core_store_data_valid;
    output 	 mem_data_t core_store_data;
-   
+   input logic 	 core_store_data_ack;
+  
    input 	 mem_rsp_t core_mem_rsp;
    input logic 	 core_mem_rsp_valid;
 
@@ -213,6 +215,11 @@ module core(clk,
    
    rob_entry_t r_rob[N_ROB_ENTRIES-1:0];
    logic [N_ROB_ENTRIES-1:0] 		  r_rob_complete;
+   logic [N_ROB_ENTRIES-1:0] 		  r_rob_sd_complete;
+
+   logic 				  t_core_store_data_ptr_valid;
+   logic [`LG_ROB_ENTRIES-1:0] 		  t_core_store_data_ptr;
+ 		  
    logic 				  t_rob_head_complete, t_rob_next_head_complete;
    
    
@@ -972,9 +979,9 @@ module core(clk,
 		 begin
 		    //$display("%d : wait for drain and memq_empty  took  %d cycles",r_cycle, r_restart_cycles);		    
 		    n_state = RAT;
-`ifdef REPORT_FAULTS		    
-		    $display("restarting after fault at cycle %d", r_cycle);
-`endif
+//`ifdef REPORT_FAULTS		    
+		    $display(">>> restarting after fault at cycle %d", r_cycle);
+//`endif
 		 end // if (r_rob_inflight == 'd0 && r_ds_done && memq_empty)
 
 
@@ -1543,16 +1550,19 @@ module core(clk,
 	if(reset || t_clr_rob)
 	  begin
 	     r_rob_complete <= 'd0;
+	     r_rob_sd_complete <= 'd0;
 	  end
 	else
 	  begin
 	     if(t_alloc)
 	       begin
 		  r_rob_complete[r_rob_tail_ptr[`LG_ROB_ENTRIES-1:0]] <= t_fold_uop;
+		  r_rob_sd_complete[r_rob_tail_ptr[`LG_ROB_ENTRIES-1:0]] <= !t_uop.is_store;
 	       end
 	     if(t_alloc_two)
 	       begin
 		  r_rob_complete[r_rob_next_tail_ptr[`LG_ROB_ENTRIES-1:0]] <= t_fold_uop2;
+		  r_rob_sd_complete[r_rob_next_tail_ptr[`LG_ROB_ENTRIES-1:0]] <= !t_uop2.is_store;				    
 	       end
 	     if(t_complete_valid_1)
 	       begin
@@ -1564,6 +1574,11 @@ module core(clk,
 	       begin
 		  //$display("rob entry %d marked complete by mem port", core_mem_rsp.rob_ptr);
 		  r_rob_complete[core_mem_rsp.rob_ptr] <= 1'b1;
+	       end
+
+	     if(t_core_store_data_ptr_valid)
+	       begin
+		  r_rob_sd_complete[t_core_store_data_ptr] <= 1'b1;
 	       end
 	  end
      end // always_ff@ (posedge clk)
@@ -1738,8 +1753,12 @@ module core(clk,
      begin
 	t_rob_head = r_rob[r_rob_head_ptr[`LG_ROB_ENTRIES-1:0]];
 	t_rob_next_head = r_rob[r_rob_next_head_ptr[`LG_ROB_ENTRIES-1:0]];
-	t_rob_head_complete = r_rob_complete[r_rob_head_ptr[`LG_ROB_ENTRIES-1:0]];
-	t_rob_next_head_complete = r_rob_complete[r_rob_next_head_ptr[`LG_ROB_ENTRIES-1:0]];
+	
+	t_rob_head_complete = r_rob_sd_complete[r_rob_head_ptr[`LG_ROB_ENTRIES-1:0]] &
+			      r_rob_complete[r_rob_head_ptr[`LG_ROB_ENTRIES-1:0]];
+	
+	t_rob_next_head_complete = r_rob_sd_complete[r_rob_next_head_ptr[`LG_ROB_ENTRIES-1:0]] &
+				   r_rob_complete[r_rob_next_head_ptr[`LG_ROB_ENTRIES-1:0]];
      end // always_comb
 
    
@@ -1900,7 +1919,7 @@ module core(clk,
 	   .clear_cnt(r_clear_cnt),
 `endif
 	   .ds_done(r_ds_done),
-	   .machine_clr(r_machine_clr),
+	   .mem_dq_clr(t_clr_rob),
 	   .restart_complete(t_restart_complete),
 	   .cpr0_status_reg(t_cpr0_status_reg),
 	   .mq_wait(mq_wait),
@@ -1922,6 +1941,9 @@ module core(clk,
 	   .mem_req_ack(core_mem_req_ack),
 	   .core_store_data_valid(core_store_data_valid),
 	   .core_store_data(core_store_data),
+	   .core_store_data_ack(core_store_data_ack),
+	   .core_store_data_ptr_valid(t_core_store_data_ptr_valid),
+	   .core_store_data_ptr(t_core_store_data_ptr),
 	   .mem_rsp_dst_ptr(core_mem_rsp.dst_ptr),
 	   .mem_rsp_dst_valid(core_mem_rsp.dst_valid),
 	   .mem_rsp_load_data(core_mem_rsp.data),
