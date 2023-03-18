@@ -1386,6 +1386,7 @@ endfunction
 				 t_pop_mq = 1'b1;
 				 core_store_data_ack = 1'b1;
 				 n_req = t_mem_head;
+				 n_req.data = core_store_data.data;
 				 t_cache_idx = t_mem_head.addr[IDX_STOP-1:IDX_START];
 				 t_cache_tag = t_mem_head.addr[`M_WIDTH-1:IDX_STOP];
 				 t_addr = t_mem_head.addr;

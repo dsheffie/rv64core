@@ -1471,13 +1471,13 @@ module exec(clk,
    ppa32 agu (.A(t_mem_srcA), .B({{E_BITS{mem_uq.imm[15]}},mem_uq.imm}), .Y(w_agu32));
 
    wire w_mem_srcA_ready = t_mem_uq.srcA_valid ? (!r_prf_inflight[t_mem_uq.srcA] | t_fwd_int_mem_srcA | t_fwd_mem_mem_srcA) : 1'b1;
-   wire w_mem_srcB_ready = t_mem_uq.srcB_valid ? (!r_prf_inflight[t_mem_uq.srcB] | t_fwd_int_mem_srcB | t_fwd_mem_mem_srcB) : 1'b1;
+
 
    wire w_dq_ready = !r_prf_inflight[t_mem_dq.src_ptr];
    	
    always_comb
      begin
-	t_pop_mem_uq = (!t_mem_uq_empty) && (!(mem_q_next_full||mem_q_full)) && w_mem_srcA_ready && w_mem_srcB_ready && !t_flash_clear;
+	t_pop_mem_uq = (!t_mem_uq_empty) && (!(mem_q_next_full||mem_q_full)) && w_mem_srcA_ready && !t_flash_clear;
 
 	t_pop_mem_dq = (!t_mem_dq_empty) && !mem_dq_clr && w_dq_ready
 		       && (!(mem_mdq_next_full||mem_mdq_full)) ;
@@ -1489,7 +1489,7 @@ module exec(clk,
    always_comb
      begin
 	t_core_store_data.rob_ptr = mem_dq.rob_ptr;
-	t_core_store_data.data = 32'hbeefbabe;
+	t_core_store_data.data = w_mem_srcB;
 	core_store_data_ptr = mem_dq.rob_ptr;
 	core_store_data_ptr_valid = r_dq_ready;
      end
@@ -1684,7 +1684,7 @@ module exec(clk,
 	   .rdptr0(t_picked_uop.srcA),
 	   .rdptr1(t_picked_uop.srcB),
 	   .rdptr2(t_mem_uq.srcA),
-	   .rdptr3(t_mem_uq.srcB),
+	   .rdptr3(t_mem_dq.src_ptr),
 	   .wrptr0(int_uop.dst),
 	   .wrptr1(mem_rsp_dst_ptr),
 	   .wen0(r_start_int && t_wr_int_prf),
