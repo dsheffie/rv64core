@@ -59,17 +59,15 @@ typedef struct packed {
    logic [31:0] addr;
    logic 	is_store;
    mem_op_t op;
-   logic [31:0] data;
    logic [`LG_ROB_ENTRIES-1:0] rob_ptr;
    logic [`LG_PRF_ENTRIES-1:0] dst_ptr;
    logic 		       dst_valid;
+   logic [31:0] 	       data;
 } mem_req_t;
 
 typedef struct packed {
    logic [`LG_ROB_ENTRIES-1:0] rob_ptr;
    logic [`LG_PRF_ENTRIES-1:0] src_ptr;
-   logic [31:0] 	       pc;
-   logic [31:0] 	       tag;
 } dq_t;
 
 typedef struct packed {

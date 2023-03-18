@@ -480,14 +480,8 @@ module exec(clk,
      begin
 	t_dq0.rob_ptr = uq_uop.rob_ptr;	
 	t_dq0.src_ptr = uq_uop.srcB;
-	t_dq0.pc = uq_uop.pc;
-	t_dq0.tag = r_cycle[31:0];
-	
 	t_dq1.rob_ptr = uq_uop_two.rob_ptr;
 	t_dq1.src_ptr = uq_uop_two.srcB;
-	t_dq1.pc = uq_uop_two.pc;
-	t_dq1.tag = r_cycle[31:0];
-	
      end
 
        
@@ -1473,7 +1467,7 @@ module exec(clk,
    wire w_mem_srcA_ready = t_mem_uq.srcA_valid ? (!r_prf_inflight[t_mem_uq.srcA] | t_fwd_int_mem_srcA | t_fwd_mem_mem_srcA) : 1'b1;
 
 
-   wire w_dq_ready = !r_prf_inflight[t_mem_dq.src_ptr];
+   wire w_dq_ready = !r_prf_inflight[t_mem_dq.src_ptr] | t_fwd_int_mem_srcB | t_fwd_mem_mem_srcB;
    	
    always_comb
      begin
@@ -1489,7 +1483,7 @@ module exec(clk,
    always_comb
      begin
 	t_core_store_data.rob_ptr = mem_dq.rob_ptr;
-	t_core_store_data.data = w_mem_srcB;
+	t_core_store_data.data = t_mem_srcB;
 	core_store_data_ptr = mem_dq.rob_ptr;
 	core_store_data_ptr_valid = r_dq_ready;
      end
@@ -1545,39 +1539,34 @@ module exec(clk,
 	t_mem_simm = {{E_BITS{mem_uq.imm[15]}},mem_uq.imm};
 	t_mem_tail.op = MEM_LW;
 	t_mem_tail.addr = w_agu32;
-	t_mem_tail.data = 32'd0;
 	t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 	t_mem_tail.dst_valid = 1'b0;
 	t_mem_tail.dst_ptr = mem_uq.dst;
 	t_mem_tail.is_store = 1'b0;
-	
+	t_mem_tail.data = 32'd0;
 	case(mem_uq.op)
 	  SB:
 	    begin
 	       t_mem_tail.op = MEM_SB;
 	       t_mem_tail.is_store = 1'b1;
-	       t_mem_tail.data = t_mem_srcB; /* needs byte swap */
 	       t_mem_tail.dst_valid = 1'b0;
 	    end // case: SB
 	  SH:
 	    begin
 	       t_mem_tail.op = MEM_SH;
 	       t_mem_tail.is_store = 1'b1;
-	       t_mem_tail.data = t_mem_srcB; /* needs byte swap */
 	       t_mem_tail.dst_valid = 1'b0;
 	    end // case: SW
 	  SW:
 	    begin
 	       t_mem_tail.op = MEM_SW;
 	       t_mem_tail.is_store = 1'b1;
-	       t_mem_tail.data = t_mem_srcB; /* needs byte swap */
 	       t_mem_tail.dst_valid = 1'b0;
 	    end // case: SW
 	  SC:
 	    begin
 	       t_mem_tail.op = MEM_SC;
 	       t_mem_tail.is_store = 1'b1;
-	       t_mem_tail.data = t_mem_srcB; /* needs byte swap */	       
 	       t_mem_tail.dst_valid = 1'b1;
 	       t_mem_tail.dst_ptr = mem_uq.dst;		    
 	    end // case: SW
@@ -1585,14 +1574,12 @@ module exec(clk,
 	    begin
 	       t_mem_tail.op = MEM_SWR;
 	       t_mem_tail.is_store = 1'b1;
-	       t_mem_tail.data = t_mem_srcB; /* needs byte swap */
 	       t_mem_tail.dst_valid = 1'b0;
 	    end // case: SW
 	  SWL:
 	    begin
 	       t_mem_tail.op = MEM_SWL;
 	       t_mem_tail.is_store = 1'b1;
-	       t_mem_tail.data = t_mem_srcB; /* needs byte swap */
 	       t_mem_tail.dst_valid = 1'b0;
 	    end // case: SW	  
 	  LW:
@@ -1605,14 +1592,12 @@ module exec(clk,
 	       t_mem_tail.op = MEM_LWL;
 	       t_mem_tail.dst_valid = 1'b1;
 	       t_mem_tail.dst_ptr = mem_uq.dst;
-	       t_mem_tail.data = t_mem_srcB;
 	    end // case: LWL
 	  LWR:
 	    begin
 	       t_mem_tail.op = MEM_LWR;
 	       t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 	       t_mem_tail.dst_valid = 1'b1;
-	       t_mem_tail.data = t_mem_srcB;
 	    end // case: LWR
 	  LB:
 	    begin
@@ -1655,9 +1640,9 @@ module exec(clk,
    always_comb
      begin
 	t_fwd_int_mem_srcA = r_start_int && t_wr_int_prf &&(t_mem_uq.srcA == int_uop.dst);
-	t_fwd_int_mem_srcB = 1'b0; //r_start_int && t_wr_int_prf &&(t_mem_uq.srcB == int_uop.dst);
+	t_fwd_int_mem_srcB = r_start_int && t_wr_int_prf &&(t_mem_dq.src_ptr == int_uop.dst);
 	t_fwd_mem_mem_srcA = mem_rsp_dst_valid && (t_mem_uq.srcA == mem_rsp_dst_ptr);
-	t_fwd_mem_mem_srcB = 1'b0; //mem_rsp_dst_valid && (t_mem_uq.srcB == mem_rsp_dst_ptr);
+	t_fwd_mem_mem_srcB = mem_rsp_dst_valid && (t_mem_dq.src_ptr == mem_rsp_dst_ptr);
      end
    
    always_ff@(posedge clk)
