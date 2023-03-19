@@ -50,8 +50,7 @@ module l1d(clk,
 	   mem_rsp_valid,
 	   mem_rsp_load_data,
 	   cache_accesses,
-	   cache_hits,
-	   cache_hits_under_miss
+	   cache_hits
 	   );
 
    localparam L1D_NUM_SETS = 1 << `LG_L1D_NUM_SETS;
@@ -102,7 +101,6 @@ module l1d(clk,
    
    output logic [63:0] 			 cache_accesses;
    output logic [63:0] 			 cache_hits;
-   output logic [63:0] 			 cache_hits_under_miss;
 
          
    localparam LG_WORDS_PER_CL = `LG_L1D_CL_LEN - 2;
@@ -281,7 +279,6 @@ endfunction
    logic [3:0] 		       r_mem_req_opcode, n_mem_req_opcode;
    logic [63:0] 	       n_cache_accesses, r_cache_accesses;
    logic [63:0] 	       n_cache_hits, r_cache_hits;
-   logic [63:0] 	       n_cache_hits_under_miss, r_cache_hits_under_miss;
    
    logic [63:0] 	       r_store_stalls, n_store_stalls;
    
@@ -298,7 +295,6 @@ endfunction
    
    assign cache_accesses = r_cache_accesses;
    assign cache_hits = r_cache_hits;
-   assign cache_hits_under_miss = r_cache_hits_under_miss;
 
    
    always_ff@(posedge clk)
@@ -538,7 +534,6 @@ endfunction
 	     r_core_mem_rsp_valid <= 1'b0;
 	     r_cache_hits <= 'd0;
 	     r_cache_accesses <= 'd0;
-	     r_cache_hits_under_miss <= 'd0;
 	     r_store_stalls <= 'd0;
 	     r_inhibit_write <= 1'b0;
 	     memq_empty <= 1'b1;
@@ -587,7 +582,6 @@ endfunction
 	     r_core_mem_rsp_valid <= n_core_mem_rsp_valid;
 	     r_cache_hits <= n_cache_hits;
 	     r_cache_accesses <= n_cache_accesses;
-	     r_cache_hits_under_miss <= n_cache_hits_under_miss;
 	     r_store_stalls <= n_store_stalls;
 	     r_inhibit_write <= n_inhibit_write;
 	     memq_empty <= mem_q_empty 
@@ -1166,7 +1160,6 @@ endfunction
 
 	n_cache_accesses = r_cache_accesses;
 	n_cache_hits = r_cache_hits;
-	n_cache_hits_under_miss = r_cache_hits_under_miss;
 	
 	n_store_stalls = r_store_stalls;
 	

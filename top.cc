@@ -1155,7 +1155,6 @@ int main(int argc, char **argv) {
 #ifdef CACHE_STATS
     out << "l1d cache hits = " << tb->l1d_cache_hits << "\n";
     out << "l1d cache accesses = " << tb->l1d_cache_accesses << "\n";
-    out << "l1d cache hit under miss = " << tb->l1d_cache_hits_under_miss << "\n";
     out << "l1d hit rate = "
 	      << 100.0 *(static_cast<double>(tb->l1d_cache_hits) / tb->l1d_cache_accesses)
 	      << "\n";

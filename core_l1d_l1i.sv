@@ -37,7 +37,6 @@ module core_l1d_l1i(clk,
 		    l1i_cache_hits,
 		    l1d_cache_accesses,
 		    l1d_cache_hits,
-		    l1d_cache_hits_under_miss,
 		    got_break,
 		    got_ud,
 		    inflight);
@@ -78,7 +77,7 @@ module core_l1d_l1i(clk,
    output logic [63:0] 			l1i_cache_hits;
    output logic [63:0] 			l1d_cache_accesses;
    output logic [63:0] 			l1d_cache_hits;
-   output logic [63:0] 			l1d_cache_hits_under_miss;
+
    
    /* mem port */
    output logic 		 mem_req_valid;
@@ -122,7 +121,6 @@ module core_l1d_l1i(clk,
    
    logic [63:0] 			  t_l1d_cache_accesses;
    logic [63:0] 			  t_l1d_cache_hits;
-   logic [63:0] 			  t_l1d_cache_hits_under_miss;
    logic [63:0] 			  t_l1i_cache_accesses;
    logic [63:0] 			  t_l1i_cache_hits;
 
@@ -239,7 +237,6 @@ module core_l1d_l1i(clk,
 
    assign l1d_cache_accesses = t_l1d_cache_accesses;
    assign l1d_cache_hits = t_l1d_cache_hits;
-   assign l1d_cache_hits_under_miss = t_l1d_cache_hits_under_miss;
    assign l1i_cache_accesses = t_l1i_cache_accesses;
    assign l1i_cache_hits = t_l1i_cache_hits;
    
@@ -398,8 +395,7 @@ module core_l1d_l1i(clk,
 	       .mem_rsp_load_data(mem_rsp_load_data),
 
 	       .cache_accesses(t_l1d_cache_accesses),
-	       .cache_hits(t_l1d_cache_hits),
-	       .cache_hits_under_miss(t_l1d_cache_hits_under_miss)
+	       .cache_hits(t_l1d_cache_hits)
 	       );
 
    l1i icache(
