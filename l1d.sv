@@ -320,6 +320,8 @@ endfunction
    localparam N_ROB_ENTRIES = (1<<`LG_ROB_ENTRIES);
    logic [1:0] r_graduated [N_ROB_ENTRIES-1:0];
    logic [N_ROB_ENTRIES-1:0] r_missed;
+   logic [N_ROB_ENTRIES-1:0] r_rob_inflight;
+   
    
    logic t_reset_graduated;
 
@@ -426,6 +428,39 @@ endfunction
 	  end
      end // always_ff@ (posedge clk)
 
+   always_ff@(posedge clk)
+     begin
+	if(reset)
+	  begin
+	     r_rob_inflight <= 'd0;
+	  end
+	else
+	  begin
+	     if(r_got_req2 && !drain_ds_complete && t_push_miss)
+	       begin
+		  //$display("rob entry %d enters at cycle %d", r_req2.rob_ptr, r_cycle);
+		  
+		  if(r_rob_inflight[r_req2.rob_ptr] == 1'b1)
+		    $display("entry %d should not be inflight\n", r_req2.rob_ptr);
+		  
+		  r_rob_inflight[r_req2.rob_ptr] <= 1'b1;
+	       end
+	     if(r_got_req && r_valid_out && (r_tag_out == r_cache_tag))
+	       begin
+		  //$display("rob entry %d leaves at cycle %d", r_req.rob_ptr, r_cycle);
+		  if(r_rob_inflight[r_req.rob_ptr] == 1'b0) 
+		    $display("huh %d should be inflight....\n", r_req.rob_ptr);
+		  
+		  r_rob_inflight[r_req.rob_ptr] <= 1'b0;
+	       end
+	     if(t_force_clear_busy)
+	       begin
+		  r_rob_inflight[t_mem_head.rob_ptr] <= 1'b0;
+	       end
+	  end
+     end
+   
+   
    // always_ff@(negedge clk)
    //   begin
    // 	if(t_push_miss && !t_port2_hit_cache)
@@ -1434,28 +1469,6 @@ endfunction
 				 t_pop_mq = 1'b1;
 				 t_force_clear_busy = 1'b1;
 			      end
-			    else
-			      begin
-`ifdef VERBOSE_L1D
-				 $display("cycle %d : op stuck pc %x, addr %x rob ptr %d, n_state = %d, line = %d, uuid = %d, drain complete = %b", 
-				 	  r_cycle,
-				 	  t_mem_head.pc,
-				 	  t_mem_head.addr, 
-				 	  t_mem_head.rob_ptr, 
-				 	  n_state, 
-				 	  t_mem_head.addr[IDX_STOP-1:IDX_START],
-				 	  t_mem_head.uuid,
-					  drain_ds_complete);
-`endif
-				 if(mem_q_empty)
-				   begin
-				      $stop();
-				   end
-				 if(r_graduated[t_mem_head.rob_ptr] == 2'b00)
-				   begin
-				      $stop();
-				   end
-			      end
 			 end // if (t_mem_head.is_store)
 		       else if(t_mem_head.op == MEM_LWL || t_mem_head.op == MEM_LWR)
 			 begin
@@ -1500,7 +1513,8 @@ endfunction
 		  !t_got_rd_retry &&
 		  !(r_last_wr2 && (r_cache_idx2 == core_mem_req.addr[IDX_STOP-1:IDX_START]) && !core_mem_req.is_store) && 
 		  !t_cm_block_stall &&
-		  (r_graduated[core_mem_req.rob_ptr] == 2'b00) 
+		  /*(r_graduated[core_mem_req.rob_ptr] == 2'b00) && */
+		  (!r_rob_inflight[core_mem_req.rob_ptr])
 		  )
 	       begin
 		  //use 2nd read port
