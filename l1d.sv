@@ -1472,7 +1472,7 @@ endfunction
 			 end // if (t_mem_head.is_store)
 		       else if(t_mem_head.op == MEM_LWL || t_mem_head.op == MEM_LWR)
 			 begin
-			    if((core_store_data_valid ? (t_mem_head.rob_ptr == core_store_data.rob_ptr) : 1'b0))
+			    if((core_store_data_valid ? (t_mem_head.rob_ptr == core_store_data.rob_ptr) : 1'b0) || drain_ds_complete)
 			      begin
 				 t_pop_mq = 1'b1;
 				 n_req = t_mem_head;
