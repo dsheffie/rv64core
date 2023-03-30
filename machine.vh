@@ -61,7 +61,6 @@
 
 `define LG_L1I_NUM_SETS 8
 
-`define LG_MEM_TAG_ENTRIES 2
 
 `define M_WIDTH (1 << `LG_M_WIDTH)
 
