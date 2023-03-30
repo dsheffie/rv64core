@@ -9,13 +9,14 @@ module core_l1d_l1i(clk,
 		    resume,
 		    resume_pc,
 		    ready_for_resume,
+		    
 		    mem_req_valid, 
 		    mem_req_addr, 
 		    mem_req_store_data,
-		    mem_req_tag,
 		    mem_req_opcode,
 		    mem_rsp_valid,
 		    mem_rsp_load_data,
+		    
 		    retire_reg_ptr,
 		    retire_reg_data,
 		    retire_reg_valid,
@@ -83,7 +84,6 @@ module core_l1d_l1i(clk,
    output logic 		 mem_req_valid;
    output logic [`M_WIDTH-1:0] 	 mem_req_addr;
    output logic [L1D_CL_LEN_BITS-1:0] mem_req_store_data;
-   output logic [`LG_MEM_TAG_ENTRIES-1:0] mem_req_tag;
    output logic [3:0] 			  mem_req_opcode;
    
    input logic  			  mem_rsp_valid;
@@ -244,14 +244,12 @@ module core_l1d_l1i(clk,
    logic 				  l1d_mem_req_valid;
    logic [(`M_WIDTH-1):0] 		  l1d_mem_req_addr;
    logic [L1D_CL_LEN_BITS-1:0] 		  l1d_mem_req_store_data;
-   logic [`LG_MEM_TAG_ENTRIES-1:0] 	  l1d_mem_req_tag;
    logic [3:0] 				  l1d_mem_req_opcode;
 
    logic 				  l1i_mem_req_ack;   
    logic 				  l1i_mem_req_valid;
    logic [(`M_WIDTH-1):0] 		  l1i_mem_req_addr;
    logic [L1D_CL_LEN_BITS-1:0] 		  l1i_mem_req_store_data;
-   logic [`LG_MEM_TAG_ENTRIES-1:0] 	  l1i_mem_req_tag;
    logic [3:0] 				  l1i_mem_req_opcode;
    logic 				  l1d_mem_rsp_valid, l1i_mem_rsp_valid;
    
@@ -278,7 +276,6 @@ module core_l1d_l1i(clk,
 	mem_req_valid = n_req;	
 	mem_req_addr = (r_state == GNT_L1I) ? l1i_mem_req_addr: l1d_mem_req_addr;
 	mem_req_store_data = l1d_mem_req_store_data;
-	mem_req_tag = (r_state == GNT_L1I) ? l1i_mem_req_tag : l1d_mem_req_tag;
 	mem_req_opcode = (r_state == GNT_L1I) ? l1i_mem_req_opcode : l1d_mem_req_opcode;
 	l1d_mem_rsp_valid = 1'b0;
 	l1i_mem_rsp_valid = 1'b0;
@@ -388,7 +385,6 @@ module core_l1d_l1i(clk,
 	       .mem_req_valid(l1d_mem_req_valid),
 	       .mem_req_addr(l1d_mem_req_addr),
 	       .mem_req_store_data(l1d_mem_req_store_data),
-	       .mem_req_tag(l1d_mem_req_tag),
 	       .mem_req_opcode(l1d_mem_req_opcode),
 	       
 	       .mem_rsp_valid(l1d_mem_rsp_valid),
@@ -428,7 +424,6 @@ module core_l1d_l1i(clk,
 	      .mem_req_ack(l1i_mem_req_ack),
 	      .mem_req_valid(l1i_mem_req_valid),
 	      .mem_req_addr(l1i_mem_req_addr),
-	      .mem_req_tag(l1i_mem_req_tag),
 	      .mem_req_opcode(l1i_mem_req_opcode),
 	      .mem_rsp_valid(l1i_mem_rsp_valid),
 	      .mem_rsp_load_data(mem_rsp_load_data),

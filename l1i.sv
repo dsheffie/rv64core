@@ -177,7 +177,6 @@ module l1i(clk,
 	   mem_req_ack,
 	   mem_req_valid, 
 	   mem_req_addr, 
-	   mem_req_tag,
 	   mem_req_opcode,
 	   //reply from memory system
 	   mem_rsp_valid,
@@ -241,7 +240,6 @@ module l1i(clk,
    localparam BTB_ENTRIES = 1 << `LG_BTB_SZ;
 
    output logic [(`M_WIDTH-1):0] mem_req_addr;
-   output logic [`LG_MEM_TAG_ENTRIES-1:0] mem_req_tag;
    output logic [3:0] 			  mem_req_opcode;
    input logic 				  mem_rsp_valid;
    input logic [L1I_CL_LEN_BITS-1:0] 	  mem_rsp_load_data;
@@ -412,7 +410,6 @@ endfunction // is_nop
 
    assign mem_req_valid = r_mem_req_valid;
    assign mem_req_addr = r_mem_req_addr;
-   assign mem_req_tag = 'd0;
    assign mem_req_opcode = MEM_LW;
    assign cache_hits = r_cache_hits;
    assign cache_accesses = r_cache_accesses;

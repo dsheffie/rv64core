@@ -44,7 +44,6 @@ module l1d(clk,
 	   mem_req_valid, 
 	   mem_req_addr, 
 	   mem_req_store_data, 
-	   mem_req_tag,
 	   mem_req_opcode,
 	   //reply from memory system
 	   mem_rsp_valid,
@@ -92,7 +91,6 @@ module l1d(clk,
    output logic mem_req_valid;
    output logic [(`M_WIDTH-1):0] mem_req_addr;
    output logic [L1D_CL_LEN_BITS-1:0] mem_req_store_data;
-   output logic [`LG_MEM_TAG_ENTRIES-1:0] mem_req_tag;
    output logic [3:0] 			  mem_req_opcode;
 
    input logic 				  mem_rsp_valid;
