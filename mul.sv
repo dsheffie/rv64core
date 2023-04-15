@@ -48,7 +48,6 @@ module mul(clk,
    logic [`LG_HILO_PRF_ENTRIES-1:0] 	   r_hilo_ptr[`MUL_LAT:0];
    logic [`LG_ROB_ENTRIES-1:0] 		   r_rob_ptr[`MUL_LAT:0];
   
-   wire [63:0] 			   r_mul31;   
 
    assign complete = r_complete[`MUL_LAT];
    assign rob_ptr_out = r_rob_ptr[`MUL_LAT];
@@ -56,13 +55,38 @@ module mul(clk,
    assign hilo_prf_ptr_val_out = r_hilo_val[`MUL_LAT];
    assign hilo_prf_ptr_out = r_hilo_ptr[`MUL_LAT];
 
-   logic 			   r_signed;
+`ifdef FPGA
+   logic [63:0] 			   t_mul;
+   logic [63:0] 			   r_mul[`MUL_LAT:0];
+   always_comb
+     begin
+	t_mul = is_signed ? ($signed(src_A) * $signed(src_B)) 
+	  : src_A * src_B;
+	y = r_mul[`MUL_LAT];
+     end
+
+   always_ff@(posedge clk)
+     begin
+	r_mul[0] <= t_mul;
+	for(integer i = 1; i <= `MUL_LAT; i=i+1)
+	  begin
+	     r_mul[i] <= r_mul[i-1];
+	  end
+     end
    
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if(go) $display("multiplying %d by %d, t_mul %d\n", 
+   // 			src_A, src_B, t_mul);
+   // 	if(r_complete[`MUL_LAT]) $display("result is %d", y);
+   //   end
+`else
+   logic 			   r_signed;
+   wire [63:0] 			   r_mul31;   
    always_comb
      begin
 	y = r_mul31;
      end // always_comb
-
    wire [63:0] w_pp_us[31:0];
    wire [63:0] w_pp[31:0];
    logic [63:0] r_pp[`MUL_LAT:0][31:0];
@@ -178,6 +202,7 @@ module mul(clk,
 
 
    ff #(.N(64)) s0 (.clk(clk), .d(w_mul31), .q(r_mul31));
+`endif // !`ifdef FPGA
    
    always_ff@(posedge clk)
      begin
