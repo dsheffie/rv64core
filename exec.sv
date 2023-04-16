@@ -651,13 +651,16 @@ module exec(clk,
    find_first_set#(`LG_INT_SCHED_ENTRIES) ffs_int_sched_alloc( .in(~r_alu_sched_valid),
 							      .y(t_alu_sched_alloc_ptr));
 
-   //find_first_set#(LG_INT_SCHED_ENTRIES) ffs_int_sched_select( .in(t_alu_entry_rdy),
-//							       .y(t_alu_sched_select_ptr//));
+   find_first_set#(`LG_INT_SCHED_ENTRIES) ffs_int_sched_select( .in(w_alu_sched_oldest_ready),
+								.y(t_alu_sched_select_ptr));
 
-   fair_sched#(`LG_INT_SCHED_ENTRIES) ffs_int_sched_select( .clk(clk),
-							   .rst(reset),
-							   .in(t_alu_entry_rdy),
-							   .y(t_alu_sched_select_ptr));
+   
+   //wire [N_INT_SCHED_ENTRIES-1:0] w_alu_sched = w_alu_sched_oldest_ready=='d0 ? t_alu_entry_rdy : w_alu_sched_oldest_ready;
+   
+   //fair_sched#(`LG_INT_SCHED_ENTRIES) ffs_int_sched_select( .clk(clk),
+   //							   .rst(reset),
+   //							   .in(w_alu_sched),
+   //.y(t_alu_sched_select_ptr));
 
    
    always_comb
@@ -714,6 +717,44 @@ module exec(clk,
 	
      end // always_comb
   
+
+   logic [N_INT_SCHED_ENTRIES-1:0] t_alu_sched_mask_valid;
+   logic [N_INT_SCHED_ENTRIES-1:0] r_alu_sched_matrix [N_INT_SCHED_ENTRIES-1:0];
+   wire [N_INT_SCHED_ENTRIES-1:0] w_alu_sched_oldest_ready;
+   
+   always_comb
+     begin
+	t_alu_sched_mask_valid = r_alu_sched_valid & (~t_alu_select_entry);
+     end
+
+   generate
+      for(genvar i = 0; i < N_INT_SCHED_ENTRIES; i=i+1)
+	begin
+	   assign w_alu_sched_oldest_ready[i] = t_alu_entry_rdy[i] & (~(|(t_alu_entry_rdy & r_alu_sched_matrix[i])));
+	   always_ff@(posedge clk)
+	     begin
+		if(reset || t_flash_clear)
+		  begin
+		     r_alu_sched_matrix[i] <= 'd0;
+		  end
+		else if(t_alu_alloc_entry[i])
+		  begin
+		     r_alu_sched_matrix[i] <= t_alu_sched_mask_valid;
+		  end
+		else if(t_alu_entry_rdy != 'd0)
+		  begin
+		     r_alu_sched_matrix[i] <= r_alu_sched_matrix[i] & (~t_alu_select_entry);
+		  end
+	     end
+	end // for (genvar i = 0; i < N_INT_SCHED_ENTRIES; i=i+1)
+   endgenerate
+
+   //always_ff@(negedge clk)
+   //begin
+   //if(t_alu_entry_rdy != 'd0)
+   //	  $display("w_alu_sched_oldest = %b, w_alu_sched_oldest_ready = %b, t_alu_entry_rdy = %b", 
+   //w_alu_sched_oldest, w_alu_sched_oldest_ready, t_alu_entry_rdy);
+   //end
    
    generate
       for(genvar i = 0; i < N_INT_SCHED_ENTRIES; i=i+1)
