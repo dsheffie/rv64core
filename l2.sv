@@ -77,14 +77,17 @@ module l2(clk,
    logic 		   r_reload, n_reload;
    
    
-   typedef enum 	logic [2:0] {
+   typedef enum 	logic [3:0] {
 				     INITIALIZE,
 				     IDLE,
 				     WAIT_FOR_RAM,
 				     CHECK_VALID_AND_TAG,
 				     CLEAN_RELOAD,
 				     WAIT_CLEAN_RELOAD,
-				     WAIT_STORE_IDLE
+				     WAIT_STORE_IDLE,
+				     FLUSH,
+				     FLUSH_WAIT,
+				     FLUSH_TRIAGE
 				     } state_t;
 
    state_t n_state, r_state;
@@ -129,8 +132,8 @@ module l2(clk,
      (.clk(clk), .addr(t_idx), .wr_data(t_dirty), .wr_en(t_wr_dirty), .rd_data(w_dirty));   
 
    wire 		w_hit = w_valid ? (r_tag == w_tag) : 1'b0;
-
-   
+   wire 		w_need_wb = w_valid ? w_dirty : 1'b0;
+      
    always_ff@(posedge clk)
      begin
 	if(reset)
@@ -262,7 +265,8 @@ module l2(clk,
 	       
 	       if(n_flush_req)
 		 begin
-		    $stop();
+		    t_idx = 'd0;
+		    n_state = FLUSH_WAIT;
 		 end
 	       else if(l1_mem_req_valid)
 		 begin
@@ -357,6 +361,35 @@ module l2(clk,
 	  WAIT_STORE_IDLE:
 	    begin
 	       n_state = IDLE;
+	    end
+	  FLUSH:
+	    begin
+	       
+	    end
+	  FLUSH_WAIT:
+	    begin
+	       n_state = FLUSH_TRIAGE;
+	    end
+	  FLUSH_TRIAGE:
+	    begin
+	       if(w_need_wb)
+		 begin
+		    $stop();
+		 end
+	       else
+		 begin
+		    t_idx = r_idx + 'd1;
+		    if(r_idx == (L2_LINES-1))
+		      begin
+			 n_state = IDLE;
+			 n_flush_complete = 1'b1;
+			 n_flush_req = 1'b0;
+		      end
+		    else
+		      begin
+			 n_state = FLUSH_WAIT;
+		      end
+		 end
 	    end
 	  default:
 	    begin
