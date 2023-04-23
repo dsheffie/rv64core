@@ -83,11 +83,11 @@ module core_l1d_l1i(clk,
    /* mem port */
    output logic 		 mem_req_valid;
    output logic [`M_WIDTH-1:0] 	 mem_req_addr;
-   output logic [L1D_CL_LEN_BITS-1:0] mem_req_store_data;
-   output logic [3:0] 			  mem_req_opcode;
+   output logic [511:0] 	 mem_req_store_data;
+   output logic [3:0] 		 mem_req_opcode;
    
    input logic  			  mem_rsp_valid;
-   input logic [L1D_CL_LEN_BITS-1:0] 	  mem_rsp_load_data;
+   input logic [511:0] 			  mem_rsp_load_data;
 
    output logic [4:0] 			  retire_reg_ptr;
    output logic [31:0] 			  retire_reg_data;
@@ -273,10 +273,11 @@ module core_l1d_l1i(clk,
 	n_l1d_req = r_l1d_req || l1d_mem_req_valid;
 	n_req = r_req;
 	
-	mem_req_valid = n_req;	
-	mem_req_addr = (r_state == GNT_L1I) ? l1i_mem_req_addr: l1d_mem_req_addr;
-	mem_req_store_data = l1d_mem_req_store_data;
-	mem_req_opcode = (r_state == GNT_L1I) ? l1i_mem_req_opcode : l1d_mem_req_opcode;
+	//mem_req_valid = n_req;	
+	//mem_req_addr = (r_state == GNT_L1I) ? l1i_mem_req_addr: l1d_mem_req_addr;
+	//mem_req_store_data = l1d_mem_req_store_data;
+	//mem_req_opcode = (r_state == GNT_L1I) ? l1i_mem_req_opcode : l1d_mem_req_opcode;
+	
 	l1d_mem_rsp_valid = 1'b0;
 	l1i_mem_rsp_valid = 1'b0;
 	
@@ -285,13 +286,11 @@ module core_l1d_l1i(clk,
 	    begin
 	       if(n_l1d_req && !n_l1i_req)
 		 begin
-		    //$display("generating memory request for the l1d");
 		    n_state = GNT_L1D;
 		    n_req = 1'b1;
 		 end
 	       else if(!n_l1d_req && n_l1i_req)
 		 begin
-		    //$display("generating memory request for the l1i, address %x / %x", mem_req_addr, l1i_mem_req_addr);
 		    n_state = GNT_L1I;
 		    n_req = 1'b1;
 		 end
@@ -305,7 +304,7 @@ module core_l1d_l1i(clk,
 	    begin
 	       n_last_gnt = 1'b0;
 	       n_l1d_req = 1'b0;
-	       if(mem_rsp_valid)
+	       if(w_l1_mem_rsp_valid)
 		 begin
 		    n_req = 1'b0;
 		    n_state = IDLE;
@@ -316,8 +315,7 @@ module core_l1d_l1i(clk,
 	    begin
 	       n_last_gnt = 1'b1;
 	       n_l1i_req = 1'b0;
-	       //$display("waiting for cache line for i-cache returns, req addr %x", mem_req_addr);	       
-	       if(mem_rsp_valid)
+	       if(w_l1_mem_rsp_valid)
 		 begin
 		    n_req = 1'b0;		    
 		    n_state = IDLE;
@@ -330,6 +328,42 @@ module core_l1d_l1i(clk,
 	  endcase
      end // always_comb
 
+   wire w_l2_flush_complete;
+   
+   wire [127:0] w_l1_mem_load_data;
+   wire 	w_l1_mem_rsp_valid;
+   
+   l2 l2cache (
+	       .clk(clk),
+	       .reset(reset),
+	       
+	       .flush_req(),
+	       .flush_complete(w_l2_flush_complete),
+	       
+	       .l1_mem_req_valid(n_req),
+	       .l1_mem_req_ack(),
+	       .l1_mem_req_addr((r_state == GNT_L1I) ? 
+				l1i_mem_req_addr : 
+				l1d_mem_req_addr),
+	       .l1_mem_req_store_data(l1d_mem_req_store_data),
+	       .l1_mem_req_opcode((r_state == GNT_L1I) ? 
+				  l1i_mem_req_opcode : 
+				  l1d_mem_req_opcode),
+	       
+	       .l1_mem_rsp_valid(w_l1_mem_rsp_valid),
+	       .l1_mem_load_data(w_l1_mem_load_data),
+	       
+	       .mem_req_ack(),
+	       .mem_req_valid(mem_req_valid),
+	       .mem_req_addr(mem_req_addr),
+	       .mem_req_store_data(mem_req_store_data),
+	       .mem_req_opcode(mem_req_opcode),
+
+	       .mem_rsp_valid(mem_rsp_valid),
+	       .mem_rsp_load_data(mem_rsp_load_data)
+	       );
+   
+   
    always_ff@(posedge clk)
      begin
 	if(reset)
@@ -388,7 +422,7 @@ module core_l1d_l1i(clk,
 	       .mem_req_opcode(l1d_mem_req_opcode),
 	       
 	       .mem_rsp_valid(l1d_mem_rsp_valid),
-	       .mem_rsp_load_data(mem_rsp_load_data),
+	       .mem_rsp_load_data(w_l1_mem_load_data),
 
 	       .cache_accesses(t_l1d_cache_accesses),
 	       .cache_hits(t_l1d_cache_hits)
@@ -426,7 +460,7 @@ module core_l1d_l1i(clk,
 	      .mem_req_addr(l1i_mem_req_addr),
 	      .mem_req_opcode(l1i_mem_req_opcode),
 	      .mem_rsp_valid(l1i_mem_rsp_valid),
-	      .mem_rsp_load_data(mem_rsp_load_data),
+	      .mem_rsp_load_data(w_l1_mem_load_data),
 	      .cache_accesses(t_l1i_cache_accesses),
 	      .cache_hits(t_l1i_cache_hits)	      
 	      );
@@ -448,7 +482,8 @@ module core_l1d_l1i(clk,
 	     .flush_cl_req(flush_cl_req),
 	     .flush_cl_addr(flush_cl_addr),	     
 	     .l1d_flush_complete(l1d_flush_complete),
-	     .l1i_flush_complete(l1i_flush_complete),	     	     
+	     .l1i_flush_complete(l1i_flush_complete),
+	     .l2_flush_complete(w_l2_flush_complete),
 	     .insn(insn),
 	     .insn_valid(insn_valid),
 	     .insn_ack(insn_ack),

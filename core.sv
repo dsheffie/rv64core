@@ -47,6 +47,7 @@ module core(clk,
 	    flush_cl_addr,
 	    l1d_flush_complete,
 	    l1i_flush_complete,
+	    l2_flush_complete,
 	    insn, 
 	    insn_valid,
 	    insn_ack,
@@ -118,7 +119,8 @@ module core(clk,
    output logic [(`M_WIDTH-1):0] flush_cl_addr;
    input logic 	l1d_flush_complete;
    input logic 	l1i_flush_complete;
-   
+   input logic 	l2_flush_complete;
+	
    input 	insn_fetch_t insn;
    input logic 	insn_valid;
    output logic insn_ack;

@@ -1084,7 +1084,7 @@ int main(int argc, char **argv) {
 
       
       if(tb->mem_req_opcode == 4) {/*load word */
-	for(int i = 0; i < 4; i++) {
+	for(int i = 0; i < 16; i++) {
 	  uint64_t ea = (tb->mem_req_addr + 4*i) & ((1UL<<32)-1);
 	  tb->mem_rsp_load_data[i] = s->mem.get<uint32_t>(ea);
 	}
@@ -1094,7 +1094,7 @@ int main(int argc, char **argv) {
 	++n_loads;
       }
       else if(tb->mem_req_opcode == 7) { /* store word */
-	for(int i = 0; i < 4; i++) {
+	for(int i = 0; i < 16; i++) {
 	  uint64_t ea = (tb->mem_req_addr + 4*i) & ((1UL<<32)-1);
 	  s->mem.set<uint32_t>(ea, tb->mem_req_store_data[i]);
 	}
