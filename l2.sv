@@ -177,7 +177,7 @@ module l2(clk,
 	if(r_state == IDLE && l1_mem_req_valid)
 	  begin
 	     $display("cycle %d : request for address %x", r_cycle, l1_mem_req_addr);
-	     $display("tag = %x, index = %d", n_tag, t_idx);
+	     $display("tag = %x, index = %d, bank = %d", n_tag, t_idx, n_bank);
 	  end
 	if(r_state == CLEAN_RELOAD && mem_rsp_valid)
 	  begin
@@ -248,7 +248,7 @@ module l2(clk,
 	       t_idx = l1_mem_req_addr[LG_L2_LINES+5:6];
 	       n_tag = l1_mem_req_addr[31:LG_L2_LINES+6];
 	       n_bank = l1_mem_req_addr[5:4];
-	       n_addr = l1_mem_req_addr;
+	       n_addr = {l1_mem_req_addr[31:6], 6'd0};
 	       n_opcode = l1_mem_req_opcode;
 	       if(flush_req)
 		 begin

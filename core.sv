@@ -1984,6 +1984,11 @@ module core(clk,
 
    always_ff@(negedge clk)
      begin
+	if(t_push_dq_one)
+	  $display("decoded %x to uop %d", t_dec_uop.pc, t_dec_uop.op);
+	if(t_push_dq_two)
+	  $display("decoded %x to uop %d", t_dec_uop2.pc, t_dec_uop2.op);	
+
     	if(insn_ack && insn_ack_two && 1'b0)
     	  begin
     	     $display("ack two insns in cycle %d, valid %b, %b, pc %x %x", 
