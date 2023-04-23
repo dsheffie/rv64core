@@ -264,6 +264,10 @@ module core_l1d_l1i(clk,
    insn_fetch_t insn, insn2;
 
 
+   logic [31:0] 			  t_l2_req_addr;
+   logic [3:0] 				  t_l2_req_opcode;
+   wire w_l1_mem_req_ack;
+   
    
    always_comb
      begin
@@ -274,9 +278,9 @@ module core_l1d_l1i(clk,
 	n_req = r_req;
 	
 	//mem_req_valid = n_req;	
-	//mem_req_addr = (r_state == GNT_L1I) ? l1i_mem_req_addr: l1d_mem_req_addr;
+	t_l2_req_addr = (r_state == GNT_L1I) ? l1i_mem_req_addr: l1d_mem_req_addr;
 	//mem_req_store_data = l1d_mem_req_store_data;
-	//mem_req_opcode = (r_state == GNT_L1I) ? l1i_mem_req_opcode : l1d_mem_req_opcode;
+	t_l2_req_opcode = (r_state == GNT_L1I) ? l1i_mem_req_opcode : l1d_mem_req_opcode;
 	
 	l1d_mem_rsp_valid = 1'b0;
 	l1i_mem_rsp_valid = 1'b0;
@@ -304,8 +308,14 @@ module core_l1d_l1i(clk,
 	    begin
 	       n_last_gnt = 1'b0;
 	       n_l1d_req = 1'b0;
+	       if(w_l1_mem_req_ack)
+		 begin
+		    n_req = 1'b0;
+		 end
+	       
 	       if(w_l1_mem_rsp_valid)
 		 begin
+		    $display("l2 cache complete for l1d");
 		    n_req = 1'b0;
 		    n_state = IDLE;
 		    l1d_mem_rsp_valid = 1'b1;
@@ -315,8 +325,15 @@ module core_l1d_l1i(clk,
 	    begin
 	       n_last_gnt = 1'b1;
 	       n_l1i_req = 1'b0;
+	       if(w_l1_mem_req_ack)
+		 begin
+		    n_req = 1'b0;
+		 end
+	       
 	       if(w_l1_mem_rsp_valid)
 		 begin
+		    $display("l2 cache complete for l1i for addr %x",
+			     t_l2_req_addr);
 		    n_req = 1'b0;		    
 		    n_state = IDLE;
 		    l1i_mem_rsp_valid = 1'b1;
@@ -340,15 +357,11 @@ module core_l1d_l1i(clk,
 	       .flush_req(),
 	       .flush_complete(w_l2_flush_complete),
 	       
-	       .l1_mem_req_valid(n_req),
-	       .l1_mem_req_ack(),
-	       .l1_mem_req_addr((r_state == GNT_L1I) ? 
-				l1i_mem_req_addr : 
-				l1d_mem_req_addr),
+	       .l1_mem_req_valid(r_req),
+	       .l1_mem_req_ack(w_l1_mem_req_ack),
+	       .l1_mem_req_addr(t_l2_req_addr),
 	       .l1_mem_req_store_data(l1d_mem_req_store_data),
-	       .l1_mem_req_opcode((r_state == GNT_L1I) ? 
-				  l1i_mem_req_opcode : 
-				  l1d_mem_req_opcode),
+	       .l1_mem_req_opcode(t_l2_req_opcode),
 	       
 	       .l1_mem_rsp_valid(w_l1_mem_rsp_valid),
 	       .l1_mem_load_data(w_l1_mem_load_data),

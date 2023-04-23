@@ -61,13 +61,19 @@ module l2(clk,
    logic 		t_valid, t_dirty;
    logic [LG_L2_LINES-1:0] t_idx, r_idx;
    logic [TAG_BITS-1:0]    n_tag, r_tag;
-   logic [1:0] 		   n_bank, r_bank;
-   logic [31:0] 	   n_addr, r_addr;
+   logic [1:0] 		 n_bank, r_bank;
+   logic [31:0] 	 n_addr, r_addr;
    
    logic [3:0] 		   n_opcode, r_opcode;
 
    logic 		   r_mem_req, n_mem_req;
    logic [3:0] 		   r_mem_opcode, n_mem_opcode;
+   logic 		   r_req_ack, n_req_ack;
+   
+   logic 		   r_rsp_valid, n_rsp_valid;
+   logic [127:0] 	   r_rsp_data, n_rsp_data;
+
+   logic 		   r_reload, n_reload;
    
    
    typedef enum 	logic [2:0] {
@@ -75,7 +81,8 @@ module l2(clk,
 				     IDLE,
 				     WAIT_FOR_RAM,
 				     CHECK_VALID_AND_TAG,
-				     CLEAN_RELOAD
+				     CLEAN_RELOAD,
+				     WAIT_CLEAN_RELOAD
 				     } state_t;
 
    state_t n_state, r_state;
@@ -87,7 +94,10 @@ module l2(clk,
    assign mem_req_addr = r_addr;
    assign mem_req_valid = r_mem_req;
    assign mem_req_opcode = r_mem_opcode;
-
+   assign l1_mem_rsp_valid = r_rsp_valid;
+   assign l1_mem_load_data = r_rsp_data;
+   assign l1_mem_req_ack = r_req_ack;
+        
    logic [127:0] 	t_d0, t_d1, t_d2, t_d3;
       
    wire [127:0] 	w_d0, w_d1, w_d2, w_d3;
@@ -117,6 +127,7 @@ module l2(clk,
      (.clk(clk), .addr(t_idx), .wr_data(t_dirty), .wr_en(t_wr_dirty), .rd_data(w_dirty));   
 
    wire 		w_hit = w_valid ? (r_tag == w_tag) : 1'b0;
+
    
    always_ff@(posedge clk)
      begin
@@ -131,6 +142,10 @@ module l2(clk,
 	     r_addr <= 'd0;
 	     r_mem_req <= 1'b0;
 	     r_mem_opcode <= 4'd0;
+	     r_rsp_data <= 'd0;
+	     r_rsp_valid <= 1'b0;
+	     r_reload <= 1'b0;
+	     r_req_ack <= 1'b0;
 	  end
 	else
 	  begin
@@ -143,9 +158,40 @@ module l2(clk,
 	     r_addr <= n_addr;
 	     r_mem_req <= n_mem_req;
 	     r_mem_opcode <= n_mem_opcode;
+	     r_rsp_data <= n_rsp_data;
+	     r_rsp_valid <= n_rsp_valid;
+	     r_reload <= n_reload;
+	     r_req_ack <= n_req_ack;
 	  end
      end
 
+
+   logic [31:0] r_cycle;
+   always_ff@(posedge clk)
+     begin
+	r_cycle <= reset ? 'd0 : (r_cycle + 'd1);
+     end
+
+   always_ff@(negedge clk)
+     begin
+	if(r_state == IDLE && l1_mem_req_valid)
+	  begin
+	     $display("cycle %d : request for address %x", r_cycle, l1_mem_req_addr);
+	     $display("tag = %x, index = %d", n_tag, t_idx);
+	  end
+	if(r_state == CLEAN_RELOAD && mem_rsp_valid)
+	  begin
+	     $display("cycle %d : clean reload for address %x", r_cycle, r_addr);
+	     $display("load data %x%x", 
+		      mem_rsp_load_data[511:256],
+		      mem_rsp_load_data[255:0]
+		      );
+	  end
+	if(r_rsp_valid)
+	  begin
+	     $display("cycle %d : reply data : %x", r_cycle, r_rsp_data);
+	  end
+     end
 
    always_comb
      begin
@@ -165,17 +211,23 @@ module l2(clk,
 	n_opcode = r_opcode;
 	n_addr = r_addr;
 
+	n_req_ack = 1'b0;
 	n_mem_req = r_mem_req;
 	n_mem_opcode = r_mem_opcode;
 		
 	t_valid = 1'b0;
 	t_dirty = 1'b0;
 
-	t_d0 = mem_req_store_data[127:0];
-	t_d1 = mem_req_store_data[255:128];
-	t_d2 = mem_req_store_data[383:256];
-	t_d3 = mem_req_store_data[511:384];
-	
+	t_d0 = mem_rsp_load_data[127:0];
+	t_d1 = mem_rsp_load_data[255:128];
+	t_d2 = mem_rsp_load_data[383:256];
+	t_d3 = mem_rsp_load_data[511:384];
+
+	n_rsp_data = r_rsp_data;
+	n_rsp_valid = 1'b0;
+
+	n_reload = r_reload;
+
 	case(r_state)
 	  INITIALIZE:
 	    begin
@@ -197,11 +249,14 @@ module l2(clk,
 	       n_tag = l1_mem_req_addr[31:LG_L2_LINES+6];
 	       n_bank = l1_mem_req_addr[5:4];
 	       n_addr = l1_mem_req_addr;
-	       
 	       n_opcode = l1_mem_req_opcode;
-	       
-	       if(l1_mem_req_valid)
+	       if(flush_req)
 		 begin
+		    $stop();
+		 end
+	       else if(l1_mem_req_valid)
+		 begin
+		    n_req_ack = 1'b1;
 		    n_state = WAIT_FOR_RAM;
 		 end
 	    end
@@ -212,10 +267,25 @@ module l2(clk,
 	
 	  CHECK_VALID_AND_TAG:
 	    begin
+	       //load hit
 	       if(w_hit)
 		 begin
-		    $display("cache hit");
-		    $stop();
+		    n_reload = 1'b0;
+		    if(r_opcode == 4'd4)
+		      begin
+			 n_rsp_valid = 1'b1;
+			 n_rsp_data = r_bank == 'd0 ? w_d0 :
+				      r_bank == 'd1 ? w_d1 :
+				      r_bank == 'd2 ? w_d2 :
+				      w_d3;
+			 n_state = IDLE;
+
+		      end
+		    else
+		      begin
+			 $display("cache hit, op type %d", r_opcode);
+			 $stop();			 
+		      end
 		 end
 	       else
 		 begin
@@ -225,6 +295,9 @@ module l2(clk,
 		      end
 		    else //invalid or clean
 		      begin
+			 if(r_reload)
+			   $stop();
+			 n_reload = 1'b1;
 			 n_state = CLEAN_RELOAD;
 			 n_mem_opcode = 4'd4; //load
 			 n_mem_req = 1'b1;
@@ -235,6 +308,7 @@ module l2(clk,
 	    begin
 	       if(mem_rsp_valid)
 		 begin
+		    n_mem_req = 1'b0;
 		    t_valid = 1'b1;
 		    t_wr_valid = 1'b1;
 		    t_wr_tag = 1'b1;
@@ -242,8 +316,12 @@ module l2(clk,
 		    t_wr_d1 = 1'b1;
 		    t_wr_d2 = 1'b1;
 		    t_wr_d3 = 1'b1;
-		    n_state = WAIT_FOR_RAM;
+		    n_state = WAIT_CLEAN_RELOAD;
 		 end
+	    end // case: CLEAN_RELOAD
+	  WAIT_CLEAN_RELOAD: /* need a cycle to turn around */
+	    begin
+	       n_state = WAIT_FOR_RAM;
 	    end
 	  default:
 	    begin
