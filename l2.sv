@@ -72,7 +72,8 @@ module l2(clk,
    
    logic 		   r_rsp_valid, n_rsp_valid;
    logic [127:0] 	   r_rsp_data, n_rsp_data;
-
+   logic [127:0] 	   r_store_data, n_store_data;
+   
    logic 		   r_reload, n_reload;
    
    
@@ -82,13 +83,14 @@ module l2(clk,
 				     WAIT_FOR_RAM,
 				     CHECK_VALID_AND_TAG,
 				     CLEAN_RELOAD,
-				     WAIT_CLEAN_RELOAD
+				     WAIT_CLEAN_RELOAD,
+				     WAIT_STORE_IDLE
 				     } state_t;
 
    state_t n_state, r_state;
    logic 		n_flush_complete, r_flush_complete;
-
-   
+   logic 		r_flush_req, n_flush_req;
+      
 
    assign flush_complete = r_flush_complete;
    assign mem_req_addr = r_addr;
@@ -146,6 +148,8 @@ module l2(clk,
 	     r_rsp_valid <= 1'b0;
 	     r_reload <= 1'b0;
 	     r_req_ack <= 1'b0;
+	     r_store_data <= 'd0;
+	     r_flush_req <= 1'b0;
 	  end
 	else
 	  begin
@@ -162,6 +166,8 @@ module l2(clk,
 	     r_rsp_valid <= n_rsp_valid;
 	     r_reload <= n_reload;
 	     r_req_ack <= n_req_ack;
+	     r_store_data <= n_store_data;
+	     r_flush_req <= n_flush_req;
 	  end
      end
 
@@ -227,7 +233,9 @@ module l2(clk,
 	n_rsp_valid = 1'b0;
 
 	n_reload = r_reload;
-
+	n_store_data = r_store_data;
+	n_flush_req = flush_req | r_flush_req;
+	
 	case(r_state)
 	  INITIALIZE:
 	    begin
@@ -250,7 +258,9 @@ module l2(clk,
 	       n_bank = l1_mem_req_addr[5:4];
 	       n_addr = {l1_mem_req_addr[31:6], 6'd0};
 	       n_opcode = l1_mem_req_opcode;
-	       if(flush_req)
+	       n_store_data = l1_mem_req_store_data;
+	       
+	       if(n_flush_req)
 		 begin
 		    $stop();
 		 end
@@ -281,10 +291,31 @@ module l2(clk,
 			 n_state = IDLE;
 
 		      end
-		    else
+		    else if(r_opcode == 4'd7)
 		      begin
-			 $display("cache hit, op type %d", r_opcode);
-			 $stop();			 
+			 t_wr_dirty = 1'b1;
+			 t_dirty = 1'b1;
+			 n_state = WAIT_STORE_IDLE;			 
+			 if(r_bank == 'd0)
+			   begin
+			      t_d0 = r_store_data;
+			      t_wr_d0 = 1'b1;
+			   end
+			 else if(r_bank == 'd1)
+			   begin
+			      t_d1 = r_store_data;
+			      t_wr_d1 = 1'b1;
+			   end
+			 else if(r_bank == 'd2)
+			   begin
+			      t_d2 = r_store_data;			      
+			      t_wr_d2 = 1'b1;
+			   end
+			 else
+			   begin
+			      t_d3 = r_store_data;			      
+			      t_wr_d3 = 1'b1;
+			   end
 		      end
 		 end
 	       else
@@ -322,6 +353,10 @@ module l2(clk,
 	  WAIT_CLEAN_RELOAD: /* need a cycle to turn around */
 	    begin
 	       n_state = WAIT_FOR_RAM;
+	    end
+	  WAIT_STORE_IDLE:
+	    begin
+	       n_state = IDLE;
 	    end
 	  default:
 	    begin

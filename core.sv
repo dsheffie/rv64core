@@ -115,6 +115,7 @@ module core(clk,
    output logic 		ready_for_resume;
    output logic 		flush_req_l1d;
    output logic 		flush_req_l1i;
+   
    output logic flush_cl_req;
    output logic [(`M_WIDTH-1):0] flush_cl_addr;
    input logic 	l1d_flush_complete;
@@ -351,6 +352,7 @@ module core(clk,
    logic 		     n_machine_clr, r_machine_clr;
    logic 		     n_flush_req_l1d, r_flush_req_l1d;
    logic 		     n_flush_req_l1i, r_flush_req_l1i;
+   
    logic 		     n_flush_cl_req, r_flush_cl_req;
    logic [(`M_WIDTH-1):0]    n_flush_cl_addr, r_flush_cl_addr;
    logic 		     r_ds_done, n_ds_done;

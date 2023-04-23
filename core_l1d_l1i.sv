@@ -145,14 +145,17 @@ module core_l1d_l1i(clk,
    logic 				  core_store_data_ack;
    
    
-   typedef enum logic [1:0] {
+   typedef enum logic [2:0] {
 			     FLUSH_IDLE = 'd0,
 			     WAIT_FOR_L1D_L1I = 'd1,
 			     GOT_L1D = 'd2,
-			     GOT_L1I = 'd3
+			     GOT_L1I = 'd3,
+			     FLUSH_L2 = 'd4
    } flush_state_t;
    flush_state_t n_flush_state, r_flush_state;
    logic 	r_flush, n_flush;
+   logic 	r_flush_l2, n_flush_l2;
+   
    logic 	memq_empty;   
    assign in_flush_mode = r_flush;
 
@@ -164,17 +167,21 @@ module core_l1d_l1i(clk,
 	  begin
 	     r_flush_state <= FLUSH_IDLE;
 	     r_flush <= 1'b0;
+	     r_flush_l2 <= 1'b0;
 	  end
 	else
 	  begin
 	     r_flush_state <= n_flush_state;
 	     r_flush <= n_flush;
+	     r_flush_l2 <= n_flush_l2;
 	  end
      end // always_ff@ (posedge clk)
    always_comb
      begin
 	n_flush_state = r_flush_state;
 	n_flush = r_flush;
+	n_flush_l2 = 1'b0;
+	
 	case(r_flush_state)
 	  FLUSH_IDLE:
 	    begin
@@ -206,25 +213,32 @@ module core_l1d_l1i(clk,
 		 end
 	       else if(l1d_flush_complete && l1i_flush_complete)
 		 begin
-		    n_flush_state = FLUSH_IDLE;
-		    n_flush = 1'b0;
+		    n_flush_state = FLUSH_L2;
+		    n_flush_l2 = 1'b1;
 		 end
 	    end
 	  GOT_L1D:
 	    begin
 	       if(l1i_flush_complete)
 		 begin
-		    n_flush_state = FLUSH_IDLE;
-		    n_flush = 1'b0;
+		    n_flush_state = FLUSH_L2;
+		    n_flush_l2 = 1'b1;
 		 end
 	    end
 	  GOT_L1I:
 	    begin
 	       if(l1d_flush_complete)
 		 begin
-		    n_flush_state = FLUSH_IDLE;
-		    n_flush = 1'b0;
+		    n_flush_state = FLUSH_L2;
+		    n_flush_l2 = 1'b1;
 		 end
+	    end
+	  FLUSH_L2:
+	    begin
+
+	    end
+	  default:
+	    begin
 	    end
 	endcase // case (r_flush_state)
      end // always_comb
@@ -354,7 +368,7 @@ module core_l1d_l1i(clk,
 	       .clk(clk),
 	       .reset(reset),
 	       
-	       .flush_req(),
+	       .flush_req(r_flush_l2),
 	       .flush_complete(w_l2_flush_complete),
 	       
 	       .l1_mem_req_valid(r_req),
