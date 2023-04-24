@@ -128,12 +128,17 @@ module core_l1d_l1i(clk,
    logic 				  head_of_rob_ptr_valid;   
    logic [`LG_ROB_ENTRIES-1:0] 		  head_of_rob_ptr;
 
-   logic 				  flush_req_l1i, flush_req_l1d;
+   wire 				  flush_req_l1i, flush_req_l1d;
    logic 				  flush_cl_req;
    logic [`M_WIDTH-1:0] 		  flush_cl_addr;
-   logic 				  l1d_flush_complete;
-   logic 				  l1i_flush_complete;
+   wire 				  l1d_flush_complete;
+   wire 				  l1i_flush_complete;
 
+   always_ff@(negedge clk)
+     begin
+	if(flush_req_l1i ||  flush_req_l1d) $stop();
+     end
+   
    mem_req_t core_mem_req;
    mem_rsp_t core_mem_rsp;
    mem_data_t core_store_data;
@@ -176,6 +181,8 @@ module core_l1d_l1i(clk,
 	     r_flush_l2 <= n_flush_l2;
 	  end
      end // always_ff@ (posedge clk)
+
+	      
    always_comb
      begin
 	n_flush_state = r_flush_state;
@@ -213,6 +220,7 @@ module core_l1d_l1i(clk,
 		 end
 	       else if(l1d_flush_complete && l1i_flush_complete)
 		 begin
+		    $display("flush l2");
 		    n_flush_state = FLUSH_L2;
 		    n_flush_l2 = 1'b1;
 		 end
@@ -221,6 +229,7 @@ module core_l1d_l1i(clk,
 	    begin
 	       if(l1i_flush_complete)
 		 begin
+		    $display("flush l2");
 		    n_flush_state = FLUSH_L2;
 		    n_flush_l2 = 1'b1;
 		 end
@@ -229,13 +238,20 @@ module core_l1d_l1i(clk,
 	    begin
 	       if(l1d_flush_complete)
 		 begin
+		    $display("flush l2");
 		    n_flush_state = FLUSH_L2;
 		    n_flush_l2 = 1'b1;
 		 end
 	    end
 	  FLUSH_L2:
 	    begin
-
+	       if(w_l2_flush_complete)
+		 begin
+		    $display("L2 FLUSH COMPLETE");
+		    n_flush = 1'b0;
+		    n_flush_state = FLUSH_IDLE;
+		    $stop();
+		 end
 	    end
 	  default:
 	    begin
@@ -367,8 +383,12 @@ module core_l1d_l1i(clk,
    l2 l2cache (
 	       .clk(clk),
 	       .reset(reset),
+
+	       .l1i_flush_req(flush_req_l1i),
+	       .l1d_flush_req(flush_req_l1d),
+	       .l1i_flush_complete(l1i_flush_complete),
+	       .l1d_flush_complete(l1d_flush_complete),
 	       
-	       .flush_req(r_flush_l2),
 	       .flush_complete(w_l2_flush_complete),
 	       
 	       .l1_mem_req_valid(r_req),

@@ -304,6 +304,7 @@ module core(clk,
 
    logic 		     n_l1i_flush_complete, r_l1i_flush_complete;
    logic 		     n_l1d_flush_complete, r_l1d_flush_complete;
+   logic 		     n_l2_flush_complete, r_l2_flush_complete;
    
    logic [(`M_WIDTH-1):0]    t_cpr0_status_reg;
    
@@ -361,14 +362,14 @@ module core(clk,
    logic 		     t_faulted_head_and_serializing_delay;
    
    typedef enum logic [4:0] {
-			     FLUSH_FOR_HALT,			     
-			     HALT,
-			     ACTIVE,
-			     DRAIN,
-			     RAT,
-			     DELAY_SLOT,
-			     ALLOC_FOR_SERIALIZE,
-			     MONITOR_FLUSH_CACHE,
+			     FLUSH_FOR_HALT, //0			     
+			     HALT, //1
+			     ACTIVE, //2
+			     DRAIN, //3
+			     RAT, //4
+			     DELAY_SLOT, //5
+			     ALLOC_FOR_SERIALIZE, //6
+			     MONITOR_FLUSH_CACHE, //7
 			     HANDLE_MONITOR,
 			     ALLOC_FOR_MONITOR,
 			     WAIT_FOR_MONITOR,
@@ -490,6 +491,7 @@ module core(clk,
 	     r_ready_for_resume <= 1'b0;
 	     r_l1i_flush_complete <= 1'b0;
 	     r_l1d_flush_complete <= 1'b0;
+	     r_l2_flush_complete <= 1'b0;
 	     r_ds_done <= 1'b0;
 	     drain_ds_complete <= 1'b0;
 	  end
@@ -518,6 +520,7 @@ module core(clk,
 	     r_ready_for_resume <= n_ready_for_resume;
 	     r_l1i_flush_complete <= n_l1i_flush_complete;
 	     r_l1d_flush_complete <= n_l1d_flush_complete;
+	     r_l2_flush_complete <= n_l2_flush_complete;
 	     r_ds_done <= n_ds_done;
 	     drain_ds_complete <= r_ds_done;	     
 	  end
@@ -778,6 +781,7 @@ module core(clk,
 	n_ready_for_resume = 1'b0;
 	n_l1i_flush_complete = r_l1i_flush_complete || l1i_flush_complete;
 	n_l1d_flush_complete = r_l1d_flush_complete || l1d_flush_complete;
+	n_l2_flush_complete = r_l2_flush_complete || l2_flush_complete;
 	
 	
 	if(r_state == ACTIVE)
@@ -1037,12 +1041,13 @@ module core(clk,
 	    end
 	  MONITOR_FLUSH_CACHE:
 	    begin
-	       //$display("%d : %b %b", r_cycle, n_l1i_flush_complete, n_l1d_flush_complete);
-	       if(/*n_l1i_flush_complete &&*/ n_l1d_flush_complete)
+	       //$display("%d : %b %b %b", r_cycle, n_l1i_flush_complete, n_l1d_flush_complete, n_l2_flush_complete);
+	       if(/*n_l1i_flush_complete &&*/ n_l1d_flush_complete && n_l2_flush_complete)
 		 begin
 		    n_state = HANDLE_MONITOR;
 		    n_l1i_flush_complete = 1'b0;
 		    n_l1d_flush_complete = 1'b0;
+		    n_l2_flush_complete = 1'b0;
 		 end
 	    end
 	  GET_TICKS:
@@ -1084,12 +1089,14 @@ module core(clk,
 	    end // case: WAIT_FOR_MONITOR
 	  FLUSH_FOR_HALT:
 	    begin
-	       if(n_l1i_flush_complete && n_l1d_flush_complete)
+	       //$display("%d : %b %b %b", r_cycle, n_l1i_flush_complete, n_l1d_flush_complete, n_l2_flush_complete);
+	       if(n_l1i_flush_complete && n_l1d_flush_complete && n_l2_flush_complete)
 		 begin
 		    n_state = HALT;
 		    n_ready_for_resume = 1'b1;		    		    
 		    n_l1i_flush_complete = 1'b0;
 		    n_l1d_flush_complete = 1'b0;
+		    n_l2_flush_complete = 1'b0;
 		 end	       
 	    end
 	  HALT:
@@ -1986,10 +1993,10 @@ module core(clk,
 
    always_ff@(negedge clk)
      begin
-	if(t_push_dq_one)
-	  $display("decoded %x to uop %d", t_dec_uop.pc, t_dec_uop.op);
-	if(t_push_dq_two)
-	  $display("decoded %x to uop %d", t_dec_uop2.pc, t_dec_uop2.op);	
+	//if(t_push_dq_one)
+	//$display("decoded %x to uop %d", t_dec_uop.pc, t_dec_uop.op);
+	//if(t_push_dq_two)
+	//$display("decoded %x to uop %d", t_dec_uop2.pc, t_dec_uop2.op);	
 
     	if(insn_ack && insn_ack_two && 1'b0)
     	  begin

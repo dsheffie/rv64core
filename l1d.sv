@@ -74,7 +74,7 @@ module l1d(clk,
    input logic [`M_WIDTH-1:0] flush_cl_addr;
    input logic 		      flush_req;
    output logic 	      flush_complete;
-   
+
    input logic core_mem_req_valid;
    input       mem_req_t core_mem_req;
 
@@ -145,8 +145,6 @@ function logic [31:0] select_cl32(logic [L1D_CL_LEN_BITS-1:0] cl, logic[LG_WORDS
    endcase // case (pos)
    return w32;
 endfunction
-      
-
    
    logic 				  r_got_req, r_last_wr, n_last_wr;
    logic 				  r_last_rd, n_last_rd;
@@ -323,9 +321,6 @@ endfunction
    
    logic t_reset_graduated;
 
-   
-   
-   
    always_ff@(posedge clk)
      begin
 	if(reset /*|| restart_valid*/)
@@ -1544,7 +1539,9 @@ endfunction
 		    n_state = FLUSH_CACHE;
 		    if(!mem_q_empty) $stop();
 		    if(r_got_req && r_last_wr) $stop();
-		    //$display("flush begins at cycle %d, mem_q_empty = %b", r_cycle, mem_q_empty);
+		    $display("flush begins at cycle %d, mem_q_empty = %b", 
+			     r_cycle, mem_q_empty);
+		    $stop();
 		    t_cache_idx = 'd0;
 		    n_flush_req = 1'b0;
 		 end

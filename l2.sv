@@ -1,6 +1,12 @@
 module l2(clk,
 	  reset,
-	  flush_req,
+
+	  l1i_flush_req,
+	  l1d_flush_req,
+
+	  l1i_flush_complete,
+	  l1d_flush_complete,
+	  
 	  flush_complete,
 
 	  //l1 -> l2
@@ -29,7 +35,11 @@ module l2(clk,
 
    input logic clk;
    input logic reset;
-   input logic flush_req;
+   input logic l1i_flush_req;
+   input logic l1d_flush_req;
+   input logic l1i_flush_complete;
+   input logic l1d_flush_complete;
+   
    output logic flush_complete;
 
    input logic 	l1_mem_req_valid;
@@ -75,6 +85,16 @@ module l2(clk,
    logic [127:0] 	   r_store_data, n_store_data;
    
    logic 		   r_reload, n_reload;
+   
+   typedef enum logic  {
+			     WAIT_FOR_FLUSH,
+			     WAIT_FOR_L1_FLUSH_DONE
+			     } flush_state_t;
+
+   logic 	r_need_l1i,n_need_l1i,r_need_l1d,n_need_l1d;
+   logic 	t_l2_flush_req;
+   
+   flush_state_t n_flush_state, r_flush_state;
    
    
    typedef enum 	logic [3:0] {
@@ -139,6 +159,7 @@ module l2(clk,
 	if(reset)
 	  begin
 	     r_state <= INITIALIZE;
+	     r_flush_state <= WAIT_FOR_FLUSH;
 	     r_flush_complete <= 1'b0;
 	     r_idx <= 'd0;
 	     r_tag <= 'd0;
@@ -153,10 +174,13 @@ module l2(clk,
 	     r_req_ack <= 1'b0;
 	     r_store_data <= 'd0;
 	     r_flush_req <= 1'b0;
+	     r_need_l1d <= 1'b0;
+	     r_need_l1i <= 1'b0;
 	  end
 	else
 	  begin
 	     r_state <= n_state;
+	     r_flush_state <= n_flush_state;
 	     r_flush_complete <= n_flush_complete;
 	     r_idx <= t_idx;
 	     r_tag <= n_tag;
@@ -171,8 +195,59 @@ module l2(clk,
 	     r_req_ack <= n_req_ack;
 	     r_store_data <= n_store_data;
 	     r_flush_req <= n_flush_req;
+	     r_need_l1d <= n_need_l1i;
+	     r_need_l1d <= n_need_l1d;
 	  end
+     end // always_ff@ (posedge clk)
+
+   always_ff@(negedge clk)
+     begin
+	$display("r_flush_state = %d", r_flush_state);
+	
+	$display("l1i_flush_req = %b", l1i_flush_req);
+	$display("l1d_flush_req = %b", l1d_flush_req);
+	
+	if(l1i_flush_req||l1i_flush_req) $stop();
+	//if(l1d_flush_complete||l1i_flush_complete) $stop();
      end
+   
+   always_comb
+     begin
+	n_flush_state = r_flush_state;
+	n_need_l1d = r_need_l1d;
+	n_need_l1i = r_need_l1i;
+	t_l2_flush_req = 1'b0;
+	case(r_flush_state)
+	  WAIT_FOR_FLUSH:
+	    begin
+	       if(l1i_flush_req || l1d_flush_req)
+		 begin
+		    n_need_l1i = l1i_flush_req;
+		    n_need_l1d = l1d_flush_req;
+		    $stop();
+		    n_flush_state = WAIT_FOR_L1_FLUSH_DONE;
+		 end
+	    end
+	  WAIT_FOR_L1_FLUSH_DONE:
+	    begin
+	       if(r_need_l1d && l1d_flush_complete)
+		 begin
+		    n_need_l1d = 1'b0;
+		 end
+	       if(r_need_l1i && l1i_flush_complete)
+		 begin
+		    n_need_l1i = 1'b0;
+		 end
+	       if(n_need_l1d==1'b0 && n_need_l1i==1'b0)
+		 begin
+		    $stop();
+		    n_flush_state = WAIT_FOR_FLUSH;
+		    t_l2_flush_req = 1'b1;
+		 end
+	    end
+	endcase
+     end
+   
 
 
    logic [31:0] r_cycle;
@@ -237,7 +312,7 @@ module l2(clk,
 
 	n_reload = r_reload;
 	n_store_data = r_store_data;
-	n_flush_req = flush_req | r_flush_req;
+	n_flush_req = r_flush_req | t_l2_flush_req;
 	
 	case(r_state)
 	  INITIALIZE:
@@ -372,6 +447,8 @@ module l2(clk,
 	    end
 	  FLUSH_TRIAGE:
 	    begin
+	       //$display("r_idx = %d, w_need_wb %b", r_idx, w_need_wb);
+	       
 	       if(w_need_wb)
 		 begin
 		    $stop();
@@ -382,6 +459,7 @@ module l2(clk,
 		    if(r_idx == (L2_LINES-1))
 		      begin
 			 n_state = IDLE;
+			 $display("L2 flush complete");
 			 n_flush_complete = 1'b1;
 			 n_flush_req = 1'b0;
 		      end
