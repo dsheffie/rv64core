@@ -205,15 +205,15 @@ module l2(clk,
 	//$display("l1i_flush_req = %b", l1i_flush_req);
 	//$display("l1d_flush_req = %b", l1d_flush_req);
 	
-	//if((l1d_flush_complete||l1i_flush_complete) && (r_flush_state == WAIT_FOR_FLUSH)) 
-	  //$stop();
+   //if((l1d_flush_complete||l1i_flush_complete) && (r_flush_state == WAIT_FOR_FLUSH)) 
+   //$stop();
    //end
    
    always_comb
      begin
 	n_flush_state = r_flush_state;
-	n_need_l1d = r_need_l1d | l1i_flush_req;
-	n_need_l1i = r_need_l1i | l1d_flush_req;
+	n_need_l1d = r_need_l1d | l1d_flush_req;
+	n_need_l1i = r_need_l1i | l1i_flush_req;
 	t_l2_flush_req = 1'b0;
 	case(r_flush_state)
 	  WAIT_FOR_FLUSH:
@@ -221,20 +221,25 @@ module l2(clk,
 	       if(n_need_l1i | n_need_l1d)
 		 begin
 		    n_flush_state = WAIT_FOR_L1_FLUSH_DONE;
+		    $display("-> got flush req at cycle %d, n_need_l1d = %b, n_need_l1i = %b", r_cycle, n_need_l1d, n_need_l1i);
 		 end
 	    end
 	  WAIT_FOR_L1_FLUSH_DONE:
 	    begin
 	       if(r_need_l1d && l1d_flush_complete)
 		 begin
+		    $display("-> l1d flush complete at cycle %d", r_cycle);
 		    n_need_l1d = 1'b0;
 		 end
 	       if(r_need_l1i && l1i_flush_complete)
 		 begin
+		    $display("-> l1i flush complete at cycle %d", r_cycle);
 		    n_need_l1i = 1'b0;
 		 end
-	       if(n_need_l1d==1'b0 && n_need_l1i==1'b0)
+	       
+	       if((n_need_l1d==1'b0) && (n_need_l1i==1'b0))
 		 begin
+		    $display("-> firing l2 flush at cycle %d", r_cycle);
 		    n_flush_state = WAIT_FOR_FLUSH;
 		    t_l2_flush_req = 1'b1;
 		 end
@@ -249,26 +254,26 @@ module l2(clk,
 	r_cycle <= reset ? 'd0 : (r_cycle + 'd1);
      end
 
-   always_ff@(negedge clk)
-     begin
-	if(r_state == IDLE && l1_mem_req_valid)
-	  begin
-	     $display("cycle %d : request for address %x", r_cycle, l1_mem_req_addr);
-	     $display("tag = %x, index = %d, bank = %d", n_tag, t_idx, n_bank);
-	  end
-	if(r_state == CLEAN_RELOAD && mem_rsp_valid)
-	  begin
-	     $display("cycle %d : clean reload for address %x", r_cycle, r_addr);
-	     $display("load data %x%x", 
-		      mem_rsp_load_data[511:256],
-		      mem_rsp_load_data[255:0]
-		      );
-	  end
-	if(r_rsp_valid)
-	  begin
-	     $display("cycle %d : reply data : %x", r_cycle, r_rsp_data);
-	  end
-     end
+   //always_ff@(negedge clk)
+   //begin
+   // 	if(r_state == IDLE && l1_mem_req_valid)
+   // 	  begin
+   // 	     $display("cycle %d : request for address %x", r_cycle, l1_mem_req_addr);
+   // 	     $display("tag = %x, index = %d, bank = %d", n_tag, t_idx, n_bank);
+   // 	  end
+   // 	if(r_state == CLEAN_RELOAD && mem_rsp_valid)
+   // 	  begin
+   // 	     $display("cycle %d : clean reload for address %x", r_cycle, r_addr);
+   // 	     $display("load data %x%x", 
+   // 		      mem_rsp_load_data[511:256],
+   // 		      mem_rsp_load_data[255:0]
+   // 		      );
+   // 	  end
+   // 	if(r_rsp_valid)
+   // 	  begin
+   // 	     $display("cycle %d : reply data : %x", r_cycle, r_rsp_data);
+   // 	  end
+   //   end
 
    always_comb
      begin
@@ -336,11 +341,15 @@ module l2(clk,
 		 begin
 		    t_idx = 'd0;
 		    n_state = FLUSH_WAIT;
+		    $display("GOT FLUSH REQUEST at cycle %d", r_cycle);
 		 end
 	       else if(l1_mem_req_valid)
 		 begin
+		    $display("accept request for addr %x at cycle %d, type %d", 
+			     l1_mem_req_addr, r_cycle, n_opcode);
 		    n_req_ack = 1'b1;
 		    n_state = WAIT_FOR_RAM;
+		    n_rsp_valid = (l1_mem_req_opcode == 4'd7);
 		 end
 	    end
 	  WAIT_FOR_RAM:
@@ -355,14 +364,13 @@ module l2(clk,
 		 begin
 		    n_reload = 1'b0;
 		    if(r_opcode == 4'd4)
-		      begin
-			 n_rsp_valid = 1'b1;
+		      begin			 
 			 n_rsp_data = r_bank == 'd0 ? w_d0 :
 				      r_bank == 'd1 ? w_d1 :
 				      r_bank == 'd2 ? w_d2 :
 				      w_d3;
 			 n_state = IDLE;
-
+			 n_rsp_valid = 1'b1;
 		      end
 		    else if(r_opcode == 4'd7)
 		      begin
@@ -453,7 +461,7 @@ module l2(clk,
 		    if(r_idx == (L2_LINES-1))
 		      begin
 			 n_state = IDLE;
-			 $display("L2 flush complete");
+			 $display("L2 flush complete at cycle %d", r_cycle);
 			 n_flush_complete = 1'b1;
 			 n_flush_req = 1'b0;
 		      end

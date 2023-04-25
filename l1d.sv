@@ -248,13 +248,13 @@ endfunction
    mem_req_t t_mem_tail, t_mem_head;
    logic 	mem_q_full, mem_q_empty, mem_q_almost_full;
    
-   typedef enum logic [3:0] {INITIALIZE,
-			     INIT_CACHE,
-			     ACTIVE,
-                             INJECT_RELOAD,
-			     WAIT_INJECT_RELOAD,
-                             FLUSH_CACHE,
-                             FLUSH_CACHE_WAIT,
+   typedef enum logic [3:0] {INITIALIZE, //0
+			     INIT_CACHE, //1
+			     ACTIVE, //2
+                             INJECT_RELOAD, //3
+			     WAIT_INJECT_RELOAD, //4
+                             FLUSH_CACHE, //5
+                             FLUSH_CACHE_WAIT, //6
                              FLUSH_CL,
                              FLUSH_CL_WAIT,
                              HANDLE_RELOAD
@@ -1176,6 +1176,7 @@ endfunction
    always_ff@(posedge clk)
      begin
 	r_fwd_cnt <= reset ? 'd0 : (r_got_req && r_must_forward ? r_fwd_cnt + 'd1 : r_fwd_cnt);
+	//$display("at cycle %d, state = %d", r_cycle, r_state);
      end
 
    always_comb
@@ -1562,6 +1563,7 @@ endfunction
 	    end
 	  INJECT_RELOAD:
 	    begin
+	       //$display("waiting reload for addr %x at cycle %d", r_req.addr, r_cycle);
 	       	if(mem_rsp_valid)
 		  begin
 		     n_state = r_reload_issue ? HANDLE_RELOAD : ACTIVE;
@@ -1626,12 +1628,15 @@ endfunction
 		      end
 		    else
 		      begin
+
 			 n_mem_req_addr = {r_tag_out,r_cache_idx,{`LG_L1D_CL_LEN{1'b0}}};
 	            n_mem_req_opcode = MEM_SW;
 	            n_mem_req_store_data = t_data;
 	            n_state = FLUSH_CACHE_WAIT;
 		    n_inhibit_write = 1'b1;
-	            n_mem_req_valid = 1'b1;	       
+	            n_mem_req_valid = 1'b1;
+		    $display("generate writeback flush for %x at cycle %d",
+			     n_mem_req_addr, r_cycle);
 		 end // else: !if(r_valid_out && !r_dirty_out)
 		 end // else: !if(r_cache_idx == (L1D_NUM_SETS-1))
 	    end // case: FLUSH_CACHE
@@ -1639,6 +1644,7 @@ endfunction
 	  FLUSH_CACHE_WAIT:
 	    begin
 	       t_cache_idx = r_cache_idx;
+	       //$display("stuck in flush cache at cycle %d", r_cycle);
 	       	if(mem_rsp_valid)
 		  begin
 		     n_state = FLUSH_CACHE;

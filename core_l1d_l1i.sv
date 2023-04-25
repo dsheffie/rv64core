@@ -294,6 +294,8 @@ module core_l1d_l1i(clk,
    logic [3:0] 				  t_l2_req_opcode;
    wire w_l1_mem_req_ack;
    
+
+   //   always_ff@(negedge clk) $display("grant state %d", r_state);
    
    always_comb
      begin
@@ -310,7 +312,7 @@ module core_l1d_l1i(clk,
 	
 	l1d_mem_rsp_valid = 1'b0;
 	l1i_mem_rsp_valid = 1'b0;
-	
+
 	case(r_state)
 	  IDLE:
 	    begin
