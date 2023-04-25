@@ -134,10 +134,6 @@ module core_l1d_l1i(clk,
    wire 				  l1d_flush_complete;
    wire 				  l1i_flush_complete;
 
-   always_ff@(negedge clk)
-     begin
-	if(flush_req_l1i ||  flush_req_l1d) $stop();
-     end
    
    mem_req_t core_mem_req;
    mem_rsp_t core_mem_rsp;
@@ -160,7 +156,8 @@ module core_l1d_l1i(clk,
    flush_state_t n_flush_state, r_flush_state;
    logic 	r_flush, n_flush;
    logic 	r_flush_l2, n_flush_l2;
-   
+   wire 	w_l2_flush_complete;
+   wire 	w_l1_mem_rsp_valid;   
    logic 	memq_empty;   
    assign in_flush_mode = r_flush;
 
@@ -250,7 +247,6 @@ module core_l1d_l1i(clk,
 		    $display("L2 FLUSH COMPLETE");
 		    n_flush = 1'b0;
 		    n_flush_state = FLUSH_IDLE;
-		    $stop();
 		 end
 	    end
 	  default:
@@ -375,10 +371,10 @@ module core_l1d_l1i(clk,
 	  endcase
      end // always_comb
 
-   wire w_l2_flush_complete;
+
    
    wire [127:0] w_l1_mem_load_data;
-   wire 	w_l1_mem_rsp_valid;
+
    
    l2 l2cache (
 	       .clk(clk),

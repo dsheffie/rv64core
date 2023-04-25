@@ -403,7 +403,6 @@ module core(clk,
    assign flush_req_l1i = r_flush_req_l1i;
    assign flush_cl_req = r_flush_cl_req;
    assign flush_cl_addr = r_flush_cl_addr;
-   
 
    assign monitor_req_reason = r_monitor_reason;
    assign monitor_req_valid = t_monitor_req_valid;
@@ -463,7 +462,8 @@ module core(clk,
 	  end
      end
 `endif
-   
+
+
    always_ff@(posedge clk)
      begin
 	if(reset)

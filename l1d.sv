@@ -1177,7 +1177,7 @@ endfunction
      begin
 	r_fwd_cnt <= reset ? 'd0 : (r_got_req && r_must_forward ? r_fwd_cnt + 'd1 : r_fwd_cnt);
      end
-	         
+
    always_comb
      begin
 	t_got_rd_retry = 1'b0;
@@ -1539,9 +1539,8 @@ endfunction
 		    n_state = FLUSH_CACHE;
 		    if(!mem_q_empty) $stop();
 		    if(r_got_req && r_last_wr) $stop();
-		    $display("flush begins at cycle %d, mem_q_empty = %b", 
-			     r_cycle, mem_q_empty);
-		    $stop();
+		    //$display("flush begins at cycle %d, mem_q_empty = %b", 
+		    //r_cycle, mem_q_empty);
 		    t_cache_idx = 'd0;
 		    n_flush_req = 1'b0;
 		 end

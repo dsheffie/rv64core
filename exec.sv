@@ -646,7 +646,7 @@ module exec(clk,
 	 t_alu_alloc_srcB_match, 
 	 t_alu_alloc_hilo_match;
    
-
+   wire [N_INT_SCHED_ENTRIES-1:0] w_alu_sched_oldest_ready;
    
    find_first_set#(`LG_INT_SCHED_ENTRIES) ffs_int_sched_alloc( .in(~r_alu_sched_valid),
 							      .y(t_alu_sched_alloc_ptr));
@@ -655,13 +655,6 @@ module exec(clk,
 								.y(t_alu_sched_select_ptr));
 
    
-   //wire [N_INT_SCHED_ENTRIES-1:0] w_alu_sched = w_alu_sched_oldest_ready=='d0 ? t_alu_entry_rdy : w_alu_sched_oldest_ready;
-   
-   //fair_sched#(`LG_INT_SCHED_ENTRIES) ffs_int_sched_select( .clk(clk),
-   //							   .rst(reset),
-   //							   .in(w_alu_sched),
-   //.y(t_alu_sched_select_ptr));
-
    
    always_comb
      begin
@@ -720,7 +713,7 @@ module exec(clk,
 
    logic [N_INT_SCHED_ENTRIES-1:0] t_alu_sched_mask_valid;
    logic [N_INT_SCHED_ENTRIES-1:0] r_alu_sched_matrix [N_INT_SCHED_ENTRIES-1:0];
-   wire [N_INT_SCHED_ENTRIES-1:0] w_alu_sched_oldest_ready;
+
    
    always_comb
      begin

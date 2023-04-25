@@ -200,31 +200,26 @@ module l2(clk,
 	  end
      end // always_ff@ (posedge clk)
 
-   always_ff@(negedge clk)
-     begin
-	$display("r_flush_state = %d", r_flush_state);
+   //always_ff@(negedge clk)
+   //begin
+	//$display("l1i_flush_req = %b", l1i_flush_req);
+	//$display("l1d_flush_req = %b", l1d_flush_req);
 	
-	$display("l1i_flush_req = %b", l1i_flush_req);
-	$display("l1d_flush_req = %b", l1d_flush_req);
-	
-	if(l1i_flush_req||l1i_flush_req) $stop();
-	//if(l1d_flush_complete||l1i_flush_complete) $stop();
-     end
+	//if((l1d_flush_complete||l1i_flush_complete) && (r_flush_state == WAIT_FOR_FLUSH)) 
+	  //$stop();
+   //end
    
    always_comb
      begin
 	n_flush_state = r_flush_state;
-	n_need_l1d = r_need_l1d;
-	n_need_l1i = r_need_l1i;
+	n_need_l1d = r_need_l1d | l1i_flush_req;
+	n_need_l1i = r_need_l1i | l1d_flush_req;
 	t_l2_flush_req = 1'b0;
 	case(r_flush_state)
 	  WAIT_FOR_FLUSH:
 	    begin
-	       if(l1i_flush_req || l1d_flush_req)
+	       if(n_need_l1i | n_need_l1d)
 		 begin
-		    n_need_l1i = l1i_flush_req;
-		    n_need_l1d = l1d_flush_req;
-		    $stop();
 		    n_flush_state = WAIT_FOR_L1_FLUSH_DONE;
 		 end
 	    end
@@ -240,14 +235,12 @@ module l2(clk,
 		 end
 	       if(n_need_l1d==1'b0 && n_need_l1i==1'b0)
 		 begin
-		    $stop();
 		    n_flush_state = WAIT_FOR_FLUSH;
 		    t_l2_flush_req = 1'b1;
 		 end
 	    end
 	endcase
-     end
-   
+     end // always_comb
 
 
    logic [31:0] r_cycle;
@@ -327,6 +320,7 @@ module l2(clk,
 	       if(r_idx == (L2_LINES-1))
 		 begin
 		    n_state = IDLE;
+		    n_flush_complete = 1'b1;
 		 end
 	    end // case: INITIALIZE
 	  IDLE:
