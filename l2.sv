@@ -73,6 +73,7 @@ module l2(clk,
    logic [TAG_BITS-1:0]    n_tag, r_tag;
    logic [1:0] 		 n_bank, r_bank;
    logic [31:0] 	 n_addr, r_addr;
+   logic [31:0] 	 n_saveaddr, r_saveaddr;
    
    logic [3:0] 		   n_opcode, r_opcode;
 
@@ -103,9 +104,10 @@ module l2(clk,
 				     WAIT_FOR_RAM,
 				     CHECK_VALID_AND_TAG,
 				     CLEAN_RELOAD,
+				     DIRTY_STORE,
 				     WAIT_CLEAN_RELOAD,
 				     WAIT_STORE_IDLE,
-				     FLUSH,
+				     FLUSH_STORE,
 				     FLUSH_WAIT,
 				     FLUSH_TRIAGE
 				     } state_t;
@@ -113,12 +115,15 @@ module l2(clk,
    state_t n_state, r_state;
    logic 		n_flush_complete, r_flush_complete;
    logic 		r_flush_req, n_flush_req;
-      
+   logic [511:0] 	r_mem_req_store_data, n_mem_req_store_data;
+   
 
    assign flush_complete = r_flush_complete;
    assign mem_req_addr = r_addr;
    assign mem_req_valid = r_mem_req;
    assign mem_req_opcode = r_mem_opcode;
+   assign mem_req_store_data = r_mem_req_store_data;
+   
    assign l1_mem_rsp_valid = r_rsp_valid;
    assign l1_mem_load_data = r_rsp_data;
    assign l1_mem_req_ack = r_req_ack;
@@ -166,6 +171,7 @@ module l2(clk,
 	     r_bank <= 2'd0;
 	     r_opcode <= 4'd0;
 	     r_addr <= 'd0;
+	     r_saveaddr <= 'd0;
 	     r_mem_req <= 1'b0;
 	     r_mem_opcode <= 4'd0;
 	     r_rsp_data <= 'd0;
@@ -187,6 +193,7 @@ module l2(clk,
 	     r_bank <= n_bank;
 	     r_opcode <= n_opcode;
 	     r_addr <= n_addr;
+	     r_saveaddr <= n_saveaddr;
 	     r_mem_req <= n_mem_req;
 	     r_mem_opcode <= n_mem_opcode;
 	     r_rsp_data <= n_rsp_data;
@@ -200,6 +207,11 @@ module l2(clk,
 	  end
      end // always_ff@ (posedge clk)
 
+   always_ff@(posedge clk)
+     begin
+	r_mem_req_store_data <= n_mem_req_store_data;
+     end
+   
    //always_ff@(negedge clk)
    //begin
 	//$display("l1i_flush_req = %b", l1i_flush_req);
@@ -221,25 +233,25 @@ module l2(clk,
 	       if(n_need_l1i | n_need_l1d)
 		 begin
 		    n_flush_state = WAIT_FOR_L1_FLUSH_DONE;
-		    $display("-> got flush req at cycle %d, n_need_l1d = %b, n_need_l1i = %b", r_cycle, n_need_l1d, n_need_l1i);
+		    //$display("-> got flush req at cycle %d, n_need_l1d = %b, n_need_l1i = %b", r_cycle, n_need_l1d, n_need_l1i);
 		 end
 	    end
 	  WAIT_FOR_L1_FLUSH_DONE:
 	    begin
 	       if(r_need_l1d && l1d_flush_complete)
 		 begin
-		    $display("-> l1d flush complete at cycle %d", r_cycle);
+		    //$display("-> l1d flush complete at cycle %d", r_cycle);
 		    n_need_l1d = 1'b0;
 		 end
 	       if(r_need_l1i && l1i_flush_complete)
 		 begin
-		    $display("-> l1i flush complete at cycle %d", r_cycle);
+		    //$display("-> l1i flush complete at cycle %d", r_cycle);
 		    n_need_l1i = 1'b0;
 		 end
 	       
 	       if((n_need_l1d==1'b0) && (n_need_l1i==1'b0))
 		 begin
-		    $display("-> firing l2 flush at cycle %d", r_cycle);
+		    //$display("-> firing l2 flush at cycle %d", r_cycle);
 		    n_flush_state = WAIT_FOR_FLUSH;
 		    t_l2_flush_req = 1'b1;
 		 end
@@ -292,7 +304,8 @@ module l2(clk,
 	n_bank = r_bank;
 	n_opcode = r_opcode;
 	n_addr = r_addr;
-
+	n_saveaddr = r_saveaddr;
+	
 	n_req_ack = 1'b0;
 	n_mem_req = r_mem_req;
 	n_mem_opcode = r_mem_opcode;
@@ -311,6 +324,7 @@ module l2(clk,
 	n_reload = r_reload;
 	n_store_data = r_store_data;
 	n_flush_req = r_flush_req | t_l2_flush_req;
+	n_mem_req_store_data = r_mem_req_store_data;
 	
 	case(r_state)
 	  INITIALIZE:
@@ -334,6 +348,7 @@ module l2(clk,
 	       n_tag = l1_mem_req_addr[31:LG_L2_LINES+6];
 	       n_bank = l1_mem_req_addr[5:4];
 	       n_addr = {l1_mem_req_addr[31:6], 6'd0};
+	       n_saveaddr = {l1_mem_req_addr[31:6], 6'd0};
 	       n_opcode = l1_mem_req_opcode;
 	       n_store_data = l1_mem_req_store_data;
 	       
@@ -341,12 +356,12 @@ module l2(clk,
 		 begin
 		    t_idx = 'd0;
 		    n_state = FLUSH_WAIT;
-		    $display("GOT FLUSH REQUEST at cycle %d", r_cycle);
+		    //$display("GOT FLUSH REQUEST at cycle %d", r_cycle);
 		 end
 	       else if(l1_mem_req_valid)
 		 begin
-		    $display("accept request for addr %x at cycle %d, type %d", 
-			     l1_mem_req_addr, r_cycle, n_opcode);
+		    //$display("accept request for addr %x at cycle %d, type %d", 
+		    //l1_mem_req_addr, r_cycle, n_opcode);
 		    n_req_ack = 1'b1;
 		    n_state = WAIT_FOR_RAM;
 		    n_rsp_valid = (l1_mem_req_opcode == 4'd7);
@@ -403,7 +418,11 @@ module l2(clk,
 		 begin
 		    if(w_dirty)
 		      begin
-			 $stop();
+			 n_mem_req_store_data = {w_d3, w_d2, w_d1, w_d0};
+			 n_addr = {w_tag, t_idx, 6'd0};
+			 n_mem_opcode = 4'd7; 
+			 n_mem_req = 1'b1;
+			 n_state = DIRTY_STORE;			 
 		      end
 		    else //invalid or clean
 		      begin
@@ -416,6 +435,17 @@ module l2(clk,
 		      end
 		 end
 	    end // case: CHECK_VALID_AND_TAG
+	  DIRTY_STORE:
+	    begin
+	       if(mem_rsp_valid)
+		 begin
+		    n_addr = r_saveaddr;
+		    n_reload = 1'b1;
+		    n_state = CLEAN_RELOAD;
+		    n_mem_opcode = 4'd4; //load
+		    n_mem_req = 1'b1;		    
+		 end
+	    end
 	  CLEAN_RELOAD:
 	    begin
 	       if(mem_rsp_valid)
@@ -439,13 +469,13 @@ module l2(clk,
 	    begin
 	       n_state = IDLE;
 	    end
-	  FLUSH:
-	    begin
-	       
-	    end
 	  FLUSH_WAIT:
 	    begin
 	       n_state = FLUSH_TRIAGE;
+	       t_valid = 1'b0;
+	       t_dirty = 1'b0;
+	       t_wr_valid = 1'b1;
+	       t_wr_dirty = 1'b1;
 	    end
 	  FLUSH_TRIAGE:
 	    begin
@@ -453,7 +483,11 @@ module l2(clk,
 	       
 	       if(w_need_wb)
 		 begin
-		    $stop();
+		    n_mem_req_store_data = {w_d3, w_d2, w_d1, w_d0};
+		    n_addr = {w_tag, t_idx, 6'd0};
+		    n_mem_opcode = 4'd7; 
+		    n_mem_req = 1'b1;
+		    n_state = FLUSH_STORE;
 		 end
 	       else
 		 begin
@@ -461,7 +495,7 @@ module l2(clk,
 		    if(r_idx == (L2_LINES-1))
 		      begin
 			 n_state = IDLE;
-			 $display("L2 flush complete at cycle %d", r_cycle);
+			 //$display("L2 flush complete at cycle %d", r_cycle);
 			 n_flush_complete = 1'b1;
 			 n_flush_req = 1'b0;
 		      end
@@ -469,6 +503,25 @@ module l2(clk,
 		      begin
 			 n_state = FLUSH_WAIT;
 		      end
+		 end
+	    end // case: FLUSH_TRIAGE
+	  FLUSH_STORE:
+	    begin
+	       if(mem_rsp_valid)
+		 begin
+		    n_mem_req = 1'b0;
+		    t_idx = r_idx + 'd1;
+		    if(r_idx == (L2_LINES-1))
+		      begin
+			 n_state = IDLE;
+			 //$display("L2 flush complete at cycle %d", r_cycle);
+			 n_flush_complete = 1'b1;
+			 n_flush_req = 1'b0;
+		      end
+		    else
+		      begin
+			 n_state = FLUSH_WAIT;
+		      end		    
 		 end
 	    end
 	  default:

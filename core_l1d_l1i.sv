@@ -343,7 +343,7 @@ module core_l1d_l1i(clk,
 	       
 	       if(w_l1_mem_rsp_valid)
 		 begin
-		    $display("l2 cache complete for l1d");
+		    //$display("l2 cache complete for l1d");
 		    n_req = 1'b0;
 		    n_state = IDLE;
 		    l1d_mem_rsp_valid = 1'b1;
@@ -360,8 +360,8 @@ module core_l1d_l1i(clk,
 	       
 	       if(w_l1_mem_rsp_valid)
 		 begin
-		    $display("l2 cache complete for l1i for addr %x",
-			     t_l2_req_addr);
+		    //$display("l2 cache complete for l1i for addr %x",
+		    //t_l2_req_addr);
 		    n_req = 1'b0;		    
 		    n_state = IDLE;
 		    l1i_mem_rsp_valid = 1'b1;

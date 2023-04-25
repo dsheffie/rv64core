@@ -1635,8 +1635,8 @@ endfunction
 	            n_state = FLUSH_CACHE_WAIT;
 		    n_inhibit_write = 1'b1;
 	            n_mem_req_valid = 1'b1;
-		    $display("generate writeback flush for %x at cycle %d",
-			     n_mem_req_addr, r_cycle);
+		    //$display("generate writeback flush for %x at cycle %d",
+		    //n_mem_req_addr, r_cycle);
 		 end // else: !if(r_valid_out && !r_dirty_out)
 		 end // else: !if(r_cache_idx == (L1D_NUM_SETS-1))
 	    end // case: FLUSH_CACHE
