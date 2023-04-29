@@ -105,6 +105,7 @@ module l2(clk,
 				     CHECK_VALID_AND_TAG,
 				     CLEAN_RELOAD,
 				     DIRTY_STORE,
+				     STORE_TURNAROUND,
 				     WAIT_CLEAN_RELOAD,
 				     WAIT_STORE_IDLE,
 				     FLUSH_STORE,
@@ -440,11 +441,16 @@ module l2(clk,
 	       if(mem_rsp_valid)
 		 begin
 		    n_addr = r_saveaddr;
-		    n_reload = 1'b1;
-		    n_state = CLEAN_RELOAD;
 		    n_mem_opcode = 4'd4; //load
-		    n_mem_req = 1'b1;		    
+		    n_state = STORE_TURNAROUND;
+		    n_mem_req = 1'b0;		    
 		 end
+	    end // case: DIRTY_STORE
+	  STORE_TURNAROUND:
+	    begin
+	       n_state = CLEAN_RELOAD;
+	       n_reload = 1'b1;
+	       n_mem_req = 1'b1;		    
 	    end
 	  CLEAN_RELOAD:
 	    begin
