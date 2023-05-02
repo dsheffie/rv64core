@@ -38,6 +38,8 @@ module core_l1d_l1i(clk,
 		    l1i_cache_hits,
 		    l1d_cache_accesses,
 		    l1d_cache_hits,
+		    l2_cache_accesses,
+		    l2_cache_hits,
 		    got_break,
 		    got_ud,
 		    inflight);
@@ -78,6 +80,8 @@ module core_l1d_l1i(clk,
    output logic [63:0] 			l1i_cache_hits;
    output logic [63:0] 			l1d_cache_accesses;
    output logic [63:0] 			l1d_cache_hits;
+   output logic [63:0] 			l2_cache_accesses;
+   output logic [63:0] 			l2_cache_hits;   
 
    
    /* mem port */
@@ -119,10 +123,6 @@ module core_l1d_l1i(clk,
    output logic 			  got_ud;
    output logic [`LG_ROB_ENTRIES:0] 	  inflight;
    
-   logic [63:0] 			  t_l1d_cache_accesses;
-   logic [63:0] 			  t_l1d_cache_hits;
-   logic [63:0] 			  t_l1i_cache_accesses;
-   logic [63:0] 			  t_l1i_cache_hits;
 
 
    logic 				  head_of_rob_ptr_valid;   
@@ -260,11 +260,6 @@ module core_l1d_l1i(clk,
       GNT_L1D = 'd1,
       GNT_L1I = 'd2			    
    } state_t;
-
-   assign l1d_cache_accesses = t_l1d_cache_accesses;
-   assign l1d_cache_hits = t_l1d_cache_hits;
-   assign l1i_cache_accesses = t_l1i_cache_accesses;
-   assign l1i_cache_hits = t_l1i_cache_hits;
    
    logic 				  l1d_mem_req_ack;
    logic 				  l1d_mem_req_valid;
@@ -405,7 +400,10 @@ module core_l1d_l1i(clk,
 	       .mem_req_opcode(mem_req_opcode),
 
 	       .mem_rsp_valid(mem_rsp_valid),
-	       .mem_rsp_load_data(mem_rsp_load_data)
+	       .mem_rsp_load_data(mem_rsp_load_data),
+	       .cache_accesses(l2_cache_accesses),
+	       .cache_hits(l2_cache_hits)
+
 	       );
    
    
@@ -469,8 +467,8 @@ module core_l1d_l1i(clk,
 	       .mem_rsp_valid(l1d_mem_rsp_valid),
 	       .mem_rsp_load_data(w_l1_mem_load_data),
 
-	       .cache_accesses(t_l1d_cache_accesses),
-	       .cache_hits(t_l1d_cache_hits)
+	       .cache_accesses(l1d_cache_accesses),
+	       .cache_hits(l1d_cache_hits)
 	       );
 
    l1i icache(
@@ -506,8 +504,8 @@ module core_l1d_l1i(clk,
 	      .mem_req_opcode(l1i_mem_req_opcode),
 	      .mem_rsp_valid(l1i_mem_rsp_valid),
 	      .mem_rsp_load_data(w_l1_mem_load_data),
-	      .cache_accesses(t_l1i_cache_accesses),
-	      .cache_hits(t_l1i_cache_hits)	      
+	      .cache_accesses(l1i_cache_accesses),
+	      .cache_hits(l1i_cache_hits)	      
 	      );
    	      
    core cpu (

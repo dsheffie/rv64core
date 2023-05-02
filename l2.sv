@@ -29,7 +29,10 @@ module l2(clk,
 	  
 	  //mem -> l2
 	  mem_rsp_valid,
-	  mem_rsp_load_data
+	  mem_rsp_load_data,
+
+	  cache_hits,
+	  cache_accesses
 	  
 	  );
 
@@ -60,6 +63,10 @@ module l2(clk,
    input logic 		mem_rsp_valid;
    input logic [511:0] 	mem_rsp_load_data;
 
+   output logic [63:0] cache_hits;
+   output logic [63:0] cache_accesses;
+   
+   
    localparam LG_L2_LINES = 9;
    localparam L2_LINES = 1<<LG_L2_LINES;
    
@@ -117,8 +124,8 @@ module l2(clk,
    logic 		n_flush_complete, r_flush_complete;
    logic 		r_flush_req, n_flush_req;
    logic [511:0] 	r_mem_req_store_data, n_mem_req_store_data;
+   logic [63:0] 	r_cache_hits, n_cache_hits, r_cache_accesses, n_cache_accesses;
    
-
    assign flush_complete = r_flush_complete;
    assign mem_req_addr = r_addr;
    assign mem_req_valid = r_mem_req;
@@ -128,7 +135,11 @@ module l2(clk,
    assign l1_mem_rsp_valid = r_rsp_valid;
    assign l1_mem_load_data = r_rsp_data;
    assign l1_mem_req_ack = r_req_ack;
-        
+   
+   assign cache_hits = r_cache_hits;
+   assign cache_accesses = r_cache_accesses;
+   
+     
    logic [127:0] 	t_d0, t_d1, t_d2, t_d3;
       
    wire [127:0] 	w_d0, w_d1, w_d2, w_d3;
@@ -183,6 +194,8 @@ module l2(clk,
 	     r_flush_req <= 1'b0;
 	     r_need_l1d <= 1'b0;
 	     r_need_l1i <= 1'b0;
+	     r_cache_hits <= 'd0;
+	     r_cache_accesses <= 'd0;
 	  end
 	else
 	  begin
@@ -205,6 +218,8 @@ module l2(clk,
 	     r_flush_req <= n_flush_req;
 	     r_need_l1d <= n_need_l1i;
 	     r_need_l1d <= n_need_l1d;
+	     r_cache_hits <= n_cache_hits;
+	     r_cache_accesses <= n_cache_accesses;	     
 	  end
      end // always_ff@ (posedge clk)
 
@@ -326,6 +341,9 @@ module l2(clk,
 	n_store_data = r_store_data;
 	n_flush_req = r_flush_req | t_l2_flush_req;
 	n_mem_req_store_data = r_mem_req_store_data;
+
+	n_cache_hits = r_cache_hits;
+	n_cache_accesses = r_cache_accesses;
 	
 	case(r_state)
 	  INITIALIZE:
@@ -366,6 +384,7 @@ module l2(clk,
 		    n_req_ack = 1'b1;
 		    n_state = WAIT_FOR_RAM;
 		    n_rsp_valid = (l1_mem_req_opcode == 4'd7);
+		    n_cache_accesses = r_cache_accesses + 64'd1;
 		 end
 	    end
 	  WAIT_FOR_RAM:
@@ -378,6 +397,7 @@ module l2(clk,
 	       //load hit
 	       if(w_hit)
 		 begin
+		    n_cache_hits = r_cache_hits + 64'd1;
 		    n_reload = 1'b0;
 		    if(r_opcode == 4'd4)
 		      begin			 
