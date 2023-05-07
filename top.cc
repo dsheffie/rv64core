@@ -1159,7 +1159,7 @@ int main(int argc, char **argv) {
     out << "avg insns in ROB = " << avg_inflight
 	      << ", max inflight = " << max_inflight << "\n";
   
-#ifdef CACHE_STATS
+
     out << "l1d cache hits = " << tb->l1d_cache_hits << "\n";
     out << "l1d cache accesses = " << tb->l1d_cache_accesses << "\n";
     out << "l1d hit rate = "
@@ -1170,7 +1170,10 @@ int main(int argc, char **argv) {
     out << "l1i hit rate = "
 	      << 100.0 *(static_cast<double>(tb->l1i_cache_hits) / tb->l1i_cache_accesses)
 	      << "\n";
-#endif
+
+    out << "l2 cache hits = " << tb->l2_cache_hits << "\n";
+    out << "l2 cache accesses = " << tb->l2_cache_accesses << "\n";
+
 
     out << "branch mispredict rate = "
 	      << (static_cast<double>(n_mispredicts)/n_branches)*100.0

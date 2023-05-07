@@ -385,6 +385,7 @@ module l2(clk,
 		    n_state = WAIT_FOR_RAM;
 		    n_rsp_valid = (l1_mem_req_opcode == 4'd7);
 		    n_cache_accesses = r_cache_accesses + 64'd1;
+		    n_cache_hits = r_cache_hits + 64'd1;
 		 end
 	    end
 	  WAIT_FOR_RAM:
@@ -397,7 +398,6 @@ module l2(clk,
 	       //load hit
 	       if(w_hit)
 		 begin
-		    n_cache_hits = r_cache_hits + 64'd1;
 		    n_reload = 1'b0;
 		    if(r_opcode == 4'd4)
 		      begin			 
@@ -407,12 +407,14 @@ module l2(clk,
 				      w_d3;
 			 n_state = IDLE;
 			 n_rsp_valid = 1'b1;
+			 //n_cache_hits = r_cache_hits + 64'd1;			 
 		      end
 		    else if(r_opcode == 4'd7)
 		      begin
 			 t_wr_dirty = 1'b1;
 			 t_dirty = 1'b1;
-			 n_state = WAIT_STORE_IDLE;			 
+			 n_state = WAIT_STORE_IDLE;
+			 //n_cache_hits = r_cache_hits + 64'd1;			 
 			 if(r_bank == 'd0)
 			   begin
 			      t_d0 = r_store_data;
@@ -437,6 +439,7 @@ module l2(clk,
 		 end
 	       else
 		 begin
+		    n_cache_hits = r_cache_hits - 64'd1;			 		    
 		    if(w_dirty)
 		      begin
 			 n_mem_req_store_data = {w_d3, w_d2, w_d1, w_d0};
