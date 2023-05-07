@@ -128,8 +128,8 @@ module divider(clk,
 	       n_state = start_div ? DIVIDE : IDLE;
 	       n_idx = W-1;
 	       n_sign = srcA[W-1] ^ srcB[W-1];
-	       n_A = srcA[W-1] ? ((~srcA) + 'd1) : srcA;
-	       n_B = srcB[W-1] ? ((~srcB) + 'd1) : srcB;
+	       n_A = is_signed_div & srcA[W-1] ? ((~srcA) + 'd1) : srcA;
+	       n_B = is_signed_div & srcB[W-1] ? ((~srcB) + 'd1) : srcB;
 	       n_D = {n_B, {W{1'b0}}};
 	       n_R = {{W{1'b0}}, n_A};
 	    end
