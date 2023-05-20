@@ -389,6 +389,7 @@ module core(clk,
 			     } state_t;
    
    state_t r_state, n_state;
+   logic 	r_pending_fault, n_pending_fault;
    logic [31:0] r_restart_cycles, n_restart_cycles;
    logic t_divide_ready;
    
@@ -540,6 +541,7 @@ module core(clk,
 	     r_machine_clr <= 1'b0;
 	     r_got_restart_ack <= 1'b0;
 	     r_cause <= 5'd0;
+	     r_pending_fault <= 1'b0;
 	  end
 	else
 	  begin
@@ -548,6 +550,7 @@ module core(clk,
 	     r_machine_clr <= n_machine_clr;
 	     r_got_restart_ack <= n_got_restart_ack;
 	     r_cause <= n_cause;
+	     r_pending_fault <= n_pending_fault;
 	  end
      end
 
@@ -755,7 +758,7 @@ module core(clk,
 	t_exception_wr_cpr0_ptr = 5'd0;
 	t_exception_wr_cpr0_data = 'd0;
 	n_cause = r_cause;
-	
+
 	n_machine_clr = r_machine_clr;
 	t_alloc = 1'b0;
 	t_alloc_two = 1'b0;
@@ -832,6 +835,11 @@ module core(clk,
 						    && t_rob_next_empty && t_uop.serializing_op;
 	  end
 
+	if(t_complete_valid_1)
+	  begin
+	     n_pending_fault = r_pending_fault | t_complete_bundle_1.faulted;
+	  end
+	
 	       
 	unique case (r_state)
 	  ACTIVE:
@@ -912,7 +920,9 @@ module core(clk,
 					&& !t_uq_full
 					&& !t_dq_empty					
 					&& t_enough_iprfs
-					&& t_enough_hlprfs;
+					&& t_enough_hlprfs
+					&& (r_pending_fault ? r_in_delay_slot : 1'b1);
+
 			      
 			      t_alloc_two = t_alloc
 					    && !t_uop2.serializing_op
@@ -983,8 +993,11 @@ module core(clk,
 				   && !t_uq_full
 				   && !t_dq_empty
 				   && t_enough_iprfs
-				   && t_enough_hlprfs;
+				   && t_enough_hlprfs
+				   && (r_pending_fault ? r_in_delay_slot : 1'b1);
 
+			 //$display("r_cycle = %d, can alloc %b, r_pending %b, delay %b", r_cycle, t_alloc, r_pending_fault, r_in_delay_slot);
+			 
 			 t_alloc_two = t_alloc
 				       && !t_uop2.serializing_op
 				       && !t_dq_next_empty 
@@ -1040,6 +1053,7 @@ module core(clk,
 	       if(n_got_restart_ack)
 		 begin
 		    n_state = ACTIVE;
+		    n_pending_fault = 1'b0;
 		    n_ds_done = 1'b0;
 		    t_restart_complete = 1'b1;
 		 end
@@ -1060,11 +1074,12 @@ module core(clk,
 		    n_restart_src_pc = t_rob_head.pc;
 		    n_restart_src_is_indirect = 1'b0;
 		    n_restart_valid = 1'b1;
+		    n_pending_fault = 1'b0;		    
 		    if(n_got_restart_ack)
 		      begin
 			 //$display("RESTART PIPELINE AT %d, pc %x", 
 			 //r_cycle, n_restart_pc);
-			 n_state = ACTIVE;
+			 n_state = ACTIVE;			 
 		      end
 		 end
 	    end
@@ -1109,6 +1124,7 @@ module core(clk,
 		    n_restart_src_pc = t_rob_head.pc;
 		    n_restart_src_is_indirect = 1'b0;
 		    n_restart_valid = 1'b1;
+		    n_pending_fault = 1'b0;
 		    if(n_got_restart_ack)
 		      begin
 			 t_retire = 1'b1;
@@ -1148,6 +1164,7 @@ module core(clk,
 	    end // case: HALT
 	  HALT_WAIT_FOR_RESTART:
 	    begin
+	       n_pending_fault = 1'b0;
 	       if(n_got_restart_ack)
 		 begin
 		    n_state = ACTIVE;
@@ -1199,6 +1216,7 @@ module core(clk,
 		     end
 		   else
 		     begin
+			n_pending_fault = 1'b0;
 			n_state = ACTIVE;
 		     end
 		end
