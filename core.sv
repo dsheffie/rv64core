@@ -3,6 +3,10 @@
 `include "uop.vh"
 
 `ifdef VERILATOR
+import "DPI-C" function void record_faults(input int n_faults);
+import "DPI-C" function void record_branches(input int n_branches);
+
+
 import "DPI-C" function void record_alloc(input int rob_full,
 					  input int alloc_one, 
 					  input int alloc_two,
@@ -662,7 +666,32 @@ module core(clk,
    
    
 //`define DEBUG
-
+`ifdef VERILATOR
+   logic [31:0] t_faults, t_branches;
+   always_comb
+     begin
+	t_faults = 'd0;
+	t_branches = 'd0;
+	for(logic [`LG_ROB_ENTRIES:0] i = r_rob_head_ptr; i != (r_rob_tail_ptr); i=i+1)
+	  begin
+	     if(r_rob_complete[i[`LG_ROB_ENTRIES-1:0]]  && r_rob[i[`LG_ROB_ENTRIES-1:0]].faulted)
+	       begin
+		  t_faults = t_faults + 'd1;
+	       end
+	     if(r_rob[i[`LG_ROB_ENTRIES-1:0]].is_br)
+	       begin
+		  t_branches = t_branches + 'd1;
+	       end
+	  end
+     end // always_comb
+   
+   always_ff@(negedge clk)
+     begin
+	record_faults(t_faults);
+	record_branches(t_branches);
+     end
+`endif
+   
 //`define DUMP_ROB
 `ifdef DUMP_ROB
    always_ff@(negedge clk)

@@ -52,6 +52,9 @@ static uint64_t l1d_stores = 0;
 static std::map<int,uint64_t> block_distribution;
 static std::map<int,uint64_t> restart_distribution;
 static std::map<int,uint64_t> restart_ds_distribution;
+static std::map<int,uint64_t> fault_distribution;
+static std::map<int,uint64_t> branch_distribution;
+static std::map<int,uint64_t> fault_to_restart_distribution;
 
 static const char* l1d_stall_str[8] =
   {
@@ -66,9 +69,30 @@ static const char* l1d_stall_str[8] =
 };
 static uint64_t l1d_stall_reasons[8] = {0};
 
+static bool pending_fault = false;
+static uint64_t fault_start_cycle = 0;
+
+void record_branches(int n_branches) {
+  branch_distribution[n_branches]++;
+}
+
+void record_faults(int n_faults) {
+  fault_distribution[n_faults]++;
+  if(n_faults && not(pending_fault)) {
+    pending_fault = true;
+    fault_start_cycle = globals::cycle;
+  }
+}
 
 void record_restart(int cycles) {
   restart_distribution[cycles]++;
+  pending_fault = false;
+
+  fault_to_restart_distribution[(globals::cycle - fault_start_cycle)]++;
+  fault_start_cycle = 0;
+  //std::cout << "clearing fault took "
+  //<< (globals::cycle - fault_start_cycle)
+  //<< " cycles\n";
 }
 
 void record_ds_restart(int cycles) {
@@ -1266,7 +1290,15 @@ int main(int argc, char **argv) {
       out << restart_ds_distribution.begin()->first << " min cycles for delay slot\n";
       out << restart_ds_distribution.rbegin()->first << " max cycles for delay slot\n";
     }
-    
+    for(auto &p : fault_distribution) {
+      out << p.first << " faults inflight, " << p.second << " times\n";
+    }
+    for(auto &p : branch_distribution) {
+      out << p.first << " branches inflight, " << p.second << " times\n";
+    }
+    for(auto &p : fault_to_restart_distribution) {
+      out << p.first << " cycles before restart, " << p.second << " times\n";
+    }
     dump_histo(branch_name, mispredicts, s);
     uint64_t total_pushout = 0;
     for(auto &p : pushout_histo) {
