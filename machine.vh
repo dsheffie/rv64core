@@ -34,6 +34,9 @@
 //rob size
 `define LG_ROB_ENTRIES 5
 
+//bob size
+`define LG_BOB_ENTRIES 2
+
 `define LG_RET_STACK_ENTRIES 2
 
 /* non-uop queue */

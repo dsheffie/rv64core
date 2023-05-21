@@ -250,11 +250,20 @@ module core(clk,
    
    logic [`LG_PRF_ENTRIES-1:0]  n_prf_entry, n_prf_entry2;
 
+   //rob
    logic [`LG_ROB_ENTRIES:0] r_rob_head_ptr, n_rob_head_ptr;
    logic [`LG_ROB_ENTRIES:0] r_rob_next_head_ptr, n_rob_next_head_ptr;
-   
    logic [`LG_ROB_ENTRIES:0] r_rob_tail_ptr, n_rob_tail_ptr;
    logic [`LG_ROB_ENTRIES:0] r_rob_next_tail_ptr, n_rob_next_tail_ptr;
+   logic 		     t_rob_empty, t_rob_full, t_rob_next_full, t_rob_next_empty;
+   
+   //bob
+   logic [`LG_BOB_ENTRIES:0] r_bob_head_ptr, n_bob_head_ptr;
+   logic [`LG_BOB_ENTRIES:0] r_bob_next_head_ptr, n_bob_next_head_ptr;
+   logic [`LG_BOB_ENTRIES:0] r_bob_tail_ptr, n_bob_tail_ptr;
+   logic [`LG_BOB_ENTRIES:0] r_bob_next_tail_ptr, n_bob_next_tail_ptr;
+   logic 		     t_bob_empty, t_bob_full, t_bob_next_full, t_bob_next_empty;
+   
          
    logic [`LG_PRF_ENTRIES-1:0] r_alloc_rat[31:0];
    logic [`LG_PRF_ENTRIES-1:0] n_alloc_rat[31:0];
@@ -268,7 +277,9 @@ module core(clk,
 
    logic [N_ROB_ENTRIES-1:0] 	    uq_wait, mq_wait;
    
-   logic 		     t_rob_empty, t_rob_full, t_rob_next_full, t_rob_next_empty;
+
+   
+   
    logic 		     t_alloc, t_alloc_two, t_retire, t_retire_two,
 			     t_rat_copy, t_clr_rob;
 
@@ -1248,6 +1259,10 @@ module core(clk,
 	     r_rob_tail_ptr <= 'd0;
 	     r_rob_next_head_ptr <= 'd1;
 	     r_rob_next_tail_ptr <= 'd1;
+	     r_bob_head_ptr <= 'd0;
+	     r_bob_tail_ptr <= 'd0;
+	     r_bob_next_head_ptr <= 'd1;
+	     r_bob_next_tail_ptr <= 'd1;
 	  end
 	else
 	  begin
@@ -1255,6 +1270,10 @@ module core(clk,
 	     r_rob_tail_ptr <= n_rob_tail_ptr;
 	     r_rob_next_head_ptr <= n_rob_next_head_ptr;
 	     r_rob_next_tail_ptr <= n_rob_next_tail_ptr;
+	     r_bob_head_ptr <= n_bob_head_ptr;
+	     r_bob_tail_ptr <= n_bob_tail_ptr;
+	     r_bob_next_head_ptr <= n_bob_next_head_ptr;
+	     r_bob_next_tail_ptr <= n_bob_next_tail_ptr;
 	  end
      end // always_ff@ (posedge clk)
 
@@ -1767,8 +1786,12 @@ module core(clk,
 	n_rob_tail_ptr = r_rob_tail_ptr;
 	n_rob_next_head_ptr = r_rob_next_head_ptr;
 	n_rob_next_tail_ptr = r_rob_next_tail_ptr;
+	n_bob_head_ptr = r_bob_head_ptr;
+	n_bob_tail_ptr = r_bob_tail_ptr;
+	n_bob_next_head_ptr = r_bob_next_head_ptr;
+	n_bob_next_tail_ptr = r_bob_next_tail_ptr;
 	
-	
+	//rob control 
 	if(t_clr_rob)
 	  begin
 	     n_rob_head_ptr = 'd0;
@@ -1798,12 +1821,30 @@ module core(clk,
 					r_rob_next_head_ptr + 'd1;
 	       end
 	  end // else: !if(t_clr_rob)
+
+	//bob control
+	if(t_clr_rob)
+	  begin
+	     n_bob_head_ptr = 'd0;
+	     n_bob_tail_ptr = 'd0;
+	     n_bob_next_head_ptr = 'd1;
+	     n_bob_next_tail_ptr = 'd1;
+	  end
+
 	
 	t_rob_empty = (r_rob_head_ptr == r_rob_tail_ptr);
 	t_rob_next_empty = (r_rob_next_head_ptr == r_rob_tail_ptr);
-	
 	t_rob_full = (r_rob_head_ptr[`LG_ROB_ENTRIES-1:0] == r_rob_tail_ptr[`LG_ROB_ENTRIES-1:0]) && (r_rob_head_ptr != r_rob_tail_ptr);
 	t_rob_next_full = (r_rob_head_ptr[`LG_ROB_ENTRIES-1:0] == r_rob_next_tail_ptr[`LG_ROB_ENTRIES-1:0]) && (r_rob_head_ptr != r_rob_next_tail_ptr);
+
+
+	t_bob_empty = (r_bob_head_ptr == r_bob_tail_ptr);
+	t_bob_next_empty = (r_bob_next_head_ptr == r_bob_tail_ptr);
+	t_bob_full = (r_bob_head_ptr[`LG_BOB_ENTRIES-1:0] == r_bob_tail_ptr[`LG_BOB_ENTRIES-1:0]) && (r_bob_head_ptr != r_bob_tail_ptr);
+	t_bob_next_full = (r_bob_head_ptr[`LG_BOB_ENTRIES-1:0] == r_bob_next_tail_ptr[`LG_BOB_ENTRIES-1:0]) && (r_bob_head_ptr != r_bob_next_tail_ptr);
+
+
+	
      end // always_comb
 
 
