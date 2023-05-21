@@ -1722,7 +1722,7 @@ module core(clk,
      begin
 	if(reset || t_clr_rob)
 	  begin
-	     for(integer i = 0; i < N_ROB_ENTRIES; i=i+1)
+	     for(integer i = 0; i < N_BOB_ENTRIES; i=i+1)
 	       begin
 		  r_bob[i].valid <= 1'b0;
 	       end
