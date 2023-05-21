@@ -82,5 +82,11 @@ typedef struct packed {
    logic 		       dst_valid;
 } mem_rsp_t;
 
+typedef struct packed {
+   logic       valid;
+   logic [`LG_ROB_ENTRIES-1:0] rob_ptr;
+} bob_entry_t;
+
+
 
 `endif
