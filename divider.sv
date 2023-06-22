@@ -159,7 +159,6 @@ module divider(clk,
 	       if(r_is_signed && r_sign)
 		 begin
 		    n_Y[W-1:0] = ((~n_Y[W-1:0]) +'d1);
-		    n_Y[W2-1:W] = ((~n_Y[W2-1:W]) + 'd1);		    
 		 end	       
 	    end
 	  WAIT_FOR_WB:
