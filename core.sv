@@ -318,6 +318,7 @@ module core(clk,
    logic 		     n_take_br, r_take_br;
 
    logic 		     n_got_break, r_got_break;
+   logic 		     n_pending_break, r_pending_break;
    logic 		     n_got_ud, r_got_ud;
 
    logic 		     n_l1i_flush_complete, r_l1i_flush_complete;
@@ -506,6 +507,7 @@ module core(clk,
 	     r_take_br <= 1'b0;
 	     r_monitor_rsp_data <= 'd0;
 	     r_got_break <= 1'b0;
+	     r_pending_break <= 1'b0;
 	     r_got_ud <= 1'b0;
 	     r_ready_for_resume <= 1'b0;
 	     r_l1i_flush_complete <= 1'b0;
@@ -535,6 +537,7 @@ module core(clk,
 	     r_take_br <= n_take_br;
 	     r_monitor_rsp_data <= n_monitor_rsp_data;
 	     r_got_break <= n_got_break;
+	     r_pending_break <= n_pending_break;
 	     r_got_ud <= n_got_ud;
 	     r_ready_for_resume <= n_ready_for_resume;
 	     r_l1i_flush_complete <= n_l1i_flush_complete;
@@ -834,6 +837,7 @@ module core(clk,
 	n_flush_cl_req = 1'b0;
 	n_flush_cl_addr = r_flush_cl_addr;
 	n_got_break = r_got_break;
+	n_pending_break = r_pending_break;
 	n_got_ud = r_got_ud;
 	n_monitor_reason = r_monitor_reason;
 	n_got_restart_ack = r_got_restart_ack;
@@ -890,7 +894,7 @@ module core(clk,
 		      begin
 			 if(t_rob_head.is_break)
 			   begin
-			      n_got_break = 1'b1;
+			      n_pending_break = 1'b1;
 			      n_flush_req_l1i = 1'b1;
 			      n_flush_req_l1d = 1'b1;
 			      n_cause = 5'd9;
@@ -1170,6 +1174,8 @@ module core(clk,
 	       if(n_l1i_flush_complete && n_l1d_flush_complete && n_l2_flush_complete)
 		 begin
 		    n_state = HALT;
+		    n_got_break = r_pending_break;
+		    n_pending_break = 1'b0;
 		    n_ready_for_resume = 1'b1;		    		    
 		    n_l1i_flush_complete = 1'b0;
 		    n_l1d_flush_complete = 1'b0;
@@ -1239,7 +1245,7 @@ module core(clk,
 		     begin
 			 if(t_rob_next_head.is_break)
 			   begin
-			      n_got_break = 1'b1;
+			      n_pending_break = 1'b1;
 			      n_flush_req_l1i = 1'b1;
 			      n_flush_req_l1d = 1'b1;
 			      n_cause = 5'd9;
