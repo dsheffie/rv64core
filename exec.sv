@@ -1567,6 +1567,7 @@ module exec(clk,
 	t_mem_tail.dst_ptr = mem_uq.dst;
 	t_mem_tail.is_store = 1'b0;
 	t_mem_tail.data = 32'd0;
+	t_mem_tail.bad_addr = 1'b0;
 	case(mem_uq.op)
 	  SB:
 	    begin
@@ -1579,19 +1580,22 @@ module exec(clk,
 	       t_mem_tail.op = MEM_SH;
 	       t_mem_tail.is_store = 1'b1;
 	       t_mem_tail.dst_valid = 1'b0;
+	       t_mem_tail.bad_addr = w_agu32[0];
 	    end // case: SW
 	  SW:
 	    begin
 	       t_mem_tail.op = MEM_SW;
 	       t_mem_tail.is_store = 1'b1;
 	       t_mem_tail.dst_valid = 1'b0;
+	       t_mem_tail.bad_addr = (w_agu32[1:0] != 2'd0);
 	    end // case: SW
 	  SC:
 	    begin
 	       t_mem_tail.op = MEM_SC;
 	       t_mem_tail.is_store = 1'b1;
 	       t_mem_tail.dst_valid = 1'b1;
-	       t_mem_tail.dst_ptr = mem_uq.dst;		    
+	       t_mem_tail.dst_ptr = mem_uq.dst;
+	       t_mem_tail.bad_addr = (w_agu32[1:0] != 2'd0);		    
 	    end // case: SW
 	  SWR:
 	    begin
@@ -1609,6 +1613,7 @@ module exec(clk,
 	    begin
 	       t_mem_tail.op = MEM_LW;
 	       t_mem_tail.dst_valid = 1'b1;
+	       t_mem_tail.bad_addr = (w_agu32[1:0] != 2'd0);
 	    end // case: LW
 	  LWL:
 	    begin
@@ -1636,11 +1641,13 @@ module exec(clk,
 	    begin
 	       t_mem_tail.op = MEM_LHU;
 	       t_mem_tail.dst_valid = 1'b1;
+	       t_mem_tail.bad_addr = w_agu32[0];
 	    end // case: LBU
 	  LH:
 	    begin
 	       t_mem_tail.op = MEM_LH;
 	       t_mem_tail.dst_valid = 1'b1;
+	       t_mem_tail.bad_addr = w_agu32[0];
 	    end // case: LH
 	  default:
 	    begin

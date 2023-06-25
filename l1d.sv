@@ -1221,9 +1221,9 @@ endfunction
 	n_core_mem_rsp.data = r_req.addr;
 	n_core_mem_rsp.rob_ptr = r_req.rob_ptr;
 	n_core_mem_rsp.dst_ptr = r_req.dst_ptr;
-	
 	n_core_mem_rsp.dst_valid = 1'b0;
-
+	n_core_mem_rsp.bad_addr = 1'b0;
+	
 	n_cache_accesses = r_cache_accesses;
 	n_cache_hits = r_cache_hits;
 	
@@ -1291,6 +1291,7 @@ endfunction
 		    if(drain_ds_complete)
 		      begin
 			 n_core_mem_rsp.dst_valid = r_req2.dst_valid;
+			 n_core_mem_rsp.bad_addr = r_req2.bad_addr;
 			 n_core_mem_rsp_valid = 1'b1;
 		      end
 		    else if(r_req2.is_store)
@@ -1300,17 +1301,17 @@ endfunction
 			 n_stall_store = 1'b1;
 			 //ack early
 			 n_core_mem_rsp.dst_valid = 1'b0;
-			  
-
 			 if(t_port2_hit_cache)
 			   begin
 			      n_cache_hits = r_cache_hits + 'd1;
 			   end
 			 n_core_mem_rsp_valid = 1'b1;
+			 n_core_mem_rsp.bad_addr = r_req2.bad_addr;
 		      end // if (r_req2.is_store)
 		    else if(r_req2.op == MEM_LWL || r_req2.op == MEM_LWR)
 		      begin
 			 t_push_miss = 1'b1;
+			 n_core_mem_rsp.bad_addr = r_req2.bad_addr;
 		      end
 		    else if(t_port2_hit_cache && !r_hit_busy_addr2)
 		      begin
@@ -1321,6 +1322,7 @@ endfunction
                          n_core_mem_rsp.dst_valid = t_rsp_dst_valid2;
                          n_cache_hits = r_cache_hits + 'd1;
                          n_core_mem_rsp_valid = 1'b1;
+			 n_core_mem_rsp.bad_addr = r_req2.bad_addr;
 		      end
 		    else
 		      begin
@@ -1337,8 +1339,6 @@ endfunction
 		 begin
 		    if(r_valid_out && (r_tag_out == r_cache_tag))
 		      begin /* valid cacheline - hit in cache */
-			 
-			 			 
 			 if(r_req.is_store)
 			   begin
 			      t_reset_graduated = 1'b1;				   
@@ -1348,6 +1348,7 @@ endfunction
 			      n_core_mem_rsp.data = t_rsp_data[31:0];
 			      n_core_mem_rsp.dst_valid = t_rsp_dst_valid;
 			      n_core_mem_rsp_valid = 1'b1;
+			      n_core_mem_rsp.bad_addr = r_req.bad_addr;
 			   end // else: !if(r_req.is_store)
 		      end // if (r_valid_out && (r_tag_out == r_cache_tag))
 		    else if(r_valid_out && r_dirty_out && (r_tag_out != r_cache_tag) )
