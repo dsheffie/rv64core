@@ -104,6 +104,7 @@ module core(clk,
 	    monitor_rsp_data,
 	    got_break,
 	    got_ud,
+	    got_bad_addr,
 	    inflight);
    input logic clk;
    input logic reset;
@@ -191,6 +192,7 @@ module core(clk,
    input logic [(`M_WIDTH-1):0] 	  monitor_rsp_data;
    output logic 			  got_break;
    output logic 			  got_ud;
+   output logic 			  got_bad_addr;
    output logic [`LG_ROB_ENTRIES:0] 	  inflight;
    
    
@@ -320,6 +322,8 @@ module core(clk,
    logic 		     n_got_break, r_got_break;
    logic 		     n_pending_break, r_pending_break;
    logic 		     n_got_ud, r_got_ud;
+   logic 		     n_got_bad_addr, r_got_bad_addr;
+   
 
    logic 		     n_l1i_flush_complete, r_l1i_flush_complete;
    logic 		     n_l1d_flush_complete, r_l1d_flush_complete;
@@ -429,7 +433,7 @@ module core(clk,
    
    assign got_break = r_got_break;
    assign got_ud = r_got_ud;
-   
+   assign got_bad_addr = r_got_bad_addr;
 
    popcount #(`LG_ROB_ENTRIES) inflight0 (.in(r_rob_inflight), 
 					  .out(inflight));
@@ -509,6 +513,7 @@ module core(clk,
 	     r_got_break <= 1'b0;
 	     r_pending_break <= 1'b0;
 	     r_got_ud <= 1'b0;
+	     r_got_bad_addr <= 1'b0;
 	     r_ready_for_resume <= 1'b0;
 	     r_l1i_flush_complete <= 1'b0;
 	     r_l1d_flush_complete <= 1'b0;
@@ -539,6 +544,7 @@ module core(clk,
 	     r_got_break <= n_got_break;
 	     r_pending_break <= n_pending_break;
 	     r_got_ud <= n_got_ud;
+	     r_got_bad_addr <= n_got_bad_addr;
 	     r_ready_for_resume <= n_ready_for_resume;
 	     r_l1i_flush_complete <= n_l1i_flush_complete;
 	     r_l1d_flush_complete <= n_l1d_flush_complete;
@@ -839,6 +845,7 @@ module core(clk,
 	n_got_break = r_got_break;
 	n_pending_break = r_pending_break;
 	n_got_ud = r_got_ud;
+	n_got_bad_addr = r_got_bad_addr;
 	n_monitor_reason = r_monitor_reason;
 	n_got_restart_ack = r_got_restart_ack;
 	n_ready_for_resume = 1'b0;
@@ -903,6 +910,14 @@ module core(clk,
 			 else if(t_rob_head.is_ii)
 			   begin
 			      n_got_ud = 1'b1;
+			      n_flush_req_l1i = 1'b1;
+			      n_flush_req_l1d = 1'b1;			      
+			      n_cause = 5'd10;
+			      n_state = WRITE_EPC;
+			   end
+			 else if(t_rob_head.is_bad_addr)
+			   begin
+			      n_got_bad_addr = 1'b1;
 			      n_flush_req_l1i = 1'b1;
 			      n_flush_req_l1d = 1'b1;			      
 			      n_cause = 5'd10;
@@ -1522,6 +1537,7 @@ module core(clk,
 	t_rob_tail.is_indirect = t_alloc_uop.op == JALR || t_alloc_uop.op == JR;
 	
 	t_rob_tail.is_ii = 1'b0;
+	t_rob_tail.is_bad_addr = 1'b0;
 	t_rob_tail.take_br = 1'b0;
 	t_rob_tail.is_br = t_alloc_uop.is_br;	
 	t_rob_tail.in_delay_slot = r_in_delay_slot;
@@ -1543,6 +1559,7 @@ module core(clk,
 	t_rob_next_tail.is_indirect = t_alloc_uop2.op == JALR || t_alloc_uop2.op == JR;
 	
 	t_rob_next_tail.is_ii = 1'b0;
+	t_rob_next_tail.is_bad_addr = 1'b0;
 	t_rob_next_tail.take_br = 1'b0;
 	t_rob_next_tail.is_br = t_alloc_uop2.is_br;
 	t_rob_next_tail.in_delay_slot = r_in_delay_slot;
@@ -1717,7 +1734,7 @@ module core(clk,
 	       begin
 		  r_rob[core_mem_rsp.rob_ptr].data <= core_mem_rsp.data;
 		  r_rob[core_mem_rsp.rob_ptr].faulted <= core_mem_rsp.bad_addr;
-		  r_rob[core_mem_rsp.rob_ptr].is_ii <= core_mem_rsp.bad_addr;
+		  r_rob[core_mem_rsp.rob_ptr].is_bad_addr <= core_mem_rsp.bad_addr;
 `ifdef ENABLE_CYCLE_ACCOUNTING
 		  r_rob[core_mem_rsp.rob_ptr].complete_cycle <= r_cycle;
 `endif	    	     	     

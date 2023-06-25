@@ -42,6 +42,7 @@ module core_l1d_l1i(clk,
 		    l2_cache_hits,
 		    got_break,
 		    got_ud,
+		    got_bad_addr,
 		    inflight);
 
    localparam L1D_CL_LEN = 1 << `LG_L1D_CL_LEN;
@@ -121,6 +122,8 @@ module core_l1d_l1i(clk,
    input logic [(`M_WIDTH-1):0] 	  monitor_rsp_data;
    output logic 			  got_break;
    output logic 			  got_ud;
+   output logic 			  got_bad_addr;
+   
    output logic [`LG_ROB_ENTRIES:0] 	  inflight;
    
 
@@ -578,6 +581,7 @@ module core_l1d_l1i(clk,
 	     .monitor_rsp_data(monitor_rsp_data),
 	     .got_break(got_break),
 	     .got_ud(got_ud),
+	     .got_bad_addr(got_bad_addr),
 	     .inflight(inflight)
 	     );
    

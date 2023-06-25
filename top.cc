@@ -923,6 +923,12 @@ int main(int argc, char **argv) {
 	}
       }
       assert(!retired_same_pc);
+
+      if(tb->got_bad_addr) {
+	std::cout << "fatal - unaligned address\n";
+	break;
+      }
+       
       
       if( enable_checker) {
 	//std::cout << std::hex << tb->retire_pc << "," << ss->pc << std::dec << "\n";	  	

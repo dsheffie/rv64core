@@ -38,18 +38,20 @@ public:
     return (*this)[disp];
   }
 #endif
-  bool compare(const sparse_mem &other) {
+  bool compare(const sparse_mem &other, bool verbose = false) {
     bool error = false;
     for(uint64_t b = 0; b < sz; ++b) {
       if(mem[b] != other.mem[b]) {
 	error = true;
-	std::cout << "byte " << std::hex << b
-		  << " differs "
-		  << static_cast<int>(mem[b])
-		  << " vs "
-		  << static_cast<int>(other.mem[b])
-		  << std::dec
-		  << "\n";
+	if(verbose) {
+	  std::cout << "byte " << std::hex << b
+		    << " differs "
+		    << static_cast<int>(mem[b])
+		    << " vs "
+		    << static_cast<int>(other.mem[b])
+		    << std::dec
+		    << "\n";
+	}
       }
     }
     return error;
