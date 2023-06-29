@@ -817,6 +817,7 @@ module core(clk,
 	t_bump_rob_head = 1'b0;
 	t_monitor_req_valid = 1'b0;
 	n_monitor_rsp_data = r_monitor_rsp_data;
+	n_pending_fault = r_pending_fault;
 	
 	t_enough_iprfs = !((t_uop.dst_valid) && t_gpr_ffs_full);
 	t_enough_hlprfs = !((t_uop.hilo_dst_valid) && (r_hilo_prf_free == 'd0));
