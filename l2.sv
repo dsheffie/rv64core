@@ -216,7 +216,7 @@ module l2(clk,
 	     r_req_ack <= n_req_ack;
 	     r_store_data <= n_store_data;
 	     r_flush_req <= n_flush_req;
-	     r_need_l1d <= n_need_l1i;
+	     r_need_l1i <= n_need_l1i;
 	     r_need_l1d <= n_need_l1d;
 	     r_cache_hits <= n_cache_hits;
 	     r_cache_accesses <= n_cache_accesses;	     
