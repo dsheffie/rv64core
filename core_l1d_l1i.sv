@@ -43,7 +43,8 @@ module core_l1d_l1i(clk,
 		    got_break,
 		    got_ud,
 		    got_bad_addr,
-		    inflight);
+		    inflight,
+		    epc);
 
    localparam L1D_CL_LEN = 1 << `LG_L1D_CL_LEN;
    localparam L1D_CL_LEN_BITS = 1 << (`LG_L1D_CL_LEN + 3);
@@ -125,7 +126,8 @@ module core_l1d_l1i(clk,
    output logic 			  got_bad_addr;
    
    output logic [`LG_ROB_ENTRIES:0] 	  inflight;
-   
+   output logic [31:0] 			  epc;
+      
 
 
    logic 				  head_of_rob_ptr_valid;   
@@ -582,7 +584,8 @@ module core_l1d_l1i(clk,
 	     .got_break(got_break),
 	     .got_ud(got_ud),
 	     .got_bad_addr(got_bad_addr),
-	     .inflight(inflight)
+	     .inflight(inflight),
+	     .epc(epc)
 	     );
    
 

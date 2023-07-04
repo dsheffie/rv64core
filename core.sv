@@ -105,7 +105,8 @@ module core(clk,
 	    got_break,
 	    got_ud,
 	    got_bad_addr,
-	    inflight);
+	    inflight,
+	    epc);
    input logic clk;
    input logic reset;
    input logic extern_irq;
@@ -194,8 +195,9 @@ module core(clk,
    output logic 			  got_ud;
    output logic 			  got_bad_addr;
    output logic [`LG_ROB_ENTRIES:0] 	  inflight;
+   output logic [31:0] 			  epc;
    
-   
+   logic [31:0] 			  r_epc, n_epc;
    
    localparam N_PRF_ENTRIES = (1<<`LG_PRF_ENTRIES);
    localparam N_ROB_ENTRIES = (1<<`LG_ROB_ENTRIES);
@@ -434,7 +436,8 @@ module core(clk,
    assign got_break = r_got_break;
    assign got_ud = r_got_ud;
    assign got_bad_addr = r_got_bad_addr;
-
+   assign epc = r_epc;
+   
    popcount #(`LG_ROB_ENTRIES) inflight0 (.in(r_rob_inflight), 
 					  .out(inflight));
 
@@ -520,6 +523,7 @@ module core(clk,
 	     r_l2_flush_complete <= 1'b0;
 	     r_ds_done <= 1'b0;
 	     drain_ds_complete <= 1'b0;
+	     r_epc <= 'd0;
 	  end
 	else
 	  begin
@@ -550,7 +554,8 @@ module core(clk,
 	     r_l1d_flush_complete <= n_l1d_flush_complete;
 	     r_l2_flush_complete <= n_l2_flush_complete;
 	     r_ds_done <= n_ds_done;
-	     drain_ds_complete <= r_ds_done;	     
+	     drain_ds_complete <= r_ds_done;
+	     r_epc <= n_epc;
 	  end
      end // always_ff@ (posedge clk)
 
@@ -818,6 +823,7 @@ module core(clk,
 	t_monitor_req_valid = 1'b0;
 	n_monitor_rsp_data = r_monitor_rsp_data;
 	n_pending_fault = r_pending_fault;
+	n_epc = r_epc;
 	
 	t_enough_iprfs = !((t_uop.dst_valid) && t_gpr_ffs_full);
 	t_enough_hlprfs = !((t_uop.hilo_dst_valid) && (r_hilo_prf_free == 'd0));
@@ -1230,6 +1236,7 @@ module core(clk,
 	       t_exception_wr_cpr0_ptr = 5'd14;
 	       t_exception_wr_cpr0_data = {32'd0, (t_rob_head.in_delay_slot ? (t_rob_head.pc - 'd4) : t_rob_head.pc)};
 	       n_state = WRITE_CAUSE;
+	       n_epc = (t_rob_head.in_delay_slot ? (t_rob_head.pc - 'd4) : t_rob_head.pc);
 	    end
 	  WRITE_CAUSE:
 	    begin
