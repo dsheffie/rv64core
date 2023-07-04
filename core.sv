@@ -1337,8 +1337,10 @@ module core(clk,
 	  begin
 	     for(logic [`LG_PRF_ENTRIES-1:0] i_rat = 'd0; i_rat < 'd32; i_rat = i_rat + 'd1)
 	       begin
-		  r_alloc_rat[i_rat[4:0]] <= i_rat;
-		  r_retire_rat[i_rat[4:0]] <= i_rat;
+		  //r_alloc_rat[i_rat[4:0]] <= i_rat;
+		  //r_retire_rat[i_rat[4:0]] <= i_rat;
+		  r_alloc_rat[i_rat[4:0]] <= 'd0;
+		  r_retire_rat[i_rat[4:0]] <= 'd0;		  
 	       end
 	  end
 	else
@@ -1991,8 +1993,8 @@ module core(clk,
 	  begin
 	     for(integer i = 0; i < N_PRF_ENTRIES; i = i + 1)
 	       begin
-		  r_prf_free[i] <= (i < 32) ? 1'b0 : 1'b1;
-		  r_retire_prf_free[i] <= (i < 32) ? 1'b0 : 1'b1;
+		  r_prf_free[i] <= (i != 'd0);
+		  r_retire_prf_free[i] <= (i != 'd0);
 	       end
 	  end
 	else
@@ -2071,11 +2073,11 @@ module core(clk,
 	  begin
 	     n_prf_free[n_prf_entry2] = 1'b0;
 	  end
-	if(t_free_reg)
+	if(t_free_reg && (t_free_reg_ptr != 'd0))
 	  begin
 	     n_prf_free[t_free_reg_ptr] = 1'b1;
 	  end
-	if(t_free_reg_two)
+	if(t_free_reg_two && (t_free_reg_two_ptr != 'd0))
 	  begin
 	     n_prf_free[t_free_reg_two_ptr] = 1'b1;
 	  end
