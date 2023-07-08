@@ -1077,12 +1077,67 @@ module core(clk,
 		 begin
 		    t_retire = r_take_br;
 		    n_ds_done = 1'b1;
+		    if(t_rob_head.faulted && r_take_br)
+		      begin
+			 if(t_rob_head.is_break)
+			   begin
+			      n_pending_break = 1'b1;
+			      n_flush_req_l1i = 1'b1;
+			      n_flush_req_l1d = 1'b1;
+			      n_cause = 5'd9;
+			      n_state = WRITE_EPC;
+			   end
+			 else if(t_rob_head.is_ii)
+			   begin
+			      n_got_ud = 1'b1;
+			      n_flush_req_l1i = 1'b1;
+			      n_flush_req_l1d = 1'b1;			      
+			      n_cause = 5'd10;
+			      n_state = WRITE_EPC;
+			   end
+			 else if(t_rob_head.is_bad_addr)
+			   begin
+			      n_got_bad_addr = 1'b1;
+			      n_flush_req_l1i = 1'b1;
+			      n_flush_req_l1d = 1'b1;			      
+			      n_cause = 5'd10;
+			      n_state = WRITE_EPC;
+			   end
+		      end		    
 		 end
 	       else if(r_has_delay_slot && t_rob_head_complete && !r_ds_done)
 		 begin
 		    t_retire = 1'b1;
 		    n_ds_done = 1'b1;
+		    if(t_rob_head.faulted)
+		      begin
+			 if(t_rob_head.is_break)
+			   begin
+			      n_pending_break = 1'b1;
+			      n_flush_req_l1i = 1'b1;
+			      n_flush_req_l1d = 1'b1;
+			      n_cause = 5'd9;
+			      n_state = WRITE_EPC;
+			   end
+			 else if(t_rob_head.is_ii)
+			   begin
+			      n_got_ud = 1'b1;
+			      n_flush_req_l1i = 1'b1;
+			      n_flush_req_l1d = 1'b1;			      
+			      n_cause = 5'd10;
+			      n_state = WRITE_EPC;
+			   end
+			 else if(t_rob_head.is_bad_addr)
+			   begin
+			      n_got_bad_addr = 1'b1;
+			      n_flush_req_l1i = 1'b1;
+			      n_flush_req_l1d = 1'b1;			      
+			      n_cause = 5'd10;
+			      n_state = WRITE_EPC;
+			   end
+		      end		    
 		 end
+	      	       
 	       if(r_rob_inflight == 'd0 && r_ds_done && memq_empty && t_divide_ready)
 		 begin
 		    //$display("%d : wait for drain and memq_empty  took  %d cycles",r_cycle, r_restart_cycles);		    
