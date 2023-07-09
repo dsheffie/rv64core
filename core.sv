@@ -385,6 +385,7 @@ module core(clk,
    
    logic 		     t_can_retire_rob_head;
    logic 		     t_faulted_head_and_serializing_delay;
+   logic 		     t_arch_fault;
    
    typedef enum logic [4:0] {
 			     FLUSH_FOR_HALT, //0			     
@@ -395,11 +396,12 @@ module core(clk,
 			     DELAY_SLOT, //5
 			     ALLOC_FOR_SERIALIZE, //6
 			     MONITOR_FLUSH_CACHE, //7
-			     HANDLE_MONITOR,
-			     ALLOC_FOR_MONITOR,
-			     WAIT_FOR_MONITOR,
-			     HALT_WAIT_FOR_RESTART,
-			     WAIT_FOR_SERIALIZE_AND_RESTART,
+			     HANDLE_MONITOR, //8
+			     ALLOC_FOR_MONITOR, //9
+			     WAIT_FOR_MONITOR, //10
+			     HALT_WAIT_FOR_RESTART, //11
+			     WAIT_FOR_SERIALIZE_AND_RESTART, //12
+			     ARCH_FAULT,
 			     WRITE_EPC,
 			     WRITE_CAUSE,
 			     WRITE_BADVADDR,
@@ -885,7 +887,10 @@ module core(clk,
 	     n_pending_fault = r_pending_fault | t_complete_bundle_1.faulted;
 	  end
 	
-	       
+	t_arch_fault = t_rob_head.faulted & 
+		       (t_rob_head.is_break | t_rob_head.is_ii | t_rob_head.is_bad_addr);
+	
+	
 	unique case (r_state)
 	  ACTIVE:
 	    begin
@@ -906,29 +911,9 @@ module core(clk,
 		 begin
 		    if(t_rob_head.faulted)
 		      begin
-			 if(t_rob_head.is_break)
+			 if(t_arch_fault)
 			   begin
-			      n_pending_break = 1'b1;
-			      n_flush_req_l1i = 1'b1;
-			      n_flush_req_l1d = 1'b1;
-			      n_cause = 5'd9;
-			      n_state = WRITE_EPC;
-			   end
-			 else if(t_rob_head.is_ii)
-			   begin
-			      n_got_ud = 1'b1;
-			      n_flush_req_l1i = 1'b1;
-			      n_flush_req_l1d = 1'b1;			      
-			      n_cause = 5'd10;
-			      n_state = WRITE_EPC;
-			   end
-			 else if(t_rob_head.is_bad_addr)
-			   begin
-			      n_got_bad_addr = 1'b1;
-			      n_flush_req_l1i = 1'b1;
-			      n_flush_req_l1d = 1'b1;			      
-			      n_cause = 5'd10;
-			      n_state = WRITE_EPC;
+			      n_state = ARCH_FAULT;
 			   end
 			 else
 			   begin
@@ -936,6 +921,7 @@ module core(clk,
 			      n_state = DRAIN;
 			      n_restart_cycles = 'd1;
 			      n_restart_valid = 1'b1;
+			      t_bump_rob_head = 1'b1;			      
 			   end // else: !if(t_rob_head.is_ii)
 			 n_machine_clr = 1'b1;
 			 n_restart_pc = t_rob_head.target_pc;
@@ -945,7 +931,6 @@ module core(clk,
 			 n_has_delay_slot = t_rob_head.has_delay_slot;
 			 n_has_nullifying_delay_slot = t_rob_head.has_nullifying_delay_slot;
 			 n_take_br = t_rob_head.take_br;
-			 t_bump_rob_head = 1'b1;
 		      end // if (t_rob_head.faulted)
 		    else if(!t_dq_empty)
 		      begin
@@ -990,7 +975,7 @@ module core(clk,
 			      //&& (t_uop2.op == NOP || t_uop2.op == J);
 			   end // else: !if(t_uop.serializing_op && !t_dq_empty)
 		      end // if (!t_dq_empty)
-		    t_retire = t_rob_head_complete;
+		    t_retire = t_rob_head_complete & !t_arch_fault;
 		    t_retire_two = !t_rob_next_empty
 		    		   && !t_rob_head.faulted
 		    		   && !t_rob_next_head.faulted 				    
@@ -1075,69 +1060,35 @@ module core(clk,
 	       
 	       if(r_has_nullifying_delay_slot && t_rob_head_complete && !r_ds_done)
 		 begin
-		    t_retire = r_take_br;
-		    n_ds_done = 1'b1;
-		    if(t_rob_head.faulted && r_take_br)
+		    if(r_take_br)
 		      begin
-			 if(t_rob_head.is_break)
+			 if(t_arch_fault)
 			   begin
-			      n_pending_break = 1'b1;
-			      n_flush_req_l1i = 1'b1;
-			      n_flush_req_l1d = 1'b1;
-			      n_cause = 5'd9;
-			      n_state = WRITE_EPC;
+			      n_state = ARCH_FAULT;
 			   end
-			 else if(t_rob_head.is_ii)
+			 else
 			   begin
-			      n_got_ud = 1'b1;
-			      n_flush_req_l1i = 1'b1;
-			      n_flush_req_l1d = 1'b1;			      
-			      n_cause = 5'd10;
-			      n_state = WRITE_EPC;
+			      t_retire = 1'b1;
 			   end
-			 else if(t_rob_head.is_bad_addr)
-			   begin
-			      n_got_bad_addr = 1'b1;
-			      n_flush_req_l1i = 1'b1;
-			      n_flush_req_l1d = 1'b1;			      
-			      n_cause = 5'd10;
-			      n_state = WRITE_EPC;
-			   end
-		      end		    
+		      end
+		    else
+		      begin
+			 t_retire = 1'b0;
+		      end
+		    n_ds_done = 1'b1;
 		 end
 	       else if(r_has_delay_slot && t_rob_head_complete && !r_ds_done)
 		 begin
-		    t_retire = 1'b1;
 		    n_ds_done = 1'b1;
-		    if(t_rob_head.faulted)
+		    if(t_arch_fault)
 		      begin
-			 if(t_rob_head.is_break)
-			   begin
-			      n_pending_break = 1'b1;
-			      n_flush_req_l1i = 1'b1;
-			      n_flush_req_l1d = 1'b1;
-			      n_cause = 5'd9;
-			      n_state = WRITE_EPC;
-			   end
-			 else if(t_rob_head.is_ii)
-			   begin
-			      n_got_ud = 1'b1;
-			      n_flush_req_l1i = 1'b1;
-			      n_flush_req_l1d = 1'b1;			      
-			      n_cause = 5'd10;
-			      n_state = WRITE_EPC;
-			   end
-			 else if(t_rob_head.is_bad_addr)
-			   begin
-			      n_got_bad_addr = 1'b1;
-			      n_flush_req_l1i = 1'b1;
-			      n_flush_req_l1d = 1'b1;			      
-			      n_cause = 5'd10;
-			      n_state = WRITE_EPC;
-			   end
-		      end		    
-		 end
-	      	       
+			 n_state = ARCH_FAULT;
+		      end
+		    else
+		      begin
+			 t_retire = 1'b1;			 
+		      end
+		 end // if (r_has_delay_slot && t_rob_head_complete && !r_ds_done)
 	       if(r_rob_inflight == 'd0 && r_ds_done && memq_empty && t_divide_ready)
 		 begin
 		    //$display("%d : wait for drain and memq_empty  took  %d cycles",r_cycle, r_restart_cycles);		    
@@ -1285,6 +1236,27 @@ module core(clk,
 		    n_state = ACTIVE;
 		 end
 	    end
+	  ARCH_FAULT:
+	    begin
+	       n_flush_req_l1i = 1'b1;
+	       n_flush_req_l1d = 1'b1;
+	       if(t_rob_head.is_break)
+		 begin
+		    n_pending_break = 1'b1;
+		    n_cause = 5'd9;
+		 end
+	       else if(t_rob_head.is_ii)
+		 begin
+		    n_got_ud = 1'b1;
+		    n_cause = 5'd10;
+		 end
+	       else if(t_rob_head.is_bad_addr)
+		 begin
+		    n_got_bad_addr = 1'b1;
+		    n_cause = 5'd10;
+		 end
+	       n_state = WRITE_EPC;
+	    end
 	  WRITE_EPC:
 	    begin
 	       t_exception_wr_cpr0_val = 1'b1;
@@ -1298,7 +1270,8 @@ module core(clk,
 	       t_exception_wr_cpr0_val = 1'b1;
 	       t_exception_wr_cpr0_ptr = 5'd13;
 	       t_exception_wr_cpr0_data = {32'd0, t_rob_head.in_delay_slot, 15'd0, 8'd0, 1'b0, r_cause, 2'b0};
-	       n_state = FLUSH_FOR_HALT; 	       
+	       n_state = FLUSH_FOR_HALT;
+	       t_bump_rob_head = 1'b1;
 	    end
 	  WRITE_BADVADDR:
 	    begin

@@ -555,6 +555,7 @@ int main(int argc, char **argv) {
   while(true) {
     bool should_break = false;
     if(tb->got_break) {
+      std::cout << "got break, epc = " << std::hex << tb->epc << std::dec << "\n";
       should_break = true;
     }
     
@@ -1084,6 +1085,7 @@ int main(int argc, char **argv) {
       break;
     }
     if(tb->got_break) {
+      std::cout << "got break, epc = " << std::hex << tb->epc << std::dec << "\n";      
       break;
     }
 
