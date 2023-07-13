@@ -255,6 +255,7 @@ endfunction
 			     WAIT_INJECT_RELOAD, //4
                              FLUSH_CACHE, //5
                              FLUSH_CACHE_WAIT, //6
+			     FLUSH_CACHE_LAST_WAIT, //6
                              FLUSH_CL,
                              FLUSH_CL_WAIT,
                              HANDLE_RELOAD
@@ -1614,34 +1615,37 @@ endfunction
 	  FLUSH_CACHE:
 	    begin
 	       t_cache_idx = r_cache_idx + 'd1;
-	       if(r_cache_idx == (L1D_NUM_SETS-1))
+	       if(!r_dirty_out)
 		 begin
-		    //$display("flush done at cycle %d", r_cycle);
-		    n_state = ACTIVE;
-		    n_flush_complete = 1'b1;
+		    t_mark_invalid = 1'b1;
+		    t_cache_idx = r_cache_idx + 'd1;
+		    if(r_cache_idx == (L1D_NUM_SETS-1))
+		      begin
+			 n_state = ACTIVE;
+			 n_flush_complete = 1'b1;
+		      end
 		 end
 	       else
 		 begin
-		    if(!r_dirty_out)
-		      begin
-			 t_mark_invalid = 1'b1;
-			 t_cache_idx = r_cache_idx + 'd1;
-		      end
-		    else
-		      begin
-
-			 n_mem_req_addr = {r_tag_out,r_cache_idx,{`LG_L1D_CL_LEN{1'b0}}};
-	            n_mem_req_opcode = MEM_SW;
-	            n_mem_req_store_data = t_data;
-	            n_state = FLUSH_CACHE_WAIT;
-		    n_inhibit_write = 1'b1;
-	            n_mem_req_valid = 1'b1;
-		    //$display("generate writeback flush for %x at cycle %d",
-		    //n_mem_req_addr, r_cycle);
-		 end // else: !if(r_valid_out && !r_dirty_out)
-		 end // else: !if(r_cache_idx == (L1D_NUM_SETS-1))
+		    n_mem_req_addr = {r_tag_out,r_cache_idx,{`LG_L1D_CL_LEN{1'b0}}};
+	       n_mem_req_opcode = MEM_SW;
+	       n_mem_req_store_data = t_data;
+	       n_state = (r_cache_idx == (L1D_NUM_SETS-1)) ? FLUSH_CACHE_LAST_WAIT : FLUSH_CACHE_WAIT;
+	       n_inhibit_write = 1'b1;
+	       n_mem_req_valid = 1'b1;
+	    end // else: !if(r_valid_out && !r_dirty_out)
 	    end // case: FLUSH_CACHE
-	  
+	  FLUSH_CACHE_LAST_WAIT:
+	    begin
+	       t_cache_idx = r_cache_idx;
+	       //$display("stuck in flush cache at cycle %d", r_cycle);
+	       	if(mem_rsp_valid)
+		  begin
+		     n_state = ACTIVE;
+		     n_inhibit_write = 1'b0;
+		     n_flush_complete = 1'b1;
+		  end
+	    end	  
 	  FLUSH_CACHE_WAIT:
 	    begin
 	       t_cache_idx = r_cache_idx;
