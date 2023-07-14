@@ -256,28 +256,6 @@ public:
   ~state_t();
 };
 
-
-class state64_t{
-public:
-  uint64_t pc = 0;
-  int64_t gpr[32] = {0};
-  int64_t lo = 0;
-  int64_t hi = 0;
-  uint32_t cpr0[32] = {0};
-  uint32_t cpr1[32] = {0};
-  uint32_t fcr1[5] = {0};
-  uint64_t icnt = 0;
-  uint8_t brk = 0;
-  uint64_t maxicnt = 0;
-  sparse_mem &mem;
-  image_info64 linux_image;
-  
-  state64_t(sparse_mem &mem) : mem(mem) {
-    memset(&linux_image, 0, sizeof(linux_image));
-  }
-  ~state64_t();
-};
-
 struct rtype_t {
   uint32_t opcode : 6;
   uint32_t sa : 5;
@@ -428,15 +406,11 @@ static inline uint32_t get_branch_target(uint32_t pc, uint32_t inst) {
 }
 
 void initState(state_t *s);
-void initState(state64_t *s);
 void execMips(state_t *s);
-void execMips(state64_t *s);
 
 void mkMonitorVectors(state_t *s);
-void mkMonitorVectors(state64_t *s);
 
 std::ostream &operator<<(std::ostream &out, const state_t & s);
-std::ostream &operator<<(std::ostream &out, const state64_t & s);
 
 struct new_utsname;
 
