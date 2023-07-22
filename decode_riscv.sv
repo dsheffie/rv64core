@@ -23,6 +23,7 @@ module decode_riscv(insn,
    localparam ZP = (`LG_PRF_ENTRIES-5);
    wire [`LG_PRF_ENTRIES-1:0] rd = {{ZP{1'b0}},insn[11:7]};
    wire [`LG_PRF_ENTRIES-1:0] rs1 = {{ZP{1'b0}},insn[19:15]};
+   wire [`LG_PRF_ENTRIES-1:0] rs2 = {{ZP{1'b0}},insn[24:20]};
    
    wire 	is_nop = (insn == 32'd0);
    
@@ -70,6 +71,40 @@ module decode_riscv(insn,
 	uop.fetch_cycle = fetch_cycle;
 `endif
 	case(opcode)
+	  7'h3:
+	    begin
+	       uop.dst = rd;
+	       uop.srcA = rs1;
+	       uop.dst_valid = (rd != 'd0);
+	       uop.srcA_valid = (rd != 'd0);	       
+	       uop.is_mem = 1'b1;
+	       uop.rvimm = {{20{insn[31]}}, insn[31:20]};
+	       case(insn[14:12])
+		 3'd0:
+		   begin
+		      uop.op = (rd == 'd0) ? NOP : LB;
+		   end
+		 3'd1:
+		   begin
+		      uop.op = (rd == 'd0) ? NOP : LH;
+		   end
+		 3'd2:
+		   begin
+		      uop.op = (rd == 'd0) ? NOP : LW;
+		   end
+		 3'd4:
+		   begin
+		      uop.op = (rd == 'd0) ? NOP : LBU;
+		   end
+		 3'd5:
+		   begin
+		      uop.op = (rd == 'd0) ? NOP : LHU;
+		   end		 
+		 default:
+		   begin
+		   end
+	       endcase
+	    end
 	  7'h13:
 	    begin
 	       uop.dst = rd;
@@ -106,6 +141,37 @@ module decode_riscv(insn,
 		   end
 	       endcase // case (inst[14:12])
 	    end // case: 7'h13
+	  7'h33:
+	    begin
+	       uop.dst = rd;
+	       uop.dst_valid = (rd != 'd0);
+	       uop.srcA_valid = 1'b1;
+	       uop.srcA = rs1;
+	       uop.srcB_valid = 1'b1;
+	       uop.srcB = rs2;
+	       uop.is_int = 1'b1;
+	       case(insn[14:12])
+		 3'd0:
+		   begin
+		      case(insn[31:25])
+			7'd0:
+			  begin
+			     uop.op = (rd != 'd0) ? ADDU : NOP;
+			  end
+			default:
+			  begin
+			  end
+		      endcase // case (insn[31:25])
+		   end // case: 3'd0
+		 3'd1:
+		   begin
+		      uop.op = (rd != 'd0) ? SLL : NOP;
+		   end
+		 default:
+		   begin
+		   end
+	       endcase
+	    end
 	  7'h17: /* auipc */
 	    begin
 	       uop.op = (rd == 'd0) ? NOP : AUIPC;
@@ -113,6 +179,48 @@ module decode_riscv(insn,
 	       uop.dst_valid = (rd != 'd0);
 	       uop.is_int = 1'b1;
 	       uop.rvimm = {insn[31:12], 12'd0};
+	    end
+	  7'h37: /* lui */
+	    begin
+	       uop.op = (rd == 'd0) ? NOP : LUI;
+	       uop.dst = rd;
+	       uop.dst_valid = (rd != 'd0);
+	       uop.is_int = 1'b1;
+	       uop.rvimm = {insn[31:12], 12'd0};
+	    end
+	  7'h67: /* jalr */
+	    begin
+	       uop.srcA_valid = 1'b1;
+	       uop.srcA = rs1;
+	       uop.is_int = 1'b1;
+	       uop.is_br = 1'b1;
+	       uop.imm = insn_pred_target[15:0];
+	       uop.jmp_imm = insn_pred_target[`M_WIDTH-1:16];
+	       uop.rvimm = {{20{insn[31]}}, insn[31:20]};	       
+	       if(rd == 'd0)
+		 begin
+		    uop.op = JR;
+		 end
+	       else
+		 begin
+		    uop.op = JALR;
+		    uop.dst_valid = 1'b1;
+		    uop.dst = rd;
+		 end
+	    end
+	  7'h73: /* this is a bunch of system stuff I dont care about currently */
+	    begin
+	       if(insn[31:7] == 'd0) /* treat as brk */
+		 begin
+		    uop.op = BREAK;
+		    uop.serializing_op = 1'b1;
+		    uop.is_int = 1'b1;		    
+		 end
+	       else
+		 begin
+		    uop.op = NOP;
+		 end
+	       uop.is_int = 1'b1;
 	    end
 	  default:
 	    begin

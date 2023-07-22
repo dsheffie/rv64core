@@ -155,7 +155,7 @@ module exec(clk,
    localparam E_BITS = `M_WIDTH-16;
    localparam HI_EBITS = `M_WIDTH-32;
    
-   logic [`M_WIDTH-1:0] t_simm, t_mem_simm;
+   logic [`M_WIDTH-1:0] t_simm;
    logic [`M_WIDTH-1:0] t_result;
    logic [`M_WIDTH-1:0] t_cpr0_result;
 
@@ -1092,6 +1092,18 @@ module exec(clk,
 	if(r_start_int)
 	  begin
 	     $display("start int fired for opcode %d, pc %x", int_uop.op, int_uop.pc);
+	     if(int_uop.op == JR)
+	       begin
+		  $display("JR target pc %x, reg src %x", t_pc, t_srcA);
+	       end
+	     if(int_uop.op == LUI)
+	       begin
+		  $display("LUI result %x", t_result);
+	       end
+	     if(int_uop.op == ADDU)
+	       begin
+		  $display("ADDU result %x", t_result);
+	       end
 	  end
      end
    
@@ -1122,17 +1134,43 @@ module exec(clk,
 	t_start_div32 = 1'b0;	
 
 	
+	
 	case(int_uop.op)
 	  //riscv
+	  ADDI:
+	    begin
+	       t_result = t_srcA + int_uop.rvimm;
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;
+	    end
+	  ADDU:
+	    begin
+	       t_result = t_srcA + t_srcB;
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;
+	    end
 	  AUIPC:
 	    begin
 	       t_result = t_pc + int_uop.rvimm;
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
-	  ADDI:
+	  LUI:
 	    begin
-	       t_result = t_srcA + int_uop.rvimm;
+	       t_result = int_uop.rvimm;
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;	       
+	    end
+	  JR:
+	     begin
+		t_take_br = 1'b1;
+		t_mispred_br = (t_srcA + int_uop.rvimm)  != {int_uop.jmp_imm,int_uop.imm};
+		t_pc = t_srcA + int_uop.rvimm;
+		t_alu_valid = 1'b1;
+	     end
+	  SLL:
+	    begin
+	       t_result = t_srcA << int_uop.srcB[4:0];
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
@@ -1145,12 +1183,6 @@ module exec(clk,
 	  //      t_fault = 1'b1;
 	  //      //t_unimp_op = 1'b1;
 	  //   end
-	  // SLL:
-	  //   begin
-	  //      t_result = t_srcA << int_uop.srcB;
-	  //      t_wr_int_prf = 1'b1;
-	  //      t_alu_valid = 1'b1;
-
 	  //   end
 	  // SRA:
 	  //   begin
@@ -1403,13 +1435,6 @@ module exec(clk,
 	  //      t_alu_valid = 1'b1;
 	  //      t_wr_int_prf = 1'b1;
 	  //   end
-	  // JR:
-	  //   begin
-	  //      t_take_br = 1'b1;
-	  //      t_mispred_br = (t_srcA != {int_uop.jmp_imm,int_uop.imm});
-	  //      t_pc = t_srcA;
-	  //      t_alu_valid = 1'b1;
-	  //   end
 	  // JALR:
 	  //   begin
 	  //      t_take_br = 1'b1;
@@ -1508,7 +1533,7 @@ module exec(clk,
 
 
    wire [31:0] w_agu32;
-   ppa32 agu (.A(t_mem_srcA), .B({{E_BITS{mem_uq.imm[15]}},mem_uq.imm}), .Y(w_agu32));
+   ppa32 agu (.A(t_mem_srcA), .B(mem_uq.rvimm), .Y(w_agu32));
 
    wire w_mem_srcA_ready = t_mem_uq.srcA_valid ? (!r_prf_inflight[t_mem_uq.srcA] | t_fwd_int_mem_srcA | t_fwd_mem_mem_srcA) : 1'b1;
 
@@ -1582,7 +1607,6 @@ module exec(clk,
    
    always_comb
      begin
-	t_mem_simm = {{E_BITS{mem_uq.imm[15]}},mem_uq.imm};
 	t_mem_tail.op = MEM_LW;
 	t_mem_tail.addr = w_agu32;
 	t_mem_tail.rob_ptr = mem_uq.rob_ptr;
