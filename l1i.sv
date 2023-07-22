@@ -25,14 +25,27 @@ typedef enum logic [3:0] {
 			  } jump_t;
 */
 
-module predecode(insn_, pd);
-   input logic [31:0] insn_;
+module predecode(insn, pd);
+   input logic [31:0] insn;
    output logic [3:0] pd;
-
-   logic [31:0]       insn;
+   logic [6:0] 	      opcode = insn[6:0];
+   logic [4:0] rd = insn[11:7];
    always_comb
      begin
 	pd = 4'd0;
+	case(opcode)
+	  7'h67: /* jalr and jr */
+	    begin
+	       pd = (rd == 'd0) ? 'd4 /*jr*/ : 'd6 /*jalr*/;
+	    end
+	  7'h6f:
+	    begin
+	       pd = (rd == 'd0) ? 'd3 /*j*/ : 'd5 /*jal*/;
+	    end
+	  default:
+	    begin
+	    end
+	endcase // case (opcode)
      end // always_comb
 endmodule // predecode
 
@@ -512,7 +525,8 @@ endfunction // is_nop
 		       {2'd0, select_pd(r_jump_out, 'd3) != 4'd0};
 	
 		
-	t_simm = {{SEXT{t_insn_data[15]}},t_insn_data[15:0]};
+	t_simm = {{11{t_insn_data[31]}}, t_insn_data[31], t_insn_data[19:12], t_insn_data[20], t_insn_data[30:21], 1'b0};
+	
 	t_clear_fq = 1'b0;
 	t_push_insn = 1'b0;
 	t_push_insn2 = 1'b0;
@@ -591,14 +605,15 @@ endfunction // is_nop
 	       else if(t_hit && !fq_full)
 		 begin
 		    t_update_spec_hist = (t_pd != 4'd0);
-		    if(t_pd == 4'd5 || t_pd == 4'd3)
+		    if(t_pd == 4'd5 || t_pd == 4'd3) /* jal and j */
 		      begin
 			 t_is_cflow = 1'b1;
 			 t_take_br = 1'b1;
 			 t_is_call = (t_pd == 4'd5);
 			 //if(t_is_call) $display("predict jal at %x will return to %x",
 			 //r_cache_pc, r_cache_pc+'d8);
-			 n_pc = {r_cache_pc[`M_WIDTH-1:28], t_insn_data[25:0], 2'd0};
+			 n_pc = r_cache_pc + t_simm;
+			 
 		      end
 		    else if(t_pd == 4'd8)
 		      begin
@@ -996,10 +1011,10 @@ endfunction // is_nop
 	   );
 
    wire [3:0] w_pd0, w_pd1, w_pd2, w_pd3;
-   predecode pd0 (.insn_(mem_rsp_load_data[31:0]),   .pd(w_pd0));
-   predecode pd1 (.insn_(mem_rsp_load_data[63:32]),  .pd(w_pd1));
-   predecode pd2 (.insn_(mem_rsp_load_data[95:64]),  .pd(w_pd2));
-   predecode pd3 (.insn_(mem_rsp_load_data[127:96]), .pd(w_pd3));   
+   predecode pd0 (.insn(mem_rsp_load_data[31:0]),   .pd(w_pd0));
+   predecode pd1 (.insn(mem_rsp_load_data[63:32]),  .pd(w_pd1));
+   predecode pd2 (.insn(mem_rsp_load_data[95:64]),  .pd(w_pd2));
+   predecode pd3 (.insn(mem_rsp_load_data[127:96]), .pd(w_pd3));   
    
    
    ram1r1w #(.WIDTH(4*WORDS_PER_CL), .LG_DEPTH(`LG_L1I_NUM_SETS))

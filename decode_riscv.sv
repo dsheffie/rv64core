@@ -188,7 +188,7 @@ module decode_riscv(insn,
 	       uop.is_int = 1'b1;
 	       uop.rvimm = {insn[31:12], 12'd0};
 	    end
-	  7'h67: /* jalr */
+	  7'h67: /* jalr and jr*/
 	    begin
 	       uop.srcA_valid = 1'b1;
 	       uop.srcA = rs1;
@@ -206,6 +206,26 @@ module decode_riscv(insn,
 		    uop.op = JALR;
 		    uop.dst_valid = 1'b1;
 		    uop.dst = rd;
+		 end
+	    end // case: 7'h67
+	  7'h6f: /* jal and j */
+	    begin
+	       uop.rvimm = {{11{insn[31]}}, insn[31], insn[19:12], insn[20], insn[30:21], 1'b0};
+	       if(rd == 'd0)
+		 begin
+		    uop.op = J;
+		    uop.br_pred = 1'b1;
+		    uop.is_br = 1'b1;
+		    uop.is_int = 1'b1;		    
+		 end
+	       else
+		 begin
+		    uop.op = JAL;
+		    uop.dst_valid = 1'b1;
+		    uop.dst = rd;	  
+		    uop.br_pred = 1'b1;
+		    uop.is_br = 1'b1;
+		    uop.is_int = 1'b1;	       
 		 end
 	    end
 	  7'h73: /* this is a bunch of system stuff I dont care about currently */

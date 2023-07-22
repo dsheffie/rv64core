@@ -1161,6 +1161,15 @@ module exec(clk,
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;	       
 	    end
+	  JAL:
+	    begin
+	       t_take_br = 1'b1;
+	       t_mispred_br = int_uop.br_pred != t_take_br;
+	       t_pc = t_pc + int_uop.rvimm;
+	       t_result = int_uop.pc + 32'd4;
+	       t_alu_valid = 1'b1;
+	       t_wr_int_prf = 1'b1;
+	    end
 	  JR:
 	     begin
 		t_take_br = 1'b1;
