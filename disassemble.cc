@@ -13,10 +13,10 @@
 #include "disassemble.hh"
 
 static const std::array<std::string,32> regNames = {
-  "zero","at", "v0", "v1","a0", "a1", "a2", "a3",
-    "t0", "t1", "t2", "t3","t4", "t5", "t6", "t7",
-    "s0", "s1", "s2", "s3","s4", "s5", "s6", "s7",
-    "t8", "t9", "k0", "k1","gp", "sp", "s8", "ra"
+  "zero","ra", "sp", "gp","tp", "t0", "t1", "t2",
+    "s0", "s1", "a0", "a1","a2", "a3", "a4", "a5",
+    "a6", "a7", "s2", "s3","s4", "s5", "s6", "s7",
+    "s8", "s9", "s10", "s11","t3", "t4", "t5", "t6"
     };
 
 static const std::array<std::string,16> condNames = {
@@ -59,7 +59,7 @@ static const std::map<cs_err, std::string> cs_error_map =
 static csh handle;
 
 void initCapstone() {
-  cs_err C = cs_open(CS_ARCH_MIPS, CS_MODE_MIPS32, &handle);
+  cs_err C = cs_open(CS_ARCH_RISCV, CS_MODE_RISCV32, &handle);
   if(C != CS_ERR_OK) {
     std::cerr << "capstone error : " << cs_error_map.at(C) << "\n";
     exit(-1);
@@ -78,12 +78,8 @@ std::string getAsmString(uint32_t inst, uint32_t addr) {
   size_t count = cs_disasm(handle,reinterpret_cast<const uint8_t *>(&inst),
 			   sizeof(inst), addr, 0, &insn);
   if(count != 1) {
-    return std::string();
+    return "huh?";
   }
-  //if(count != 1) {
-  //std::cerr << "decoded count of " << count << " mips instructions?\n";
-  //}
-  //assert(count == 1);
   ss << insn[0].mnemonic << " " << insn[0].op_str;
   cs_free(insn, count);
   return ss.str();

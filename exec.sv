@@ -682,7 +682,7 @@ module exec(clk,
      begin
 	int_uop <= t_picked_uop;
      end
-
+   
    always_ff@(posedge clk)
      begin
 	r_start_int <= reset ? 1'b0 : ((t_alu_entry_rdy != 'd0) & !ds_done);
@@ -1086,6 +1086,14 @@ module exec(clk,
    wire [31:0] w_add_srcB = w_s_sub32;
       
    ppa32 add0 (.A(w_add_srcA), .B(w_add_srcB), .Y(w_add32));
+
+   always_ff@(negedge clk)
+     begin
+	if(r_start_int)
+	  begin
+	     $display("start int fired for opcode %d, pc %x", int_uop.op, int_uop.pc);
+	  end
+     end
    
 
    always_comb
@@ -1115,357 +1123,372 @@ module exec(clk,
 
 	
 	case(int_uop.op)
-	  BREAK:
+	  //riscv
+	  AUIPC:
 	    begin
-	       t_alu_valid = 1'b1;
-	       t_got_break = 1'b1;
-	       t_fault = 1'b1;
-	       //t_unimp_op = 1'b1;
-	    end
-	  SLL:
-	    begin
-	       t_result = t_srcA << int_uop.srcB;
+	       t_result = t_pc + int_uop.rvimm;
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
+	    end
+	  ADDI:
+	    begin
+	       t_result = t_srcA + int_uop.rvimm;
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;
+	    end
 
-	    end
-	  SRA:
-	    begin
-	       t_signed_shift = 1'b1;
-	       t_shift_amt = int_uop.srcB[4:0];
-	       //t_result = $signed(t_srcA) >> $signed(int_uop.srcB[4:0]);
-	       //$display("t_result = %b, t_shift_right = %b", t_result, t_shift_right);
+	  // //old mips instructions
+	  // BREAK:
+	  //   begin
+	  //      t_alu_valid = 1'b1;
+	  //      t_got_break = 1'b1;
+	  //      t_fault = 1'b1;
+	  //      //t_unimp_op = 1'b1;
+	  //   end
+	  // SLL:
+	  //   begin
+	  //      t_result = t_srcA << int_uop.srcB;
+	  //      t_wr_int_prf = 1'b1;
+	  //      t_alu_valid = 1'b1;
+
+	  //   end
+	  // SRA:
+	  //   begin
+	  //      t_signed_shift = 1'b1;
+	  //      t_shift_amt = int_uop.srcB[4:0];
+	  //      //t_result = $signed(t_srcA) >> $signed(int_uop.srcB[4:0]);
+	  //      //$display("t_result = %b, t_shift_right = %b", t_result, t_shift_right);
 	       
-	       t_result = {{HI_EBITS{t_shift_right[31]}}, t_shift_right};
-	       t_wr_int_prf = 1'b1;
-	       t_alu_valid = 1'b1;
-	    end // case: SRA
-	  SRAV:
-	    begin
-	       t_signed_shift = 1'b1;
-	       t_shift_amt = t_srcB[4:0];
-	       t_result = {{HI_EBITS{t_shift_right[31]}}, t_shift_right};	       
-	       t_wr_int_prf = 1'b1;
-	       t_alu_valid = 1'b1;
-	    end
-	  SRL:
-	    begin
-	       t_result = t_srcA >> int_uop.srcB;	       
-	       t_wr_int_prf = 1'b1;
-	       t_alu_valid = 1'b1;
-	    end
-	  SLLV:
-	    begin
-	       t_result = t_srcA << (t_srcB[4:0]);
-	       t_wr_int_prf = 1'b1;
-	       t_alu_valid = 1'b1;
-	    end
-	  SRLV:
-	    begin
-	       t_result = t_srcA >> (t_srcB[4:0]);
-	       t_wr_int_prf = 1'b1;
-	       t_alu_valid = 1'b1;
-	    end
-	  MTLO:
-	    begin
-	       t_hilo_result = {t_src_hilo[63:32], t_srcA[31:0]};
-	       t_wr_hilo = 1'b1;
-	       t_alu_valid = 1'b1;	       
-	    end
-	  MTHI:
-	    begin
-	       t_hilo_result = {t_srcA[31:0], t_src_hilo[31:0] };
-	       t_wr_hilo = 1'b1;
-	       t_alu_valid = 1'b1;	       
-	    end
-	  MFLO:
-	    begin
-	       t_result = {{HI_EBITS{1'b0}}, t_src_hilo[31:0]};
-	       t_wr_int_prf = 1'b1;
-	       t_alu_valid = 1'b1;
-	    end
-	  MFHI:
-	    begin
-	       t_result = {{HI_EBITS{1'b0}},t_src_hilo[63:32]};
-	       t_wr_int_prf = 1'b1;
-	       t_alu_valid = 1'b1;
-	    end
-	  ADDU:
-	    begin
-	       t_result = w_add32;
-	       t_wr_int_prf = 1'b1;
-	       t_alu_valid = 1'b1;
-	    end
-	  MULT:
-	    begin
-	       t_start_mul = r_start_int&!ds_done;
-	    end
-	  MULTU:
-	    begin
-	       t_start_mul = r_start_int&!ds_done;
-	    end
-	  DIV:
-	    begin
-	       t_signed_div = 1'b1;
-	       t_start_div32 = r_start_int&!ds_done;	       
-	    end
-	  DIVU:
-	    begin
-	       t_start_div32 = r_start_int&!ds_done;
-	    end
-	  SUBU:
-	    begin
-	       t_result = w_add32;
-	       t_wr_int_prf = 1'b1;
-	       t_alu_valid = 1'b1;
-	    end
-	  AND:
-	    begin
-	       t_result = t_srcA & t_srcB;
-	       t_wr_int_prf = 1'b1;
-	       t_alu_valid = 1'b1;
-	    end
-	  MOV:
-	    begin
-	       t_result = t_srcA;
-	       t_wr_int_prf = 1'b1;
-	       t_alu_valid = 1'b1;
-	    end
-	  OR:
-	    begin
-	       t_result = t_srcA | t_srcB;
-	       t_wr_int_prf = 1'b1;//int_uop.dst_valid;
-	       t_alu_valid = 1'b1;
-	    end
-	  XOR:
-	    begin
-	       t_result = t_srcA ^ t_srcB;
-	       t_wr_int_prf = 1'b1;
-	       t_alu_valid = 1'b1;
-	    end
-	  NOR:
-	    begin
-	       t_result = ~(t_srcA | t_srcB);
-	       t_wr_int_prf = 1'b1;
-	       t_alu_valid = 1'b1;
-	    end
-	  SLT:
-	    begin
-	       t_result = (($signed(t_srcB) <  $signed(t_srcA)) ? 'd1 : 'd0);
-	       t_wr_int_prf = 1'b1;
-	       t_alu_valid = 1'b1;
-	    end // case: SLT
-	  SLTU:
-	    begin
-	       t_result = (t_srcB <  t_srcA) ? 'd1 : 'd0;
-	       t_wr_int_prf = 1'b1;
-	       t_alu_valid = 1'b1;
-	    end // case: SLTU
-	  BEQ:
-	    begin
-	       t_take_br = (t_srcA  == t_srcB);
-	       t_mispred_br = int_uop.br_pred != t_take_br;
-	       t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
-	       t_alu_valid = 1'b1;
-	    end
-	  BEQL:
-	    begin
-	       t_take_br = (t_srcA  == t_srcB);
-	       t_mispred_br = int_uop.br_pred != t_take_br || !t_take_br;
-	       t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
-	       t_alu_valid = 1'b1;
-	    end
-	  BNE:
-	    begin
-	       t_take_br = (t_srcA  != t_srcB);
-	       t_mispred_br = int_uop.br_pred != t_take_br;
-	       t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
-	       t_alu_valid = 1'b1;
-	    end // case: BNE
-	  BGEZ:
-	    begin
-	       t_take_br = (t_srcA[31] == 1'b0);
-	       t_mispred_br = int_uop.br_pred != t_take_br;
-	       t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;	       
-	       t_alu_valid = 1'b1;
-	    end
-	  BGEZAL:
-	    begin
-	       t_take_br = (t_srcA[31] == 1'b0);
-	       t_mispred_br = int_uop.br_pred != t_take_br;
-	       t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;	  
-     	       t_result = t_take_br ?  int_uop.pc + {{HI_EBITS{1'b0}}, 32'd8} : t_srcB;
-	       t_alu_valid = 1'b1;
-	       t_wr_int_prf = 1'b1;
-	    end // case: BGEZAL
-	  BAL:
-	    begin
-	       t_take_br = 1'b1;
-	       t_mispred_br = int_uop.br_pred != t_take_br;
-	       t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
-	       t_result = int_uop.pc + {{HI_EBITS{1'b0}}, 32'd8};
-	       t_alu_valid = 1'b1;
-	       t_wr_int_prf = 1'b1;
-	    end
-	  BLTZ:
-	    begin
-	       t_take_br = ($signed(t_srcA) < $signed({`M_WIDTH{1'b0}}));
-	       t_mispred_br = int_uop.br_pred != t_take_br;
-	       t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
-	       t_alu_valid = 1'b1;
-	    end
-	  BLEZ:
-	    begin
-	       t_take_br = ($signed(t_srcA) <= $signed({`M_WIDTH{1'b0}}));
-	       t_mispred_br = int_uop.br_pred != t_take_br;
-	       t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
-	       t_alu_valid = 1'b1;
-	    end
-	  BLEZL:
-	    begin
-	       t_take_br = ($signed(t_srcA) < $signed({`M_WIDTH{1'b0}})) || (t_srcA == {`M_WIDTH{1'b0}});
-	       t_mispred_br = int_uop.br_pred != t_take_br || !t_take_br;
-	       t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
-	       t_alu_valid = 1'b1;
-	    end
-	  BGTZ:
-	    begin
-	       t_take_br = ($signed(t_srcA) > $signed({`M_WIDTH{1'b0}}));
-	       t_mispred_br = int_uop.br_pred != t_take_br;
-	       t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;	       
-	       t_alu_valid = 1'b1;
-	    end
-	  BNEL:
-	    begin
-	       t_take_br = (t_srcA  != t_srcB);
-	       t_mispred_br = (int_uop.br_pred != t_take_br) /* || !t_take_br */;
-	       t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
-	       t_alu_valid = 1'b1;
-	    end
-	  BLTZL:
-	    begin
-	       t_take_br = $signed(t_srcA) < $signed({`M_WIDTH{1'b0}});
-	       t_mispred_br = (int_uop.br_pred != t_take_br) || !t_take_br;
-	       t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
-	       t_alu_valid = 1'b1;
-	    end
-	  BGTZL:
-	    begin
-	       t_take_br = ($signed(t_srcA) > $signed({`M_WIDTH{1'b0}}));
-	       t_mispred_br = (int_uop.br_pred != t_take_br) || !t_take_br;
-	       t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
-	       t_alu_valid = 1'b1;
-	    end
-	  BGEZL:
-	    begin
-	       t_take_br = ($signed(t_srcA) >= $signed({`M_WIDTH{1'b0}}));
-	       t_mispred_br = (int_uop.br_pred != t_take_br) || !t_take_br;
-	       t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
-	       t_alu_valid = 1'b1;
-	    end
-	  // J:
+	  //      t_result = {{HI_EBITS{t_shift_right[31]}}, t_shift_right};
+	  //      t_wr_int_prf = 1'b1;
+	  //      t_alu_valid = 1'b1;
+	  //   end // case: SRA
+	  // SRAV:
+	  //   begin
+	  //      t_signed_shift = 1'b1;
+	  //      t_shift_amt = t_srcB[4:0];
+	  //      t_result = {{HI_EBITS{t_shift_right[31]}}, t_shift_right};	       
+	  //      t_wr_int_prf = 1'b1;
+	  //      t_alu_valid = 1'b1;
+	  //   end
+	  // SRL:
+	  //   begin
+	  //      t_result = t_srcA >> int_uop.srcB;	       
+	  //      t_wr_int_prf = 1'b1;
+	  //      t_alu_valid = 1'b1;
+	  //   end
+	  // SLLV:
+	  //   begin
+	  //      t_result = t_srcA << (t_srcB[4:0]);
+	  //      t_wr_int_prf = 1'b1;
+	  //      t_alu_valid = 1'b1;
+	  //   end
+	  // SRLV:
+	  //   begin
+	  //      t_result = t_srcA >> (t_srcB[4:0]);
+	  //      t_wr_int_prf = 1'b1;
+	  //      t_alu_valid = 1'b1;
+	  //   end
+	  // MTLO:
+	  //   begin
+	  //      t_hilo_result = {t_src_hilo[63:32], t_srcA[31:0]};
+	  //      t_wr_hilo = 1'b1;
+	  //      t_alu_valid = 1'b1;	       
+	  //   end
+	  // MTHI:
+	  //   begin
+	  //      t_hilo_result = {t_srcA[31:0], t_src_hilo[31:0] };
+	  //      t_wr_hilo = 1'b1;
+	  //      t_alu_valid = 1'b1;	       
+	  //   end
+	  // MFLO:
+	  //   begin
+	  //      t_result = {{HI_EBITS{1'b0}}, t_src_hilo[31:0]};
+	  //      t_wr_int_prf = 1'b1;
+	  //      t_alu_valid = 1'b1;
+	  //   end
+	  // MFHI:
+	  //   begin
+	  //      t_result = {{HI_EBITS{1'b0}},t_src_hilo[63:32]};
+	  //      t_wr_int_prf = 1'b1;
+	  //      t_alu_valid = 1'b1;
+	  //   end
+	  // ADDU:
+	  //   begin
+	  //      t_result = w_add32;
+	  //      t_wr_int_prf = 1'b1;
+	  //      t_alu_valid = 1'b1;
+	  //   end
+	  // MULT:
+	  //   begin
+	  //      t_start_mul = r_start_int&!ds_done;
+	  //   end
+	  // MULTU:
+	  //   begin
+	  //      t_start_mul = r_start_int&!ds_done;
+	  //   end
+	  // DIV:
+	  //   begin
+	  //      t_signed_div = 1'b1;
+	  //      t_start_div32 = r_start_int&!ds_done;	       
+	  //   end
+	  // DIVU:
+	  //   begin
+	  //      t_start_div32 = r_start_int&!ds_done;
+	  //   end
+	  // SUBU:
+	  //   begin
+	  //      t_result = w_add32;
+	  //      t_wr_int_prf = 1'b1;
+	  //      t_alu_valid = 1'b1;
+	  //   end
+	  // AND:
+	  //   begin
+	  //      t_result = t_srcA & t_srcB;
+	  //      t_wr_int_prf = 1'b1;
+	  //      t_alu_valid = 1'b1;
+	  //   end
+	  // MOV:
+	  //   begin
+	  //      t_result = t_srcA;
+	  //      t_wr_int_prf = 1'b1;
+	  //      t_alu_valid = 1'b1;
+	  //   end
+	  // OR:
+	  //   begin
+	  //      t_result = t_srcA | t_srcB;
+	  //      t_wr_int_prf = 1'b1;//int_uop.dst_valid;
+	  //      t_alu_valid = 1'b1;
+	  //   end
+	  // XOR:
+	  //   begin
+	  //      t_result = t_srcA ^ t_srcB;
+	  //      t_wr_int_prf = 1'b1;
+	  //      t_alu_valid = 1'b1;
+	  //   end
+	  // NOR:
+	  //   begin
+	  //      t_result = ~(t_srcA | t_srcB);
+	  //      t_wr_int_prf = 1'b1;
+	  //      t_alu_valid = 1'b1;
+	  //   end
+	  // SLT:
+	  //   begin
+	  //      t_result = (($signed(t_srcB) <  $signed(t_srcA)) ? 'd1 : 'd0);
+	  //      t_wr_int_prf = 1'b1;
+	  //      t_alu_valid = 1'b1;
+	  //   end // case: SLT
+	  // SLTU:
+	  //   begin
+	  //      t_result = (t_srcB <  t_srcA) ? 'd1 : 'd0;
+	  //      t_wr_int_prf = 1'b1;
+	  //      t_alu_valid = 1'b1;
+	  //   end // case: SLTU
+	  // BEQ:
+	  //   begin
+	  //      t_take_br = (t_srcA  == t_srcB);
+	  //      t_mispred_br = int_uop.br_pred != t_take_br;
+	  //      t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
+	  //      t_alu_valid = 1'b1;
+	  //   end
+	  // BEQL:
+	  //   begin
+	  //      t_take_br = (t_srcA  == t_srcB);
+	  //      t_mispred_br = int_uop.br_pred != t_take_br || !t_take_br;
+	  //      t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
+	  //      t_alu_valid = 1'b1;
+	  //   end
+	  // BNE:
+	  //   begin
+	  //      t_take_br = (t_srcA  != t_srcB);
+	  //      t_mispred_br = int_uop.br_pred != t_take_br;
+	  //      t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
+	  //      t_alu_valid = 1'b1;
+	  //   end // case: BNE
+	  // BGEZ:
+	  //   begin
+	  //      t_take_br = (t_srcA[31] == 1'b0);
+	  //      t_mispred_br = int_uop.br_pred != t_take_br;
+	  //      t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;	       
+	  //      t_alu_valid = 1'b1;
+	  //   end
+	  // BGEZAL:
+	  //   begin
+	  //      t_take_br = (t_srcA[31] == 1'b0);
+	  //      t_mispred_br = int_uop.br_pred != t_take_br;
+	  //      t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;	  
+     	  //      t_result = t_take_br ?  int_uop.pc + {{HI_EBITS{1'b0}}, 32'd8} : t_srcB;
+	  //      t_alu_valid = 1'b1;
+	  //      t_wr_int_prf = 1'b1;
+	  //   end // case: BGEZAL
+	  // BAL:
+	  //   begin
+	  //      t_take_br = 1'b1;
+	  //      t_mispred_br = int_uop.br_pred != t_take_br;
+	  //      t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
+	  //      t_result = int_uop.pc + {{HI_EBITS{1'b0}}, 32'd8};
+	  //      t_alu_valid = 1'b1;
+	  //      t_wr_int_prf = 1'b1;
+	  //   end
+	  // BLTZ:
+	  //   begin
+	  //      t_take_br = ($signed(t_srcA) < $signed({`M_WIDTH{1'b0}}));
+	  //      t_mispred_br = int_uop.br_pred != t_take_br;
+	  //      t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
+	  //      t_alu_valid = 1'b1;
+	  //   end
+	  // BLEZ:
+	  //   begin
+	  //      t_take_br = ($signed(t_srcA) <= $signed({`M_WIDTH{1'b0}}));
+	  //      t_mispred_br = int_uop.br_pred != t_take_br;
+	  //      t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
+	  //      t_alu_valid = 1'b1;
+	  //   end
+	  // BLEZL:
+	  //   begin
+	  //      t_take_br = ($signed(t_srcA) < $signed({`M_WIDTH{1'b0}})) || (t_srcA == {`M_WIDTH{1'b0}});
+	  //      t_mispred_br = int_uop.br_pred != t_take_br || !t_take_br;
+	  //      t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
+	  //      t_alu_valid = 1'b1;
+	  //   end
+	  // BGTZ:
+	  //   begin
+	  //      t_take_br = ($signed(t_srcA) > $signed({`M_WIDTH{1'b0}}));
+	  //      t_mispred_br = int_uop.br_pred != t_take_br;
+	  //      t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;	       
+	  //      t_alu_valid = 1'b1;
+	  //   end
+	  // BNEL:
+	  //   begin
+	  //      t_take_br = (t_srcA  != t_srcB);
+	  //      t_mispred_br = (int_uop.br_pred != t_take_br) /* || !t_take_br */;
+	  //      t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
+	  //      t_alu_valid = 1'b1;
+	  //   end
+	  // BLTZL:
+	  //   begin
+	  //      t_take_br = $signed(t_srcA) < $signed({`M_WIDTH{1'b0}});
+	  //      t_mispred_br = (int_uop.br_pred != t_take_br) || !t_take_br;
+	  //      t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
+	  //      t_alu_valid = 1'b1;
+	  //   end
+	  // BGTZL:
+	  //   begin
+	  //      t_take_br = ($signed(t_srcA) > $signed({`M_WIDTH{1'b0}}));
+	  //      t_mispred_br = (int_uop.br_pred != t_take_br) || !t_take_br;
+	  //      t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
+	  //      t_alu_valid = 1'b1;
+	  //   end
+	  // BGEZL:
+	  //   begin
+	  //      t_take_br = ($signed(t_srcA) >= $signed({`M_WIDTH{1'b0}}));
+	  //      t_mispred_br = (int_uop.br_pred != t_take_br) || !t_take_br;
+	  //      t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
+	  //      t_alu_valid = 1'b1;
+	  //   end
+	  // // J:
+	  // //   begin
+	  // //      t_take_br = 1'b1;
+	  // //      t_mispred_br = int_uop.br_pred != t_take_br;
+	  // //      t_pc = {t_pc4[`M_WIDTH-1:28],t_jaddr};
+	  // //      t_alu_valid = 1'b1;
+	  // //      t_srcs_rdy = 1'b1;	       
+	  // //   end
+	  // JAL:
 	  //   begin
 	  //      t_take_br = 1'b1;
 	  //      t_mispred_br = int_uop.br_pred != t_take_br;
 	  //      t_pc = {t_pc4[`M_WIDTH-1:28],t_jaddr};
+	  //      t_result = int_uop.pc + {{HI_EBITS{1'b0}}, 32'd8};
 	  //      t_alu_valid = 1'b1;
-	  //      t_srcs_rdy = 1'b1;	       
+	  //      t_wr_int_prf = 1'b1;
 	  //   end
-	  JAL:
-	    begin
-	       t_take_br = 1'b1;
-	       t_mispred_br = int_uop.br_pred != t_take_br;
-	       t_pc = {t_pc4[`M_WIDTH-1:28],t_jaddr};
-	       t_result = int_uop.pc + {{HI_EBITS{1'b0}}, 32'd8};
-	       t_alu_valid = 1'b1;
-	       t_wr_int_prf = 1'b1;
-	    end
-	  JR:
-	    begin
-	       t_take_br = 1'b1;
-	       t_mispred_br = (t_srcA != {int_uop.jmp_imm,int_uop.imm});
-	       t_pc = t_srcA;
-	       t_alu_valid = 1'b1;
-	    end
-	  JALR:
-	    begin
-	       t_take_br = 1'b1;
-	       t_mispred_br = (t_srcA != {int_uop.jmp_imm,int_uop.imm});
-	       t_pc = t_srcA;
-	       t_alu_valid = 1'b1;
-	       t_result = int_uop.pc + {{HI_EBITS{1'b0}},32'd8};
-	       t_wr_int_prf = 1'b1;
-	    end
-	  MONITOR:
-	    begin
-	       t_take_br = 1'b1;
-	       t_mispred_br = 1'b1;
-	       t_pc = t_srcA;
-	       t_alu_valid = 1'b1;
-	       t_result = monitor_rsp_data;
-	       t_wr_int_prf = 1'b1;
-	    end
-	  ANDI:
-	    begin
-	       t_result = t_srcA & {{E_BITS{1'b0}},int_uop.imm};
-	       t_wr_int_prf = 1'b1;
-	       t_alu_valid = 1'b1;
-	    end
-	  ORI:
-	    begin
-	       t_result = t_srcA | {{E_BITS{1'b0}},int_uop.imm};	       
-	       t_wr_int_prf = 1'b1;
-	       t_alu_valid = 1'b1;
-	    end
-	  XORI:
-	    begin
-	       t_result = t_srcA ^ {{E_BITS{1'b0}},int_uop.imm};
-	       t_wr_int_prf = 1'b1;
-	       t_alu_valid = 1'b1;
-	    end
-	  LUI:
-	    begin
-	       t_result = {{HI_EBITS{int_uop.imm[15]}},int_uop.imm, 16'd0};
-	       t_wr_int_prf = 1'b1;
-	       t_alu_valid = 1'b1;
-	    end
-	  ADDIU:
-	    begin
-	       t_result = w_add32;
-	       t_wr_int_prf = 1'b1;
-	       t_alu_valid = 1'b1;
-	    end
-	  MOVI:
-	    begin
-	       t_result = {{HI_EBITS{t_simm[31]}}, t_simm[31:0]};
-	       t_wr_int_prf = 1'b1;
-	       t_alu_valid = 1'b1;
-	    end
-	  SLTI:
-	    begin
-	       t_result = (($signed(t_srcA) < $signed(t_simm)) ? 'd1 : 'd0);
-	       t_wr_int_prf = 1'b1;
-	       t_alu_valid = 1'b1;
-	    end
-	  SLTIU:
-	    begin
-	       t_result = (t_srcA < t_simm ? 'd1 : 'd0);
-	       t_wr_int_prf = 1'b1;
-	       t_alu_valid = 1'b1;
-	    end
-	  MFC0:
-	    begin	       
-	       t_result = int_uop.srcA[4:0] == 'd12 ? cpr0_status_reg : 'd0;
-	       t_alu_valid = 1'b1;
-	       t_wr_int_prf = 1'b1;
-	       t_pc = t_pc4;	       
-	    end
-	  MTC0:
-	    begin
-	       t_wr_cpr0 = 1'b1;	       
-	       t_alu_valid = 1'b1;
-	       t_pc = t_pc4;
-	    end // case: MTC0
+	  // JR:
+	  //   begin
+	  //      t_take_br = 1'b1;
+	  //      t_mispred_br = (t_srcA != {int_uop.jmp_imm,int_uop.imm});
+	  //      t_pc = t_srcA;
+	  //      t_alu_valid = 1'b1;
+	  //   end
+	  // JALR:
+	  //   begin
+	  //      t_take_br = 1'b1;
+	  //      t_mispred_br = (t_srcA != {int_uop.jmp_imm,int_uop.imm});
+	  //      t_pc = t_srcA;
+	  //      t_alu_valid = 1'b1;
+	  //      t_result = int_uop.pc + {{HI_EBITS{1'b0}},32'd8};
+	  //      t_wr_int_prf = 1'b1;
+	  //   end
+	  // MONITOR:
+	  //   begin
+	  //      t_take_br = 1'b1;
+	  //      t_mispred_br = 1'b1;
+	  //      t_pc = t_srcA;
+	  //      t_alu_valid = 1'b1;
+	  //      t_result = monitor_rsp_data;
+	  //      t_wr_int_prf = 1'b1;
+	  //   end
+	  // ANDI:
+	  //   begin
+	  //      t_result = t_srcA & {{E_BITS{1'b0}},int_uop.imm};
+	  //      t_wr_int_prf = 1'b1;
+	  //      t_alu_valid = 1'b1;
+	  //   end
+	  // ORI:
+	  //   begin
+	  //      t_result = t_srcA | {{E_BITS{1'b0}},int_uop.imm};	       
+	  //      t_wr_int_prf = 1'b1;
+	  //      t_alu_valid = 1'b1;
+	  //   end
+	  // XORI:
+	  //   begin
+	  //      t_result = t_srcA ^ {{E_BITS{1'b0}},int_uop.imm};
+	  //      t_wr_int_prf = 1'b1;
+	  //      t_alu_valid = 1'b1;
+	  //   end
+	  // LUI:
+	  //   begin
+	  //      t_result = {{HI_EBITS{int_uop.imm[15]}},int_uop.imm, 16'd0};
+	  //      t_wr_int_prf = 1'b1;
+	  //      t_alu_valid = 1'b1;
+	  //   end
+	  // ADDIU:
+	  //   begin
+	  //      t_result = w_add32;
+	  //      t_wr_int_prf = 1'b1;
+	  //      t_alu_valid = 1'b1;
+	  //   end
+	  // MOVI:
+	  //   begin
+	  //      t_result = {{HI_EBITS{t_simm[31]}}, t_simm[31:0]};
+	  //      t_wr_int_prf = 1'b1;
+	  //      t_alu_valid = 1'b1;
+	  //   end
+	  // SLTI:
+	  //   begin
+	  //      t_result = (($signed(t_srcA) < $signed(t_simm)) ? 'd1 : 'd0);
+	  //      t_wr_int_prf = 1'b1;
+	  //      t_alu_valid = 1'b1;
+	  //   end
+	  // SLTIU:
+	  //   begin
+	  //      t_result = (t_srcA < t_simm ? 'd1 : 'd0);
+	  //      t_wr_int_prf = 1'b1;
+	  //      t_alu_valid = 1'b1;
+	  //   end
+	  // MFC0:
+	  //   begin	       
+	  //      t_result = int_uop.srcA[4:0] == 'd12 ? cpr0_status_reg : 'd0;
+	  //      t_alu_valid = 1'b1;
+	  //      t_wr_int_prf = 1'b1;
+	  //      t_pc = t_pc4;	       
+	  //   end
+	  // MTC0:
+	  //   begin
+	  //      t_wr_cpr0 = 1'b1;	       
+	  //      t_alu_valid = 1'b1;
+	  //      t_pc = t_pc4;
+	  //   end // case: MTC0
 	  II:
 	    begin
 	       t_unimp_op = 1'b1;

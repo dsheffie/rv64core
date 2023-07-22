@@ -183,7 +183,7 @@ static inline T round_to_alignment(T x, T m) {
 }
 
 static inline uint32_t get_insn(uint32_t pc, const state_t *s) {
-  return bswap<IS_LITTLE_ENDIAN>(s->mem.get<uint32_t>(pc));
+  return *reinterpret_cast<uint32_t*>(&s->mem[pc]);
 }
 
 
@@ -198,8 +198,7 @@ static inline void dump_histo(const std::string &fname,
   std::ofstream out(fname);
   std::sort(sorted_by_cnt.begin(), sorted_by_cnt.end());
   for(auto it = sorted_by_cnt.rbegin(), E = sorted_by_cnt.rend(); it != E; ++it) {
-    uint32_t r_inst = s->mem.get<uint32_t>(it->second);
-    r_inst = bswap<IS_LITTLE_ENDIAN>(r_inst);	
+    uint32_t r_inst = *reinterpret_cast<uint32_t*>(&s->mem[it->second]);
     auto s = getAsmString(r_inst, it->second);
     out << std::hex << it->second << ":"
   	      << s << ","
@@ -224,66 +223,12 @@ static inline double to_double(uint64_t u) {
   return *reinterpret_cast<double*>(&u);
 }
 
+static inline uint32_t mem_r32(const state_t*s, uint32_t a) {
+  return *reinterpret_cast<uint32_t*>(&s->mem[a]);
+}
 
-template<typename T>
-static inline T compute_fp_insn(uint32_t r_inst, fpOperation op, state_t *s) {
-  T x = static_cast<T>(0);
-  uint32_t ft = (r_inst>>16)&31;
-  uint32_t fs = (r_inst>>11)&31;
-  uint32_t fmt=(r_inst >> 21) & 31;	    
-  T _fs = *reinterpret_cast<T*>(s->cpr1+fs);
-  T _ft = *reinterpret_cast<T*>(s->cpr1+ft);  
-  switch(op)
-    {
-    case fpOperation::abs:
-      x = std::abs(_fs);
-      break;
-    case fpOperation::neg:
-      x = -_fs;
-      break;
-    case fpOperation::mov:
-      x = _fs;
-      break;
-    case fpOperation::add:
-      x = _fs + _ft;
-      break;
-    case fpOperation::sub:
-      x = _fs - _ft;
-      break;
-    case fpOperation::mul:
-      x = _fs * _ft;
-      break;
-    case fpOperation::div:
-      if(_ft==0.0) {
-	x = std::numeric_limits<T>::max();
-      }
-      else {
-	x = _fs / _ft;
-      }
-      break;
-    case fpOperation::sqrt:
-      x = std::sqrt(_fs);
-      break;
-    case fpOperation::rsqrt:
-      x = static_cast<T>(1.0) / std::sqrt(_fs);
-      break;
-    case fpOperation::recip:
-      x = static_cast<T>(1.0) / _fs;
-      break;
-      //case fpOperation::cvtd:
-      //assert(fmt == FMT_W);
-      //x = (double)(*((int32_t*)(s->cpr1 + fs)));
-      //break;
-      //case fpOperation::truncw: {
-      //assert(fmt == FMT_D);
-      //int32_t t = (int32_t)_fs;
-      //*reinterpret_cast<int32_t*>(&x) = t;
-      //break;
-      //}
-    default:
-      break;
-    }
-  return x;
+static inline void mem_w32(state_t*s, uint32_t a, uint32_t x) {
+  *reinterpret_cast<uint32_t*>(&s->mem[a]) = x;
 }
 
 

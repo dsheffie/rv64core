@@ -9,125 +9,30 @@ import "DPI-C" function void record_fetch(int push1, int push2, int push3, int p
 
 `endif
 
+
+/*
+typedef enum logic [3:0] {
+			  NOT_CFLOW = 'd0,
+			  IS_COND_BR = 'd1,
+			  IS_L_COND_BR = 'd2,
+			  IS_J = 'd3,
+			  IS_JR = 'd4,
+			  IS_JAL = 'd5,
+			  IS_JALR = 'd6,
+			  IS_JR_R31 = 'd7,
+			  IS_BR = 'd8,
+			  IS_BR_AND_LINK = 'd9
+			  } jump_t;
+*/
+
 module predecode(insn_, pd);
    input logic [31:0] insn_;
    output logic [3:0] pd;
 
    logic [31:0]       insn;
-   
    always_comb
      begin
 	pd = 4'd0;
-	insn = bswap32(insn_);
-	case(insn[31:26])
-	  6'd0: /* rtype */
-	    begin
-	       if(insn[5:0] == 6'd8) /* pdr */
-		 begin
-		    pd = (insn[25:21] == 5'd31) ? 4'd7 : 4'd4;
-		 end
-	       else if(insn[5:0] == 6'd9)
-		 begin
-		    pd = 4'd6;
-		 end
-	    end
-	  6'd1:
-	    begin
-	       case(insn[20:16])
-		 'd0:
-		   begin
-		      pd = 4'd1;
-		   end
-		 'd1:
-		   begin
-		      pd = 4'd1;
-		   end
-		 'd2:
-		   begin
-		      pd = 4'd2;
-		   end
-		 'd3:
-		   begin
-		      pd = 4'd2;
-		   end
-		 'd17:
-		   begin
-		      pd = 4'd9;
-		   end
-		 default:
-		   begin
-		   end
-	       endcase // case (rt)	  
-	    end
-	  6'd2:
-	    begin
-	       pd = 4'd3;
-	    end   
-	  6'd3:
-	    begin
-	       pd = 4'd5;
-	    end
-	  6'd4:
-	    begin
-	       pd = ((insn[25:21] == 'd0) && (insn[20:16] == 'd0)) ? 4'd8 : 4'd1;
-	    end
-	  6'd5:
-	    begin
-	       pd = 4'd1;
-	    end
-	  6'd6:
-	    begin
-	       pd = 4'd1;
-	    end
-	  6'd7:
-	    begin
-	       pd = 4'd1;
-	    end
-	  6'd17:
-	    begin
-	       if(insn[25:21]==5'd8)
-		 begin
-		    case(insn[17:16])
-		      2'b00: //bc1f
-			begin
-			   pd = 4'd1;
-			end
-		      2'b01: //bc1t
-			begin
-			   pd = 4'd1;
-			end
-		      2'b10: //bc1fl;
-			begin
-			   pd = 4'd2;
-			end
-		      2'b11: //bc1tl
-			begin
-			   pd = 4'd2;
-			end	       
-		    endcase // case (insn[17:16])
-		 end // if (insn[25:21]==5'd8)
-	    end
-	  6'd20:
-	    begin
-	       pd = 4'd2;
-	    end
-	  6'd21:
-	    begin
-	       pd = 4'd2;
-	    end
-	  6'd22:
-	    begin
-	       pd = 4'd2;
-	    end
-	  6'd23:
-	    begin
-	       pd = 4'd2;
-	    end     
-	  default:
-	    begin
-	       pd = 4'd0;
-	    end
-	endcase // case (opcode)   
      end // always_comb
 endmodule // predecode
 
@@ -366,7 +271,6 @@ endfunction // is_nop
    logic 		  t_clear_fq;
    logic 		  r_flush_req, n_flush_req;
    logic 		  r_flush_complete, n_flush_complete;
-   logic 		  n_delay_slot, r_delay_slot;
    logic 		  t_take_br, t_is_cflow;
    logic 		  t_update_spec_hist;
    
@@ -381,14 +285,6 @@ endfunction // is_nop
    logic [`LG_PHT_SZ-1:0] r_init_pht_idx, n_init_pht_idx;
    
 
-   
-   //always_ff@(negedge clk)
-   //begin
-   //$display("r_cache_pc = %x, t_branch_locs = %b, t_insn_idx = %d, t_branch_marker = %b, first_branch = %d",
-   //r_cache_pc,t_branch_locs, t_insn_idx, t_branch_marker, t_first_branch);
-   //end
-   
-   
    localparam SEXT = `M_WIDTH-16;
    insn_fetch_t t_insn, t_insn2, t_insn3, t_insn4;
    logic [3:0] t_pd, r_pd;
@@ -557,7 +453,6 @@ endfunction // is_nop
 	n_restart_ack = 1'b0;
 	n_flush_req = r_flush_req | flush_req;
 	n_flush_complete = 1'b0;
-	n_delay_slot = r_delay_slot;
 	t_cache_idx = 'd0;
 	t_cache_tag = 'd0;
 	n_req = 1'b0;
@@ -680,7 +575,6 @@ endfunction // is_nop
 		 begin
 		    n_restart_ack = 1'b1;
 		    n_restart_req = 1'b0;
-		    n_delay_slot = 1'b0;
 		    n_pc = restart_pc;
 		    n_req = 1'b0;
 		    n_state = ACTIVE;
@@ -700,7 +594,6 @@ endfunction // is_nop
 		    if(t_pd == 4'd5 || t_pd == 4'd3)
 		      begin
 			 t_is_cflow = 1'b1;
-			 n_delay_slot = 1'b1;
 			 t_take_br = 1'b1;
 			 t_is_call = (t_pd == 4'd5);
 			 //if(t_is_call) $display("predict jal at %x will return to %x",
@@ -710,7 +603,6 @@ endfunction // is_nop
 		    else if(t_pd == 4'd8)
 		      begin
 			 t_is_cflow = 1'b1;			 
-			 n_delay_slot = 1'b1;
 			 t_take_br = 1'b1;
 			 n_pc = ((r_cache_pc + 'd4) + {t_simm[`M_WIDTH-3:0], 2'd0});
 		      end
@@ -719,7 +611,6 @@ endfunction // is_nop
 			 //$display("decoded likely branch @ %x", r_cache_pc);
 			 //treat as always taken for simplicity
 			 t_is_cflow = 1'b1;			 
-			 n_delay_slot = 1'b1;
 			 t_take_br = 1'b1;
 			 n_pc = ((r_cache_pc + 'd4) + {t_simm[`M_WIDTH-3:0], 2'd0});
 		      end
@@ -729,7 +620,6 @@ endfunction // is_nop
 			 if(r_pht_out[1] || t_insn_data[25:21] == 5'd0)
 			   begin
 			      t_is_cflow = 1'b1;
-			      n_delay_slot = 1'b1;			      
 			      n_pc = ((r_cache_pc + 'd4) + {t_simm[`M_WIDTH-3:0], 2'd0});
 			      t_is_call = 1'b1;
 			      t_take_br = 1'b1;
@@ -739,41 +629,27 @@ endfunction // is_nop
 		    else if(t_pd == 4'd1 && r_pht_out[1])
 		      begin
 			 t_is_cflow = 1'b1;			 
-			 n_delay_slot = 1'b1;
 			 t_take_br = 1'b1;
 			 n_pc = ((r_cache_pc + 'd4) + {t_simm[`M_WIDTH-3:0], 2'd0});
-			 //if(t_insn_idx != 'd3 && !fq_full2)
-			 //begin
-			 //t_push_insn2 = 1'b1;
-			 //n_resteer_bubble = 1'b1;
-			 //n_delay_slot = 1'b0;
-			 // end
 		      end
 		    else if(t_pd == 4'd7)
 		      begin
 			 t_is_cflow = 1'b1;
 			 t_is_ret = 1'b1;
-			 n_delay_slot = 1'b1;
 			 t_take_br = 1'b1;
 			 n_pc = r_spec_return_stack[t_next_spec_rs_tos];
 		      end // if (t_pd == 4'd7)
 		    else if(t_pd == 4'd4 || t_pd == 4'd6)
 		      begin
 			 t_is_cflow = 1'b1;			 
-			 n_delay_slot = 1'b1;
 			 t_take_br = 1'b1;
 			 t_is_call = (t_pd == 4'd6);
 			 n_pc = r_btb_pc;
 			 //$display("predicted target for %x is %x", r_cache_pc, n_pc);			 
 		      end
 		    
-		    if(r_delay_slot)
-		      begin
-			 n_delay_slot = 1'b0;
-		      end
-		    
 		    //initial push multiple logic
-		    if(!(t_is_cflow || r_delay_slot))
+		    if(!(t_is_cflow))
 		      begin
 			 if(t_first_branch == 'd4 && !fq_full4)
 			   begin
@@ -813,11 +689,7 @@ endfunction // is_nop
 			   begin
 			      t_push_insn = 1'b1;
 			   end // else: !if(t_first_branch == 'd2 && !fq_full2)
-		      end // if (!(t_is_cflow || r_delay_slot))
-		    //else if(t_is_cflow && !r_delay_slot && t_insn_idx != 'd3 && !fq_full2)
-		    //begin
-		    //branch delay slot is on the same cacheline
-		    //end
+		      end 
 		    else
 		      begin
 			 t_push_insn = 1'b1;
@@ -853,7 +725,6 @@ endfunction // is_nop
 		 begin
 		    n_restart_ack = 1'b1;
 		    n_restart_req = 1'b0;
-		    n_delay_slot = 1'b0;
 		    n_pc = restart_pc;
 		    n_req = 1'b0;
 		    n_state = ACTIVE;
@@ -899,7 +770,6 @@ endfunction // is_nop
 		 begin
 		    n_restart_ack = 1'b1;
 		    n_restart_req = 1'b0;
-		    n_delay_slot = 1'b0;
 		    n_pc = restart_pc;
 		    n_req = 1'b0;
 		    n_state = ACTIVE;
@@ -1117,10 +987,10 @@ endfunction // is_nop
 	   .clk(clk),
 	   .rd_addr(t_cache_idx),
 	   .wr_addr(r_mem_req_addr[IDX_STOP-1:IDX_START]),
-	   .wr_data({bswap32(mem_rsp_load_data[127:96]),
-		     bswap32(mem_rsp_load_data[95:64]),
-		     bswap32(mem_rsp_load_data[63:32]), 
-		     bswap32(mem_rsp_load_data[31:0])}),
+	   .wr_data({mem_rsp_load_data[127:96],
+		     mem_rsp_load_data[95:64],
+		     mem_rsp_load_data[63:32], 
+		     mem_rsp_load_data[31:0]}),
 	   .wr_en(mem_rsp_valid),
 	   .rd_data(r_array_out)
 	   );
@@ -1257,7 +1127,6 @@ endfunction // is_nop
 	     r_restart_req <= 1'b0;
 	     r_flush_req <= 1'b0;
 	     r_flush_complete <= 1'b0;
-	     r_delay_slot <= 1'b0;
 	     r_spec_rs_tos <= RETURN_STACK_ENTRIES-1;
 	     r_arch_rs_tos <= RETURN_STACK_ENTRIES-1;
 	     r_arch_gbl_hist <= 'd0;
@@ -1288,7 +1157,6 @@ endfunction // is_nop
 	     r_restart_req <= n_restart_req;
 	     r_flush_req <= n_flush_req;
 	     r_flush_complete <= n_flush_complete;
-	     r_delay_slot <= n_delay_slot;
 	     r_spec_rs_tos <= n_spec_rs_tos;
 	     r_arch_rs_tos <= n_arch_rs_tos;
 	     r_arch_gbl_hist <= n_arch_gbl_hist;

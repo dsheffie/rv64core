@@ -2,15 +2,13 @@
 #define __GLOBALSH__
 
 namespace globals {
-  extern bool enClockFuncts;
+  extern uint32_t tohost_addr;
+  extern uint32_t fromhost_addr;
   extern int sysArgc;
   extern char **sysArgv;
-  extern bool isMipsEL;
-  extern uint64_t icountMIPS;
-  extern uint64_t cycle;
-  extern bool trace_retirement;
-  extern bool trace_fp;
-  extern bool report_syscalls;
+  extern bool silent;
+  extern bool log;
+  extern std::map<std::string, uint32_t> symtab;
 };
 
 #endif

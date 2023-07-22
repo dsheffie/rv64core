@@ -1,8 +1,8 @@
 UNAME_S = $(shell uname -s)
 
-OBJ = top.o verilated.o verilated_vcd_c.o loadelf.o interpret.o disassemble.o helper.o saveState.o sparse_mem.o
+OBJ = top.o verilated.o verilated_vcd_c.o loadelf.o interpret.o disassemble.o helper.o saveState.o
 
-SV_SRC = core_l1d_l1i.sv core.sv exec.sv decode_mips32.sv shiftregbit.sv shift_right.sv mul.sv find_first_set.sv divider.sv l1d.sv l1i.sv machine.vh rob.vh uop.vh ram1r1w.sv ram2r1w.sv popcount.sv count_leading_zeros.sv unsigned_divider.sv fair_sched.sv ppa32.sv csa.sv rf4r2w.sv reg_ram1rw.sv l2.sv
+SV_SRC = core_l1d_l1i.sv core.sv exec.sv decode_riscv.sv shiftregbit.sv shift_right.sv mul.sv find_first_set.sv divider.sv l1d.sv l1i.sv machine.vh rob.vh uop.vh ram1r1w.sv ram2r1w.sv popcount.sv count_leading_zeros.sv unsigned_divider.sv fair_sched.sv ppa32.sv csa.sv rf4r2w.sv reg_ram1rw.sv l2.sv
 
 ifeq ($(UNAME_S),Linux)
 	CXX = clang++-12 -flto
@@ -34,7 +34,7 @@ ifeq ($(UNAME_S),Darwin)
 	EXTRA_LD = -L/opt/local/lib -lboost_program_options-mt -lboost_serialization-mt -lcapstone
 endif
 
-OPT = -O3 -g -std=c++14 #-fomit-frame-pointer
+OPT = -Og -g -std=c++14 #-fomit-frame-pointer
 CXXFLAGS = -std=c++11 -g  $(OPT) -I$(VERILATOR_INC) -I$(VERILATOR_DPI_INC) #-DLINUX_SYSCALL_EMULATION=1
 LIBS =  $(EXTRA_LD) -lpthread
 

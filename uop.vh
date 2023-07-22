@@ -81,6 +81,7 @@ typedef enum logic [6:0]
    MOV,
    MONITOR,
    NOP,
+   AUIPC,
    II //illegal instruction
    } opcode_t;
 
@@ -152,10 +153,10 @@ typedef struct packed {
    logic 			    hilo_src_valid;
    logic [`LG_HILO_PRF_ENTRIES-1:0] hilo_src;
      
-   logic 		       has_delay_slot;
-   logic 		       has_nullifying_delay_slot;
-   logic [15:0] 	       imm;
-   logic [`M_WIDTH-17:0]       jmp_imm;
+   logic [15:0] 		    imm;
+   logic [`M_WIDTH-17:0] 	    jmp_imm;
+
+   logic [31:0] 		    rvimm;
    logic [`M_WIDTH-1:0]        pc;
    logic [`LG_ROB_ENTRIES-1:0] rob_ptr;
    logic 		       serializing_op;

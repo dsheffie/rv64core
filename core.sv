@@ -88,7 +88,6 @@ module core(clk,
 	    retire_reg_two_valid,
 	    retire_valid,
 	    retire_two_valid,
-	    retire_delay_slot,
 	    retire_pc,
 	    retire_two_pc,
 	    retired_call,
@@ -172,8 +171,6 @@ module core(clk,
    
    output logic 			  retire_valid;
    output logic 			  retire_two_valid;
-   
-   output logic 			  retire_delay_slot;
    
    output logic [(`M_WIDTH-1):0] 	  retire_pc;
    output logic [(`M_WIDTH-1):0] 	  retire_two_pc;
@@ -294,8 +291,6 @@ module core(clk,
    
    logic 		     t_fold_uop, t_fold_uop2;
    
-   logic 		     n_in_delay_slot, r_in_delay_slot;
-   
    logic 		     t_clr_dq;
    logic 		     t_enough_bob;
    logic 		     t_enough_iprfs, t_enough_hlprfs;
@@ -317,8 +312,6 @@ module core(clk,
    logic [`LG_PHT_SZ-1:0]    n_branch_pht_idx, r_branch_pht_idx;
          
    logic 		     n_restart_valid,r_restart_valid;
-   logic 		     n_has_delay_slot, r_has_delay_slot;
-   logic 		     n_has_nullifying_delay_slot,r_has_nullifying_delay_slot;
    logic 		     n_take_br, r_take_br;
 
    logic 		     n_got_break, r_got_break;
@@ -384,7 +377,6 @@ module core(clk,
    logic 		     r_ds_done, n_ds_done;
    
    logic 		     t_can_retire_rob_head;
-   logic 		     t_faulted_head_and_serializing_delay;
    logic 		     t_arch_fault;
    
    typedef enum logic [4:0] {
@@ -393,7 +385,6 @@ module core(clk,
 			     ACTIVE, //2
 			     DRAIN, //3
 			     RAT, //4
-			     DELAY_SLOT, //5
 			     ALLOC_FOR_SERIALIZE, //6
 			     MONITOR_FLUSH_CACHE, //7
 			     HANDLE_MONITOR, //8
@@ -406,8 +397,6 @@ module core(clk,
 			     WRITE_CAUSE,
 			     WRITE_BADVADDR,
 			     EXCEPTION_DRAIN,
-			     SERIALIZE_IN_FAULTED_DELAY_SLOT,
-			     WAIT_FOR_SERIALIZE_IN_FAULTED_DELAY_SLOT,
 			     GET_TICKS
 			     } state_t;
    
@@ -425,8 +414,10 @@ module core(clk,
    
 
    assign ready_for_resume = r_ready_for_resume;
-   assign head_of_rob_ptr_valid = (r_state == ACTIVE) || (r_state==DRAIN) && !r_ds_done;
+   
+   assign head_of_rob_ptr_valid = (r_state == ACTIVE);
    assign head_of_rob_ptr = r_rob_head_ptr[`LG_ROB_ENTRIES-1:0];
+   
    assign flush_req_l1d = r_flush_req_l1d;
    assign flush_req_l1i = r_flush_req_l1i;
    assign flush_cl_req = r_flush_cl_req;
@@ -509,10 +500,7 @@ module core(clk,
 	     r_branch_valid <= 1'b0;
 	     r_branch_fault <= 1'b0;
 	     r_branch_pht_idx <= 'd0;
-	     r_in_delay_slot <= 1'b0;
 	     r_restart_valid <= 1'b0;
-	     r_has_delay_slot <= 1'b0;
-	     r_has_nullifying_delay_slot <= 1'b0;
 	     r_take_br <= 1'b0;
 	     r_monitor_rsp_data <= 'd0;
 	     r_got_break <= 1'b0;
@@ -523,9 +511,9 @@ module core(clk,
 	     r_l1i_flush_complete <= 1'b0;
 	     r_l1d_flush_complete <= 1'b0;
 	     r_l2_flush_complete <= 1'b0;
-	     r_ds_done <= 1'b0;
-	     drain_ds_complete <= 1'b0;
 	     r_epc <= 'd0;
+	     drain_ds_complete <= 1'b0;	     
+	     r_ds_done <= 1'b0;
 	  end
 	else
 	  begin
@@ -541,10 +529,7 @@ module core(clk,
 	     r_branch_valid <= n_branch_valid;
 	     r_branch_fault <= n_branch_fault;
 	     r_branch_pht_idx <= n_branch_pht_idx;
-	     r_in_delay_slot <= n_in_delay_slot;
 	     r_restart_valid <= n_restart_valid;
-	     r_has_delay_slot <= n_has_delay_slot;
-	     r_has_nullifying_delay_slot <= n_has_nullifying_delay_slot;
 	     r_take_br <= n_take_br;
 	     r_monitor_rsp_data <= n_monitor_rsp_data;
 	     r_got_break <= n_got_break;
@@ -555,9 +540,9 @@ module core(clk,
 	     r_l1i_flush_complete <= n_l1i_flush_complete;
 	     r_l1d_flush_complete <= n_l1d_flush_complete;
 	     r_l2_flush_complete <= n_l2_flush_complete;
-	     r_ds_done <= n_ds_done;
-	     drain_ds_complete <= r_ds_done;
 	     r_epc <= n_epc;
+	     drain_ds_complete <= r_ds_done;	     
+	     r_ds_done <= n_ds_done;
 	  end
      end // always_ff@ (posedge clk)
 
@@ -611,7 +596,6 @@ module core(clk,
 	     
    	     retire_pc <= 'd0;
 	     retire_two_pc <= 'd0;
-	     retire_delay_slot <= 1'b0;
 	     retired_call <= 1'b0;
 	     retired_ret <= 1'b0;
 	     retired_rob_ptr_valid <= 1'b0;
@@ -634,7 +618,6 @@ module core(clk,
 	     retire_two_valid <= t_retire_two;
    	     retire_pc <= t_rob_head.pc;
 	     retire_two_pc <= t_rob_next_head.pc;
-	     retire_delay_slot <= t_rob_head.in_delay_slot && t_retire;
 	     retired_ret <= t_rob_head.is_ret && t_retire;
 	     retired_call <= t_rob_head.is_call && t_retire;
 
@@ -739,7 +722,7 @@ module core(clk,
 	  end
 	if(1)
 	  begin
-	     $display("cycle %d : state = %d, alu complete %b, mem complete %b,head_ptr %d, inflight %d, complete %b,  can_retire_rob_head %b, t_faulted_head_and_serializing_delay %b, head pc %x, empty %b, full %b, bob full %b", 
+	     $display("cycle %d : state = %d, alu complete %b, mem complete %b,head_ptr %d, inflight %d, complete %b,  can_retire_rob_head %b, head pc %x, empty %b, full %b, bob full %b", 
 		      r_cycle,
 		      r_state,
 		      t_complete_valid_1,
@@ -748,7 +731,6 @@ module core(clk,
 		      r_rob_inflight,
 		      t_rob_head_complete && !t_rob_empty, 
 		      t_can_retire_rob_head,
-		      t_faulted_head_and_serializing_delay,
 		      t_rob_head.pc,
 		      t_rob_empty, 
 		      t_rob_full,
@@ -806,7 +788,6 @@ module core(clk,
 	t_possible_to_alloc = 1'b0;
 
 	
-	n_in_delay_slot = r_in_delay_slot;
 	t_retire = 1'b0;
 	t_retire_two = 1'b0;
 	t_rat_copy = 1'b0;
@@ -818,8 +799,6 @@ module core(clk,
 	n_restart_src_pc = r_restart_src_pc;
 	n_restart_src_is_indirect = r_restart_src_is_indirect;
 	n_restart_valid = 1'b0;
-	n_has_delay_slot = r_has_delay_slot;
-	n_has_nullifying_delay_slot = r_has_nullifying_delay_slot;
 	n_take_br = r_take_br;	
 	t_bump_rob_head = 1'b0;
 	t_monitor_req_valid = 1'b0;
@@ -845,7 +824,7 @@ module core(clk,
 	t_fold_uop2 = (t_uop2.op == NOP || 
 		       t_uop2.op == J  ||
 		       t_uop2.op == II);
-	
+
 	n_ds_done = r_ds_done;
 	n_flush_req_l1d = 1'b0;
 	n_flush_req_l1i = 1'b0;
@@ -872,15 +851,7 @@ module core(clk,
 	     n_got_restart_ack = restart_ack;
 	  end	
 	
-	t_can_retire_rob_head = 1'b0;
-	t_faulted_head_and_serializing_delay = 1'b0;
-	
-	if(t_rob_head_complete && !t_rob_empty)
-	  begin
-	     t_can_retire_rob_head = (t_rob_head.has_delay_slot || t_rob_head.has_nullifying_delay_slot) && t_rob_head.faulted ? !t_rob_next_empty : 1'b1;
-	     t_faulted_head_and_serializing_delay = (t_rob_head.has_delay_slot || t_rob_head.has_nullifying_delay_slot) && t_rob_head.faulted && !t_dq_empty 
-						    && t_rob_next_empty && t_uop.serializing_op;
-	  end
+	t_can_retire_rob_head = t_rob_head_complete && !t_rob_empty;
 
 	if(t_complete_valid_1)
 	  begin
@@ -894,7 +865,7 @@ module core(clk,
 	unique case (r_state)
 	  ACTIVE:
 	    begin
-	       if(r_extern_irq && !t_rob_empty && !t_rob_head.in_delay_slot)
+	       if(r_extern_irq && !t_rob_empty)
 		 begin
 		    n_state = EXCEPTION_DRAIN;
 		    n_restart_pc = t_rob_head.pc;
@@ -902,10 +873,6 @@ module core(clk,
 		    n_ds_done = 1'b1;
 		    t_clr_extern_irq = 1'b1;
 		    n_restart_valid = 1'b1;
-		 end
-	       else if(t_faulted_head_and_serializing_delay)
-		 begin
-		    n_state = SERIALIZE_IN_FAULTED_DELAY_SLOT;
 		 end
 	       else if(t_can_retire_rob_head)
 		 begin
@@ -917,7 +884,7 @@ module core(clk,
 			   end
 			 else
 			   begin
-			      n_ds_done = !t_rob_head.has_delay_slot;
+			      n_ds_done = 1'b1;
 			      n_state = DRAIN;
 			      n_restart_cycles = 'd1;
 			      n_restart_valid = 1'b1;
@@ -927,18 +894,10 @@ module core(clk,
 			 n_restart_pc = t_rob_head.target_pc;
 			 n_restart_src_pc = t_rob_head.pc;
 			 n_restart_src_is_indirect = t_rob_head.is_indirect && !t_rob_head.is_ret;
-			 
-			 n_has_delay_slot = t_rob_head.has_delay_slot;
-			 n_has_nullifying_delay_slot = t_rob_head.has_nullifying_delay_slot;
 			 n_take_br = t_rob_head.take_br;
 		      end // if (t_rob_head.faulted)
 		    else if(!t_dq_empty)
 		      begin
-			// if(t_faulted_head_and_serializing_delay)
-			 //begin
-			 //$display("situation where we need to allocate after fault due to serializing insn");
-			 //end
-			 
 			 if(t_uop.serializing_op)
 			   begin
 			      if(/*r_inflight*/t_rob_empty)
@@ -959,9 +918,7 @@ module core(clk,
 					&& !t_dq_empty					
 					&& t_enough_iprfs
 					&& t_enough_hlprfs
-					&& t_enough_bob
-					&& (r_pending_fault ? r_in_delay_slot : 1'b1);
-
+					&& t_enough_bob;
 			      
 			      t_alloc_two = t_alloc
 					    && !t_uop.is_br
@@ -1034,10 +991,8 @@ module core(clk,
 				   && !t_dq_empty
 				   && t_enough_iprfs
 				   && t_enough_hlprfs
-				   && t_enough_bob
-				   && (r_pending_fault ? r_in_delay_slot : 1'b1);
-
-			 //$display("r_cycle = %d, can alloc %b, r_pending %b, delay %b", r_cycle, t_alloc, r_pending_fault, r_in_delay_slot);
+				   && t_enough_bob;
+			 
 			 
 			 t_alloc_two = t_alloc
 				       && !t_uop.is_br
@@ -1054,51 +1009,14 @@ module core(clk,
 	    end // case: ACTIVE
 	  DRAIN:	    
 	    begin
-	       //$display("cycle %d : r_rob_inflight = %b, r_ds_done = %b, t_rob_head_complete = %b, has delay slot", 
-	       //r_cycle, r_rob_inflight, r_ds_done, t_rob_head_complete, r_has_delay_slot);
-
-	       
-	       if(r_has_nullifying_delay_slot && t_rob_head_complete && !r_ds_done)
-		 begin
-		    if(r_take_br)
-		      begin
-			 if(t_arch_fault)
-			   begin
-			      n_state = ARCH_FAULT;
-			   end
-			 else
-			   begin
-			      t_retire = 1'b1;
-			   end
-		      end
-		    else
-		      begin
-			 t_retire = 1'b0;
-		      end
-		    n_ds_done = 1'b1;
-		 end
-	       else if(r_has_delay_slot && t_rob_head_complete && !r_ds_done)
-		 begin
-		    n_ds_done = 1'b1;
-		    if(t_arch_fault)
-		      begin
-			 n_state = ARCH_FAULT;
-		      end
-		    else
-		      begin
-			 t_retire = 1'b1;			 
-		      end
-		 end // if (r_has_delay_slot && t_rob_head_complete && !r_ds_done)
-	       if(r_rob_inflight == 'd0 && r_ds_done && memq_empty && t_divide_ready)
+	       if(r_rob_inflight == 'd0 && memq_empty && t_divide_ready)
 		 begin
 		    //$display("%d : wait for drain and memq_empty  took  %d cycles",r_cycle, r_restart_cycles);		    
 		    n_state = RAT;
 `ifdef REPORT_FAULTS		    
 		    $display(">>> restarting after fault at cycle %d", r_cycle);
 `endif
-		 end // if (r_rob_inflight == 'd0 && r_ds_done && memq_empty)
-
-
+		 end 
 	    end // case: DRAIN
 	  EXCEPTION_DRAIN:
 	    begin
@@ -1117,8 +1035,8 @@ module core(clk,
 	       if(n_got_restart_ack)
 		 begin
 		    n_state = ACTIVE;
-		    n_pending_fault = 1'b0;
 		    n_ds_done = 1'b0;
+		    n_pending_fault = 1'b0;
 		    t_restart_complete = 1'b1;
 		 end
 	    end
@@ -1261,15 +1179,15 @@ module core(clk,
 	    begin
 	       t_exception_wr_cpr0_val = 1'b1;
 	       t_exception_wr_cpr0_ptr = 5'd14;
-	       t_exception_wr_cpr0_data = {32'd0, (t_rob_head.in_delay_slot ? (t_rob_head.pc - 'd4) : t_rob_head.pc)};
+	       t_exception_wr_cpr0_data = {32'd0, t_rob_head.pc};
 	       n_state = WRITE_CAUSE;
-	       n_epc = (t_rob_head.in_delay_slot ? (t_rob_head.pc - 'd4) : t_rob_head.pc);
+	       n_epc = t_rob_head.pc;
 	    end
 	  WRITE_CAUSE:
 	    begin
 	       t_exception_wr_cpr0_val = 1'b1;
 	       t_exception_wr_cpr0_ptr = 5'd13;
-	       t_exception_wr_cpr0_data = {32'd0, t_rob_head.in_delay_slot, 15'd0, 8'd0, 1'b0, r_cause, 2'b0};
+	       t_exception_wr_cpr0_data = {32'd0, t_rob_head.pc};	       
 	       n_state = FLUSH_FOR_HALT;
 	       t_bump_rob_head = 1'b1;
 	    end
@@ -1280,52 +1198,11 @@ module core(clk,
 	       t_exception_wr_cpr0_data = {32'd0, t_rob_head.data};
 	       n_state = WRITE_EPC;
 	    end
-	  SERIALIZE_IN_FAULTED_DELAY_SLOT:
-	    begin
-	       t_alloc = !t_rob_full && !t_uq_full 
-			 && (r_prf_free != 'd0) 
-			   && !t_dq_empty;
-	       n_state = t_alloc ? WAIT_FOR_SERIALIZE_IN_FAULTED_DELAY_SLOT : 
-			 SERIALIZE_IN_FAULTED_DELAY_SLOT;
-	    end
-	 WAIT_FOR_SERIALIZE_IN_FAULTED_DELAY_SLOT:
-	   begin
-	      if(t_rob_next_head_complete)
-		begin
-		   if(t_rob_next_head.faulted)
-		     begin
-			 if(t_rob_next_head.is_break)
-			   begin
-			      n_pending_break = 1'b1;
-			      n_flush_req_l1i = 1'b1;
-			      n_flush_req_l1d = 1'b1;
-			      n_cause = 5'd9;
-			      n_state = WRITE_EPC;
-			   end
-		     end
-		   else
-		     begin
-			n_pending_fault = 1'b0;
-			n_state = ACTIVE;
-		     end
-		end
-	   end
+
 	  default:
 	    begin
 	    end
 	endcase // unique case (r_state)
-
-	if(t_alloc)
-	  begin
-	     n_in_delay_slot = t_alloc_two ? t_uop2.has_delay_slot
-			       : t_uop.has_delay_slot;
-	  end
-	
-	else if(t_clr_dq || t_clr_rob)
-	  begin
-	     n_in_delay_slot = 1'b0;
-	  end
-	
      end // always_comb
    
       
@@ -1576,7 +1453,6 @@ module core(clk,
 	t_rob_tail.is_bad_addr = 1'b0;
 	t_rob_tail.take_br = 1'b0;
 	t_rob_tail.is_br = t_alloc_uop.is_br;	
-	t_rob_tail.in_delay_slot = r_in_delay_slot;
 	t_rob_tail.data = 'd0;
 	t_rob_tail.pht_idx = t_alloc_uop.pht_idx;
 
@@ -1598,15 +1474,9 @@ module core(clk,
 	t_rob_next_tail.is_bad_addr = 1'b0;
 	t_rob_next_tail.take_br = 1'b0;
 	t_rob_next_tail.is_br = t_alloc_uop2.is_br;
-	t_rob_next_tail.in_delay_slot = r_in_delay_slot;
 	t_rob_next_tail.data = 'd0;
 	t_rob_next_tail.pht_idx = t_alloc_uop2.pht_idx;
 	
-	t_rob_tail.has_delay_slot = t_alloc_uop.has_delay_slot;
-	t_rob_tail.has_nullifying_delay_slot = t_alloc_uop.has_nullifying_delay_slot;
-
-	t_rob_next_tail.has_delay_slot = t_uop2.has_delay_slot;
-	t_rob_next_tail.has_nullifying_delay_slot = t_uop2.has_nullifying_delay_slot;	
 	
 	if(t_alloc)
 	  begin	     
@@ -1658,8 +1528,6 @@ module core(clk,
 	     t_rob_next_tail.alloc_cycle = r_cycle;
 	     t_rob_next_tail.complete_cycle = 'd0;
 `endif
-	     //t_uop.has_delay_slot
-	     t_rob_next_tail.in_delay_slot = t_uop.has_delay_slot;
 
 	     if(t_uop2.dst_valid)
 	       begin
@@ -1719,7 +1587,7 @@ module core(clk,
 	       end
 	     if(t_complete_valid_1)
 	       begin
-		  //$display("rob entry %d marked complete by port 1", t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]);
+		  $display("rob entry %d marked complete by port 1", t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]);
 		  r_rob_complete[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]] <= t_complete_bundle_1.complete;
 	       end
 
@@ -2117,7 +1985,7 @@ module core(clk,
      end // always_comb
 
    
-   decode_mips32 dec0 (.insn(insn.data), 
+   decode_riscv dec0 (.insn(insn.data), 
 		      .pc(insn.pc), 
 		      .insn_pred(insn.pred), 
 		      .pht_idx(insn.pht_idx),
@@ -2127,7 +1995,7 @@ module core(clk,
 `endif		      
 		      .uop(t_dec_uop));
 
-   decode_mips32 dec1 (.insn(insn_two.data), 
+   decode_riscv dec1 (.insn(insn_two.data), 
 		      .pc(insn_two.pc), 
 		      .insn_pred(insn_two.pred), 
 		      .pht_idx(insn_two.pht_idx),

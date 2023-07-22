@@ -66,7 +66,6 @@ module core_l1d_l1i(clk,
    logic [`LG_PHT_SZ-1:0] 	branch_pht_idx;
    logic 			took_branch;
 
-   logic 			t_retire_delay_slot;
    logic [(`M_WIDTH-1):0] 	t_branch_pc;
    logic 			t_branch_pc_valid;
    logic 			t_branch_fault;
@@ -568,7 +567,6 @@ module core_l1d_l1i(clk,
 	     .retire_reg_two_valid(retire_reg_two_valid),
 	     .retire_valid(retire_valid),
 	     .retire_two_valid(retire_two_valid),
-	     .retire_delay_slot(t_retire_delay_slot),
 	     .retire_pc(retire_pc),
 	     .retire_two_pc(retire_two_pc),
 	     .retired_call(retired_call),

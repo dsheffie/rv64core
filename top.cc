@@ -3,16 +3,18 @@
 #define BRANCH_DEBUG 1
 #define CACHE_STATS 1
 
+uint32_t globals::tohost_addr = 0;
+uint32_t globals::fromhost_addr = 0;
+bool globals::log = false;
+std::map<std::string, uint32_t> globals::symtab;
+
 
 char **globals::sysArgv = nullptr;
 int globals::sysArgc = 0;
-bool globals::enClockFuncts = false;
-bool globals::isMipsEL = IS_LITTLE_ENDIAN;
-uint64_t globals::icountMIPS = 0;
-uint64_t globals::cycle = 0;
-bool globals::trace_retirement = false;
-bool globals::trace_fp = false;
-bool globals::report_syscalls = false;
+
+static uint64_t cycle = 0;
+static bool trace_retirement = false;
+
 static state_t *s = nullptr;
 static state_t *ss = nullptr;
 static uint64_t insns_retired = 0;
@@ -80,7 +82,7 @@ void record_faults(int n_faults) {
   fault_distribution[n_faults]++;
   if(n_faults && not(pending_fault)) {
     pending_fault = true;
-    fault_start_cycle = globals::cycle;
+    fault_start_cycle = cycle;
   }
 }
 
@@ -88,10 +90,10 @@ void record_restart(int cycles) {
   restart_distribution[cycles]++;
   pending_fault = false;
 
-  fault_to_restart_distribution[(globals::cycle - fault_start_cycle)]++;
+  fault_to_restart_distribution[(cycle - fault_start_cycle)]++;
   fault_start_cycle = 0;
   //std::cout << "clearing fault took "
-  //<< (globals::cycle - fault_start_cycle)
+  //<< (cycle - fault_start_cycle)
   //<< " cycles\n";
 }
 
@@ -314,7 +316,7 @@ int main(int argc, char **argv) {
   std::string pushout_name = "pushout.txt";
   std::string branch_name = "branch_info.txt";
   
-  bool use_checkpoint = false, use_checker_only = false;
+  bool use_checker_only = false;
   uint64_t heartbeat = 1UL<<36, start_trace_at = ~0UL;
   uint64_t max_cycle = 0, max_icnt = 0, mem_lat = 2;
   uint64_t last_store_addr = 0, last_load_addr = 0, last_addr = 0;
@@ -327,7 +329,6 @@ int main(int argc, char **argv) {
       ("help", "Print help messages")
       ("args,a", po::value<std::string>(&sysArgs), "arguments to mips binary")
       ("checker,c", po::value<bool>(&enable_checker)->default_value(true), "use checker")
-      ("isdump,d", po::value<bool>(&use_checkpoint)->default_value(false), "is a dump")
       ("file,f", po::value<std::string>(&mips_binary), "mips binary")
       ("heartbeat,h", po::value<uint64_t>(&heartbeat)->default_value(1<<24), "heartbeat for stats")
       ("log,l", po::value<std::string>(&log_name), "stats log filename")
@@ -339,11 +340,9 @@ int main(int argc, char **argv) {
       ("pipeend", po::value<uint64_t>(&pipeend)->default_value(~0UL), "when to stop logging")      
       ("maxcycle", po::value<uint64_t>(&max_cycle)->default_value(1UL<<34), "maximum cycles")
       ("maxicnt", po::value<uint64_t>(&max_icnt)->default_value(1UL<<50), "maximum icnt")
-      ("tracefp", po::value<bool>(&globals::trace_fp)->default_value(false), "trace fp instructions")
-      ("trace,t", po::value<bool>(&globals::trace_retirement)->default_value(false), "trace retired instruction stream")
+      ("trace,t", po::value<bool>(&trace_retirement)->default_value(false), "trace retired instruction stream")
       ("starttrace,s", po::value<uint64_t>(&start_trace_at)->default_value(~0UL), "start tracing retired instructions")
       ("checkeronly,o", po::value<bool>(&use_checker_only)->default_value(false), "no RTL simulation, just run checker")
-      ("reportsyscalls", po::value<bool>(&globals::report_syscalls)->default_value(false), "print syscall id when syscall executed")
       ; 
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);
@@ -372,30 +371,26 @@ int main(int argc, char **argv) {
 
   const std::unique_ptr<VerilatedContext> contextp{new VerilatedContext};
   contextp->commandArgs(argc, argv);  
-  //contextp->traceEverOn(true);
+  s = new state_t;
+  ss = new state_t;
   
-  sparse_mem *sm0 = new sparse_mem();
-  sparse_mem *sm1 = new sparse_mem();
-  s = new state_t(*sm0);
-  ss = new state_t(*sm1);
   initState(s);
   initState(ss);
+  s->mem = new uint8_t[1UL<<32];
+  ss->mem = new uint8_t[1UL<<32];
+
+  
   globals::sysArgc = buildArgcArgv(mips_binary.c_str(),sysArgs.c_str(),&globals::sysArgv);
   initCapstone();
 
 
-  if(use_checkpoint) {
-    loadState(*s, mips_binary.c_str());
-  }
-  else {
-    load_elf(mips_binary.c_str(), s);
-    mkMonitorVectors(s);
-  }
+  load_elf(mips_binary.c_str(), s);
+  
 
   //debug interpreter functionality
   if(use_checker_only) {
     while((s->icnt < max_icnt) and (s->brk == 0)) {
-      execMips(s);
+      execRiscv(s);
     }
     //std::cout << *s << "\n";
     delete s;
@@ -404,13 +399,8 @@ int main(int argc, char **argv) {
   }
   
   //load checker
-   if(use_checkpoint) {
-     loadState(*ss, mips_binary.c_str());
-   }
-   else {
-     load_elf(mips_binary.c_str(), ss);
-     mkMonitorVectors(ss);
-   }
+  load_elf(mips_binary.c_str(), ss);
+  
   
   // Create an instance of our module under test
    //Vcore_l1d_l1i *tb = new Vcore_l1d_l1i;
@@ -422,7 +412,7 @@ int main(int argc, char **argv) {
   uint64_t n_branches = 0, n_mispredicts = 0, n_checks = 0, n_flush_cycles = 0;
   bool got_mem_req = false, got_mem_rsp = false, got_monitor = false, incorrect = false;
   //assert reset
-  for(globals::cycle = 0; (globals::cycle < 4) && !Verilated::gotFinish(); ++globals::cycle) {
+  for(cycle = 0; (cycle < 4) && !Verilated::gotFinish(); ++cycle) {
     contextp->timeInc(1);  // 1 timeprecision period passes...
     tb->mem_rsp_valid = 0;
     tb->monitor_rsp_valid = 0;
@@ -433,9 +423,8 @@ int main(int argc, char **argv) {
     tb->eval();
     tb->clk = 0;
     tb->eval();
-    ++globals::cycle;
+    ++cycle;
   }
-  s->pc = 0x000d0000;
   //deassert reset
   contextp->timeInc(1);  // 1 timeprecision period passes...  
   tb->reset = 0;
@@ -446,14 +435,14 @@ int main(int argc, char **argv) {
 
   tb->resume_pc = s->pc;
   while(!tb->ready_for_resume) {
-    ++globals::cycle;  
+    ++cycle;  
     tb->clk = 1;
     tb->eval();
     tb->clk = 0;
     tb->eval();
   }
   
-  ++globals::cycle;
+  ++cycle;
   tb->resume = 1;
 
   tb->clk = 1;
@@ -461,7 +450,7 @@ int main(int argc, char **argv) {
   tb->clk = 0;
   tb->eval();
   
-  ++globals::cycle;  
+  ++cycle;  
   tb->resume = 0;
   tb->clk = 1;
   tb->eval();
@@ -469,190 +458,15 @@ int main(int argc, char **argv) {
   tb->eval();
 
 
-
-  uint32_t pos = s->pc;
-  
-  
-  if(s->lo) {
-    uint32_t r = *reinterpret_cast<uint32_t*>(&s->lo);
-    //std::cout << "lo = " << std::hex << r << std::dec << "\n";
-    itype z,y;
-    mtlo m(1);
-    
-    //save in $1
-    z.uu.op = 15;
-    z.uu.rt = 1;
-    z.uu.rs = 1;
-    z.uu.imm = (r >> 16);
-
-    y.uu.op = 13;
-    y.uu.rt = 1;
-    y.uu.rs = 1;
-    y.uu.imm = r & 0xffff;
-    s->mem.set<uint32_t>(pos, bswap<IS_LITTLE_ENDIAN>(z.u));
-    s->mem.set<uint32_t>(pos+4, bswap<IS_LITTLE_ENDIAN>(y.u));
-    s->mem.set<uint32_t>(pos+8, bswap<IS_LITTLE_ENDIAN>(m.u));
-    
-    // std::cout << "i0 : " << std::hex << pos << " " << std::dec
-    // 	      << getAsmString(z.u, pos+0) << "\n";
-    // std::cout << "i1 : " << std::hex << pos+4 << " " << std::dec
-    // 	      << getAsmString(y.u, pos+4) << "\n";
-    // std::cout << "i2 : " <<  std::hex << pos+8 << " " << std::dec
-    // 	      << getAsmString(m.u, pos+8) << "\n";
-    pos += 12;    
-  }
-  
-  if(s->hi) {
-    uint32_t r = *reinterpret_cast<uint32_t*>(&s->hi);
-    itype z,y;
-    mthi m(1);
-    //save in $1
-    z.uu.op = 15;
-    z.uu.rt = 1;
-    z.uu.rs = 1;
-    z.uu.imm = (r >> 16);
-    y.uu.op = 13;
-    y.uu.rt = 1;
-    y.uu.rs = 1;
-    y.uu.imm = r & 0xffff;
-    s->mem.set<uint32_t>(pos, bswap<IS_LITTLE_ENDIAN>(z.u));
-    s->mem.set<uint32_t>(pos+4, bswap<IS_LITTLE_ENDIAN>(y.u));
-    s->mem.set<uint32_t>(pos+8, bswap<IS_LITTLE_ENDIAN>(m.u));
-    pos += 12;    
-  }
- 
- //write out initialization instructions for the GPRs
- for(int i = 1; i < 32; i++) {
-    uint32_t r = *reinterpret_cast<uint32_t*>(&s->gpr[i]);
-    if(r == 0)
-      continue;
-    itype z,y;
-    z.uu.op = 15;
-    z.uu.rt = i;
-    z.uu.rs = i;
-    z.uu.imm = (r >> 16);    
-    y.uu.op = 13;
-    y.uu.rt = i;
-    y.uu.rs = i;
-    y.uu.imm = r & 0xffff;
-    s->mem.set<uint32_t>(pos, bswap<IS_LITTLE_ENDIAN>(z.u));
-    s->mem.set<uint32_t>(pos+4, bswap<IS_LITTLE_ENDIAN>(y.u));
-    pos += 8;
-  }
-  rtype b;
-  b.u = 0;
-  b.uu.subop = 13;
-  s->mem.set<uint32_t>(pos, bswap<IS_LITTLE_ENDIAN>(b.u));
-  pos += 4;
-
-  //write out a bunch of nops
-  for(int i = 0; i < 128; i++) {
-    s->mem.set<uint32_t>(pos, 0);
-    pos += 4;
-  }
-  //std::cout << "init last instruction at " << std::hex << pos << std::dec << "\n";
-  
-  while(true) {
-    bool should_break = false;
-    if(tb->got_break) {
-      std::cout << "got break, epc = " << std::hex << tb->epc << std::dec << "\n";
-      should_break = true;
-    }
-    
-    tb->mem_rsp_valid = 0;
-    
-    if(tb->mem_req_valid) {
-      for(int i = 0; i < 16; i++) {
-	uint64_t ea = (tb->mem_req_addr + 4*i) & ((1UL<<32)-1);
-	tb->mem_rsp_load_data[i] = s->mem.get<uint32_t>(ea);
-	//std::cout << "\tinit loading " << std::hex << ea << " with data "
-	//<< s->mem.get<uint32_t>(ea)
-	//<< std::dec << "\n";
-      }
-      tb->mem_rsp_valid = 1;
-    }
-    tb->clk = 0;
-    tb->eval();
-    tb->clk = 1;
-    tb->eval();
-    if(should_break)
-      break;
-    
-    if(tb->retire_reg_valid) {
-      s->gpr[tb->retire_reg_ptr] = tb->retire_reg_data;
-      //if(tb->retire_reg_ptr == R_a0) {
-      //std::cout << std::hex << "insn with pc " << tb->retire_pc << " updates a0 \n"
-      //<< std::dec;
-      //}
-    }
-    if(tb->retire_valid) {
-      last_retire = 0;
-      last_retired_pc = tb->retire_pc;
-    }
-    last_retire++;
-    
-    //if(last_retire > (20*mem_lat)) {
-    //std::cerr << "DEAD = " << static_cast<int>(tb->got_ud) << "\n";
-    // exit(-1);
-    //}
-  }
-
-  for(int c = 0; c < 128; c++) {
-    tb->mem_rsp_valid = 0;
-    if(tb->mem_req_valid) {
-      for(int i = 0; i < 4; i++) {
-	tb->mem_rsp_load_data[i] = s->mem.get<uint32_t>(tb->mem_req_addr + 4*i);
-      }
-      tb->mem_rsp_valid = 1;
-    }
-    tb->clk = 0;
-    tb->eval();
-    tb->clk = 1;
-    tb->eval();
-  }
-  //std::cout << "made it through init\n";
-  //exit(-1);
-
-  if(use_checkpoint) {
-    loadState(*s, mips_binary.c_str());
-  }
-  else {
-    load_elf(mips_binary.c_str(), s);
-    mkMonitorVectors(s);
-  }
 
   if(not(pipelog.empty())) {
     pl = new pipeline_logger(pipelog);
   }
   
   s->pc = ss->pc;
-  while(!tb->ready_for_resume) {
-    ++globals::cycle;  
-      tb->clk = 1;
-      tb->eval();
-      tb->clk = 0;
-      tb->eval();
-  }
-  ++globals::cycle;
-  tb->resume = 1;
-  tb->resume_pc = s->pc;
-  tb->clk = 1;
-  tb->eval();
-  tb->clk = 0;
-  tb->eval();
-  ++globals::cycle;  
-  tb->resume = 0;
-  tb->clk = 1;
-  tb->eval();
-  tb->clk = 0;
-  tb->eval();
-  //done with initialize
-  globals::cycle = 0;  
-
-  //std::cout << getAsmString(get_insn(0xa45b0, s), 0xa45b0) << "\n";
   
   double t0 = timestamp();
-  while(!Verilated::gotFinish() && (globals::cycle < max_cycle) && (insns_retired < max_icnt)) {
+  while(!Verilated::gotFinish() && (cycle < max_cycle) && (insns_retired < max_icnt)) {
     contextp->timeInc(1);  // 1 timeprecision periodd passes...    
 
     tb->clk = 1;
@@ -668,13 +482,9 @@ int main(int argc, char **argv) {
     if(tb->monitor_req_valid) {
       bool handled = false;
 
-      if(globals::report_syscalls) {
-	std::cerr << "got monitor reason "
-		  << static_cast<int>(tb->monitor_req_reason)
-		  << "\n";
-      }
+
       
-      
+#if 0
       switch(tb->monitor_req_reason)
 	{
 	case 6: {
@@ -767,7 +577,7 @@ int main(int argc, char **argv) {
 	}
 	case 50: /* get cycle */
 	  handled = true;
-	  tb->monitor_rsp_data = globals::cycle;
+	  tb->monitor_rsp_data = cycle;
 	  break;
 	case 51: /* nuke caches */
 	  handled = true;
@@ -810,7 +620,8 @@ int main(int argc, char **argv) {
 	default:
 	  break;
 	}
-
+#endif
+      
       touched_lines.reset();
       if(!handled) {
 	std::cout << "didn't handled monitor reason " << tb->monitor_req_reason << "\n";
@@ -862,8 +673,8 @@ int main(int argc, char **argv) {
     //tb->extern_irq = 0;
     //}
     
-    //if((globals::cycle & ((1UL<<8)-1)) == 0) {
-    //std::cout << "firing irq at cycle " << globals::cycle << "\n";
+    //if((cycle & ((1UL<<8)-1)) == 0) {
+    //std::cout << "firing irq at cycle " << cycle << "\n";
     //tb->extern_irq = 1;
     //}
     
@@ -880,20 +691,20 @@ int main(int argc, char **argv) {
       last_retired_pc = tb->retire_pc;
 
       if(insns_retired >= start_trace_at)
-	globals::trace_retirement = true;
+	trace_retirement = true;
 
 
       
-      if(((insns_retired % heartbeat) == 0) or globals::trace_retirement ) {
+      if(((insns_retired % heartbeat) == 0) or trace_retirement ) {
 	//uint32_t r_inst = s->mem.get<uint32_t>(tb->retire_pc);
 	//r_inst = bswap<IS_LITTLE_ENDIAN>(r_inst);	
 	std::cout << "retiring "
 		  << std::hex
 		  << tb->retire_pc
 		  << std::dec
-		  << " cycle " << globals::cycle
+		  << " cycle " << cycle
 		  << std::fixed
-		  << ", " << static_cast<double>(insns_retired) / globals::cycle << " IPC "
+		  << ", " << static_cast<double>(insns_retired) / cycle << " IPC "
 		  << ", insns_retired "
 		  << insns_retired
 		  << ", mispredict rate "
@@ -905,14 +716,14 @@ int main(int argc, char **argv) {
       }
       if(tb->retire_two_valid) {
 	++insns_retired;
-	if(((insns_retired % heartbeat) == 0) or globals::trace_retirement ) {
+	if(((insns_retired % heartbeat) == 0) or trace_retirement ) {
 	  std::cout << "retiring "
 		    << std::hex
 		    << tb->retire_two_pc
 		    << std::dec
-		    << " cycle " << globals::cycle
+		    << " cycle " << cycle
 		    << std::fixed
-		    << ", " << static_cast<double>(insns_retired) / globals::cycle << " IPC "	    
+		    << ", " << static_cast<double>(insns_retired) / cycle << " IPC "	    
 		    << ", insns_retired "
 		    << insns_retired
 		    << ", mispredict rate "
@@ -935,7 +746,7 @@ int main(int argc, char **argv) {
 	//std::cout << std::hex << tb->retire_pc << "," << ss->pc << std::dec << "\n";	  	
 	if(tb->retire_pc == ss->pc) {
 	  //std::cout << std::hex << tb->retire_pc << "," << ss->pc << std::dec << "\n";	  	
-	  execMips(ss);
+	  execRiscv(ss);
 	  // if(static_cast<uint32_t>(ss->mem.at(0x4cadc)) == 3) {
 	  //   std::cout << "changed memory at " << std::hex << ss->pc << std::dec << "\n";
 	  //   exit(-1);
@@ -957,10 +768,9 @@ int main(int argc, char **argv) {
 			  << " bits in difference "
 			  << wrong_bits
 			  << "\n";
-		//globals::trace_retirement |= (wrong_bits != 0);
+		//trace_retirement |= (wrong_bits != 0);
 		diverged = true;//(wrong_bits > 16);
-		uint32_t r_inst = s->mem.get<uint32_t>(ss->pc);
-		r_inst = bswap<IS_LITTLE_ENDIAN>(r_inst);
+		uint32_t r_inst = mem_r32(ss, ss->pc);
 		std::cout << "incorrect "
 			  << std::hex
 			  << ss->pc 
@@ -976,8 +786,7 @@ int main(int argc, char **argv) {
 	  
 	  if(diverged) {
 	    incorrect = true;
-	    uint32_t r_inst = s->mem.get<uint32_t>(tb->retire_pc);
-	    r_inst = bswap<IS_LITTLE_ENDIAN>(r_inst);
+	    uint32_t r_inst = mem_r32(s, tb->retire_pc);
 	    std::cout << "incorrect "
 		      << std::hex
 		      << tb->retire_pc
@@ -1016,7 +825,7 @@ int main(int argc, char **argv) {
 	else {
 	  ++last_check;
 	  if(last_check > 2) {
-	    uint32_t linsn = bswap<IS_LITTLE_ENDIAN>(s->mem.get<uint32_t>(last_match_pc));
+	    uint32_t linsn = mem_r32(s,last_match_pc);
 	    std::cerr << "no match in a while, last match : "
 		      << std::hex
 		      << last_match_pc
@@ -1064,7 +873,7 @@ int main(int argc, char **argv) {
 
     if(enable_checker && tb->retire_two_valid) {
       if(tb->retire_two_pc == ss->pc) {
-	execMips(ss);
+	execRiscv(ss);
 	++n_checks;
 	last_check = 0;
 	last_match_pc =  tb->retire_two_pc; 
@@ -1107,11 +916,11 @@ int main(int argc, char **argv) {
 
     if(tb->mem_req_valid && (mem_reply_cycle == -1)) {
       
-      mem_reply_cycle = globals::cycle + (tb->mem_req_opcode == 4 ? 1 : 2)*mem_lat;
+      mem_reply_cycle = cycle + (tb->mem_req_opcode == 4 ? 1 : 2)*mem_lat;
       
     }
     
-    if(/*tb->mem_req_valid*/mem_reply_cycle ==globals::cycle) {
+    if(/*tb->mem_req_valid*/mem_reply_cycle ==cycle) {
       //std::cout << "got memory request for address "
       //<< std::hex << tb->mem_req_addr << std::dec <<"\n";
       last_retire = 0;
@@ -1122,10 +931,7 @@ int main(int argc, char **argv) {
       if(tb->mem_req_opcode == 4) {/*load word */
 	for(int i = 0; i < 16; i++) {
 	  uint64_t ea = (tb->mem_req_addr + 4*i) & ((1UL<<32)-1);
-	  tb->mem_rsp_load_data[i] = s->mem.get<uint32_t>(ea);
-	  //std::cout << "\tloading " << std::hex << ea << " with data "
-	  //<< s->mem.get<uint32_t>(ea)
-	  //<< std::dec << "\n";
+	  tb->mem_rsp_load_data[i] = mem_r32(s,ea);
 	}
 	last_load_addr = tb->mem_req_addr;
 	assert((tb->mem_req_addr & 0xf) == 0);
@@ -1135,7 +941,7 @@ int main(int argc, char **argv) {
       else if(tb->mem_req_opcode == 7) { /* store word */
 	for(int i = 0; i < 16; i++) {
 	  uint64_t ea = (tb->mem_req_addr + 4*i) & ((1UL<<32)-1);
-	  s->mem.set<uint32_t>(ea, tb->mem_req_store_data[i]);
+	  mem_w32(s, ea, tb->mem_req_store_data[i]);
 	}
 	last_store_addr = tb->mem_req_addr;
 	++n_stores;
@@ -1160,23 +966,20 @@ int main(int argc, char **argv) {
       tb->monitor_rsp_data = 0;
       got_monitor = false;
     }
-    ++globals::cycle;
+    ++cycle;
   }
   tb->final();
   t0 = timestamp() - t0;
 
-  if(incorrect) {
-    s->mem.compare(ss->mem);
-  }
   
   if(!incorrect) {
     std::ofstream out(log_name);
     out << "n_mispredicts = " << n_mispredicts
-	<<  ", cycles = " << globals::cycle
+	<<  ", cycles = " << cycle
 	<< ", insns = " << insns_retired
 	<< ", n_checks = " << n_checks
 	<< "\n";
-    out << static_cast<double>(insns_retired) / globals::cycle << " insn per cycle\n";
+    out << static_cast<double>(insns_retired) / cycle << " insn per cycle\n";
     double avg_inflight = 0, sum = 0;
     for(int i = 0; i < 32; i++) {
       if(inflight[i] == 0) continue;
@@ -1357,14 +1160,6 @@ int main(int argc, char **argv) {
     std::cout << "total_cycle  = " << total_cycle << "\n";
     std::cout << "total ipc    = " << static_cast<double>(total_retire) / total_cycle << "\n";
 
-    uint64_t total_histo = 0;
-    for(auto &p : ss->insn_histo) {
-      if(p.second) {
-	out << p.first << "," << p.second << "\n";
-	total_histo += p.second;
-      }
-    }
-    out << "total_histo = " << total_histo << "\n";
     out.close();
   }
   else {
