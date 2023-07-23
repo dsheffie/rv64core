@@ -316,6 +316,8 @@ module core(clk,
 
    logic 		     n_got_break, r_got_break;
    logic 		     n_pending_break, r_pending_break;
+   logic 		     n_pending_badva, r_pending_badva;
+   logic 		     n_pending_ii, r_pending_ii;
    logic 		     n_got_ud, r_got_ud;
    logic 		     n_got_bad_addr, r_got_bad_addr;
    
@@ -395,7 +397,6 @@ module core(clk,
 			     ARCH_FAULT,
 			     WRITE_EPC,
 			     WRITE_CAUSE,
-			     WRITE_BADVADDR,
 			     EXCEPTION_DRAIN,
 			     GET_TICKS
 			     } state_t;
@@ -505,6 +506,8 @@ module core(clk,
 	     r_monitor_rsp_data <= 'd0;
 	     r_got_break <= 1'b0;
 	     r_pending_break <= 1'b0;
+	     r_pending_badva <= 1'b0;
+	     r_pending_ii <= 1'b0;
 	     r_got_ud <= 1'b0;
 	     r_got_bad_addr <= 1'b0;
 	     r_ready_for_resume <= 1'b0;
@@ -534,6 +537,8 @@ module core(clk,
 	     r_monitor_rsp_data <= n_monitor_rsp_data;
 	     r_got_break <= n_got_break;
 	     r_pending_break <= n_pending_break;
+	     r_pending_badva <= n_pending_badva;
+	     r_pending_ii <= n_pending_ii;	     
 	     r_got_ud <= n_got_ud;
 	     r_got_bad_addr <= n_got_bad_addr;
 	     r_ready_for_resume <= n_ready_for_resume;
@@ -804,6 +809,8 @@ module core(clk,
 	t_monitor_req_valid = 1'b0;
 	n_monitor_rsp_data = r_monitor_rsp_data;
 	n_pending_fault = r_pending_fault;
+	n_pending_badva = r_pending_badva;
+	n_pending_ii = r_pending_ii;
 	n_epc = r_epc;
 	
 	t_enough_iprfs = !((t_uop.dst_valid) && t_gpr_ffs_full);
@@ -1121,7 +1128,11 @@ module core(clk,
 		 begin
 		    n_state = HALT;
 		    n_got_break = r_pending_break;
+		    n_got_ud = r_pending_ii;
+		    n_got_bad_addr = r_pending_badva;
 		    n_pending_break = 1'b0;
+		    n_pending_badva = 1'b0;
+		    n_pending_ii = 1'b0;
 		    n_ready_for_resume = 1'b1;		    		    
 		    n_l1i_flush_complete = 1'b0;
 		    n_l1d_flush_complete = 1'b0;
@@ -1165,12 +1176,13 @@ module core(clk,
 		 end
 	       else if(t_rob_head.is_ii)
 		 begin
-		    n_got_ud = 1'b1;
+		    $display("bad instruction at pc %x", t_rob_head.pc);
+		    n_pending_ii = 1'b1;
 		    n_cause = 5'd10;
 		 end
 	       else if(t_rob_head.is_bad_addr)
 		 begin
-		    n_got_bad_addr = 1'b1;
+		    n_pending_badva = 1'b1;
 		    n_cause = 5'd10;
 		 end
 	       n_state = WRITE_EPC;
@@ -1181,6 +1193,7 @@ module core(clk,
 	       t_exception_wr_cpr0_ptr = 5'd14;
 	       t_exception_wr_cpr0_data = {32'd0, t_rob_head.pc};
 	       n_state = WRITE_CAUSE;
+	       $display("write epc, pc = %x", t_rob_head.pc);
 	       n_epc = t_rob_head.pc;
 	    end
 	  WRITE_CAUSE:
@@ -1190,13 +1203,6 @@ module core(clk,
 	       t_exception_wr_cpr0_data = {32'd0, t_rob_head.pc};	       
 	       n_state = FLUSH_FOR_HALT;
 	       t_bump_rob_head = 1'b1;
-	    end
-	  WRITE_BADVADDR:
-	    begin
-	       t_exception_wr_cpr0_val = 1'b1;
-	       t_exception_wr_cpr0_ptr = 5'd8;
-	       t_exception_wr_cpr0_data = {32'd0, t_rob_head.data};
-	       n_state = WRITE_EPC;
 	    end
 
 	  default:

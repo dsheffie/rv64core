@@ -27,8 +27,6 @@ typedef enum logic [6:0]
    SLTU,
    MFLO,
    MTLO,
-   BEQ,
-   BNE,
    BLEZ,
    BGTZ,
    ADDIU,
@@ -48,7 +46,7 @@ typedef enum logic [6:0]
    SW,
    BEQL,
    BNEL, 
-   BLTZ, 
+
    BGEZ,
    BLTZL,
    BGEZL,
@@ -70,7 +68,13 @@ typedef enum logic [6:0]
    MONITOR,
    
    //known used in riscv design
-   ADDU,   
+   ADDU,
+   BEQ,
+   BGE,
+   BGEU,
+   BLT, 
+   BLTU,  
+   BNE,
    SLL,   
    LB,
    LH,

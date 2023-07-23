@@ -899,15 +899,28 @@ int main(int argc, char **argv) {
     }
 
     if(tb->got_ud) {
-      uint32_t insn = get_insn(tb->retire_pc, s);
+      uint32_t insn = get_insn(tb->epc, s);
       std::cerr << "GOT UD for "
 		<< std::hex
-		<< tb->retire_pc
+		<< tb->epc
 		<< " opcode " 
 		<< (insn & 127)
 		<< std::dec
 		<< " "
-		<< getAsmString(insn, tb->retire_pc)
+		<< getAsmString(insn, tb->epc)
+		<< "\n";
+      break;
+    }
+    else if(tb->got_bad_addr) {
+      uint32_t insn = get_insn(tb->epc, s);
+      std::cerr << "GOT VA for "
+		<< std::hex
+		<< tb->epc
+		<< " opcode " 
+		<< (insn & 127)
+		<< std::dec
+		<< " "
+		<< getAsmString(insn, tb->epc)
 		<< "\n";
       break;
     }

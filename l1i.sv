@@ -34,6 +34,10 @@ module predecode(insn, pd);
      begin
 	pd = 4'd0;
 	case(opcode)
+	  7'h63: /* cond branches */
+	    begin
+	       pd = 'd1;
+	    end
 	  7'h67: /* jalr and jr */
 	    begin
 	       pd = (rd == 'd0) ? 'd4 /*jr*/ : 'd6 /*jalr*/;
@@ -288,7 +292,7 @@ endfunction // is_nop
    logic 		  t_update_spec_hist;
    
    logic [31:0] 	  t_insn_data, t_insn_data2, t_insn_data3, t_insn_data4;
-   logic [`M_WIDTH-1:0]   t_simm;
+   logic [`M_WIDTH-1:0]   t_jal_simm, t_br_simm;
    logic 		  t_is_call, t_is_ret;
    logic [2:0] 		  t_branch_cnt;
    logic [4:0] 		  t_branch_marker, t_spec_branch_marker;
@@ -525,7 +529,9 @@ endfunction // is_nop
 		       {2'd0, select_pd(r_jump_out, 'd3) != 4'd0};
 	
 		
-	t_simm = {{11{t_insn_data[31]}}, t_insn_data[31], t_insn_data[19:12], t_insn_data[20], t_insn_data[30:21], 1'b0};
+	t_jal_simm = {{11{t_insn_data[31]}}, t_insn_data[31], t_insn_data[19:12], t_insn_data[20], t_insn_data[30:21], 1'b0};
+	
+	t_br_simm = {{19{t_insn_data[31]}}, t_insn_data[31], t_insn_data[7], t_insn_data[30:25], t_insn_data[11:8], 1'b0};
 	
 	t_clear_fq = 1'b0;
 	t_push_insn = 1'b0;
@@ -610,44 +616,16 @@ endfunction // is_nop
 			 t_is_cflow = 1'b1;
 			 t_take_br = 1'b1;
 			 t_is_call = (t_pd == 4'd5);
-			 //if(t_is_call) $display("predict jal at %x will return to %x",
-			 //r_cache_pc, r_cache_pc+'d8);
-			 n_pc = r_cache_pc + t_simm;
+			 n_pc = r_cache_pc + t_jal_simm;
 			 
-		      end
-		    else if(t_pd == 4'd8)
-		      begin
-			 t_is_cflow = 1'b1;			 
-			 t_take_br = 1'b1;
-			 n_pc = ((r_cache_pc + 'd4) + {t_simm[`M_WIDTH-3:0], 2'd0});
-		      end
-		    else if(t_pd == 4'd2)
-		      begin
-			 //$display("decoded likely branch @ %x", r_cache_pc);
-			 //treat as always taken for simplicity
-			 t_is_cflow = 1'b1;			 
-			 t_take_br = 1'b1;
-			 n_pc = ((r_cache_pc + 'd4) + {t_simm[`M_WIDTH-3:0], 2'd0});
-		      end
-		    else if(t_pd == 4'd9)
-		      begin
-			 //check if insn is bal or cond branch thinks its gonna be taken
-			 if(r_pht_out[1] || t_insn_data[25:21] == 5'd0)
-			   begin
-			      t_is_cflow = 1'b1;
-			      n_pc = ((r_cache_pc + 'd4) + {t_simm[`M_WIDTH-3:0], 2'd0});
-			      t_is_call = 1'b1;
-			      t_take_br = 1'b1;
-			      //$display("some flavor of branch and link, predicting target %x", n_pc);
-			   end
 		      end
 		    else if(t_pd == 4'd1 && r_pht_out[1])
 		      begin
 			 t_is_cflow = 1'b1;			 
 			 t_take_br = 1'b1;
-			 n_pc = ((r_cache_pc + 'd4) + {t_simm[`M_WIDTH-3:0], 2'd0});
+			 n_pc = (r_cache_pc + t_br_simm);
 		      end
-		    else if(t_pd == 4'd7)
+		    else if(t_pd == 4'd7) /* return */
 		      begin
 			 t_is_cflow = 1'b1;
 			 t_is_ret = 1'b1;
@@ -660,8 +638,9 @@ endfunction // is_nop
 			 t_take_br = 1'b1;
 			 t_is_call = (t_pd == 4'd6);
 			 n_pc = r_btb_pc;
-			 //$display("predicted target for %x is %x", r_cache_pc, n_pc);			 
 		      end
+		    
+		    n_resteer_bubble = t_is_cflow;
 		    
 		    //initial push multiple logic
 		    if(!(t_is_cflow))
@@ -684,7 +663,7 @@ endfunction // is_nop
 				begin
 				   t_cache_idx = r_cache_idx + 'd1;
 				end
-			      //n_resteer_bubble = 1'b1;
+			      //
 			   end
 			 else if(t_first_branch == 'd2 && !fq_full2)
 			   begin

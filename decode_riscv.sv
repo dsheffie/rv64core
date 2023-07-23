@@ -110,7 +110,7 @@ module decode_riscv(insn,
 	       uop.dst = rd;
 	       uop.srcA = rs1;
 	       uop.dst_valid = (rd != 'd0);
-	       uop.srcA_valid = (rd != 'd0);	       
+	       uop.srcA_valid = (rd != 'd0);	       	       
 	       uop.is_int = 1'b1;
 	       uop.rvimm = {{20{insn[31]}}, insn[31:20]};
 	       case(insn[14:12])
@@ -129,18 +129,47 @@ module decode_riscv(insn,
 		   end
 		 3'd4:
 		   begin
+		      uop.op = (rd == 'd0) ? NOP : XORI;		      
 		   end
 		 3'd5:
 		   begin
 		   end
 		 3'd6:
 		   begin
+		      uop.op = (rd == 'd0) ? NOP : ORI;		      		      
 		   end
 		 3'd7:
 		   begin
+		      uop.op = (rd == 'd0) ? NOP : ANDI;
 		   end
 	       endcase // case (inst[14:12])
 	    end // case: 7'h13
+	  7'h23:
+	    begin
+	       uop.srcA = rs1;
+	       uop.srcA = rs2;
+	       uop.srcA_valid = 1'b1;
+	       uop.srcB_valid = 1'b1;
+	       uop.is_mem = 1'b1;
+	       uop.rvimm = {{20{insn[31]}}, insn[31:25], insn[11:7]};
+	       case(insn[14:12])
+		 3'd0:
+		   begin
+		      uop.op = SB;
+		   end
+		 3'd1:
+		   begin
+		      uop.op = SH;
+		   end
+		 3'd2:
+		   begin
+		      uop.op = SW;
+		   end
+		 default:
+		   begin
+		   end
+	       endcase
+	    end
 	  7'h33:
 	    begin
 	       uop.dst = rd;
@@ -167,6 +196,18 @@ module decode_riscv(insn,
 		   begin
 		      uop.op = (rd != 'd0) ? SLL : NOP;
 		   end
+		 3'd4:
+		   begin
+		      case(insn[31:25])
+			7'd0:
+			  begin
+			     uop.op = (rd != 'd0) ? XOR : NOP;
+			  end
+			default:
+			  begin
+			  end
+		      endcase // case (insn[31:25])
+		   end
 		 default:
 		   begin
 		   end
@@ -188,6 +229,45 @@ module decode_riscv(insn,
 	       uop.is_int = 1'b1;
 	       uop.rvimm = {insn[31:12], 12'd0};
 	    end
+	  7'h63: /* branches */
+	    begin
+	       uop.srcA = rs1;
+	       uop.srcB = rs2;
+	       uop.srcA_valid = 1'b1;
+	       uop.srcB_valid = 1'b1;
+	       uop.is_int = 1'b1;
+	       uop.rvimm = {{19{insn[31]}}, insn[31], insn[7], insn[30:25], insn[11:8], 1'b0};
+	       case(insn[14:12])
+		 3'd0:
+		   begin
+		      uop.op = BEQ;
+		   end
+		 3'd1:
+		   begin
+		      uop.op = BNE;
+		   end
+		 3'd4:
+		   begin
+		      uop.op = BLT;
+		   end
+		 3'd5:
+		   begin
+		      uop.op = BGE;
+		   end
+		 3'd6:
+		   begin
+		      uop.op = BLTU;
+		   end
+		 3'd7:
+		   begin
+		      uop.op = BGEU;
+		   end
+		 default:
+		   begin
+		   end
+	       endcase
+	    end
+	    
 	  7'h67: /* jalr and jr*/
 	    begin
 	       uop.srcA_valid = 1'b1;
