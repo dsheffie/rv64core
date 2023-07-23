@@ -242,7 +242,6 @@ void execRiscv(state_t *s) {
     case 0x37:
       if(rd != 0) {
 	s->gpr[rd] = inst & 0xfffff000;
-	std::cout << "lui result " << std::hex << s->gpr[rd] << std::dec << "\n";
       }
       s->pc += 4;
       break;

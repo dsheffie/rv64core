@@ -1085,7 +1085,7 @@ module exec(clk,
    wire [31:0] w_s_sub32, w_c_sub32;
    
    csa #(.N(32)) csa0 (.a(t_srcA), 
-		       .b(int_uop.op == SUBU ? ~t_srcB : ((int_uop.op == ADDIU ? {{E_BITS{int_uop.imm[15]}},int_uop.imm} : t_srcB))), 
+		       .b(int_uop.op == SUBU ? ~t_srcB : t_srcB), 
 		       .cin(int_uop.op == SUBU ? 32'd1 : 32'd0), .s(w_s_sub32), .cout(w_c_sub32) );
 
    wire [31:0] w_add_srcA = {w_c_sub32[30:0], 1'b0};
@@ -1153,7 +1153,13 @@ module exec(clk,
 	    end
 	  ADDU:
 	    begin
-	       t_result = t_srcA + t_srcB;
+	       t_result = w_add32;
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;
+	    end
+	  SUBU:
+	    begin
+	       t_result = w_add32;
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
@@ -1212,8 +1218,6 @@ module exec(clk,
 	       t_pc = t_take_br ? (int_uop.pc + int_uop.rvimm) : t_pc4;
 	       t_alu_valid = 1'b1;
 	    end
-	  
-	  
 	  JAL:
 	    begin
 	       t_take_br = 1'b1;
@@ -1221,6 +1225,15 @@ module exec(clk,
 	       t_pc = t_pc + int_uop.rvimm;
 	       t_result = int_uop.pc + 32'd4;
 	       t_alu_valid = 1'b1;
+	       t_wr_int_prf = 1'b1;
+	    end
+	  JALR:
+	    begin
+	       t_take_br = 1'b1;
+	       t_mispred_br = (t_srcA + int_uop.rvimm)  != {int_uop.jmp_imm,int_uop.imm};	       
+	       t_pc = t_srcA + int_uop.rvimm;
+	       t_alu_valid = 1'b1;
+	       t_result = int_uop.pc + 32'd4;
 	       t_wr_int_prf = 1'b1;
 	    end
 	  JR:
@@ -1244,7 +1257,21 @@ module exec(clk,
 	     end
 	  SLL:
 	    begin
-	       t_result = t_srcA << int_uop.srcB[4:0];
+	       t_result = t_srcA << t_srcB[4:0];
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;
+	    end
+	  SLLI:
+	    begin
+	       t_result = t_srcA << int_uop.rvimm[4:0];
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;
+	    end
+	  SRAI:
+	    begin
+	       t_signed_shift = 1'b1;
+	       t_shift_amt = int_uop.rvimm[4:0];
+	       t_result = {{HI_EBITS{t_shift_right[31]}}, t_shift_right};
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
@@ -1516,15 +1543,6 @@ module exec(clk,
 	  //      t_alu_valid = 1'b1;
 	  //      t_wr_int_prf = 1'b1;
 	  //   end
-	  // JALR:
-	  //   begin
-	  //      t_take_br = 1'b1;
-	  //      t_mispred_br = (t_srcA != {int_uop.jmp_imm,int_uop.imm});
-	  //      t_pc = t_srcA;
-	  //      t_alu_valid = 1'b1;
-	  //      t_result = int_uop.pc + {{HI_EBITS{1'b0}},32'd8};
-	  //      t_wr_int_prf = 1'b1;
-	  //   end
 	  // MONITOR:
 	  //   begin
 	  //      t_take_br = 1'b1;
@@ -1533,12 +1551,6 @@ module exec(clk,
 	  //      t_alu_valid = 1'b1;
 	  //      t_result = monitor_rsp_data;
 	  //      t_wr_int_prf = 1'b1;
-	  //   end
-	  // LUI:
-	  //   begin
-	  //      t_result = {{HI_EBITS{int_uop.imm[15]}},int_uop.imm, 16'd0};
-	  //      t_wr_int_prf = 1'b1;
-	  //      t_alu_valid = 1'b1;
 	  //   end
 	  // ADDIU:
 	  //   begin

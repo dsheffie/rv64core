@@ -120,9 +120,11 @@ module decode_riscv(insn,
 		   end
 		 3'd1:
 		   begin
+		      uop.op = (rd == 'd0) ? NOP : SLLI;
 		   end
 		 3'd2:
 		   begin
+		      uop.op = (rd == 'd0) ? NOP : SLTI;
 		   end
 		 3'd3:
 		   begin
@@ -133,6 +135,19 @@ module decode_riscv(insn,
 		   end
 		 3'd5:
 		   begin
+		      case(insn[31:25])
+			7'h0:
+			  begin
+			     uop.op = (rd == 'd0) ? NOP : SRLI;
+			  end
+			7'h20:
+			  begin
+			     uop.op = (rd == 'd0) ? NOP : SRAI;			     
+			  end
+			default:
+			  begin
+			  end
+		      endcase
 		   end
 		 3'd6:
 		   begin
@@ -188,6 +203,10 @@ module decode_riscv(insn,
 			  begin
 			     uop.op = (rd != 'd0) ? ADDU : NOP;
 			  end
+			7'h20:
+			  begin
+			     uop.op = (rd != 'd0) ? SUBU : NOP;
+			  end
 			default:
 			  begin
 			  end
@@ -195,7 +214,15 @@ module decode_riscv(insn,
 		   end // case: 3'd0
 		 3'd1:
 		   begin
-		      uop.op = (rd != 'd0) ? SLL : NOP;
+		      case(insn[31:25])
+			7'd0:
+			  begin
+			     uop.op = (rd != 'd0) ? SLL : NOP;
+			  end
+			default:
+			  begin
+			  end
+		      endcase
 		   end
 		 3'd4:
 		   begin
