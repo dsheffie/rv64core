@@ -57,6 +57,7 @@ void execRiscv(state_t *s) {
   
   if(tohost) {
     //std::cout << "tohost = " << std::hex << tohost << std::dec << "\n";
+    //exit(-1);
     std::cout << std::hex << s->pc << std::dec << "\n";
     //std::cout << std::hex << s->last_pc << std::dec << "\n";
     if(tohost & 1) {

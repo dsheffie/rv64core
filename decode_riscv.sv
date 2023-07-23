@@ -104,6 +104,10 @@ module decode_riscv(insn,
 		   begin
 		   end
 	       endcase
+	    end // case: 7'h3
+	  7'hf:
+	    begin
+	       uop.op = NOP;
 	    end
 	  7'h13:
 	    begin
@@ -159,6 +163,14 @@ module decode_riscv(insn,
 		   end
 	       endcase // case (inst[14:12])
 	    end // case: 7'h13
+	  7'h17: /* auipc */
+	    begin
+	       uop.op = (rd == 'd0) ? NOP : AUIPC;
+	       uop.dst = rd;
+	       uop.dst_valid = (rd != 'd0);
+	       uop.is_int = 1'b1;
+	       uop.rvimm = {insn[31:12], 12'd0};
+	    end
 	  7'h23:
 	    begin
 	       uop.srcA = rs1;
@@ -223,6 +235,18 @@ module decode_riscv(insn,
 			  begin
 			  end
 		      endcase
+		   end // case: 3'd1
+		 3'd3:
+		   begin
+		      case(insn[31:25])
+			7'd0:
+			  begin
+			     uop.op = (rd != 'd0) ? SLTU : NOP;
+			  end
+			default:
+			  begin
+			  end
+		      endcase
 		   end
 		 3'd4:
 		   begin
@@ -235,19 +259,24 @@ module decode_riscv(insn,
 			  begin
 			  end
 		      endcase // case (insn[31:25])
+		   end // case: 3'd4
+		 3'd7:
+		   begin
+		      case(insn[31:25])
+			7'd0:
+			  begin
+			     uop.op = (rd != 'd0) ? AND : NOP;
+			  end
+			default:
+			  begin
+			  end
+		      endcase // case (insn[31:25])
+		      
 		   end
 		 default:
 		   begin
 		   end
 	       endcase
-	    end
-	  7'h17: /* auipc */
-	    begin
-	       uop.op = (rd == 'd0) ? NOP : AUIPC;
-	       uop.dst = rd;
-	       uop.dst_valid = (rd != 'd0);
-	       uop.is_int = 1'b1;
-	       uop.rvimm = {insn[31:12], 12'd0};
 	    end
 	  7'h37: /* lui */
 	    begin
@@ -806,46 +835,6 @@ module decode_riscv(insn,
 	//        uop.dst_valid = (rt != 'd0);
 	//        uop.dst = rt;
 	//        uop.is_int = 1'b1;	       
-	//        uop.imm = insn[15:0];
-	//     end
-	//   6'd12: /* ANDI */
-	//     begin
-	//        uop.op = (rt == 'd0) ? NOP : ANDI;
-	//        uop.srcA_valid = 1'b1;
-	//        uop.srcA = rs;
-	//        uop.dst_valid = (rt != 'd0);
-	//        uop.dst = rt;
-	//        uop.is_int = 1'b1;
-	//        uop.imm = insn[15:0];	       
-	//     end
-	//   6'd13: /* ORI */
-	//     begin
-	//        uop.op = (rt == 'd0) ? NOP : ORI;
-	//        uop.srcA_valid = 1'b1;
-	//        uop.srcA = rs;	       
-	//        uop.dst_valid = (rt != 'd0);
-	//        uop.dst = rt;
-	//        uop.is_int = 1'b1;
-	//        uop.imm = insn[15:0];
-	//        //$display("ORI : dest %d, src %d, imm = %d", uop.dst, uop.srcA, uop.imm);
-	       
-	//     end
-	//   6'd14: /* XORI */
-	//     begin
-	//        uop.op = (rt == 'd0) ? NOP : XORI;
-	//        uop.srcA_valid = 1'b1;
-	//        uop.srcA = rs;	       
-	//        uop.dst_valid = (rt != 'd0);
-	//        uop.dst = rt;
-	//        uop.is_int = 1'b1;
-	//        uop.imm = insn[15:0];	       
-	//     end
-	//   6'd15: /* LUI*/
-	//     begin
-	//        uop.op = (rt == 'd0) ? NOP : LUI;
-	//        uop.dst_valid = (rt != 'd0);
-	//        uop.dst = rt;
-	//        uop.is_int = 1'b1;
 	//        uop.imm = insn[15:0];
 	//     end
 	//   6'd16: /* coproc0 */

@@ -1299,10 +1299,10 @@ endfunction
 		    begin
 		       if(t_mem_head.is_store)
 			 begin
-			    $display("STORE DATA t_mem_head.rob_ptr = %d, grad %b, dq ptr %d valid %b, data %x", 
-				     t_mem_head.rob_ptr, r_graduated[t_mem_head.rob_ptr], 
-				     core_store_data.rob_ptr, core_store_data_valid,
-				     core_store_data.data);
+			    //$display("STORE DATA t_mem_head.rob_ptr = %d, grad %b, dq ptr %d valid %b, data %x", 
+			    //t_mem_head.rob_ptr, r_graduated[t_mem_head.rob_ptr], 
+			    //core_store_data.rob_ptr, core_store_data_valid,
+			    //core_store_data.data);
 			    
 			    if(r_graduated[t_mem_head.rob_ptr] == 2'b10 && (core_store_data_valid ? (t_mem_head.rob_ptr == core_store_data.rob_ptr) : 1'b0) )
 			      begin

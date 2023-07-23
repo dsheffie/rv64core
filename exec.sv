@@ -1157,6 +1157,12 @@ module exec(clk,
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
+	  AND:
+	    begin
+	       t_result = t_srcA & t_srcB;
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;	       
+	    end
 	  SUBU:
 	    begin
 	       t_result = w_add32;
@@ -1267,6 +1273,12 @@ module exec(clk,
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
+	  SLTU:
+	    begin
+	       t_result = (t_srcA <  t_srcB) ? 'd1 : 'd0;
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;
+	    end
 	  SRAI:
 	    begin
 	       t_signed_shift = 1'b1;
@@ -1275,6 +1287,12 @@ module exec(clk,
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
+	   SRLI:
+	     begin
+		t_result = t_srcA >> int_uop.rvimm[4:0];	       
+		t_wr_int_prf = 1'b1;
+		t_alu_valid = 1'b1;
+	     end
 	  XORI:
 	    begin
 	       t_result = t_srcA ^ int_uop.rvimm;
@@ -1315,12 +1333,6 @@ module exec(clk,
 	  //      t_signed_shift = 1'b1;
 	  //      t_shift_amt = t_srcB[4:0];
 	  //      t_result = {{HI_EBITS{t_shift_right[31]}}, t_shift_right};	       
-	  //      t_wr_int_prf = 1'b1;
-	  //      t_alu_valid = 1'b1;
-	  //   end
-	  // SRL:
-	  //   begin
-	  //      t_result = t_srcA >> int_uop.srcB;	       
 	  //      t_wr_int_prf = 1'b1;
 	  //      t_alu_valid = 1'b1;
 	  //   end
@@ -1425,12 +1437,6 @@ module exec(clk,
 	  //      t_wr_int_prf = 1'b1;
 	  //      t_alu_valid = 1'b1;
 	  //   end // case: SLT
-	  // SLTU:
-	  //   begin
-	  //      t_result = (t_srcB <  t_srcA) ? 'd1 : 'd0;
-	  //      t_wr_int_prf = 1'b1;
-	  //      t_alu_valid = 1'b1;
-	  //   end // case: SLTU
 	  // BEQL:
 	  //   begin
 	  //      t_take_br = (t_srcA  == t_srcB);
@@ -1638,7 +1644,7 @@ module exec(clk,
      begin
 	if(r_dq_ready)
 	  begin
-	     $display("STORE DATA value %x for rob ptr %d", t_core_store_data.data, mem_dq.rob_ptr);
+	     //$display("STORE DATA value %x for rob ptr %d", t_core_store_data.data, mem_dq.rob_ptr);
 	     r_mdq[r_mdq_tail_ptr[`LG_MQ_ENTRIES-1:0]] <= t_core_store_data;
 	  end
      end
