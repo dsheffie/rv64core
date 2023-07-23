@@ -1593,7 +1593,6 @@ module core(clk,
 	       end
 	     if(t_complete_valid_1)
 	       begin
-		  $display("rob entry %d marked complete by port 1", t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]);
 		  r_rob_complete[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]] <= t_complete_bundle_1.complete;
 	       end
 

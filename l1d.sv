@@ -31,7 +31,7 @@ module l1d(clk,
 	   //inputs from core
 	   core_mem_req_valid,
 	   core_mem_req,
-	   //store data (and lwl/lwr data)
+	   //store data
 	   core_store_data_valid,
 	   core_store_data,
 	   core_store_data_ack,
@@ -1023,7 +1023,8 @@ endfunction
 	    begin
 	       t_array_data = merge_cl32(t_data, bswap32(r_req.data[31:0]), r_req.addr[WORD_STOP-1:WORD_START]);
 	       //t_wr_array = t_hit_cache && t_can_release_store;
-	       t_wr_array = t_hit_cache && (r_is_retry || r_did_reload);	       
+	       t_wr_array = t_hit_cache && (r_is_retry || r_did_reload);
+	       if(t_wr_array) 	       $display("perform SW with data %x for address %x", r_req.data, r_req.addr);
 	    end
 	  MEM_SC:
 	    begin
@@ -1298,9 +1299,10 @@ endfunction
 		    begin
 		       if(t_mem_head.is_store)
 			 begin
-			    //$display("t_mem_head.rob_ptr = %d, grad %b, dq ptr %d valid %b", 
-			    //t_mem_head.rob_ptr, r_graduated[t_mem_head.rob_ptr], 
-			    //core_store_data.rob_ptr, core_store_data_valid);
+			    $display("STORE DATA t_mem_head.rob_ptr = %d, grad %b, dq ptr %d valid %b, data %x", 
+				     t_mem_head.rob_ptr, r_graduated[t_mem_head.rob_ptr], 
+				     core_store_data.rob_ptr, core_store_data_valid,
+				     core_store_data.data);
 			    
 			    if(r_graduated[t_mem_head.rob_ptr] == 2'b10 && (core_store_data_valid ? (t_mem_head.rob_ptr == core_store_data.rob_ptr) : 1'b0) )
 			      begin

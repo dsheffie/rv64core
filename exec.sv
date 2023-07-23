@@ -1099,19 +1099,19 @@ module exec(clk,
 	  begin
 	     $display("start int fired for opcode %d, pc %x", 
 		      int_uop.op, int_uop.pc);
-	     if(int_uop.op == JR)
-	       begin
-		  $display("JR target pc %x, reg src %x", t_pc, t_srcA);
-	       end
-	     if(int_uop.op == ADDU)
-	       begin
-		  $display("ADDU result %x", t_result);
-	       end
-	     if(int_uop.op == BEQ)
-	       begin
-		  $display("BEQ at %x target %x, mispred %b", 
-			   int_uop.pc, t_pc, t_mispred_br);
-	       end
+	     // if(int_uop.op == JR)
+	     //   begin
+	     // 	  $display("JR target pc %x, reg src %x", t_pc, t_srcA);
+	     //   end
+	     // if(int_uop.op == ADDU)
+	     //   begin
+	     // 	  $display("ADDU result %x", t_result);
+	     //   end
+	     // if(int_uop.op == BEQ)
+	     //   begin
+	     // 	  $display("BEQ at %x target %x, mispred %b", 
+	     // 		   int_uop.pc, t_pc, t_mispred_br);
+	     //   end
 	  end
      end // always_ff@ (negedge clk)
    
@@ -1626,6 +1626,7 @@ module exec(clk,
      begin
 	if(r_dq_ready)
 	  begin
+	     $display("STORE DATA value %x for rob ptr %d", t_core_store_data.data, mem_dq.rob_ptr);
 	     r_mdq[r_mdq_tail_ptr[`LG_MQ_ENTRIES-1:0]] <= t_core_store_data;
 	  end
      end

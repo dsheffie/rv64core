@@ -147,10 +147,11 @@ module decode_riscv(insn,
 	  7'h23:
 	    begin
 	       uop.srcA = rs1;
-	       uop.srcA = rs2;
+	       uop.srcB = rs2;
 	       uop.srcA_valid = 1'b1;
 	       uop.srcB_valid = 1'b1;
 	       uop.is_mem = 1'b1;
+	       uop.is_store = 1'b1;
 	       uop.rvimm = {{20{insn[31]}}, insn[31:25], insn[11:7]};
 	       case(insn[14:12])
 		 3'd0:
