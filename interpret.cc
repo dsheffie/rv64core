@@ -450,10 +450,10 @@ void execRiscv(state_t *s) {
 	  break;
 	case 7: /* bgeu */
 	  takeBranch = u_rs1 >= u_rs2;
-	  //std::cout << "s->pc " << std::hex << s->pc << ", rs1 " << u_rs1 << ", rs2 "
-	  //<< u_rs2 << std::dec
-	  //<< ", takeBranch " << takeBranch
-	  //<< "\n";
+	  std::cout << "s->pc " << std::hex << s->pc << ", rs1 " << u_rs1 << ", rs2 "
+		    << u_rs2 << std::dec
+		    << ", takeBranch " << takeBranch
+		    << "\n";
 
 	  break;
 	default:

@@ -1097,12 +1097,17 @@ module exec(clk,
      begin
 	if(r_start_int)
 	  begin
-	     $display("start int fired for opcode %d, pc %x", 
-		      int_uop.op, int_uop.pc);
-	     // if(int_uop.op == JR)
-	     //   begin
-	     // 	  $display("JR target pc %x, reg src %x", t_pc, t_srcA);
-	     //   end
+	     $display("start int fired for opcode %d, pc %x, rob id %d, cycle %d", 
+		      int_uop.op, int_uop.pc, int_uop.rob_ptr, r_cycle);
+	     if(t_mispred_br)
+	       begin
+		  $display("mispredicted op for %x", int_uop.pc);
+	       end
+	     if(int_uop.op == BGEU)
+	       begin
+		  $display("BGEU source %x, %x, take br %b, prediction %b",
+			   t_srcA, t_srcB, t_take_br, int_uop.br_pred);
+	       end
 	     // if(int_uop.op == ADDU)
 	     //   begin
 	     // 	  $display("ADDU result %x", t_result);
@@ -1199,7 +1204,7 @@ module exec(clk,
 	    begin
 	       t_take_br = (t_srcA  > t_srcB) | (t_srcA == t_srcB);
 	       t_mispred_br = int_uop.br_pred != t_take_br;
-	       t_pc = t_take_br ? (int_uop.pc + int_uop.rvimm) : t_pc4;	       
+	       t_pc = t_take_br ? (int_uop.pc + int_uop.rvimm) : t_pc4;
 	       t_alu_valid = 1'b1;
 	    end
 	  BLT:
@@ -1255,6 +1260,12 @@ module exec(clk,
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;	       
 	    end
+	   OR:
+	     begin
+		t_result = t_srcA | t_srcB;	       
+		t_wr_int_prf = 1'b1;
+		t_alu_valid = 1'b1;
+	     end
 	   ORI:
 	     begin
 		t_result = t_srcA | int_uop.rvimm;	       

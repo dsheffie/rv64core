@@ -829,9 +829,9 @@ int main(int argc, char **argv) {
 	}
 	else {
 	  ++last_check;
-	  if(last_check > 2) {
+	  if(last_check > 0) {
 	    uint32_t linsn = mem_r32(s,last_match_pc);
-	    std::cerr << "no match in a while, last match : "
+	    std::cerr << "no match in " << last_check << " insts, last match : "
 		      << std::hex
 		      << last_match_pc
 		      << " "

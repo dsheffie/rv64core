@@ -1024,7 +1024,6 @@ endfunction
 	       t_array_data = merge_cl32(t_data, bswap32(r_req.data[31:0]), r_req.addr[WORD_STOP-1:WORD_START]);
 	       //t_wr_array = t_hit_cache && t_can_release_store;
 	       t_wr_array = t_hit_cache && (r_is_retry || r_did_reload);
-	       if(t_wr_array) 	       $display("perform SW with data %x for address %x", r_req.data, r_req.addr);
 	    end
 	  MEM_SC:
 	    begin

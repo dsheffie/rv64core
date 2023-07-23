@@ -260,6 +260,18 @@ module decode_riscv(insn,
 			  end
 		      endcase // case (insn[31:25])
 		   end // case: 3'd4
+		 3'd6:
+		   begin
+		      case(insn[31:25])
+			7'd0:
+			  begin
+			     uop.op = (rd != 'd0) ? OR : NOP;
+			  end
+			default:
+			  begin
+			  end
+		      endcase // case (insn[31:25])
+		   end
 		 3'd7:
 		   begin
 		      case(insn[31:25])
@@ -294,6 +306,7 @@ module decode_riscv(insn,
 	       uop.srcB_valid = 1'b1;
 	       uop.is_int = 1'b1;
 	       uop.rvimm = {{19{insn[31]}}, insn[31], insn[7], insn[30:25], insn[11:8], 1'b0};
+	       uop.br_pred = insn_pred;
 	       case(insn[14:12])
 		 3'd0:
 		   begin
@@ -333,7 +346,8 @@ module decode_riscv(insn,
 	       uop.is_br = 1'b1;
 	       uop.imm = insn_pred_target[15:0];
 	       uop.jmp_imm = insn_pred_target[`M_WIDTH-1:16];
-	       uop.rvimm = {{20{insn[31]}}, insn[31:20]};	       
+	       uop.rvimm = {{20{insn[31]}}, insn[31:20]};
+	       uop.br_pred = 1'b1;	       
 	       if(rd == 'd0)
 		 begin
 		    uop.op = JR;

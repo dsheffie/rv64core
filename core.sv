@@ -397,7 +397,6 @@ module core(clk,
 			     ARCH_FAULT,
 			     WRITE_EPC,
 			     WRITE_CAUSE,
-			     EXCEPTION_DRAIN,
 			     GET_TICKS
 			     } state_t;
    
@@ -874,7 +873,7 @@ module core(clk,
 	    begin
 	       if(r_extern_irq && !t_rob_empty)
 		 begin
-		    n_state = EXCEPTION_DRAIN;
+		    n_state = DRAIN;
 		    n_restart_pc = t_rob_head.pc;
 		    n_machine_clr = 1'b1;
 		    n_ds_done = 1'b1;
@@ -949,6 +948,7 @@ module core(clk,
 				   && !t_rob_next_head.is_ret
 				   && !t_rob_next_head.is_call
 		    		   && !t_rob_next_head.valid_hilo_dst;
+		    
 		 end // if (t_can_retire_rob_head)
 	       else if(!t_dq_empty)
 		 begin
@@ -1018,20 +1018,10 @@ module core(clk,
 	    begin
 	       if(r_rob_inflight == 'd0 && memq_empty && t_divide_ready)
 		 begin
-		    //$display("%d : wait for drain and memq_empty  took  %d cycles",r_cycle, r_restart_cycles);		    
 		    n_state = RAT;
-`ifdef REPORT_FAULTS		    
-		    $display(">>> restarting after fault at cycle %d", r_cycle);
-`endif
+		    //$display(">>> restarting after fault at cycle %d", r_cycle);
 		 end 
 	    end // case: DRAIN
-	  EXCEPTION_DRAIN:
-	    begin
-	       if(r_rob_inflight == 'd0 && memq_empty && t_divide_ready)
-		 begin
-		    n_state = RAT;
-		 end
-	    end
 	  RAT:
 	    begin
 	       t_rat_copy = 1'b1;
