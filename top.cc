@@ -686,8 +686,6 @@ int main(int argc, char **argv) {
       }
       last_retire = 0;
 
-      bool retired_same_pc = last_retired_pc == tb->retire_pc;
-
       last_retired_pc = tb->retire_pc;
 
       if(insns_retired >= start_trace_at)
@@ -739,8 +737,6 @@ int main(int argc, char **argv) {
 		    <<" \n";
 	}
       }
-      assert(!retired_same_pc);
-
       if(tb->got_bad_addr) {
 	std::cout << "fatal - unaligned address\n";
 	break;

@@ -132,6 +132,7 @@ module decode_riscv(insn,
 		   end
 		 3'd3:
 		   begin
+		      uop.op = (rd == 'd0) ? NOP : SLTIU;		      
 		   end
 		 3'd4:
 		   begin
@@ -236,6 +237,18 @@ module decode_riscv(insn,
 			  end
 		      endcase
 		   end // case: 3'd1
+		 3'd2:
+		   begin
+		      case(insn[31:25])
+			7'd0:
+			  begin
+			     uop.op = (rd != 'd0) ? SLT : NOP;
+			  end
+			default:
+			  begin
+			  end
+		      endcase
+		   end
 		 3'd3:
 		   begin
 		      case(insn[31:25])
@@ -260,6 +273,22 @@ module decode_riscv(insn,
 			  end
 		      endcase // case (insn[31:25])
 		   end // case: 3'd4
+		 3'd5:
+		   begin
+		      case(insn[31:25])
+			7'h0:
+			  begin
+			     uop.op = (rd != 'd0) ? SRL : NOP;
+			  end
+			7'h20:
+			  begin
+			     uop.op = (rd != 'd0) ? SRA : NOP;
+			  end
+			default:
+			  begin
+			  end
+		      endcase // case (insn[31:25])
+		   end // case: 3'd5
 		 3'd6:
 		   begin
 		      case(insn[31:25])

@@ -926,12 +926,6 @@ module exec(clk,
 	if(r_mem_ready)
 	  begin
 	     r_mem_q[r_mq_tail_ptr[`LG_MQ_ENTRIES-1:0]] <= t_mem_tail;
-	     if(t_mem_tail.bad_addr)
-	       begin
-		  $display("bad address %x, mem src %x!",
-			   t_mem_tail.addr, t_mem_srcA);
-		  $stop();
-	       end
 	  end
      end
 
@@ -1093,32 +1087,23 @@ module exec(clk,
       
    ppa32 add0 (.A(w_add_srcA), .B(w_add_srcB), .Y(w_add32));
 
-   always_ff@(negedge clk)
-     begin
-	if(r_start_int)
-	  begin
-	     $display("start int fired for opcode %d, pc %x, rob id %d, cycle %d", 
-		      int_uop.op, int_uop.pc, int_uop.rob_ptr, r_cycle);
-	     if(t_mispred_br)
-	       begin
-		  $display("mispredicted op for %x", int_uop.pc);
-	       end
-	     if(int_uop.op == BGEU)
-	       begin
-		  $display("BGEU source %x, %x, take br %b, prediction %b",
-			   t_srcA, t_srcB, t_take_br, int_uop.br_pred);
-	       end
-	     // if(int_uop.op == ADDU)
-	     //   begin
-	     // 	  $display("ADDU result %x", t_result);
-	     //   end
-	     // if(int_uop.op == BEQ)
-	     //   begin
-	     // 	  $display("BEQ at %x target %x, mispred %b", 
-	     // 		   int_uop.pc, t_pc, t_mispred_br);
-	     //   end
-	  end
-     end // always_ff@ (negedge clk)
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if(r_start_int)
+   // 	  begin
+   // 	     $display("start int fired for opcode %d, pc %x, rob id %d, cycle %d", 
+   // 		      int_uop.op, int_uop.pc, int_uop.rob_ptr, r_cycle);
+   // 	     if(t_mispred_br)
+   // 	       begin
+   // 		  $display("mispredicted op for %x", int_uop.pc);
+   // 	       end
+   // 	     if(int_uop.op == BGEU)
+   // 	       begin
+   // 		  $display("BGEU source %x, %x, take br %b, prediction %b",
+   // 			   t_srcA, t_srcB, t_take_br, int_uop.br_pred);
+   // 	       end
+   // 	  end
+   //   end // always_ff@ (negedge clk)
    
 
    always_comb
@@ -1284,9 +1269,27 @@ module exec(clk,
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
+	  SLT:
+	    begin
+	       t_result = ($signed(t_srcA) <  $signed(t_srcB)) ? 'd1 : 'd0;
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;
+	    end
 	  SLTU:
 	    begin
 	       t_result = (t_srcA <  t_srcB) ? 'd1 : 'd0;
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;
+	    end
+	  SLTI:
+	    begin
+	       t_result = (($signed(t_srcA) < $signed(int_uop.rvimm)) ? 'd1 : 'd0);
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;
+	    end
+	  SLTIU:
+	    begin
+	       t_result = (t_srcA < int_uop.rvimm) ? 'd1 : 'd0;
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
@@ -1298,7 +1301,21 @@ module exec(clk,
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
-	   SRLI:
+	  SRA:
+	    begin
+	       t_signed_shift = 1'b1;
+	       t_shift_amt = t_srcB[4:0];
+	       t_result = {{HI_EBITS{t_shift_right[31]}}, t_shift_right};
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;
+	    end
+	  SRL:
+	    begin
+	       t_result = t_srcA >> (t_srcB[4:0]);
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;
+	    end
+	  SRLI:
 	     begin
 		t_result = t_srcA >> int_uop.rvimm[4:0];	       
 		t_wr_int_prf = 1'b1;
@@ -1350,12 +1367,6 @@ module exec(clk,
 	  // SLLV:
 	  //   begin
 	  //      t_result = t_srcA << (t_srcB[4:0]);
-	  //      t_wr_int_prf = 1'b1;
-	  //      t_alu_valid = 1'b1;
-	  //   end
-	  // SRLV:
-	  //   begin
-	  //      t_result = t_srcA >> (t_srcB[4:0]);
 	  //      t_wr_int_prf = 1'b1;
 	  //      t_alu_valid = 1'b1;
 	  //   end
@@ -1442,19 +1453,6 @@ module exec(clk,
 	  //      t_wr_int_prf = 1'b1;
 	  //      t_alu_valid = 1'b1;
 	  //   end
-	  // SLT:
-	  //   begin
-	  //      t_result = (($signed(t_srcB) <  $signed(t_srcA)) ? 'd1 : 'd0);
-	  //      t_wr_int_prf = 1'b1;
-	  //      t_alu_valid = 1'b1;
-	  //   end // case: SLT
-	  // BEQL:
-	  //   begin
-	  //      t_take_br = (t_srcA  == t_srcB);
-	  //      t_mispred_br = int_uop.br_pred != t_take_br || !t_take_br;
-	  //      t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
-	  //      t_alu_valid = 1'b1;
-	  //   end
 	  // BNE:
 	  //   begin
 	  //      t_take_br = (t_srcA  != t_srcB);
@@ -1468,24 +1466,6 @@ module exec(clk,
 	  //      t_mispred_br = int_uop.br_pred != t_take_br;
 	  //      t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;	       
 	  //      t_alu_valid = 1'b1;
-	  //   end
-	  // BGEZAL:
-	  //   begin
-	  //      t_take_br = (t_srcA[31] == 1'b0);
-	  //      t_mispred_br = int_uop.br_pred != t_take_br;
-	  //      t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;	  
-     	  //      t_result = t_take_br ?  int_uop.pc + {{HI_EBITS{1'b0}}, 32'd8} : t_srcB;
-	  //      t_alu_valid = 1'b1;
-	  //      t_wr_int_prf = 1'b1;
-	  //   end // case: BGEZAL
-	  // BAL:
-	  //   begin
-	  //      t_take_br = 1'b1;
-	  //      t_mispred_br = int_uop.br_pred != t_take_br;
-	  //      t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
-	  //      t_result = int_uop.pc + {{HI_EBITS{1'b0}}, 32'd8};
-	  //      t_alu_valid = 1'b1;
-	  //      t_wr_int_prf = 1'b1;
 	  //   end
 	  // BLTZ:
 	  //   begin
@@ -1578,18 +1558,6 @@ module exec(clk,
 	  // MOVI:
 	  //   begin
 	  //      t_result = {{HI_EBITS{t_simm[31]}}, t_simm[31:0]};
-	  //      t_wr_int_prf = 1'b1;
-	  //      t_alu_valid = 1'b1;
-	  //   end
-	  // SLTI:
-	  //   begin
-	  //      t_result = (($signed(t_srcA) < $signed(t_simm)) ? 'd1 : 'd0);
-	  //      t_wr_int_prf = 1'b1;
-	  //      t_alu_valid = 1'b1;
-	  //   end
-	  // SLTIU:
-	  //   begin
-	  //      t_result = (t_srcA < t_simm ? 'd1 : 'd0);
 	  //      t_wr_int_prf = 1'b1;
 	  //      t_alu_valid = 1'b1;
 	  //   end

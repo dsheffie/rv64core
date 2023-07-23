@@ -20,8 +20,7 @@ typedef enum logic [6:0]
    MFLO,
    MTLO,
    ADDIU,
-   SLTI,
-   SLTIU,
+
    MFC0,
    MTC0,
    MFC1,
@@ -34,6 +33,8 @@ typedef enum logic [6:0]
    MONITOR,
    
    //known used in riscv design
+   SLTI,
+   SLTIU,   
    ADDU,
    SUBU,
    ANDI,   
