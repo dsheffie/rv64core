@@ -33,10 +33,6 @@ typedef enum logic [6:0]
    SLTI,
    SLTIU,
    ANDI,
-   ORI,
-   XORI,
-   J,
-   JAL,
    MFC0,
    MTC0,
    MFC1,
@@ -44,22 +40,9 @@ typedef enum logic [6:0]
    SB,
    SH,
    SW,
-   BEQL,
-   BNEL, 
 
    BGEZ,
-   BLTZL,
-   BGEZL,
-   BGTZL,
-   BLEZL,
    TEQ,
-   LWL,
-   LWR,
-   SWL,
-   SWR,
-   BAL,
-   BGEZAL,
-   BGEZALL,
    SC,
    MTC1_MERGE,
    MFC1_MERGE,
@@ -81,6 +64,10 @@ typedef enum logic [6:0]
    LW,
    LBU,
    LHU,
+   ORI,
+   XORI,
+   J,
+   JAL,
    JR,
    JALR,
    BREAK,
@@ -127,10 +114,6 @@ function logic is_store(opcode_t op);
      SW:
        x = 1'b1;
      SC:
-       x = 1'b1;
-     SWR:
-       x = 1'b1;
-     SWL:
        x = 1'b1;
      default:
        x = 1'b0;

@@ -893,50 +893,6 @@ endfunction
 	       t_rsp_data2 = {{32{t_bswap_w32_2[31]}}, t_bswap_w32_2};
 	       t_rsp_dst_valid2 = r_req2.dst_valid & t_hit_cache2;
 	    end
-	  MEM_LWR:
-	    begin
-	       case(r_req2.addr[1:0])
-		 2'd0:
-		   begin
-		      t_rsp_data2 = {{32{r_req2.data[31]}}, r_req2.data[31:8], t_bswap_w32_2[31:24]};
-		   end
-		 2'd1:
-		   begin
-		      t_rsp_data2 = {{32{r_req2.data[31]}}, r_req2.data[31:16], t_bswap_w32_2[31:16]};
-		   end
-		 2'd2:
-		   begin
-		      t_rsp_data2 = {{32{r_req2.data[31]}}, r_req2.data[31:24], t_bswap_w32_2[31:8]};				       
-		   end
-		 2'd3:
-		   begin
-		      t_rsp_data2 = {{32{t_bswap_w32_2[31]}}, t_bswap_w32_2};
-		   end
-	       endcase // case (r_req.addr[1:0])
-	       t_rsp_dst_valid2 = r_req2.dst_valid & t_hit_cache2;
-	    end
-	  MEM_LWL:
-	    begin
-	       case(r_req2.addr[1:0])
-		 2'd0:
-		   begin
-		      t_rsp_data2 = {{32{t_bswap_w32_2[31]}}, t_bswap_w32_2};
-		   end
-		 2'd1:
-		   begin
-		      t_rsp_data2 = {{32{t_bswap_w32_2[23]}}, t_bswap_w32_2[23:0], r_req2.data[7:0]};
-		   end
-		 2'd2:
-		   begin
-		      t_rsp_data2 = {{32{t_bswap_w32_2[15]}}, t_bswap_w32_2[15:0], r_req2.data[15:0]};
-		   end
-		 2'd3:
-		   begin
-		      t_rsp_data2 = {{32{t_bswap_w32_2[7]}}, t_bswap_w32_2[7:0], r_req2.data[23:0]};
-		   end
-	       endcase // case (r_req.addr[1:0])
-	       t_rsp_dst_valid2 = r_req2.dst_valid & t_hit_cache2;	       
-	    end // case: MEM_LWL
 	  default:
 	    begin
 	    end
@@ -1026,50 +982,6 @@ endfunction
 	       t_rsp_data = {{32{t_bswap_w32[31]}}, t_bswap_w32};
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
 	    end
-	  MEM_LWR:
-	    begin
-	       case(r_req.addr[1:0])
-		 2'd0:
-		   begin
-		      t_rsp_data = {{32{r_req.data[31]}}, r_req.data[31:8], t_bswap_w32[31:24]};
-		   end
-		 2'd1:
-		   begin
-		      t_rsp_data = {{32{r_req.data[31]}}, r_req.data[31:16], t_bswap_w32[31:16]};
-		   end
-		 2'd2:
-		   begin
-		      t_rsp_data = {{32{r_req.data[31]}}, r_req.data[31:24], t_bswap_w32[31:8]};				       
-		   end
-		 2'd3:
-		   begin
-		      t_rsp_data = {{32{t_bswap_w32[31]}}, t_bswap_w32};
-		   end
-	       endcase // case (r_req.addr[1:0])
-	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
-	    end
-	  MEM_LWL:
-	    begin
-	       case(r_req.addr[1:0])
-		 2'd0:
-		   begin
-		      t_rsp_data = {{32{t_bswap_w32[31]}}, t_bswap_w32};
-		   end
-		 2'd1:
-		   begin
-		      t_rsp_data = {{32{t_bswap_w32[23]}}, t_bswap_w32[23:0], r_req.data[7:0]};
-		   end
-		 2'd2:
-		   begin
-		      t_rsp_data = {{32{t_bswap_w32[15]}}, t_bswap_w32[15:0], r_req.data[15:0]};
-		   end
-		 2'd3:
-		   begin
-		      t_rsp_data = {{32{t_bswap_w32[7]}}, t_bswap_w32[7:0], r_req.data[23:0]};
-		   end
-	       endcase // case (r_req.addr[1:0])
-	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;	       
-	    end // case: MEM_LWL
 	  MEM_SB:
 	    begin
 	       case(r_req.addr[1:0])
@@ -1118,50 +1030,6 @@ endfunction
 	       t_array_data = merge_cl32(t_data, bswap32(r_req.data[31:0]), r_req.addr[WORD_STOP-1:WORD_START]);
 	       t_rsp_data = 64'd1;
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
-	       t_wr_array = t_hit_cache && (r_is_retry || r_did_reload);
-	    end
-	  MEM_SWR:
-	    begin
-	       case(r_req.addr[1:0])
-		 2'd0:
-		   begin
-		      t_array_data = merge_cl32(t_data, bswap32({r_req.data[7:0], t_bswap_w32[23:0]}), r_req.addr[WORD_STOP-1:WORD_START]);
-		   end
-		 2'd1:
-		   begin
-		      t_array_data = merge_cl32(t_data, bswap32({r_req.data[15:0], t_bswap_w32[15:0]}), r_req.addr[WORD_STOP-1:WORD_START]);
-		   end
-		 2'd2:
-		   begin
-		      t_array_data = merge_cl32(t_data, bswap32({r_req.data[23:0], t_bswap_w32[7:0]}), r_req.addr[WORD_STOP-1:WORD_START]);
-		   end
-		 2'd3:
-		   begin
-		      t_array_data = merge_cl32(t_data, bswap32(r_req.data[31:0]), r_req.addr[WORD_STOP-1:WORD_START]);
-		   end
-	       endcase // case (r_req.addr[1:0])
-	       t_wr_array = t_hit_cache && (r_is_retry || r_did_reload);
-	    end
-	  MEM_SWL:
-	    begin
-	       case(r_req.addr[1:0])
-		 2'd0:
-		   begin
-		      t_array_data = merge_cl32(t_data, t_bswap_w32, r_req.addr[WORD_STOP-1:WORD_START]);
-		   end
-		 2'd1:
-		   begin
-		      t_array_data = merge_cl32(t_data, bswap32({t_bswap_w32[31:24], r_req.data[31:8]}), r_req.addr[WORD_STOP-1:WORD_START]);
-		   end
-		 2'd2:
-		   begin
-		      t_array_data = merge_cl32(t_data, bswap32({t_bswap_w32[31:16], r_req.data[31:16]}), r_req.addr[WORD_STOP-1:WORD_START]);
-		   end
-		 2'd3:
-		   begin
-		      t_array_data = merge_cl32(t_data, bswap32({t_bswap_w32[31:8], r_req.data[31:24]}), r_req.addr[WORD_STOP-1:WORD_START]);
-		   end
-	       endcase // case (r_req.addr[1:0])
 	       t_wr_array = t_hit_cache && (r_is_retry || r_did_reload);
 	    end
 	  default:
@@ -1309,11 +1177,6 @@ endfunction
 			 n_core_mem_rsp_valid = 1'b1;
 			 n_core_mem_rsp.bad_addr = r_req2.bad_addr;
 		      end // if (r_req2.is_store)
-		    else if(r_req2.op == MEM_LWL || r_req2.op == MEM_LWR)
-		      begin
-			 t_push_miss = 1'b1;
-			 n_core_mem_rsp.bad_addr = r_req2.bad_addr;
-		      end
 		    else if(t_port2_hit_cache && !r_hit_busy_addr2)
 		      begin
 `ifdef VERBOSE_L1D
@@ -1466,23 +1329,6 @@ endfunction
 				 t_force_clear_busy = 1'b1;
 			      end
 			 end // if (t_mem_head.is_store)
-		       else if(t_mem_head.op == MEM_LWL || t_mem_head.op == MEM_LWR)
-			 begin
-			    if((core_store_data_valid ? (t_mem_head.rob_ptr == core_store_data.rob_ptr) : 1'b0) || drain_ds_complete)
-			      begin
-				 t_pop_mq = 1'b1;
-				 n_req = t_mem_head;
-				 n_req.data = core_store_data.data;
-				 core_store_data_ack = 1'b1;
-				 t_cache_idx = t_mem_head.addr[IDX_STOP-1:IDX_START];
-				 t_cache_tag = t_mem_head.addr[`M_WIDTH-1:IDX_STOP];
-				 t_addr = t_mem_head.addr;
-				 t_got_req = 1'b1;
-				 n_is_retry = 1'b1;
-				 n_last_rd = 1'b1;
-				 t_got_rd_retry = 1'b1;
-			      end
-			 end
 		       else
 			 begin
 			    t_pop_mq = 1'b1;
