@@ -1166,7 +1166,6 @@ module core(clk,
 		 end
 	       else if(t_rob_head.is_ii)
 		 begin
-		    $display("bad instruction at pc %x", t_rob_head.pc);
 		    n_pending_ii = 1'b1;
 		    n_cause = 5'd10;
 		 end
