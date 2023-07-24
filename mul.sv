@@ -18,12 +18,12 @@ module mul(clk,
 	   src_A,
 	   src_B,
 	   rob_ptr_in,
-	   hilo_prf_ptr_in,
+	   prf_ptr_in,
 	   y,
 	   complete,
 	   rob_ptr_out,
-	   hilo_prf_ptr_val_out,
-	   hilo_prf_ptr_out);
+	   prf_ptr_val_out,
+	   prf_ptr_out);
    
    input logic clk;
    input logic reset;
@@ -34,26 +34,26 @@ module mul(clk,
    input logic [31:0] src_B;
    
    input logic [`LG_ROB_ENTRIES-1:0] rob_ptr_in;
-   input logic [`LG_HILO_PRF_ENTRIES-1:0] hilo_prf_ptr_in;
+   input logic [`LG_PRF_ENTRIES-1:0] prf_ptr_in;
    
    
    output logic [63:0] 			  y;
    output logic 			  complete;
    output logic [`LG_ROB_ENTRIES-1:0] 	  rob_ptr_out;
-   output logic 			  hilo_prf_ptr_val_out;
-   output logic [`LG_HILO_PRF_ENTRIES-1:0] hilo_prf_ptr_out;
+   output logic 			  prf_ptr_val_out;
+   output logic [`LG_PRF_ENTRIES-1:0] prf_ptr_out;
    
    logic [`MUL_LAT:0] 			   r_complete;
-   logic [`MUL_LAT:0] 			   r_hilo_val;
-   logic [`LG_HILO_PRF_ENTRIES-1:0] 	   r_hilo_ptr[`MUL_LAT:0];
+   logic [`MUL_LAT:0] 			   r_gpr_val;
+   logic [`LG_PRF_ENTRIES-1:0] 		   r_gpr_ptr[`MUL_LAT:0];
    logic [`LG_ROB_ENTRIES-1:0] 		   r_rob_ptr[`MUL_LAT:0];
   
 
    assign complete = r_complete[`MUL_LAT];
    assign rob_ptr_out = r_rob_ptr[`MUL_LAT];
    
-   assign hilo_prf_ptr_val_out = r_hilo_val[`MUL_LAT];
-   assign hilo_prf_ptr_out = r_hilo_ptr[`MUL_LAT];
+   assign prf_ptr_val_out = r_gpr_val[`MUL_LAT];
+   assign prf_ptr_out = r_gpr_ptr[`MUL_LAT];
 
 `ifdef FPGA
    logic [63:0] 			   t_mul;
@@ -211,10 +211,10 @@ module mul(clk,
 	     for(integer i = 0; i <= `MUL_LAT; i=i+1)
 	       begin
 		  r_rob_ptr[i] <= 'd0;
-		  r_hilo_ptr[i] <= 'd0;
+		  r_gpr_ptr[i] <= 'd0;
 	       end
 	     r_complete <= 'd0;
-	     r_hilo_val <= 'd0;
+	     r_gpr_val <= 'd0;
 	  end
 	else
 	  begin
@@ -224,15 +224,15 @@ module mul(clk,
 		    begin
 		       r_complete[0] <= go;
 		       r_rob_ptr[0] <= rob_ptr_in;
-		       r_hilo_val[0] <= go;
-		       r_hilo_ptr[0] <= hilo_prf_ptr_in;
+		       r_gpr_val[0] <= go;
+		       r_gpr_ptr[0] <= prf_ptr_in;
 		    end
 		  else
 		    begin
 		       r_complete[i] <= r_complete[i-1];
 		       r_rob_ptr[i] <= r_rob_ptr[i-1];
-		       r_hilo_val[i] <= r_hilo_val[i-1];
-		       r_hilo_ptr[i] <= r_hilo_ptr[i-1];
+		       r_gpr_val[i] <= r_gpr_val[i-1];
+		       r_gpr_ptr[i] <= r_gpr_ptr[i-1];
 		    end
 	       end
 	  end

@@ -108,20 +108,16 @@ module exec(clk,
    
    localparam N_MQ_ENTRIES = (1<<`LG_MQ_ENTRIES);
    localparam N_INT_PRF_ENTRIES = (1<<`LG_PRF_ENTRIES);
-   localparam N_HILO_PRF_ENTRIES = (1<<`LG_HILO_PRF_ENTRIES);
    
    localparam N_UQ_ENTRIES = (1<<`LG_UQ_ENTRIES);
    localparam N_MEM_UQ_ENTRIES = (1<<`LG_MEM_UQ_ENTRIES);
    localparam N_MEM_DQ_ENTRIES = (1<<`LG_MEM_DQ_ENTRIES);
    
-   logic [63:0] r_hilo_prf[N_HILO_PRF_ENTRIES-1:0];
       
    logic [N_INT_PRF_ENTRIES-1:0]  r_prf_inflight, n_prf_inflight;
-   logic [N_HILO_PRF_ENTRIES-1:0] r_hilo_inflight, n_hilo_inflight;
    
    logic 			  t_wr_int_prf, t_wr_cpr0;
    
-   logic 	t_wr_hilo;
    logic 	t_take_br;
    logic 	t_mispred_br;
    logic 	t_alu_valid;
@@ -160,7 +156,6 @@ module exec(clk,
    logic [`M_WIDTH-1:0] t_cpr0_result;
 
    
-   logic [63:0] t_hilo_result;
    
    logic [`M_WIDTH-1:0] t_pc, t_pc4, t_pc8;
    logic [27:0] t_jaddr;
@@ -177,15 +172,10 @@ module exec(clk,
    logic t_fwd_int_mem_srcA,t_fwd_int_mem_srcB,t_fwd_mem_mem_srcA,t_fwd_mem_mem_srcB;
    logic r_fwd_int_mem_srcA,r_fwd_int_mem_srcB,r_fwd_mem_mem_srcA,r_fwd_mem_mem_srcB;
    
-   logic [63:0] r_int_hilo, r_mul_hilo, r_div_hilo;
-   logic [63:0] r_src_hilo;
-   logic 	r_fwd_hilo_int, r_fwd_hilo_mul, r_fwd_hilo_div;
       
    logic [31:0] t_srcA, t_srcB;
    logic [31:0] t_mem_srcA, t_mem_srcB;
    
-   
-   logic [63:0] t_src_hilo;
    logic [`M_WIDTH-1:0] t_cpr0_srcA;
    
    
@@ -201,11 +191,9 @@ module exec(clk,
    logic 	t_mul_complete;
    logic [63:0] t_mul_result;
    
-   logic 	t_hilo_prf_ptr_val_out;
    logic [`LG_ROB_ENTRIES-1:0] t_rob_ptr_out;
 
    
-   logic [`LG_HILO_PRF_ENTRIES-1:0] t_hilo_prf_ptr_out;
    
    logic [`MAX_LAT:0] r_wb_bitvec, n_wb_bitvec;
 
@@ -213,7 +201,6 @@ module exec(clk,
    logic 	t_div_ready, t_signed_div, t_start_div32;
    logic [`LG_ROB_ENTRIES-1:0] t_div_rob_ptr_out;
    logic [63:0] 	       t_div_result;
-   logic [`LG_HILO_PRF_ENTRIES-1:0] t_div_hilo_prf_ptr_out;
    logic 			    t_div_complete;
 
    logic [N_ROB_ENTRIES-1:0] 	    r_uq_wait, r_mq_wait;
@@ -606,12 +593,7 @@ module exec(clk,
 
 	t_mem_srcB = r_fwd_int_mem_srcB ? r_int_result :
 		     r_fwd_mem_mem_srcB ? r_mem_result :
-		     w_mem_srcB;
-	
-	t_src_hilo = r_fwd_hilo_int ? r_int_hilo :
-		     r_fwd_hilo_mul ? r_mul_hilo :
-		     r_fwd_hilo_div ? r_div_hilo :
-		     r_src_hilo;
+		     w_mem_srcB;	
      end // always_comb
 
 
@@ -633,18 +615,15 @@ module exec(clk,
    
 	
    logic [N_INT_SCHED_ENTRIES-1:0] r_alu_srcA_rdy, 
-				   r_alu_srcB_rdy, 
-				   r_alu_hilo_rdy;
+				   r_alu_srcB_rdy;
    
    logic [N_INT_SCHED_ENTRIES-1:0] t_alu_srcA_match, 
-				   t_alu_srcB_match, 
-				   t_alu_hilo_match;
+				   t_alu_srcB_match;
    
 
 
    logic t_alu_alloc_srcA_match, 
-	 t_alu_alloc_srcB_match, 
-	 t_alu_alloc_hilo_match;
+	 t_alu_alloc_srcB_match;
    
    wire [N_INT_SCHED_ENTRIES-1:0] w_alu_sched_oldest_ready;
    
@@ -702,11 +681,6 @@ module exec(clk,
 						   (r_start_int && t_wr_int_prf & (int_uop.dst == uq.srcB))
 						   );
 
-	t_alu_alloc_hilo_match = uq.hilo_src_valid && (
-						       (t_hilo_prf_ptr_val_out & (t_hilo_prf_ptr_out == uq.hilo_src)) ||
-						       (t_div_complete && (t_div_hilo_prf_ptr_out == uq.hilo_src)) ||
-						       (r_start_int && t_wr_hilo && (int_uop.hilo_dst == uq.hilo_src))
-						       );
 	
      end // always_comb
   
@@ -742,12 +716,20 @@ module exec(clk,
 	end // for (genvar i = 0; i < N_INT_SCHED_ENTRIES; i=i+1)
    endgenerate
 
-   //always_ff@(negedge clk)
-   //begin
-   //if(t_alu_entry_rdy != 'd0)
-   //	  $display("w_alu_sched_oldest = %b, w_alu_sched_oldest_ready = %b, t_alu_entry_rdy = %b", 
-   //w_alu_sched_oldest, w_alu_sched_oldest_ready, t_alu_entry_rdy);
-   //end
+   // always_ff@(negedge clk)
+   //   begin
+   // 	for(integer i = 0; i < N_INT_SCHED_ENTRIES; i=i+1)
+   // 	  begin
+   // 	     if(r_alu_sched_valid[i])
+   // 	       begin
+   // 		  $display("entry for pc %x is %b ready, src A %b, src B %b", 
+   // 			   r_alu_sched_uops[i].pc, t_alu_entry_rdy[i],
+   // 			   r_alu_srcA_rdy[i],
+   // 			   r_alu_srcB_rdy[i]);
+   // 	       end
+   // 	  end
+   //   end
+   
    
    generate
       for(genvar i = 0; i < N_INT_SCHED_ENTRIES; i=i+1)
@@ -756,28 +738,25 @@ module exec(clk,
 	     begin
 		t_alu_srcA_match[i] = r_alu_sched_uops[i].srcA_valid && (
 									 (mem_rsp_dst_valid & (mem_rsp_dst_ptr == r_alu_sched_uops[i].srcA)) ||
+									 (r_mul_complete && (r_mul_prf_ptr == r_alu_sched_uops[i].srcA)) ||
 									 (r_start_int && t_wr_int_prf & (int_uop.dst == r_alu_sched_uops[i].srcA))
 									 );
 		t_alu_srcB_match[i] = r_alu_sched_uops[i].srcB_valid && (
 									 (mem_rsp_dst_valid & (mem_rsp_dst_ptr == r_alu_sched_uops[i].srcB)) ||
+									 (r_mul_complete && (r_mul_prf_ptr == r_alu_sched_uops[i].srcB)) ||	
 									 (r_start_int && t_wr_int_prf & (int_uop.dst == r_alu_sched_uops[i].srcB))
 									 );
-		
-		t_alu_hilo_match[i] = r_alu_sched_uops[i].hilo_src_valid && (
-									     (t_hilo_prf_ptr_val_out & (t_hilo_prf_ptr_out == r_alu_sched_uops[i].hilo_src)) ||
-									     (t_div_complete && (t_div_hilo_prf_ptr_out == r_alu_sched_uops[i].hilo_src)) ||
-									     (r_start_int && t_wr_hilo && (int_uop.hilo_dst == r_alu_sched_uops[i].hilo_src))
-									     );
 		
 
 		//is_mult(r_alu_sched_uops[i].op);
 		
 		t_alu_entry_rdy[i] = r_alu_sched_valid[i] &&
-				     (is_div(r_alu_sched_uops[i].op) ?  t_div_ready :  (is_mult(r_alu_sched_uops[i].op) ?  !r_wb_bitvec[`MUL_LAT+2] : !r_wb_bitvec[1]))
+				     (uses_div(r_alu_sched_uops[i].op) ?  t_div_ready :  
+				      (uses_mul(r_alu_sched_uops[i].op) ?  !r_wb_bitvec[`MUL_LAT+2] : !r_wb_bitvec[1]))
 				     ? (
 					(t_alu_srcA_match[i] |r_alu_srcA_rdy[i]) & 
-					(t_alu_srcB_match[i] |r_alu_srcB_rdy[i]) &
-					(t_alu_hilo_match[i] |r_alu_hilo_rdy[i]) ) : 1'b0;
+					(t_alu_srcB_match[i] |r_alu_srcB_rdy[i]) 
+					 ) : 1'b0;
 	     end // always_comb
 	   
 	   always_ff@(posedge clk)
@@ -786,7 +765,6 @@ module exec(clk,
 		  begin
 		     r_alu_srcA_rdy[i] <= 1'b0;
 		     r_alu_srcB_rdy[i] <= 1'b0;
-		     r_alu_hilo_rdy[i] <= 1'b0;
 		  end
 		else
 		  begin
@@ -794,19 +772,16 @@ module exec(clk,
 		       begin //allocating to this entry
 			  r_alu_srcA_rdy[i] <= uq.srcA_valid ? (!r_prf_inflight[uq.srcA] | t_alu_alloc_srcA_match) : 1'b1;
 			  r_alu_srcB_rdy[i] <= uq.srcB_valid ? (!r_prf_inflight[uq.srcB] | t_alu_alloc_srcB_match) : 1'b1;
-			  r_alu_hilo_rdy[i] <= uq.hilo_src_valid ? (!r_hilo_inflight[uq.hilo_src] | t_alu_alloc_hilo_match) : 1'b1;
 		       end
 		     else if(t_alu_select_entry[i])
 		       begin
 			  r_alu_srcA_rdy[i] <= 1'b0;
 			  r_alu_srcB_rdy[i] <= 1'b0;
-			  r_alu_hilo_rdy[i] <= 1'b0;
 		       end
 		     else if(r_alu_sched_valid[i])
 		       begin
 			  r_alu_srcA_rdy[i] <= r_alu_srcA_rdy[i] | t_alu_srcA_match[i];
 			  r_alu_srcB_rdy[i] <= r_alu_srcB_rdy[i] | t_alu_srcB_match[i];
-			  r_alu_hilo_rdy[i] <= r_alu_hilo_rdy[i] | t_alu_hilo_match[i];
 		       end // else: !if(t_pop_uq&&(t_alu_sched_alloc_ptr == i))
 		     
 		  end // else: !if(reset)
@@ -855,21 +830,52 @@ module exec(clk,
    
    shift_right #(.LG_W(5)) s0(.is_signed(t_signed_shift), .data(t_srcA[31:0]), 
 			      .distance(t_shift_amt), .y(t_shift_right));
+
+   wire [`LG_PRF_ENTRIES-1:0] w_mul_prf_ptr;
+   logic [`LG_PRF_ENTRIES-1:0] r_mul_prf_ptr;
+   logic 		       r_mul_complete;
+   
+   always_ff@(posedge clk)
+     begin
+	r_mul_prf_ptr <= w_mul_prf_ptr;
+	r_mul_complete <= reset ? 1'b0 : t_mul_complete;
+     end
    
    mul m(.clk(clk), 
 	 .reset(reset), 
-	 .is_signed(int_uop.op != MULTU), 
+	 .is_signed(int_uop.op == MUL), 
 	 .go(t_start_mul&r_start_int),
 	 .src_A(t_srcA[31:0]),
 	 .src_B(t_srcB[31:0]),
 	 .rob_ptr_in(int_uop.rob_ptr),
-	 .hilo_prf_ptr_in(int_uop.hilo_dst),
+	 .prf_ptr_in(int_uop.dst),
 	 .y(t_mul_result),
 	 .complete(t_mul_complete),
 	 .rob_ptr_out(t_rob_ptr_out),
-	 .hilo_prf_ptr_val_out(t_hilo_prf_ptr_val_out),
-	 .hilo_prf_ptr_out(t_hilo_prf_ptr_out)
+	 .prf_ptr_val_out(),
+	 .prf_ptr_out(w_mul_prf_ptr)
 	 );
+
+   always_ff@(negedge clk)
+     begin
+	if(t_start_mul&r_start_int)
+	  begin
+	     $display("multiplier dest ptr entry %d", int_uop.dst);
+	  end
+	if(t_mul_complete)
+	  begin
+	     $display("r_start_int %b, t_wr_int_prf %b,ptr %d, result %x",
+		      r_start_int, t_wr_int_prf,w_mul_prf_ptr, t_mul_result);
+	     if(r_start_int & t_wr_int_prf)
+	       $stop();
+	  end
+	if(t_div_complete)
+	  begin
+	     $stop();
+	  end
+     end
+   
+   
 
    divider #(.LG_W(5)) d32 (
 	   .clk(clk), 
@@ -877,12 +883,12 @@ module exec(clk,
 	   .srcA(t_srcA[31:0]),
 	   .srcB(t_srcB[31:0]),
 	   .rob_ptr_in(int_uop.rob_ptr),
-	   .hilo_prf_ptr_in(int_uop.hilo_dst),
+	   .prf_ptr_in(),
 	   .is_signed_div(t_signed_div),
 	   .start_div(t_start_div32),
 	   .y(t_div_result),
-	   .rob_ptr_out(t_div_rob_ptr_out),
-	   .hilo_prf_ptr_out(t_div_hilo_prf_ptr_out),
+	   .rob_ptr_out(),
+	   .prf_ptr_out(),
 	   .complete(t_div_complete),
 	   .ready(t_div_ready)
 	   );
@@ -984,12 +990,10 @@ module exec(clk,
 	if(reset)
 	  begin
 	     r_prf_inflight <= 'd0;
-	     r_hilo_inflight <= 'd0;
 	  end
 	else
 	  begin
 	     r_prf_inflight <= ds_done ? 'd0 : n_prf_inflight;
-	     r_hilo_inflight <= ds_done ? 'd0 : n_hilo_inflight;
 	  end
      end // always_ff@ (posedge clk)
 
@@ -1013,41 +1017,16 @@ module exec(clk,
 	  begin
 	     n_prf_inflight[mem_rsp_dst_ptr] = 1'b0;
 	  end
+	
 	if(r_start_int && t_wr_int_prf)
 	  begin
 	     n_prf_inflight[int_uop.dst] = 1'b0;
 	  end
+	else if(t_mul_complete)
+	  begin
+	     n_prf_inflight[w_mul_prf_ptr] = 1'b0;
+	  end
      end // always_comb
-   
-   always_comb
-     begin
-	n_hilo_inflight = r_hilo_inflight;
-	if(uq_push && uq_uop.hilo_dst_valid)
-	  begin
-	     n_hilo_inflight[uq_uop.hilo_dst] = 1'b1;
-	  end
-	
-	if(uq_push_two && uq_uop_two.hilo_dst_valid)
-	  begin
-	     n_hilo_inflight[uq_uop_two.hilo_dst] = 1'b1;
-	  end
-	
-	if(t_hilo_prf_ptr_val_out)
-	  begin
-	     n_hilo_inflight[t_hilo_prf_ptr_out] = 1'b0;
-	  end
-	if(t_div_complete)
-	  begin
-	     n_hilo_inflight[t_div_hilo_prf_ptr_out] = 1'b0;
-	  end
-	if(r_start_int && t_wr_hilo)
-	  begin
-	     n_hilo_inflight[int_uop.hilo_dst] = 1'b0;
-	  end
-
-     end // always_comb
-
-   
 
    
 `ifdef VERILATOR
@@ -1122,8 +1101,6 @@ module exec(clk,
 	t_mispred_br = 1'b0;
 	t_jaddr = {int_uop.jmp_imm[9:0],int_uop.imm,2'd0};
 	t_alu_valid = 1'b0;
-	t_hilo_result = 'd0;
-	t_wr_hilo = 1'b0;
 	t_got_break = 1'b0;
 	t_signed_shift = 1'b0;
 	t_shift_amt = 5'd0;
@@ -1135,6 +1112,10 @@ module exec(clk,
 	
 	case(int_uop.op)
 	  //riscv
+	  MUL:
+	    begin
+	       t_start_mul = r_start_int&!ds_done;
+	    end
 	  ADDI:
 	    begin
 	       t_result = t_srcA + int_uop.rvimm;
@@ -1344,236 +1325,6 @@ module exec(clk,
 	  //      t_fault = 1'b1;
 	  //      //t_unimp_op = 1'b1;
 	  //   end
-	  //   end
-	  // SRA:
-	  //   begin
-	  //      t_signed_shift = 1'b1;
-	  //      t_shift_amt = int_uop.srcB[4:0];
-	  //      //t_result = $signed(t_srcA) >> $signed(int_uop.srcB[4:0]);
-	  //      //$display("t_result = %b, t_shift_right = %b", t_result, t_shift_right);
-	       
-	  //      t_result = {{HI_EBITS{t_shift_right[31]}}, t_shift_right};
-	  //      t_wr_int_prf = 1'b1;
-	  //      t_alu_valid = 1'b1;
-	  //   end // case: SRA
-	  // SRAV:
-	  //   begin
-	  //      t_signed_shift = 1'b1;
-	  //      t_shift_amt = t_srcB[4:0];
-	  //      t_result = {{HI_EBITS{t_shift_right[31]}}, t_shift_right};	       
-	  //      t_wr_int_prf = 1'b1;
-	  //      t_alu_valid = 1'b1;
-	  //   end
-	  // SLLV:
-	  //   begin
-	  //      t_result = t_srcA << (t_srcB[4:0]);
-	  //      t_wr_int_prf = 1'b1;
-	  //      t_alu_valid = 1'b1;
-	  //   end
-	  // MTLO:
-	  //   begin
-	  //      t_hilo_result = {t_src_hilo[63:32], t_srcA[31:0]};
-	  //      t_wr_hilo = 1'b1;
-	  //      t_alu_valid = 1'b1;	       
-	  //   end
-	  // MTHI:
-	  //   begin
-	  //      t_hilo_result = {t_srcA[31:0], t_src_hilo[31:0] };
-	  //      t_wr_hilo = 1'b1;
-	  //      t_alu_valid = 1'b1;	       
-	  //   end
-	  // MFLO:
-	  //   begin
-	  //      t_result = {{HI_EBITS{1'b0}}, t_src_hilo[31:0]};
-	  //      t_wr_int_prf = 1'b1;
-	  //      t_alu_valid = 1'b1;
-	  //   end
-	  // MFHI:
-	  //   begin
-	  //      t_result = {{HI_EBITS{1'b0}},t_src_hilo[63:32]};
-	  //      t_wr_int_prf = 1'b1;
-	  //      t_alu_valid = 1'b1;
-	  //   end
-	  // ADDU:
-	  //   begin
-	  //      t_result = w_add32;
-	  //      t_wr_int_prf = 1'b1;
-	  //      t_alu_valid = 1'b1;
-	  //   end
-	  // MULT:
-	  //   begin
-	  //      t_start_mul = r_start_int&!ds_done;
-	  //   end
-	  // MULTU:
-	  //   begin
-	  //      t_start_mul = r_start_int&!ds_done;
-	  //   end
-	  // DIV:
-	  //   begin
-	  //      t_signed_div = 1'b1;
-	  //      t_start_div32 = r_start_int&!ds_done;	       
-	  //   end
-	  // DIVU:
-	  //   begin
-	  //      t_start_div32 = r_start_int&!ds_done;
-	  //   end
-	  // SUBU:
-	  //   begin
-	  //      t_result = w_add32;
-	  //      t_wr_int_prf = 1'b1;
-	  //      t_alu_valid = 1'b1;
-	  //   end
-	  // AND:
-	  //   begin
-	  //      t_result = t_srcA & t_srcB;
-	  //      t_wr_int_prf = 1'b1;
-	  //      t_alu_valid = 1'b1;
-	  //   end
-	  // MOV:
-	  //   begin
-	  //      t_result = t_srcA;
-	  //      t_wr_int_prf = 1'b1;
-	  //      t_alu_valid = 1'b1;
-	  //   end
-	  // OR:
-	  //   begin
-	  //      t_result = t_srcA | t_srcB;
-	  //      t_wr_int_prf = 1'b1;//int_uop.dst_valid;
-	  //      t_alu_valid = 1'b1;
-	  //   end
-	  // XOR:
-	  //   begin
-	  //      t_result = t_srcA ^ t_srcB;
-	  //      t_wr_int_prf = 1'b1;
-	  //      t_alu_valid = 1'b1;
-	  //   end
-	  // NOR:
-	  //   begin
-	  //      t_result = ~(t_srcA | t_srcB);
-	  //      t_wr_int_prf = 1'b1;
-	  //      t_alu_valid = 1'b1;
-	  //   end
-	  // BNE:
-	  //   begin
-	  //      t_take_br = (t_srcA  != t_srcB);
-	  //      t_mispred_br = int_uop.br_pred != t_take_br;
-	  //      t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
-	  //      t_alu_valid = 1'b1;
-	  //   end // case: BNE
-	  // BGEZ:
-	  //   begin
-	  //      t_take_br = (t_srcA[31] == 1'b0);
-	  //      t_mispred_br = int_uop.br_pred != t_take_br;
-	  //      t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;	       
-	  //      t_alu_valid = 1'b1;
-	  //   end
-	  // BLTZ:
-	  //   begin
-	  //      t_take_br = ($signed(t_srcA) < $signed({`M_WIDTH{1'b0}}));
-	  //      t_mispred_br = int_uop.br_pred != t_take_br;
-	  //      t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
-	  //      t_alu_valid = 1'b1;
-	  //   end
-	  // BLEZ:
-	  //   begin
-	  //      t_take_br = ($signed(t_srcA) <= $signed({`M_WIDTH{1'b0}}));
-	  //      t_mispred_br = int_uop.br_pred != t_take_br;
-	  //      t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
-	  //      t_alu_valid = 1'b1;
-	  //   end
-	  // BLEZL:
-	  //   begin
-	  //      t_take_br = ($signed(t_srcA) < $signed({`M_WIDTH{1'b0}})) || (t_srcA == {`M_WIDTH{1'b0}});
-	  //      t_mispred_br = int_uop.br_pred != t_take_br || !t_take_br;
-	  //      t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
-	  //      t_alu_valid = 1'b1;
-	  //   end
-	  // BGTZ:
-	  //   begin
-	  //      t_take_br = ($signed(t_srcA) > $signed({`M_WIDTH{1'b0}}));
-	  //      t_mispred_br = int_uop.br_pred != t_take_br;
-	  //      t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;	       
-	  //      t_alu_valid = 1'b1;
-	  //   end
-	  // BNEL:
-	  //   begin
-	  //      t_take_br = (t_srcA  != t_srcB);
-	  //      t_mispred_br = (int_uop.br_pred != t_take_br) /* || !t_take_br */;
-	  //      t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
-	  //      t_alu_valid = 1'b1;
-	  //   end
-	  // BLTZL:
-	  //   begin
-	  //      t_take_br = $signed(t_srcA) < $signed({`M_WIDTH{1'b0}});
-	  //      t_mispred_br = (int_uop.br_pred != t_take_br) || !t_take_br;
-	  //      t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
-	  //      t_alu_valid = 1'b1;
-	  //   end
-	  // BGTZL:
-	  //   begin
-	  //      t_take_br = ($signed(t_srcA) > $signed({`M_WIDTH{1'b0}}));
-	  //      t_mispred_br = (int_uop.br_pred != t_take_br) || !t_take_br;
-	  //      t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
-	  //      t_alu_valid = 1'b1;
-	  //   end
-	  // BGEZL:
-	  //   begin
-	  //      t_take_br = ($signed(t_srcA) >= $signed({`M_WIDTH{1'b0}}));
-	  //      t_mispred_br = (int_uop.br_pred != t_take_br) || !t_take_br;
-	  //      t_pc = t_take_br ? (t_pc4 + {t_simm[`M_WIDTH-3:0], 2'd0}) : t_pc8;
-	  //      t_alu_valid = 1'b1;
-	  //   end
-	  // // J:
-	  // //   begin
-	  // //      t_take_br = 1'b1;
-	  // //      t_mispred_br = int_uop.br_pred != t_take_br;
-	  // //      t_pc = {t_pc4[`M_WIDTH-1:28],t_jaddr};
-	  // //      t_alu_valid = 1'b1;
-	  // //      t_srcs_rdy = 1'b1;	       
-	  // //   end
-	  // JAL:
-	  //   begin
-	  //      t_take_br = 1'b1;
-	  //      t_mispred_br = int_uop.br_pred != t_take_br;
-	  //      t_pc = {t_pc4[`M_WIDTH-1:28],t_jaddr};
-	  //      t_result = int_uop.pc + {{HI_EBITS{1'b0}}, 32'd8};
-	  //      t_alu_valid = 1'b1;
-	  //      t_wr_int_prf = 1'b1;
-	  //   end
-	  // MONITOR:
-	  //   begin
-	  //      t_take_br = 1'b1;
-	  //      t_mispred_br = 1'b1;
-	  //      t_pc = t_srcA;
-	  //      t_alu_valid = 1'b1;
-	  //      t_result = monitor_rsp_data;
-	  //      t_wr_int_prf = 1'b1;
-	  //   end
-	  // ADDIU:
-	  //   begin
-	  //      t_result = w_add32;
-	  //      t_wr_int_prf = 1'b1;
-	  //      t_alu_valid = 1'b1;
-	  //   end
-	  // MOVI:
-	  //   begin
-	  //      t_result = {{HI_EBITS{t_simm[31]}}, t_simm[31:0]};
-	  //      t_wr_int_prf = 1'b1;
-	  //      t_alu_valid = 1'b1;
-	  //   end
-	  // MFC0:
-	  //   begin	       
-	  //      t_result = int_uop.srcA[4:0] == 'd12 ? cpr0_status_reg : 'd0;
-	  //      t_alu_valid = 1'b1;
-	  //      t_wr_int_prf = 1'b1;
-	  //      t_pc = t_pc4;	       
-	  //   end
-	  // MTC0:
-	  //   begin
-	  //      t_wr_cpr0 = 1'b1;	       
-	  //      t_alu_valid = 1'b1;
-	  //      t_pc = t_pc4;
-	  //   end // case: MTC0
 	  II:
 	    begin
 	       t_unimp_op = 1'b1;
@@ -1728,15 +1479,13 @@ module exec(clk,
      begin
 	r_int_result <= t_result;
 	r_mem_result <= mem_rsp_load_data[31:0];
-	r_int_hilo <= t_hilo_result;
-	r_mul_hilo <= t_mul_result;
-	r_div_hilo <= t_div_result;
      end
 
    always_comb
      begin
 	t_fwd_int_mem_srcA = r_start_int && t_wr_int_prf &&(t_mem_uq.srcA == int_uop.dst);
 	t_fwd_int_mem_srcB = r_start_int && t_wr_int_prf &&(t_mem_dq.src_ptr == int_uop.dst);
+	
 	t_fwd_mem_mem_srcA = mem_rsp_dst_valid && (t_mem_uq.srcA == mem_rsp_dst_ptr);
 	t_fwd_mem_mem_srcB = mem_rsp_dst_valid && (t_mem_dq.src_ptr == mem_rsp_dst_ptr);
      end
@@ -1753,10 +1502,6 @@ module exec(clk,
 	
 	r_fwd_mem_srcA <= mem_rsp_dst_valid && (t_picked_uop.srcA == mem_rsp_dst_ptr);
 	r_fwd_mem_srcB <= mem_rsp_dst_valid && (t_picked_uop.srcB == mem_rsp_dst_ptr);
-
-	r_fwd_hilo_int <= r_start_int && t_wr_hilo && (t_picked_uop.hilo_src == int_uop.hilo_dst);
-	r_fwd_hilo_mul <= t_hilo_prf_ptr_val_out && (t_picked_uop.hilo_src == t_hilo_prf_ptr_out);
-	r_fwd_hilo_div <= t_div_complete && (t_picked_uop.hilo_src == t_div_hilo_prf_ptr_out);
      end
 
 
@@ -1766,11 +1511,11 @@ module exec(clk,
 	   .rdptr1(t_picked_uop.srcB),
 	   .rdptr2(t_mem_uq.srcA),
 	   .rdptr3(t_mem_dq.src_ptr),
-	   .wrptr0(int_uop.dst),
+	   .wrptr0(t_mul_complete ? w_mul_prf_ptr : int_uop.dst),
 	   .wrptr1(mem_rsp_dst_ptr),
-	   .wen0(r_start_int && t_wr_int_prf),
+	   .wen0(t_mul_complete | r_start_int && t_wr_int_prf),
 	   .wen1(mem_rsp_dst_valid),
-	   .wr0(t_result),
+	   .wr0(t_mul_complete ? t_mul_result[31:0] : t_result),
 	   .wr1(mem_rsp_load_data[31:0]),
 	   .rd0(w_srcA),
 	   .rd1(w_srcB),
@@ -1779,26 +1524,6 @@ module exec(clk,
 	   );
    
    
-
-  
-   always_ff@(posedge clk)
-     begin
-	r_src_hilo <= r_hilo_prf[t_picked_uop.hilo_src];
-	
-	if(r_start_int && t_wr_hilo)
-	  begin
-	     r_hilo_prf[int_uop.hilo_dst] <= t_hilo_result;
-	  end
-	else if(t_hilo_prf_ptr_val_out)
-	  begin
-	     r_hilo_prf[t_hilo_prf_ptr_out] <= t_mul_result;
-	  end
-	else if(t_div_complete)
-	  begin
-	     r_hilo_prf[t_div_hilo_prf_ptr_out] <= t_div_result;
-	  end	     
-     end // always_ff@ (posedge clk)
-
 
    always_ff@(posedge clk)
      begin

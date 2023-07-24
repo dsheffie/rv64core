@@ -11,10 +11,7 @@ typedef enum logic [6:0]
    SRAV,
    MFHI,
    MTHI,
-   MULT,
-   MULTU,
-   DIV,
-   DIVU,
+   
    SLT,
    SLTU,
    MFLO,
@@ -33,6 +30,12 @@ typedef enum logic [6:0]
    MONITOR,
    
    //known used in riscv design
+   MUL,
+   MULHU,
+   DIV,
+   DIVU,
+   REM,
+   REMU,
    SLTI,
    SLTIU,   
    ADDU,
@@ -73,12 +76,12 @@ typedef enum logic [6:0]
    II //illegal instruction
    } opcode_t;
 
-function logic is_mult(opcode_t op);
+function logic uses_mul(opcode_t op);
    logic     x;
    case(op)
-     MULT:
+     MUL:
        x = 1'b1;
-     MULTU:
+     MULHU:
        x = 1'b1;
      default:
        x = 1'b0;
@@ -86,12 +89,16 @@ function logic is_mult(opcode_t op);
    return x;
 endfunction // is_mult
 
-function logic is_div(opcode_t op);
+function logic uses_div(opcode_t op);
    logic     x;
    case(op)
      DIV:
        x = 1'b1;
      DIVU:
+       x = 1'b1;
+     REM:
+       x = 1'b1;
+     REMU:
        x = 1'b1;
      default:
        x = 1'b0;
@@ -126,21 +133,17 @@ typedef struct packed {
    logic 		       fp_srcA_valid;
    logic [`LG_PRF_ENTRIES-1:0] srcB;
    logic 		       srcB_valid;
+   
    logic 		       fp_srcB_valid;   
    logic [`LG_PRF_ENTRIES-1:0] dst;
    logic 		       dst_valid;
    logic 		       fp_dst_valid;
 
-   logic 		       hilo_dst_valid;
-   logic [`LG_HILO_PRF_ENTRIES-1:0] hilo_dst;
-
-   logic 			    hilo_src_valid;
-   logic [`LG_HILO_PRF_ENTRIES-1:0] hilo_src;
-     
-   logic [15:0] 		    imm;
-   logic [`M_WIDTH-17:0] 	    jmp_imm;
 
    logic [31:0] 		    rvimm;
+   logic [15:0] 		    imm;
+   logic [`M_WIDTH-17:0] 	    jmp_imm;
+   
    logic [`M_WIDTH-1:0]        pc;
    logic [`LG_ROB_ENTRIES-1:0] rob_ptr;
    logic 		       serializing_op;

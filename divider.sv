@@ -5,12 +5,12 @@ module divider(clk,
 	       srcA,
 	       srcB,
 	       rob_ptr_in,
-	       hilo_prf_ptr_in,	     
+	       prf_ptr_in,	     
 	       is_signed_div,
 	       start_div,
 	       y,
 	       rob_ptr_out,
-	       hilo_prf_ptr_out,
+	       prf_ptr_out,
 	       ready,
 	       complete
 	       );
@@ -24,7 +24,7 @@ module divider(clk,
    input logic [W-1:0] srcB;
 
    input logic [`LG_ROB_ENTRIES-1:0] rob_ptr_in;
-   input logic [`LG_HILO_PRF_ENTRIES-1:0] hilo_prf_ptr_in;
+   input logic [`LG_PRF_ENTRIES-1:0] prf_ptr_in;
    
    input logic 	      is_signed_div;
    input logic 	      start_div;
@@ -32,7 +32,7 @@ module divider(clk,
    output logic [W2-1:0] y;
    
    output logic [`LG_ROB_ENTRIES-1:0] rob_ptr_out;
-   output logic [`LG_HILO_PRF_ENTRIES-1:0] hilo_prf_ptr_out;
+   output logic [`LG_PRF_ENTRIES-1:0] prf_ptr_out;
 
    output logic        ready;
    output logic        complete;
@@ -50,7 +50,7 @@ module divider(clk,
    logic 	r_rem_sign, n_rem_sign;
    
    logic [`LG_ROB_ENTRIES-1:0] r_rob_ptr, n_rob_ptr;
-   logic [`LG_HILO_PRF_ENTRIES-1:0] r_hilo_prf_ptr, n_hilo_prf_ptr;
+   logic [`LG_PRF_ENTRIES-1:0] r_gpr_prf_ptr, n_gpr_prf_ptr;
 
    logic [W-1:0] 		    r_A, n_A, r_B, n_B;
    logic [W2-1:0] 		    r_Y, n_Y;
@@ -67,7 +67,7 @@ module divider(clk,
 	  begin
 	     r_state <= IDLE;
 	     r_rob_ptr <= 'd0;
-	     r_hilo_prf_ptr <= 'd0;
+	     r_gpr_prf_ptr <= 'd0;
 	     r_is_signed <= 1'b0;
 	     r_sign <= 1'b0;
 	     r_rem_sign <= 1'b0;
@@ -82,7 +82,7 @@ module divider(clk,
 	  begin
 	     r_state <= n_state;
 	     r_rob_ptr <= n_rob_ptr;
-	     r_hilo_prf_ptr <= n_hilo_prf_ptr;
+	     r_gpr_prf_ptr <= n_gpr_prf_ptr;
 	     r_is_signed <= n_is_signed;
 	     r_sign <= n_sign;
 	     r_rem_sign <= n_rem_sign;	     
@@ -102,7 +102,7 @@ module divider(clk,
    always_comb
      begin
 	n_rob_ptr = r_rob_ptr;
-	n_hilo_prf_ptr = r_hilo_prf_ptr;
+	n_gpr_prf_ptr = r_gpr_prf_ptr;
 	n_state = r_state;
 	n_is_signed = r_is_signed;
 	n_sign = r_sign;
@@ -119,7 +119,7 @@ module divider(clk,
 	//output signals
 	ready = (r_state == IDLE) & !start_div;
 	rob_ptr_out = r_rob_ptr;
-	hilo_prf_ptr_out = r_hilo_prf_ptr;
+	prf_ptr_out = r_gpr_prf_ptr;
 	y = r_Y;
 	complete = 1'b0;
 	
@@ -127,7 +127,7 @@ module divider(clk,
 	  IDLE:
 	    begin
 	       n_rob_ptr = rob_ptr_in;
-	       n_hilo_prf_ptr = hilo_prf_ptr_in;
+	       n_gpr_prf_ptr = prf_ptr_in;
 	       n_is_signed = is_signed_div;
 	       n_state = start_div ? DIVIDE : IDLE;
 	       n_idx = W-1;

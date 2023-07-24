@@ -45,10 +45,6 @@ module decode_riscv(insn,
 	uop.srcB_valid = 1'b0;
 	uop.fp_srcA_valid = 1'b0;
 	uop.fp_srcB_valid = 1'b0;
-	uop.hilo_dst_valid = 1'b0;
-	uop.hilo_src_valid = 1'b0;
-	uop.hilo_dst = 'd0;
-	uop.hilo_src = 'd0;
 	
 	uop.dst_valid = 1'b0;
 	uop.fp_dst_valid = 1'b0;
@@ -212,9 +208,13 @@ module decode_riscv(insn,
 		 3'd0:
 		   begin
 		      case(insn[31:25])
-			7'd0:
+			7'h0:
 			  begin
 			     uop.op = (rd != 'd0) ? ADDU : NOP;
+			  end
+			7'h1:
+			  begin
+			     uop.op = (rd != 'd0) ? MUL : NOP;
 			  end
 			7'h20:
 			  begin
@@ -252,9 +252,13 @@ module decode_riscv(insn,
 		 3'd3:
 		   begin
 		      case(insn[31:25])
-			7'd0:
+			7'h0:
 			  begin
 			     uop.op = (rd != 'd0) ? SLTU : NOP;
+			  end
+			7'h1:
+			  begin
+			     uop.op = (rd != 'd0) ? MULHU : NOP;
 			  end
 			default:
 			  begin
@@ -264,9 +268,13 @@ module decode_riscv(insn,
 		 3'd4:
 		   begin
 		      case(insn[31:25])
-			7'd0:
+			7'h0:
 			  begin
 			     uop.op = (rd != 'd0) ? XOR : NOP;
+			  end
+			7'h1:
+			  begin
+			     uop.op = (rd != 'd0) ? DIV : NOP;
 			  end
 			default:
 			  begin
@@ -280,6 +288,10 @@ module decode_riscv(insn,
 			  begin
 			     uop.op = (rd != 'd0) ? SRL : NOP;
 			  end
+			7'h1:
+			  begin
+			     uop.op = (rd != 'd0) ? DIVU : NOP;
+			  end
 			7'h20:
 			  begin
 			     uop.op = (rd != 'd0) ? SRA : NOP;
@@ -292,9 +304,13 @@ module decode_riscv(insn,
 		 3'd6:
 		   begin
 		      case(insn[31:25])
-			7'd0:
+			7'h0:
 			  begin
 			     uop.op = (rd != 'd0) ? OR : NOP;
+			  end
+			7'h1:
+			  begin
+			     uop.op = (rd != 'd0) ? REM : NOP;
 			  end
 			default:
 			  begin
@@ -304,9 +320,13 @@ module decode_riscv(insn,
 		 3'd7:
 		   begin
 		      case(insn[31:25])
-			7'd0:
+			7'h0:
 			  begin
 			     uop.op = (rd != 'd0) ? AND : NOP;
+			  end
+			7'h1:
+			  begin
+			     uop.op = (rd != 'd0) ? REMU : NOP;
 			  end
 			default:
 			  begin

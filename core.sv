@@ -200,7 +200,6 @@ module core(clk,
    localparam N_ROB_ENTRIES = (1<<`LG_ROB_ENTRIES);
    localparam N_BOB_ENTRIES = (1<<`LG_BOB_ENTRIES);   
    localparam N_UQ_ENTRIES = (1<<`LG_UQ_ENTRIES);
-   localparam N_HILO_ENTRIES = (1<<`LG_HILO_PRF_ENTRIES);
    
    localparam N_DQ_ENTRIES = (1<<`LG_DQ_ENTRIES);
    localparam HI_EBITS = `M_WIDTH-32;
@@ -248,10 +247,6 @@ module core(clk,
    
    logic [N_PRF_ENTRIES-1:0] n_retire_prf_free, r_retire_prf_free;
       
-   logic [N_HILO_ENTRIES-1:0] n_hilo_prf_free,r_hilo_prf_free;
-   logic [N_HILO_ENTRIES-1:0] n_retire_hilo_prf_free, r_retire_hilo_prf_free;
-   logic [`LG_HILO_PRF_ENTRIES-1:0] n_hilo_prf_entry;
-   logic [`LG_HILO_PRF_ENTRIES:0]   t_hilo_prf_idx;
    
    logic [`LG_PRF_ENTRIES-1:0]  n_prf_entry, n_prf_entry2;
 
@@ -272,11 +267,6 @@ module core(clk,
    logic [`LG_PRF_ENTRIES-1:0] n_alloc_rat[31:0];
    logic [`LG_PRF_ENTRIES-1:0] r_retire_rat[31:0];
    logic [`LG_PRF_ENTRIES-1:0] n_retire_rat[31:0];
-   
-   logic [`LG_HILO_PRF_ENTRIES-1:0] r_hilo_alloc_rat;
-   logic [`LG_HILO_PRF_ENTRIES-1:0] n_hilo_alloc_rat;
-   logic [`LG_HILO_PRF_ENTRIES-1:0] r_hilo_retire_rat;
-   logic [`LG_HILO_PRF_ENTRIES-1:0] n_hilo_retire_rat;
 
    logic [N_ROB_ENTRIES-1:0] 	    uq_wait, mq_wait;
    
@@ -293,10 +283,9 @@ module core(clk,
    
    logic 		     t_clr_dq;
    logic 		     t_enough_bob;
-   logic 		     t_enough_iprfs, t_enough_hlprfs;
-   logic 		     t_enough_next_iprfs, t_enough_next_hlprfs;
+   logic 		     t_enough_iprfs;
+   logic 		     t_enough_next_iprfs;
    
-
    
    
    logic 		     t_bump_rob_head;
@@ -345,11 +334,6 @@ module core(clk,
    logic 		       t_free_reg_two;
    logic [`LG_PRF_ENTRIES-1:0] t_free_reg_two_ptr;
    
-   logic 			   t_free_hilo;
-   logic [`LG_HILO_PRF_ENTRIES-1:0] t_free_hilo_ptr;
-   
-
-   logic [`LG_HILO_PRF_ENTRIES:0]   t_hilo_ffs;
 
    
    logic [`LG_PRF_ENTRIES:0] 	    t_gpr_ffs, t_gpr_ffs2;
@@ -813,14 +797,10 @@ module core(clk,
 	n_epc = r_epc;
 	
 	t_enough_iprfs = !((t_uop.dst_valid) && t_gpr_ffs_full);
-	t_enough_hlprfs = !((t_uop.hilo_dst_valid) && (r_hilo_prf_free == 'd0));
 
 	t_enough_bob = t_uop.is_br ? !t_bob_full : 1'b1;
 	
 	t_enough_next_iprfs = !((t_uop2.dst_valid) && t_gpr_ffs2_full);
-	t_enough_next_hlprfs = !((t_uop2.hilo_dst_valid) /*&& (r_hilo_prf_free == 'd0)*/);
-
-
 
 	
 	t_fold_uop = (t_uop.op == NOP || 
@@ -923,7 +903,6 @@ module core(clk,
 					&& !t_uq_full
 					&& !t_dq_empty					
 					&& t_enough_iprfs
-					&& t_enough_hlprfs
 					&& t_enough_bob;
 			      
 			      t_alloc_two = t_alloc
@@ -932,8 +911,7 @@ module core(clk,
 					    && !t_dq_next_empty 
 					    && !t_rob_next_full
 					    && !t_uq_next_full
-					    && t_enough_next_iprfs
-					    && t_enough_next_hlprfs;
+					    && t_enough_next_iprfs;
 
 			      //&& (t_uop2.op == NOP || t_uop2.op == J);
 			   end // else: !if(t_uop.serializing_op && !t_dq_empty)
@@ -946,8 +924,7 @@ module core(clk,
 		    		   && t_rob_next_head_complete				    
 				   && !t_rob_head.is_br
 				   && !t_rob_next_head.is_ret
-				   && !t_rob_next_head.is_call
-		    		   && !t_rob_next_head.valid_hilo_dst;
+				   && !t_rob_next_head.is_call;
 		    
 		 end // if (t_can_retire_rob_head)
 	       else if(!t_dq_empty)
@@ -997,7 +974,6 @@ module core(clk,
 				   && !t_uq_full
 				   && !t_dq_empty
 				   && t_enough_iprfs
-				   && t_enough_hlprfs
 				   && t_enough_bob;
 			 
 			 
@@ -1008,8 +984,7 @@ module core(clk,
 				       && !t_rob_next_full
 				       && !t_uq_next_full
 				       && t_enough_bob
-				       && t_enough_next_iprfs
-				       && t_enough_next_hlprfs;
+				       && t_enough_next_iprfs;
 
 		      end
 		 end
@@ -1228,20 +1203,6 @@ module core(clk,
      begin
 	if(reset)
 	  begin
-	     r_hilo_alloc_rat <= 'd0;
-	     r_hilo_retire_rat <= 'd0;
-	  end
-	else
-	  begin
-	     r_hilo_alloc_rat <= t_rat_copy ? r_hilo_retire_rat : n_hilo_alloc_rat;
-	     r_hilo_retire_rat <= n_hilo_retire_rat;
-	  end
-     end
-
-   always_ff@(posedge clk)
-     begin
-	if(reset)
-	  begin
 	     for(logic [`LG_PRF_ENTRIES-1:0] i_rat = 'd0; i_rat < 'd32; i_rat = i_rat + 'd1)
 	       begin
 		  r_alloc_rat[i_rat[4:0]] <= i_rat;
@@ -1291,7 +1252,6 @@ module core(clk,
    always_comb
      begin
 	n_alloc_rat = r_alloc_rat;
-	n_hilo_alloc_rat = r_hilo_alloc_rat;
 	
 	t_alloc_uop = t_uop;
 	t_alloc_uop2 = t_uop2;
@@ -1309,10 +1269,6 @@ module core(clk,
 	     t_alloc_uop.srcB = r_alloc_rat[t_uop.srcB[4:0]];
 	  end
 	     
-	if(t_uop.hilo_src_valid)
-	  begin
-	     t_alloc_uop.hilo_src = r_hilo_alloc_rat;
-	  end
 	
 	//2nd uop begins here
 	if(t_uop2.srcA_valid)
@@ -1325,13 +1281,6 @@ module core(clk,
 	     t_alloc_uop2.srcB = (t_uop.dst_valid && (t_uop2.srcB[4:0] == t_uop.dst[4:0]) ?
 				  n_prf_entry :  r_alloc_rat[t_uop2.srcB[4:0]]);	     	     
 	  end
-	
-	if(t_uop2.hilo_src_valid)
-	  begin
-	     t_alloc_uop2.hilo_src = t_uop.hilo_dst_valid ? n_hilo_prf_entry : 
-				     r_hilo_alloc_rat;
-	  end
-	
 
 	if(t_alloc)
 	  begin
@@ -1339,11 +1288,6 @@ module core(clk,
 	       begin
 		  n_alloc_rat[t_uop.dst[4:0]] = n_prf_entry;
 		  t_alloc_uop.dst = n_prf_entry;
-	       end
-	     else if(t_uop.hilo_dst_valid)
-	       begin
-		  n_hilo_alloc_rat = n_hilo_prf_entry;
-		  t_alloc_uop.hilo_dst = n_hilo_prf_entry;
 	       end
 	     
 	     t_alloc_uop.rob_ptr = r_rob_tail_ptr[`LG_ROB_ENTRIES-1:0];
@@ -1370,19 +1314,13 @@ module core(clk,
    always_comb
      begin
 	n_retire_rat = r_retire_rat;
-	n_hilo_retire_rat = r_hilo_retire_rat;
 	
 	t_free_reg = 1'b0;
 	t_free_reg_ptr = 'd0;
 	t_free_reg_two = 1'b0;
 	t_free_reg_two_ptr = 'd0;
 	
-	
-	t_free_hilo = 1'b0;
-	t_free_hilo_ptr = 'd0;
-	
 	n_retire_prf_free = r_retire_prf_free;
-	n_retire_hilo_prf_free = r_retire_hilo_prf_free;
 	
 	n_branch_pc = {{HI_EBITS{1'b0}}, 32'd0};
 	n_took_branch = 1'b0;
@@ -1399,14 +1337,6 @@ module core(clk,
 		  n_retire_rat[t_rob_head.ldst] = t_rob_head.pdst;
 		  n_retire_prf_free[t_rob_head.pdst] = 1'b0;
 		  n_retire_prf_free[t_rob_head.old_pdst] = 1'b1;
-	       end
-	     else if(t_rob_head.valid_hilo_dst)
-	       begin
-		  t_free_hilo = 1'b1;
-		  t_free_hilo_ptr = t_rob_head.old_pdst[`LG_HILO_PRF_ENTRIES-1:0];
-		  n_hilo_retire_rat = t_rob_head.pdst[`LG_HILO_PRF_ENTRIES-1:0];
-		  n_retire_hilo_prf_free[t_rob_head.pdst[`LG_HILO_PRF_ENTRIES-1:0]] = 1'b0;
-		  n_retire_hilo_prf_free[t_rob_head.old_pdst[`LG_HILO_PRF_ENTRIES-1:0]] = 1'b1;
 	       end
 
 	     if(t_retire_two && t_rob_next_head.valid_dst)
@@ -1432,7 +1362,6 @@ module core(clk,
      begin
 	t_rob_tail.faulted  = 1'b0;
 	t_rob_tail.valid_dst  = 1'b0;
-	t_rob_tail.valid_hilo_dst = 1'b0;
 	t_rob_tail.ldst  = 'd0;
 	t_rob_tail.pdst  = 'd0;
 	t_rob_tail.old_pdst  = 'd0;
@@ -1453,7 +1382,6 @@ module core(clk,
 
 	t_rob_next_tail.faulted  = 1'b0;
 	t_rob_next_tail.valid_dst  = 1'b0;
-	t_rob_next_tail.valid_hilo_dst = 1'b0;
 	t_rob_next_tail.ldst  = 'd0;
 	t_rob_next_tail.pdst  = 'd0;
 	t_rob_next_tail.old_pdst  = 'd0;
@@ -1487,12 +1415,6 @@ module core(clk,
 		  t_rob_tail.ldst = t_uop.dst[4:0];
 		  t_rob_tail.pdst = n_prf_entry;
 		  t_rob_tail.old_pdst = r_alloc_rat[t_uop.dst[4:0]];
-	       end
-	     else if(t_uop.hilo_dst_valid)
-	       begin
-		  t_rob_tail.valid_hilo_dst = 1'b1;
-		  t_rob_tail.pdst = {{(`LG_PRF_ENTRIES-`LG_HILO_PRF_ENTRIES){1'b0}}, n_hilo_prf_entry};
-		  t_rob_tail.old_pdst = {{(`LG_PRF_ENTRIES-`LG_HILO_PRF_ENTRIES){1'b0}}, r_hilo_alloc_rat};
 	       end
 	     
 	     if(t_fold_uop)
@@ -1864,22 +1786,6 @@ module core(clk,
 
    
 
-   always_ff@(posedge clk)
-     begin
-	if(reset)
-	  begin
-	     for(integer i = 0; i < N_HILO_ENTRIES; i = i + 1)
-	       begin
-		  r_hilo_prf_free[i] <= (i==0) ? 1'b0 : 1'b1;
-		  r_retire_hilo_prf_free[i] <= (i==0) ? 1'b0 : 1'b1;
-	       end
-	  end
-	else
-	  begin
-	     r_hilo_prf_free <= t_rat_copy ? r_retire_hilo_prf_free : n_hilo_prf_free;
-	     r_retire_hilo_prf_free <= n_retire_hilo_prf_free;
-	  end
-     end // always_ff@ (posedge clk)
    
    
    always_ff@(posedge clk)
@@ -1899,27 +1805,6 @@ module core(clk,
 	  end
      end // always_ff@ (posedge clk)
 
-
-
-   
-   find_first_set#(`LG_HILO_PRF_ENTRIES) ffs_hilo(.in(r_hilo_prf_free),
-						 .y(t_hilo_ffs));
-
-   always_comb
-     begin
-	n_hilo_prf_free = r_hilo_prf_free;
-	n_hilo_prf_entry = t_hilo_ffs[`LG_HILO_PRF_ENTRIES-1:0];
-	
-	if(t_alloc & t_uop.hilo_dst_valid)
-	  begin
-	     n_hilo_prf_free[n_hilo_prf_entry] = 1'b0;
-	  end
-	if(t_free_hilo)
-	  begin
-	     n_hilo_prf_free[t_free_hilo_ptr] = 1'b1;
-	  end
-	
-     end // always_comb
 
    generate
       for(genvar i = 0; i < N_PRF_ENTRIES; i=i+2)
