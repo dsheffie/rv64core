@@ -368,6 +368,10 @@ void execRiscv(state_t *s) {
 	      case 0x0: /* srl */
 		s->gpr[rd] = (*reinterpret_cast<uint32_t*>(&s->gpr[m.r.rs1]) >> (s->gpr[m.r.rs2] & 31));
 		break;
+	      case 0x1: {
+		*reinterpret_cast<uint32_t*>(&s->gpr[m.r.rd]) = u_rs1 / u_rs2;
+		break;
+	      }
 	      case 0x20: /* sra */
 		s->gpr[rd] = s->gpr[m.r.rs1] >> (s->gpr[m.r.rs2] & 31);
 		break;
@@ -397,7 +401,7 @@ void execRiscv(state_t *s) {
 		s->gpr[m.r.rd] = s->gpr[m.r.rs1] & s->gpr[m.r.rs2];
 		break;
 	      case 0x1: { /* remu */
-		s->gpr[m.r.rd] = u_rs1 % u_rs2;
+		*reinterpret_cast<uint32_t*>(&s->gpr[m.r.rd]) = u_rs1 % u_rs2;
 		break;
 	      }
 	      default:

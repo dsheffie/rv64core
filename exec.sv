@@ -198,8 +198,8 @@ module exec(clk,
    logic [`MAX_LAT:0] r_wb_bitvec, n_wb_bitvec;
 
    /* divider */
-   logic 	t_div_ready, t_signed_div, t_start_div32;
-   logic [`LG_ROB_ENTRIES-1:0] t_div_rob_ptr_out;
+   logic 	t_div_ready, t_signed_div, t_is_rem, t_start_div32;
+   logic [`LG_ROB_ENTRIES-1:0] t_div_rob_ptr;
    logic [63:0] 	       t_div_result;
    logic 			    t_div_complete;
 
@@ -674,10 +674,14 @@ module exec(clk,
 	//allocation forwarding
 	t_alu_alloc_srcA_match = uq.srcA_valid && (
 						   (mem_rsp_dst_valid & (mem_rsp_dst_ptr == uq.srcA)) ||
+						   //(r_mul_complete && (r_mul_prf_ptr == uq.srcA)) ||
+						   //(r_div_complete && (r_div_prf_ptr == uq.srcA)) ||
 						   (r_start_int && t_wr_int_prf & (int_uop.dst == uq.srcA))
 						   );
 	t_alu_alloc_srcB_match = uq.srcB_valid && (
 						   (mem_rsp_dst_valid & (mem_rsp_dst_ptr == uq.srcB)) ||
+						   //(r_mul_complete && (r_mul_prf_ptr == uq.srcB)) ||
+						   //(r_div_complete && (r_div_prf_ptr == uq.srcB)) ||						   
 						   (r_start_int && t_wr_int_prf & (int_uop.dst == uq.srcB))
 						   );
 
@@ -739,16 +743,15 @@ module exec(clk,
 		t_alu_srcA_match[i] = r_alu_sched_uops[i].srcA_valid && (
 									 (mem_rsp_dst_valid & (mem_rsp_dst_ptr == r_alu_sched_uops[i].srcA)) ||
 									 (r_mul_complete && (r_mul_prf_ptr == r_alu_sched_uops[i].srcA)) ||
+									 (r_div_complete && (r_div_prf_ptr == r_alu_sched_uops[i].srcA)) ||
 									 (r_start_int && t_wr_int_prf & (int_uop.dst == r_alu_sched_uops[i].srcA))
 									 );
 		t_alu_srcB_match[i] = r_alu_sched_uops[i].srcB_valid && (
 									 (mem_rsp_dst_valid & (mem_rsp_dst_ptr == r_alu_sched_uops[i].srcB)) ||
-									 (r_mul_complete && (r_mul_prf_ptr == r_alu_sched_uops[i].srcB)) ||	
+									 (r_mul_complete && (r_mul_prf_ptr == r_alu_sched_uops[i].srcB)) ||
+									 (r_div_complete && (r_div_prf_ptr == r_alu_sched_uops[i].srcB)) ||
 									 (r_start_int && t_wr_int_prf & (int_uop.dst == r_alu_sched_uops[i].srcB))
 									 );
-		
-
-		//is_mult(r_alu_sched_uops[i].op);
 		
 		t_alu_entry_rdy[i] = r_alu_sched_valid[i] &&
 				     (uses_div(r_alu_sched_uops[i].op) ?  t_div_ready :  
@@ -834,11 +837,17 @@ module exec(clk,
    wire [`LG_PRF_ENTRIES-1:0] w_mul_prf_ptr;
    logic [`LG_PRF_ENTRIES-1:0] r_mul_prf_ptr;
    logic 		       r_mul_complete;
+   wire [`LG_PRF_ENTRIES-1:0] w_div_prf_ptr;
+   logic [`LG_PRF_ENTRIES-1:0] r_div_prf_ptr;
+   logic 		       r_div_complete;
+
    
    always_ff@(posedge clk)
      begin
 	r_mul_prf_ptr <= w_mul_prf_ptr;
+	r_div_prf_ptr <= w_div_prf_ptr;
 	r_mul_complete <= reset ? 1'b0 : t_mul_complete;
+	r_div_complete <= reset ? 1'b0 : t_div_complete;
      end
    
    mul m(.clk(clk), 
@@ -869,10 +878,22 @@ module exec(clk,
 	     if(r_start_int & t_wr_int_prf)
 	       $stop();
 	  end
+
 	if(t_div_complete)
 	  begin
-	     $stop();
+	     $display("divider writes back to rob %d, prf %d, value %x at cycle %d",
+		      t_div_rob_ptr, w_div_prf_ptr, t_div_result[31:0], r_cycle);
 	  end
+	
+	
+	if(t_mul_complete & t_div_complete)
+	  $stop();
+	
+	if(t_mul_complete & r_start_int & t_wr_int_prf)
+	  $stop();
+
+	if(t_div_complete & r_start_int & t_wr_int_prf)
+	  $stop();	
      end
    
    
@@ -883,12 +904,13 @@ module exec(clk,
 	   .srcA(t_srcA[31:0]),
 	   .srcB(t_srcB[31:0]),
 	   .rob_ptr_in(int_uop.rob_ptr),
-	   .prf_ptr_in(),
+	   .prf_ptr_in(int_uop.dst),
 	   .is_signed_div(t_signed_div),
+           .is_rem(t_is_rem),
 	   .start_div(t_start_div32),
 	   .y(t_div_result),
-	   .rob_ptr_out(),
-	   .prf_ptr_out(),
+	   .rob_ptr_out(t_div_rob_ptr),
+	   .prf_ptr_out(w_div_prf_ptr),
 	   .complete(t_div_complete),
 	   .ready(t_div_ready)
 	   );
@@ -1026,6 +1048,10 @@ module exec(clk,
 	  begin
 	     n_prf_inflight[w_mul_prf_ptr] = 1'b0;
 	  end
+	else if(t_div_complete)
+	  begin
+	     n_prf_inflight[w_div_prf_ptr] = 1'b0;
+	  end	
      end // always_comb
 
    
@@ -1065,25 +1091,18 @@ module exec(clk,
    wire [31:0] w_add_srcB = w_s_sub32;
       
    ppa32 add0 (.A(w_add_srcA), .B(w_add_srcB), .Y(w_add32));
-
+   
    // always_ff@(negedge clk)
    //   begin
    // 	if(r_start_int)
    // 	  begin
-   // 	     $display("start int fired for opcode %d, pc %x, rob id %d, cycle %d", 
-   // 		      int_uop.op, int_uop.pc, int_uop.rob_ptr, r_cycle);
-   // 	     if(t_mispred_br)
-   // 	       begin
-   // 		  $display("mispredicted op for %x", int_uop.pc);
-   // 	       end
-   // 	     if(int_uop.op == BGEU)
-   // 	       begin
-   // 		  $display("BGEU source %x, %x, take br %b, prediction %b",
-   // 			   t_srcA, t_srcB, t_take_br, int_uop.br_pred);
-   // 	       end
+   // 	     $display("start int fired for opcode %d, pc %x, rob id %d, cycle %d, srcA %x, prf A ptr %d, r_fwd_int_srcA %b, r_fwd_mem_srcA %b, srcB %x", 
+   // 		      int_uop.op, int_uop.pc, int_uop.rob_ptr, r_cycle, 
+   // 		      t_srcA, int_uop.srcA, 
+   // 		      r_fwd_int_srcA, r_fwd_mem_srcA,
+   // 		      t_srcB);
    // 	  end
    //   end // always_ff@ (negedge clk)
-   
 
    always_comb
      begin
@@ -1106,12 +1125,34 @@ module exec(clk,
 	t_shift_amt = 5'd0;
 	t_start_mul = 1'b0;
 	t_signed_div = 1'b0;
+	t_is_rem = 1'b0;
 	t_start_div32 = 1'b0;	
 
 	
 	
 	case(int_uop.op)
 	  //riscv
+	  DIV:
+	    begin
+	       t_signed_div = 1'b1;
+	       t_start_div32 = r_start_int&!ds_done;	       
+	    end
+	  DIVU:
+	    begin
+	       t_start_div32 = r_start_int&!ds_done;
+	    end
+	  REM:
+	    begin
+	       t_signed_div = 1'b1;
+	       t_is_rem = 1'b1;
+	       t_start_div32 = r_start_int&!ds_done;	       
+	    end
+	  REMU:
+	    begin
+	       t_is_rem = 1'b1;
+	       t_start_div32 = r_start_int&!ds_done;
+	    end
+	  
 	  MUL:
 	    begin
 	       t_start_mul = r_start_int&!ds_done;
@@ -1504,6 +1545,16 @@ module exec(clk,
 	r_fwd_mem_srcB <= mem_rsp_dst_valid && (t_picked_uop.srcB == mem_rsp_dst_ptr);
      end
 
+   // always_ff@(negedge clk)
+   //   begin
+	
+   // 	$display("at cycle %d, mul ptr = %d %b, div ptr = %d %b, int_uop.dst %d", 
+   // 		 r_cycle, 
+   // 		 w_mul_prf_ptr, t_mul_complete,
+   // 		 w_div_prf_ptr, t_div_complete,
+   // 		 int_uop.dst);
+   //   end
+   
 
    rf4r2w #(.WIDTH(32), .LG_DEPTH(`LG_PRF_ENTRIES)) 
    intprf (.clk(clk),
@@ -1511,11 +1562,15 @@ module exec(clk,
 	   .rdptr1(t_picked_uop.srcB),
 	   .rdptr2(t_mem_uq.srcA),
 	   .rdptr3(t_mem_dq.src_ptr),
-	   .wrptr0(t_mul_complete ? w_mul_prf_ptr : int_uop.dst),
+	   .wrptr0(t_mul_complete ? w_mul_prf_ptr :
+		   t_div_complete ? w_div_prf_ptr :
+		   int_uop.dst),
 	   .wrptr1(mem_rsp_dst_ptr),
-	   .wen0(t_mul_complete | r_start_int && t_wr_int_prf),
+	   .wen0(t_mul_complete | t_div_complete | (r_start_int & t_wr_int_prf)),
 	   .wen1(mem_rsp_dst_valid),
-	   .wr0(t_mul_complete ? t_mul_result[31:0] : t_result),
+	   .wr0(t_mul_complete ? t_mul_result[31:0] :
+		t_div_complete ? t_div_result[31:0] :
+		t_result),
 	   .wr1(mem_rsp_load_data[31:0]),
 	   .rd0(w_srcA),
 	   .rd1(w_srcB),
@@ -1558,13 +1613,17 @@ module exec(clk,
      begin
 	if(t_mul_complete || t_div_complete)
 	  begin
-	     complete_bundle_1.rob_ptr <= t_mul_complete ? t_rob_ptr_out : t_div_rob_ptr_out;
+	     complete_bundle_1.rob_ptr <= t_mul_complete ? 
+					  t_rob_ptr_out : 
+					  t_div_rob_ptr;
 	     complete_bundle_1.complete <= 1'b1;
 	     complete_bundle_1.faulted <= 1'b0;
 	     complete_bundle_1.restart_pc <= 'd0;
 	     complete_bundle_1.is_ii <= 1'b0;
 	     complete_bundle_1.take_br <= 1'b0;
-	     complete_bundle_1.data <= t_mul_result[`M_WIDTH-1:0];
+	     complete_bundle_1.data <= t_mul_complete ? 
+				       t_mul_result[31:0] :
+				       t_div_result[31:0];
 	  end
 	else
 	  begin

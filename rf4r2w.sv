@@ -28,6 +28,16 @@ module rf4r2w(clk,
    localparam DEPTH = 1<<LG_DEPTH;
    logic [WIDTH-1:0] 	    r_ram[DEPTH-1:0];
 
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if(wen0)
+   // 	  begin
+   // 	     $display("writing %x to location %d on write port 0",
+   // 		      wr0, wrptr0);
+   // 	  end
+   //   end
+  
+   
    always_ff@(posedge clk)
      begin
 	rd0 <= rdptr0=='d0 ? 'd0 : r_ram[rdptr0];

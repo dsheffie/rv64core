@@ -7,6 +7,7 @@ module divider(clk,
 	       rob_ptr_in,
 	       prf_ptr_in,	     
 	       is_signed_div,
+	       is_rem,
 	       start_div,
 	       y,
 	       rob_ptr_out,
@@ -27,6 +28,7 @@ module divider(clk,
    input logic [`LG_PRF_ENTRIES-1:0] prf_ptr_in;
    
    input logic 	      is_signed_div;
+   input logic 	      is_rem;
    input logic 	      start_div;
    
    output logic [W2-1:0] y;
@@ -48,6 +50,7 @@ module divider(clk,
    logic 	r_is_signed, n_is_signed;
    logic 	r_sign, n_sign;
    logic 	r_rem_sign, n_rem_sign;
+   logic 	r_is_rem_op, n_is_rem_op;
    
    logic [`LG_ROB_ENTRIES-1:0] r_rob_ptr, n_rob_ptr;
    logic [`LG_PRF_ENTRIES-1:0] r_gpr_prf_ptr, n_gpr_prf_ptr;
@@ -71,6 +74,7 @@ module divider(clk,
 	     r_is_signed <= 1'b0;
 	     r_sign <= 1'b0;
 	     r_rem_sign <= 1'b0;
+	     r_is_rem_op <= 1'b0;
 	     r_A <= 'd0;
 	     r_B <= 'd0;
 	     r_Y <= 'd0;
@@ -85,7 +89,8 @@ module divider(clk,
 	     r_gpr_prf_ptr <= n_gpr_prf_ptr;
 	     r_is_signed <= n_is_signed;
 	     r_sign <= n_sign;
-	     r_rem_sign <= n_rem_sign;	     
+	     r_rem_sign <= n_rem_sign;
+	     r_is_rem_op <= n_is_rem_op;
 	     r_A <= n_A;
 	     r_B <= n_B;
 	     r_Y <= n_Y;
@@ -107,6 +112,7 @@ module divider(clk,
 	n_is_signed = r_is_signed;
 	n_sign = r_sign;
 	n_rem_sign = r_rem_sign;
+	n_is_rem_op = r_is_rem_op;
 	n_A = r_A;
 	n_B = r_B;
 	n_Y = r_Y;
@@ -128,6 +134,7 @@ module divider(clk,
 	    begin
 	       n_rob_ptr = rob_ptr_in;
 	       n_gpr_prf_ptr = prf_ptr_in;
+	       n_is_rem_op = is_rem;
 	       n_is_signed = is_signed_div;
 	       n_state = start_div ? DIVIDE : IDLE;
 	       n_idx = W-1;
@@ -168,6 +175,10 @@ module divider(clk,
 	       if(r_is_signed && r_rem_sign)
 		 begin
 		    n_Y[W2-1:W] = (~n_R[W2-1:W]) + 'd1;
+		 end
+	       if(r_is_rem_op)
+		 begin
+		    n_Y[W-1:0] = n_Y[W2-1:W];
 		 end
 	    end
 	  WAIT_FOR_WB:
