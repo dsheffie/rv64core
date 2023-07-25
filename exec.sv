@@ -158,7 +158,6 @@ module exec(clk,
    
    
    logic [`M_WIDTH-1:0] t_pc, t_pc4, t_pc8;
-   logic [27:0] t_jaddr;
    logic 	t_srcs_rdy;
 
    
@@ -1118,7 +1117,6 @@ module exec(clk,
 	t_wr_cpr0 = 1'b0;
 	t_take_br = 1'b0;
 	t_mispred_br = 1'b0;
-	t_jaddr = {int_uop.jmp_imm[9:0],int_uop.imm,2'd0};
 	t_alu_valid = 1'b0;
 	t_got_break = 1'b0;
 	t_signed_shift = 1'b0;
@@ -1248,7 +1246,7 @@ module exec(clk,
 	  JALR:
 	    begin
 	       t_take_br = 1'b1;
-	       t_mispred_br = (t_srcA + int_uop.rvimm)  != {int_uop.jmp_imm,int_uop.imm};	       
+	       t_mispred_br = (t_srcA + int_uop.rvimm) != {int_uop.jmp_imm,int_uop.imm};	       
 	       t_pc = t_srcA + int_uop.rvimm;
 	       t_alu_valid = 1'b1;
 	       t_result = int_uop.pc + 32'd4;
@@ -1257,7 +1255,7 @@ module exec(clk,
 	  JR:
 	     begin
 		t_take_br = 1'b1;
-		t_mispred_br = (t_srcA + int_uop.rvimm)  != {int_uop.jmp_imm,int_uop.imm};
+		t_mispred_br = (t_srcA + int_uop.rvimm) != {int_uop.jmp_imm,int_uop.imm};
 		t_pc = t_srcA + int_uop.rvimm;
 		t_alu_valid = 1'b1;
 	     end
