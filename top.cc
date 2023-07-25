@@ -547,7 +547,7 @@ int main(int argc, char **argv) {
 
       
       if(((insns_retired % heartbeat) == 0) or trace_retirement ) {
-	std::cout << "retiring "
+	std::cout << "port a "
 		  << " cycle " << cycle
 		  << " "
 		  << std::hex
@@ -555,21 +555,21 @@ int main(int argc, char **argv) {
 		  << std::dec
 		  << " "
 		  << getAsmString(mem_r32(s,tb->retire_pc), tb->retire_pc)
-		  // << std::fixed
-		  // << ", " << static_cast<double>(insns_retired) / cycle << " IPC "
-		  // << ", insns_retired "
-		  // << insns_retired
-		  // << ", mispredict rate "
-		  // << ((static_cast<double>(n_mispredicts)/n_branches)*100.0)
-		  // << ", mispredict pki "
-		  // << (static_cast<double>(n_mispredicts) / insns_retired) * 1000.0
-		  // << std::defaultfloat	  
+		  << std::fixed
+		  << ", " << static_cast<double>(insns_retired) / cycle << " IPC "
+		  << ", insns_retired "
+		  << insns_retired
+		  << ", mispredict rate "
+		  << ((static_cast<double>(n_mispredicts)/n_branches)*100.0)
+		  << ", mispredict pki "
+		  << (static_cast<double>(n_mispredicts) / insns_retired) * 1000.0
+		  << std::defaultfloat	  
 		  <<" \n";
       }
       if(tb->retire_two_valid) {
 	++insns_retired;
 	if(((insns_retired % heartbeat) == 0) or trace_retirement ) {
-	  std::cout << "retiring "
+	  std::cout << "port b "
 		    << " cycle " << cycle
 		    << " "
 		    << std::hex
@@ -577,16 +577,15 @@ int main(int argc, char **argv) {
 		    << std::dec
 		    << " "
 		    << getAsmString(mem_r32(s,tb->retire_two_pc), tb->retire_two_pc)
-
-	    // << std::fixed
-		    // << ", " << static_cast<double>(insns_retired) / cycle << " IPC "	    
-		    // << ", insns_retired "
-		    // << insns_retired
-		    // << ", mispredict rate "
-		    // << ((static_cast<double>(n_mispredicts)/n_branches)*100.0)
-		    // << ", mispredict pki "
-		    // << (static_cast<double>(n_mispredicts) / insns_retired) * 1000.0
-		    // << std::defaultfloat
+		    << std::fixed
+		    << ", " << static_cast<double>(insns_retired) / cycle << " IPC "	    
+		    << ", insns_retired "
+		    << insns_retired
+		    << ", mispredict rate "
+		    << ((static_cast<double>(n_mispredicts)/n_branches)*100.0)
+		    << ", mispredict pki "
+		    << (static_cast<double>(n_mispredicts) / insns_retired) * 1000.0
+		    << std::defaultfloat
 		    <<" \n";
 	}
       }
