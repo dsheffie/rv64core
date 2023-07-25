@@ -436,6 +436,13 @@ module decode_riscv(insn,
 		    uop.serializing_op = 1'b1;
 		    uop.is_int = 1'b1;		    
 		 end
+	       else if(insn[31:20] == 'd1 && insn[19:7] == 'd0)
+		 begin
+		    uop.op = MONITOR;
+		    uop.serializing_op = 1'b1;
+		    uop.must_restart = 1'b1;		    
+		    uop.is_int = 1'b1;
+		 end
 	       else
 		 begin
 		    uop.op = NOP;

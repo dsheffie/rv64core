@@ -51,14 +51,13 @@ void execRiscv(state_t *s) {
   std::cout << std::dec;
 #endif				    
   
-  
   uint64_t tohost = *reinterpret_cast<uint64_t*>(mem + globals::tohost_addr);
   tohost &= ((1UL<<32)-1);
   
   if(tohost) {
-    //std::cout << "tohost = " << std::hex << tohost << std::dec << "\n";
+    std::cout << "tohost = " << std::hex << tohost << std::dec << "\n";
     //exit(-1);
-    std::cout << std::hex << s->pc << std::dec << "\n";
+    //std::cout << std::hex << s->pc << std::dec << "\n";
     //std::cout << std::hex << s->last_pc << std::dec << "\n";
     if(tohost & 1) {
       /* exit */

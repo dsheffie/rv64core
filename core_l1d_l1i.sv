@@ -27,10 +27,6 @@ module core_l1d_l1i(clk,
 		    retire_two_valid,
 		    retire_pc,
 		    retire_two_pc,
-		    monitor_req_reason,
-		    monitor_req_valid,
-		    monitor_rsp_valid,
-		    monitor_rsp_data,
 		    branch_pc,
 		    branch_pc_valid,		    
 		    branch_fault,
@@ -40,6 +36,7 @@ module core_l1d_l1i(clk,
 		    l1d_cache_hits,
 		    l2_cache_accesses,
 		    l2_cache_hits,
+		    monitor_ack,
 		    got_break,
 		    got_ud,
 		    got_bad_addr,
@@ -115,11 +112,8 @@ module core_l1d_l1i(clk,
    logic [`LG_ROB_ENTRIES-1:0] 		  retired_rob_ptr;
    logic [`LG_ROB_ENTRIES-1:0] 		  retired_rob_ptr_two;
 
+   input logic 				  monitor_ack;
    
-   output logic [15:0] 			  monitor_req_reason;
-   output logic 			  monitor_req_valid;
-   input logic 				  monitor_rsp_valid;
-   input logic [(`M_WIDTH-1):0] 	  monitor_rsp_data;
    output logic 			  got_break;
    output logic 			  got_ud;
    output logic 			  got_bad_addr;
@@ -575,10 +569,7 @@ module core_l1d_l1i(clk,
 	     .retired_rob_ptr_two_valid(retired_rob_ptr_two_valid),
 	     .retired_rob_ptr(retired_rob_ptr),
 	     .retired_rob_ptr_two(retired_rob_ptr_two),
-	     .monitor_req_reason(monitor_req_reason),
-	     .monitor_req_valid(monitor_req_valid),
-	     .monitor_rsp_valid(monitor_rsp_valid),
-	     .monitor_rsp_data(monitor_rsp_data),
+	     .monitor_ack(monitor_ack),
 	     .got_break(got_break),
 	     .got_ud(got_ud),
 	     .got_bad_addr(got_bad_addr),

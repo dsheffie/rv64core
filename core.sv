@@ -96,11 +96,7 @@ module core(clk,
 	    retired_rob_ptr_two_valid,
 	    retired_rob_ptr,
 	    retired_rob_ptr_two,
-	    
-	    monitor_req_reason,
-	    monitor_req_valid,
-	    monitor_rsp_valid,
-	    monitor_rsp_data,
+	    monitor_ack,
 	    got_break,
 	    got_ud,
 	    got_bad_addr,
@@ -184,10 +180,8 @@ module core(clk,
    output logic [`LG_ROB_ENTRIES-1:0] retired_rob_ptr_two;
    
    
-   output logic [15:0] 			  monitor_req_reason;
-   output logic 			  monitor_req_valid;
-   input logic 				  monitor_rsp_valid;
-   input logic [(`M_WIDTH-1):0] 	  monitor_rsp_data;
+   input logic 			      monitor_ack;
+   
    output logic 			  got_break;
    output logic 			  got_ud;
    output logic 			  got_bad_addr;
@@ -208,7 +202,6 @@ module core(clk,
    
    uop_t r_dq[N_DQ_ENTRIES-1:0];
 
-   logic [15:0] 			  r_monitor_reason, n_monitor_reason;
    
    logic [`LG_DQ_ENTRIES:0] 		  r_dq_head_ptr, n_dq_head_ptr;
    logic [`LG_DQ_ENTRIES:0] 		  r_dq_next_head_ptr, n_dq_next_head_ptr;
@@ -351,8 +344,6 @@ module core(clk,
    
    mem_req_t t_mem_req;
    logic 		     t_mem_req_valid;
-   logic 		     t_monitor_req_valid;
-   logic [(`M_WIDTH-1):0]    r_monitor_rsp_data, n_monitor_rsp_data;
 
    logic 		     n_machine_clr, r_machine_clr;
    logic 		     n_flush_req_l1d, r_flush_req_l1d;
@@ -380,8 +371,7 @@ module core(clk,
 			     WAIT_FOR_SERIALIZE_AND_RESTART, //12
 			     ARCH_FAULT,
 			     WRITE_EPC,
-			     WRITE_CAUSE,
-			     GET_TICKS
+			     WRITE_CAUSE
 			     } state_t;
    
    state_t r_state, n_state;
@@ -407,8 +397,6 @@ module core(clk,
    assign flush_cl_req = r_flush_cl_req;
    assign flush_cl_addr = r_flush_cl_addr;
 
-   assign monitor_req_reason = r_monitor_reason;
-   assign monitor_req_valid = t_monitor_req_valid;
    
    assign got_break = r_got_break;
    assign got_ud = r_got_ud;
@@ -486,7 +474,6 @@ module core(clk,
 	     r_branch_pht_idx <= 'd0;
 	     r_restart_valid <= 1'b0;
 	     r_take_br <= 1'b0;
-	     r_monitor_rsp_data <= 'd0;
 	     r_got_break <= 1'b0;
 	     r_pending_break <= 1'b0;
 	     r_pending_badva <= 1'b0;
@@ -517,7 +504,6 @@ module core(clk,
 	     r_branch_pht_idx <= n_branch_pht_idx;
 	     r_restart_valid <= n_restart_valid;
 	     r_take_br <= n_take_br;
-	     r_monitor_rsp_data <= n_monitor_rsp_data;
 	     r_got_break <= n_got_break;
 	     r_pending_break <= n_pending_break;
 	     r_pending_badva <= n_pending_badva;
@@ -591,7 +577,6 @@ module core(clk,
 	     retired_rob_ptr_two_valid <= 1'b0;
 	     retired_rob_ptr <= 'd0;
 	     retired_rob_ptr_two <= 'd0;
-	     r_monitor_reason <= 16'd0;
    	  end
    	else
    	  begin
@@ -614,7 +599,6 @@ module core(clk,
 	     retired_rob_ptr_two_valid <= t_retire_two;
 	     retired_rob_ptr <= r_rob_head_ptr[`LG_ROB_ENTRIES-1:0];
 	     retired_rob_ptr_two <= r_rob_next_head_ptr[`LG_ROB_ENTRIES-1:0];
-	     r_monitor_reason <= n_monitor_reason;
    	  end
      end
 `ifdef ENABLE_CYCLE_ACCOUNTING
@@ -789,8 +773,6 @@ module core(clk,
 	n_restart_valid = 1'b0;
 	n_take_br = r_take_br;	
 	t_bump_rob_head = 1'b0;
-	t_monitor_req_valid = 1'b0;
-	n_monitor_rsp_data = r_monitor_rsp_data;
 	n_pending_fault = r_pending_fault;
 	n_pending_badva = r_pending_badva;
 	n_pending_ii = r_pending_ii;
@@ -820,7 +802,6 @@ module core(clk,
 	n_pending_break = r_pending_break;
 	n_got_ud = r_got_ud;
 	n_got_bad_addr = r_got_bad_addr;
-	n_monitor_reason = r_monitor_reason;
 	n_got_restart_ack = r_got_restart_ack;
 	n_ready_for_resume = 1'b0;
 	n_l1i_flush_complete = r_l1i_flush_complete || l1i_flush_complete;
@@ -890,7 +871,6 @@ module core(clk,
 				begin
 				   n_state = (t_uop.op == MONITOR) ? 
 					     HANDLE_MONITOR : ALLOC_FOR_SERIALIZE;
-				   n_monitor_reason = t_uop.imm;
 				end
 			   end
 			 else
@@ -933,30 +913,9 @@ module core(clk,
 		      begin
 			 if(t_uop.op == MONITOR)
 			   begin
-			      n_monitor_reason = t_uop.imm;
-			      case(t_uop.imm)
-				'd50: /* get cycle */
-				  begin
-				     n_state = GET_TICKS;
-				  end
-				'd52: /* flush line in data cache */
-				  begin
-				     n_state = MONITOR_FLUSH_CACHE;
-				     n_l1i_flush_complete = 1'b1;
-				     n_flush_cl_addr = r_arch_a0;
-				     n_flush_cl_req = 1'b1;
-				  end
-				'd53: /* get icnt */
-				  begin
-				     n_state = HANDLE_MONITOR;
-				  end
-				default:
-				  begin
-				     n_flush_req_l1i = 1'b0;
-				     n_flush_req_l1d = 1'b1;			      				     
-				     n_state = MONITOR_FLUSH_CACHE;
-				  end
-			      endcase // case (t_uop.imm)
+			      n_flush_req_l1i = 1'b0;
+			      n_flush_req_l1d = 1'b1;
+			      n_state = MONITOR_FLUSH_CACHE;
 			   end // if (t_uop.op == MONITOR)
 			 else
 			   begin
@@ -1048,18 +1007,11 @@ module core(clk,
 		    n_l2_flush_complete = 1'b0;
 		 end
 	    end
-	  GET_TICKS:
-	    begin
-	       n_state = ALLOC_FOR_MONITOR;
-	       n_monitor_rsp_data = r_cycle[31:0];
-	    end
 	  HANDLE_MONITOR:
 	    begin
-	       t_monitor_req_valid = 1'b1;
-	       if(monitor_rsp_valid)
+	       if(monitor_ack)
 		 begin
 		    n_state = ALLOC_FOR_MONITOR;
-		    n_monitor_rsp_data = monitor_rsp_data;
 		 end
 	    end
 	  ALLOC_FOR_MONITOR:
@@ -1933,8 +1885,7 @@ module core(clk,
 	   .mem_rsp_dst_ptr(core_mem_rsp.dst_ptr),
 	   .mem_rsp_dst_valid(core_mem_rsp.dst_valid),
 	   .mem_rsp_load_data(core_mem_rsp.data),
-	   .mem_rsp_rob_ptr(core_mem_rsp.rob_ptr),
-	   .monitor_rsp_data(r_monitor_rsp_data)
+	   .mem_rsp_rob_ptr(core_mem_rsp.rob_ptr)
 	   );
 
 

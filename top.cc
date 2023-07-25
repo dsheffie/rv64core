@@ -415,8 +415,7 @@ int main(int argc, char **argv) {
   for(cycle = 0; (cycle < 4) && !Verilated::gotFinish(); ++cycle) {
     contextp->timeInc(1);  // 1 timeprecision period passes...
     tb->mem_rsp_valid = 0;
-    tb->monitor_rsp_valid = 0;
-    tb->monitor_rsp_data = 0;    
+    tb->monitor_ack = 0;
     tb->reset = 1;
     tb->extern_irq = 0;
     tb->clk = 1;
@@ -472,172 +471,33 @@ int main(int argc, char **argv) {
     tb->clk = 1;
     tb->eval();
 
-#ifdef LINUX_SYSCALL_EMULATION
-    got_monitor = emulate_linux_syscall(tb, s);
-    if(s->brk) {
-      break;
-    }
-#else
-    
-    if(tb->monitor_req_valid) {
-      bool handled = false;
-
-
-      
-#if 0
-      switch(tb->monitor_req_reason)
-	{
-	case 6: {
-	  char *path = reinterpret_cast<char*>(s->mem.get_raw_ptr(s->gpr[R_a0]));
-	  int32_t flags = remapIOFlags(s->gpr[R_a1]);
-	  tb->monitor_rsp_data = open(path, flags, S_IRUSR|S_IWUSR);	  
-	  handled = true;
-#ifdef PRINT_SYSCALL
-	  std::cout << insns_retired << " open " << path << " " << tb->monitor_rsp_data << "\n";
-#endif
-	  break;
-	}
-	case 7: {
-	  int32_t fd = s->gpr[R_a0];
-	  int32_t nr = s->gpr[R_a2];
-	  tb->monitor_rsp_data = read(fd, reinterpret_cast<char*>(s->mem.get_raw_ptr(s->gpr[R_a1])), nr);
-#ifdef PRINT_SYSCALL	  
-	  std::cout << insns_retired << " read " << fd << ","
-		    << std::hex << s->gpr[R_a1] << std::dec
-		    << "," << nr
-		    << " = "
-		    << tb->monitor_rsp_data
-		    << "\n";
-#endif
-	  handled = true;
-	  break;
-
-	}
-	case 8: { /* int write(int file, char *ptr, int len) */
-	  int32_t fd = s->gpr[R_a0];
-	  int32_t nr = s->gpr[R_a2];
-	  
-	  tb->monitor_rsp_data = write(fd, reinterpret_cast<void*>(s->mem.get_raw_ptr(s->gpr[R_a1])), nr);
-#ifdef PRINT_SYSCALL
-	  std::cout << insns_retired << " write " << fd << ","
-		    << std::hex << s->gpr[R_a1] << std::dec << "," << nr << "\n";
-#endif
-	  if(fd==1)
-	    fflush(stdout);
-	  else if(fd==2)
-	    fflush(stderr);
-
-	  handled = true;
-	  break;
-	}
-	case 9: { /* lseek */
-	  handled = true;
-	  tb->monitor_rsp_data  = lseek(s->gpr[R_a0], s->gpr[R_a1], s->gpr[R_a2]);
-	  break;
-	}
-	case 10: { /* close */
-	  int32_t fd = s->gpr[R_a0];
-	  handled = true;
-	  tb->monitor_rsp_data = 0;
-	  if(fd>2) {
-	    tb->monitor_rsp_data = (int32_t)close(fd);
-	  }
-#ifdef PRINT_SYSCALL
-	  std::cout << insns_retired << " close " << fd << "\n";
-#endif
-	  break;
-	}
-	case 33: {
-	  handled = true;	  
-	  uint32_t uptr = *(uint32_t*)(s->gpr + R_a0);
-	  s->mem.set<uint32_t>(uptr, 0);
-	  s->mem.set<uint32_t>(uptr+4, 0);
-	  tb->monitor_rsp_data = 0;
-	  break;
-	}
-	case 34: {
-	  handled = true;	  
-	  uint32_t uptr = *(uint32_t*)(s->gpr + R_a0);
-	  for(int i = 0; i < 4; i++) {
-	    s->mem.set<uint32_t>(uptr+i,0);
-	  }
-	  tb->monitor_rsp_data = 0;
-	  break;
-	}
-	case 35: {
-	  /* int getargs(char **argv) */
-	  handled = true;
-	  for(int i = 0; i < std::min(MARGS, globals::sysArgc); i++) {
-	    uint32_t arrayAddr = ((uint32_t)s->gpr[R_a0])+4*i;
-	    uint32_t ptr = bswap<IS_LITTLE_ENDIAN>(s->mem.get<uint32_t>(arrayAddr));
-	    strcpy(reinterpret_cast<char*>(s->mem.get_raw_ptr(ptr)), globals::sysArgv[i]);
-	  }
-	  tb->monitor_rsp_data = globals::sysArgc;
-	  break;
-	}
-	case 50: /* get cycle */
-	  handled = true;
-	  tb->monitor_rsp_data = cycle;
-	  break;
-	case 51: /* nuke caches */
-	  handled = true;
-	  break;
-	case 52: {/* flush cacheline */
-	  handled = true;
-	  break;
-	}
-	case 53:
-	  handled = true;
-	  tb->monitor_rsp_data = insns_retired;
-	  break;	  
-	case 55: {
-	  handled = true;
-	  //std::cerr << "R_a0 = " << std::hex << s->gpr[R_a0] << std::dec << "\n";
-	  s->mem.set<uint32_t>(static_cast<uint32_t>(s->gpr[R_a0] + 0),
-			       bswap<IS_LITTLE_ENDIAN>(K1SIZE));
-	  /* No Icache */
-	  s->mem.set<uint32_t>(static_cast<uint32_t>(s->gpr[R_a0] + 4), 0);
-	  /* No Dcache */
-	  s->mem.set<uint32_t>(static_cast<uint32_t>(s->gpr[R_a0] + 8), 0);
-	  
-	  
-	  //std::cerr << "u = " << std::hex << s->mem.get<uint32_t>(s->gpr[R_a0]) << std::dec << "\n"; 	  
-	  //*((uint32_t*)(s->mem + (uint32_t)s->gpr[R_a0] + 0)) = bswap<IS_LITTLE_ENDIAN>(K1SIZE);
-
-	  //std::cerr << "u = " << std::hex << *((uint32_t*)(s->mem + (uint32_t)s->gpr[R_a0] + 0))
-	  //<< std::dec << "\n";
-	  
-	  //auto uu = *((uint32_t*)(s->mem + (uint32_t)s->gpr[R_a0] + 0));
-	  //assert(uu == u);
-	  /* No Icache */
-	  //*((uint32_t*)(s->mem + (uint32_t)s->gpr[R_a0] + 4)) = 0;
-	  /* No Dcache */
-	  //*((uint32_t*)(s->mem + (uint32_t)s->gpr[R_a0] + 8)) = 0;
-	  
-	  s->gpr[R_v0] = 0;
-	  break;
-	}
-	default:
-	  break;
-	}
-#endif
-      
-      touched_lines.reset();
-      if(!handled) {
-	std::cout << "didn't handled monitor reason " << tb->monitor_req_reason << "\n";
-	exit(-1);
+    uint32_t to_host = mem_r32(s, globals::tohost_addr);
+    if(to_host) {
+      std::cout << "got to host " << std::hex << to_host << std::dec << "\n";
+      if(to_host & 1) {
 	break;
       }
-      tb->monitor_rsp_valid = 1;
-      got_monitor = true;
-      // std::cout << "handled = "
-      // 		<< handled
-      // 		<< " retire valid = "
-      // 		<< static_cast<int>(tb->retire_valid)
-      // 		<< "\n";
+      uint64_t *buf = reinterpret_cast<uint64_t*>(&s->mem[to_host]);
+      switch(buf[0])
+	{
+	case SYS_write: /* int write(int file, char *ptr, int len) */
+	  buf[0] = write(buf[1], (void*)(s->mem + buf[2]), buf[3]);
+	  if(buf[1]==1)
+	    fflush(stdout);
+	  else if(buf[1]==2)
+	    fflush(stderr);
+	  break;
+	default:
+	  std::cout << "syscall " << buf[0] << " unsupported\n";
+	  exit(-1);
+	}
+      exit(-1);
+      tb->monitor_ack = 1;
+      got_monitor = true;      
     }
-#endif
+
     
+
     if(tb->retire_reg_valid) {
       s->gpr[tb->retire_reg_ptr] = tb->retire_reg_data;
       //if(tb->retire_reg_ptr == R_a0) {
@@ -669,15 +529,6 @@ int main(int argc, char **argv) {
       ++n_flush_cycles;
     }
 
-    //if(tb->extern_irq) {
-    //tb->extern_irq = 0;
-    //}
-    
-    //if((cycle & ((1UL<<8)-1)) == 0) {
-    //std::cout << "firing irq at cycle " << cycle << "\n";
-    //tb->extern_irq = 1;
-    //}
-    
     
     if(tb->retire_valid) {
       ++insns_retired;
@@ -958,6 +809,7 @@ int main(int argc, char **argv) {
       else if(tb->mem_req_opcode == 7) { /* store word */
 	for(int i = 0; i < 16; i++) {
 	  uint64_t ea = (tb->mem_req_addr + 4*i) & ((1UL<<32)-1);
+	  std::cout << std::hex << ea << ":" << tb->mem_req_store_data[i] << std::dec << "\n";
 	  mem_w32(s, ea, tb->mem_req_store_data[i]);
 	}
 	last_store_addr = tb->mem_req_addr;
@@ -979,8 +831,7 @@ int main(int argc, char **argv) {
     }
     
     if(got_monitor) {
-      tb->monitor_rsp_valid = 0;
-      tb->monitor_rsp_data = 0;
+      tb->monitor_ack = 0;
       got_monitor = false;
     }
     ++cycle;

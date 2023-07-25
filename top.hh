@@ -227,8 +227,16 @@ static inline uint32_t mem_r32(const state_t*s, uint32_t a) {
   return *reinterpret_cast<uint32_t*>(&s->mem[a]);
 }
 
+static inline uint64_t mem_r64(const state_t*s, uint32_t a) {
+  return *reinterpret_cast<uint64_t*>(&s->mem[a]);
+}
+
 static inline void mem_w32(state_t*s, uint32_t a, uint32_t x) {
   *reinterpret_cast<uint32_t*>(&s->mem[a]) = x;
+}
+
+static inline void mem_w64(state_t*s, uint32_t a, uint64_t x) {
+  *reinterpret_cast<uint64_t*>(&s->mem[a]) = x;
 }
 
 
