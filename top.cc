@@ -471,31 +471,33 @@ int main(int argc, char **argv) {
     tb->clk = 1;
     tb->eval();
 
-    uint32_t to_host = mem_r32(s, globals::tohost_addr);
-    if(to_host) {
-      std::cout << "got to host " << std::hex << to_host << std::dec << "\n";
-      if(to_host & 1) {
-	break;
-      }
-      uint64_t *buf = reinterpret_cast<uint64_t*>(&s->mem[to_host]);
-      switch(buf[0])
-	{
-	case SYS_write: /* int write(int file, char *ptr, int len) */
-	  buf[0] = write(buf[1], (void*)(s->mem + buf[2]), buf[3]);
-	  if(buf[1]==1)
-	    fflush(stdout);
-	  else if(buf[1]==2)
-	    fflush(stderr);
+    if(not(tb->in_flush_mode)) {
+      uint32_t to_host = mem_r32(s, globals::tohost_addr);
+      if(to_host) {
+	//std::cout << "got to host " << std::hex << to_host << std::dec << "\n";
+	if(to_host & 1) {
 	  break;
-	default:
-	  std::cout << "syscall " << buf[0] << " unsupported\n";
-	  exit(-1);
 	}
-      exit(-1);
-      tb->monitor_ack = 1;
-      got_monitor = true;      
+	uint64_t *buf = reinterpret_cast<uint64_t*>(&s->mem[to_host]);
+	switch(buf[0])
+	  {
+	  case SYS_write: /* int write(int file, char *ptr, int len) */
+	    buf[0] = write(buf[1], (void*)(s->mem + buf[2]), buf[3]);
+	    if(buf[1]==1)
+	      fflush(stdout);
+	    else if(buf[1]==2)
+	      fflush(stderr);
+	    break;
+	  default:
+	    std::cout << "syscall " << buf[0] << " unsupported\n";
+	    exit(-1);
+	  }
+	mem_w64(s, globals::tohost_addr, 0);
+	mem_w64(s, globals::fromhost_addr, 1);
+	tb->monitor_ack = 1;
+	got_monitor = true;      
+      }
     }
-
     
 
     if(tb->retire_reg_valid) {
@@ -809,7 +811,6 @@ int main(int argc, char **argv) {
       else if(tb->mem_req_opcode == 7) { /* store word */
 	for(int i = 0; i < 16; i++) {
 	  uint64_t ea = (tb->mem_req_addr + 4*i) & ((1UL<<32)-1);
-	  std::cout << std::hex << ea << ":" << tb->mem_req_store_data[i] << std::dec << "\n";
 	  mem_w32(s, ea, tb->mem_req_store_data[i]);
 	}
 	last_store_addr = tb->mem_req_addr;

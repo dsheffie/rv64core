@@ -14,6 +14,7 @@ endmodule // dff
 module mul(clk,
 	   reset,
 	   is_signed,
+	   is_high,
 	   go,
 	   src_A,
 	   src_B,
@@ -28,6 +29,7 @@ module mul(clk,
    input logic clk;
    input logic reset;
    input logic is_signed;
+   input logic is_high;
    input logic go;
    
    input logic [31:0] src_A;
@@ -42,8 +44,9 @@ module mul(clk,
    output logic [`LG_ROB_ENTRIES-1:0] 	  rob_ptr_out;
    output logic 			  prf_ptr_val_out;
    output logic [`LG_PRF_ENTRIES-1:0] prf_ptr_out;
-   
-   logic [`MUL_LAT:0] 			   r_complete;
+
+   logic [`MUL_LAT:0] 		      r_is_high;
+   logic [`MUL_LAT:0] 		      r_complete;
    logic [`MUL_LAT:0] 			   r_gpr_val;
    logic [`LG_PRF_ENTRIES-1:0] 		   r_gpr_ptr[`MUL_LAT:0];
    logic [`LG_ROB_ENTRIES-1:0] 		   r_rob_ptr[`MUL_LAT:0];
@@ -62,7 +65,7 @@ module mul(clk,
      begin
 	t_mul = is_signed ? ($signed(src_A) * $signed(src_B)) 
 	  : src_A * src_B;
-	y = r_mul[`MUL_LAT];
+	y = r_is_high[`MUL_LAT] ? {32'd0, r_mul[`MUL_LAT][63:32]} : r_mul[`MUL_LAT];
      end
 
    always_ff@(posedge clk)
@@ -85,7 +88,7 @@ module mul(clk,
    wire [63:0] 			   r_mul31;   
    always_comb
      begin
-	y = r_mul31;
+	y = r_is_high[`MUL_LAT] ? {32'd0, r_mul31[63:32]} : r_mul31;
      end // always_comb
    wire [63:0] w_pp_us[31:0];
    wire [63:0] w_pp[31:0];
@@ -215,6 +218,7 @@ module mul(clk,
 	       end
 	     r_complete <= 'd0;
 	     r_gpr_val <= 'd0;
+	     r_is_high <= 'd0;
 	  end
 	else
 	  begin
@@ -223,6 +227,7 @@ module mul(clk,
 		  if(i == 0)
 		    begin
 		       r_complete[0] <= go;
+		       r_is_high[0] <= is_high;
 		       r_rob_ptr[0] <= rob_ptr_in;
 		       r_gpr_val[0] <= go;
 		       r_gpr_ptr[0] <= prf_ptr_in;
@@ -230,6 +235,7 @@ module mul(clk,
 		  else
 		    begin
 		       r_complete[i] <= r_complete[i-1];
+		       r_is_high[i] <= r_is_high[i-1];
 		       r_rob_ptr[i] <= r_rob_ptr[i-1];
 		       r_gpr_val[i] <= r_gpr_val[i-1];
 		       r_gpr_ptr[i] <= r_gpr_ptr[i-1];

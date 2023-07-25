@@ -1462,9 +1462,9 @@ endfunction
 	  FLUSH_CACHE:
 	    begin
 	       t_cache_idx = r_cache_idx + 'd1;
-	       $display("flush line %x was %b", 
-			{r_tag_out,r_cache_idx,{`LG_L1D_CL_LEN{1'b0}}},
-			r_dirty_out);
+	       //$display("flush line %x was %b", 
+	       //{r_tag_out,r_cache_idx,{`LG_L1D_CL_LEN{1'b0}}},
+	       //r_dirty_out);
 	       
 	       if(!r_dirty_out)
 		 begin

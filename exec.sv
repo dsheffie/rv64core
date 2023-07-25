@@ -849,7 +849,8 @@ module exec(clk,
    
    mul m(.clk(clk), 
 	 .reset(reset), 
-	 .is_signed(int_uop.op == MUL), 
+	 .is_signed(int_uop.op == MUL),
+	 .is_high(int_uop.op == MULHU),
 	 .go(t_start_mul&r_start_int),
 	 .src_A(t_srcA[31:0]),
 	 .src_B(t_srcB[31:0]),
@@ -864,23 +865,23 @@ module exec(clk,
 
    always_ff@(negedge clk)
      begin
-	if(t_start_mul&r_start_int)
-	  begin
-	     $display("multiplier dest ptr entry %d", int_uop.dst);
-	  end
-	if(t_mul_complete)
-	  begin
-	     $display("r_start_int %b, t_wr_int_prf %b,ptr %d, result %x",
-		      r_start_int, t_wr_int_prf,w_mul_prf_ptr, t_mul_result);
-	     if(r_start_int & t_wr_int_prf)
-	       $stop();
-	  end
+	// if(t_start_mul&r_start_int)
+	//   begin
+	//      $display("multiplier dest ptr entry %d", int_uop.dst);
+	//   end
+	// if(t_mul_complete)
+	//   begin
+	//      $display("r_start_int %b, t_wr_int_prf %b,ptr %d, result %x",
+	// 	      r_start_int, t_wr_int_prf,w_mul_prf_ptr, t_mul_result);
+	//      if(r_start_int & t_wr_int_prf)
+	//        $stop();
+	//   end
 
-	if(t_div_complete)
-	  begin
-	     $display("divider writes back to rob %d, prf %d, value %x at cycle %d",
-		      t_div_rob_ptr, w_div_prf_ptr, t_div_result[31:0], r_cycle);
-	  end
+	// if(t_div_complete)
+	//   begin
+	//      $display("divider writes back to rob %d, prf %d, value %x at cycle %d",
+	// 	      t_div_rob_ptr, w_div_prf_ptr, t_div_result[31:0], r_cycle);
+	//   end
 	
 	
 	if(t_mul_complete & t_div_complete)
@@ -1150,6 +1151,10 @@ module exec(clk,
 	    end
 	  
 	  MUL:
+	    begin
+	       t_start_mul = r_start_int&!ds_done;
+	    end
+	  MULHU:
 	    begin
 	       t_start_mul = r_start_int&!ds_done;
 	    end

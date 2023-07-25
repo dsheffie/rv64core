@@ -1026,7 +1026,7 @@ module core(clk,
 	       if(t_rob_head_complete)
 		 begin
 		    t_clr_dq = 1'b1;
-		    n_restart_pc = t_rob_head.target_pc;
+		    n_restart_pc = t_rob_head.pc + 'd4;
 		    n_restart_src_pc = t_rob_head.pc;
 		    n_restart_src_is_indirect = 1'b0;
 		    n_restart_valid = 1'b1;

@@ -379,8 +379,8 @@ module l2(clk,
 		 end
 	       else if(l1_mem_req_valid)
 		 begin
-		    $display("accept request for addr %x, idx %x at cycle %d, type %d", 
-			     l1_mem_req_addr, t_idx, r_cycle, n_opcode);
+		    //$display("accept request for addr %x at cycle %d, type %d", 
+		    //l1_mem_req_addr, r_cycle, n_opcode);
 		    n_req_ack = 1'b1;
 		    n_state = WAIT_FOR_RAM;
 		    n_rsp_valid = (l1_mem_req_opcode == 4'd7);
@@ -398,7 +398,6 @@ module l2(clk,
 	       //load hit
 	       if(w_hit)
 		 begin
-		    $display("request for address %x hit, was dirty %b", r_addr, w_dirty);
 		    n_reload = 1'b0;
 		    if(r_opcode == 4'd4)
 		      begin			 
@@ -440,7 +439,6 @@ module l2(clk,
 		 end
 	       else
 		 begin
-		    $display("request for address %x missed, dirty %b", r_addr, w_dirty);
 		    n_cache_hits = r_cache_hits - 64'd1;			 		    
 		    if(w_dirty)
 		      begin
@@ -465,7 +463,6 @@ module l2(clk,
 	    begin
 	       if(mem_rsp_valid)
 		 begin
-		    $display("dirty writeback foro address %x missed", r_addr);	       
 		    n_addr = r_saveaddr;
 		    n_mem_opcode = 4'd4; //load
 		    n_state = STORE_TURNAROUND;
@@ -511,7 +508,7 @@ module l2(clk,
 	    end
 	  FLUSH_TRIAGE:
 	    begin
-	       $display("addr = %x, w_valid %b, w_need_wb %b", {w_tag, t_idx, 6'd0}, w_need_wb, w_valid);
+	       //$display("r_idx = %d, w_need_wb %b", r_idx, w_need_wb);
 	       
 	       if(w_need_wb)
 		 begin
