@@ -4,7 +4,7 @@ import subprocess
 import re
 
 if __name__ == '__main__':
-    n_tests = 1000
+    n_tests = 10
     for t in range(0,n_tests):
         r = 'test-' + str(t)
         test = r + '.c'

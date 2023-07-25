@@ -508,7 +508,8 @@ module l2(clk,
 	    end
 	  FLUSH_TRIAGE:
 	    begin
-	       //$display("r_idx = %d, w_need_wb %b", r_idx, w_need_wb);
+	       //if(w_need_wb)
+	       //$display("address = %x needs wb", {w_tag, t_idx, 6'd0});
 	       
 	       if(w_need_wb)
 		 begin

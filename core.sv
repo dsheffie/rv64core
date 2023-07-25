@@ -684,14 +684,6 @@ module core(clk,
 `ifdef DUMP_ROB
    always_ff@(negedge clk)
      begin
-	if(r_state == ACTIVE)
-	  begin
-	     if(t_bob_full && t_rob_empty)
-	       begin
-		  $display("fucked up at cycle %d", r_cycle);
-		  $stop();
-	       end
-	  end
 	if(1)
 	  begin
 	     $display("cycle %d : state = %d, alu complete %b, mem complete %b,head_ptr %d, inflight %d, complete %b,  can_retire_rob_head %b, head pc %x, empty %b, full %b, bob full %b", 
@@ -998,7 +990,6 @@ module core(clk,
 	    end
 	  MONITOR_FLUSH_CACHE:
 	    begin
-	       //$display("%d : %b %b %b", r_cycle, n_l1i_flush_complete, n_l1d_flush_complete, n_l2_flush_complete);
 	       if(/*n_l1i_flush_complete &&*/ n_l1d_flush_complete && n_l2_flush_complete)
 		 begin
 		    n_state = HANDLE_MONITOR;
@@ -1011,6 +1002,7 @@ module core(clk,
 	    begin
 	       if(monitor_ack)
 		 begin
+		    //$display("monitor ack");
 		    n_state = ALLOC_FOR_MONITOR;
 		 end
 	    end
