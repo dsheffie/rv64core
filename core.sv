@@ -310,8 +310,6 @@ module core(clk,
    
    logic [(`M_WIDTH-1):0]    t_cpr0_status_reg;
    
-   logic [31:0] 	     r_arch_a0;
-
    logic [4:0] 		     n_cause, r_cause;
    
    
@@ -543,18 +541,6 @@ module core(clk,
 	  end
      end
 
-   always_ff@(posedge clk)
-     begin
-	if(reset)
-	  begin
-	     r_arch_a0 <= 'd0;
-	  end
-	else if(t_rob_head.valid_dst && t_retire && t_rob_head.ldst == 'd4)
-	  begin
-	     r_arch_a0 <= t_rob_head.data[31:0];
-	  end
-     end
-   
    always_ff@(posedge clk)
      begin
    	if(reset)
@@ -1313,7 +1299,7 @@ module core(clk,
 	t_rob_tail.target_pc = 'd0;
 	
 	t_rob_tail.is_call = t_alloc_uop.op == JAL || t_alloc_uop.op == JALR;
-	t_rob_tail.is_ret = (t_alloc_uop.op == JR) && (t_uop.srcA == 'd31);
+	t_rob_tail.is_ret = (t_alloc_uop.op == JR) && (t_uop.srcA == 'd5);
 	t_rob_tail.is_break  = (t_alloc_uop.op == BREAK);
 	t_rob_tail.is_indirect = t_alloc_uop.op == JALR || t_alloc_uop.op == JR;
 	
@@ -1333,7 +1319,7 @@ module core(clk,
 	t_rob_next_tail.target_pc = 'd0;
 
 	t_rob_next_tail.is_call = t_alloc_uop2.op == JAL || t_alloc_uop2.op == JALR;
-	t_rob_next_tail.is_ret = (t_alloc_uop2.op == JR) && (t_uop.srcA == 'd31);
+	t_rob_next_tail.is_ret = (t_alloc_uop2.op == JR) && (t_uop.srcA == 'd5);
 	t_rob_next_tail.is_break  = (t_alloc_uop2.op == BREAK);
 	t_rob_next_tail.is_indirect = t_alloc_uop2.op == JALR || t_alloc_uop2.op == JR;
 	

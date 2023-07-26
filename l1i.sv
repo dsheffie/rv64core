@@ -19,20 +19,27 @@ typedef enum logic [3:0] {
 			  IS_JR = 'd4,
 			  IS_JAL = 'd5,
 			  IS_JALR = 'd6,
-			  IS_JR_R31 = 'd7,
-			  IS_BR = 'd8,
-			  IS_BR_AND_LINK = 'd9
+			  IS_RET = 'd7,
 			  } jump_t;
 */
 
 module predecode(insn, pd);
    input logic [31:0] insn;
    output logic [3:0] pd;
-   logic [6:0] 	      opcode = insn[6:0];
-   logic [4:0] rd = insn[11:7];
+   logic [6:0] 	      opcode;
+   
+   logic [4:0] 	      rd, rs1;
+   logic 	      rd_is_link, rs1_is_link;
+   
    always_comb
      begin
 	pd = 4'd0;
+	opcode = insn[6:0];
+	rd = insn[11:7];
+	rs1 = insn[19:15];
+	rd_is_link = (rd == 'd1) || (rd == 'd5);
+	rs1_is_link = (rs1 == 'd1) || (rs1 == 'd5);
+	
 	case(opcode)
 	  7'h63: /* cond branches */
 	    begin
@@ -40,11 +47,29 @@ module predecode(insn, pd);
 	    end
 	  7'h67: /* jalr and jr */
 	    begin
-	       pd = (rd == 'd0) ? 'd4 /*jr*/ : 'd6 /*jalr*/;
+	       //$display("rd = %d, rs1 = %d, rd link %b, rs1 link %b", rd, rs1, rd_is_link, rs1_is_link);
+	       if(rd == 'd0)
+		 begin
+		    pd = rs1_is_link ? 'd7 /* return */: 'd4; /*jr */
+		 end
+	       else
+		 begin
+		    /* jalr */
+		    pd = 'd6;
+		 end
+
 	    end
 	  7'h6f:
 	    begin
-	       pd = (rd == 'd0) ? 'd3 /*j*/ : 'd5 /*jal*/;
+	       //$display("rd = %d, rs1 = %d", rd, rs1);
+	       if(rd_is_link)
+		 begin
+		    pd = 'd5 /*jal*/;
+		 end
+	       else		 
+		 begin
+		    pd = 'd3; /* j */
+		 end
 	    end
 	  default:
 	    begin
@@ -609,8 +634,12 @@ endfunction // is_nop
 		    n_pc = r_pc;
 		 end
 	       else if(t_hit && !fq_full)
-		 begin
+		 begin		    
 		    t_update_spec_hist = (t_pd != 4'd0);
+		    
+		    //if(r_cache_pc == 'h800004f0)
+		    //$display("800004f0 pd = %d", t_pd);
+		    
 		    if(t_pd == 4'd5 || t_pd == 4'd3) /* jal and j */
 		      begin
 			 t_is_cflow = 1'b1;
@@ -631,6 +660,10 @@ endfunction // is_nop
 			 t_is_ret = 1'b1;
 			 t_take_br = 1'b1;
 			 n_pc = r_spec_return_stack[t_next_spec_rs_tos];
+			 //$display("ret at %x, predict %x",
+			 //r_cache_pc, n_pc);
+			 
+			 
 		      end // if (t_pd == 4'd7)
 		    else if(t_pd == 4'd4 || t_pd == 4'd6)
 		      begin
@@ -847,20 +880,6 @@ endfunction // is_nop
 	t_valid_ram_idx = mem_rsp_valid ? r_mem_req_addr[IDX_STOP-1:IDX_START] : r_cache_idx;
      end
 
-      
-     // always_ff@(negedge clk)
-     //   begin
-     // 	  if((t_push_insn | t_push_insn2 | t_push_insn3 | t_push_insn4) && (t_pd != 'd0))
-     // 	    begin
-     // 	       $display("spec %x : cycle %d n_pht_idx = %d, hist = %b, pred = %b",
-     // 			t_insn.pc, r_cycle, t_insn.pht_idx, r_last_spec_gbl_hist, t_insn.pred);
-     // 	    end
-     // 	  if(branch_pc_valid)
-     // 	    begin
-     // 	       $display("arch %x : cycle %d n_pht_idx = %d, hist = %b, took branch %b, mispred %b, comp_pht %d", 
-     // 			branch_pc, r_cycle, branch_pht_idx, n_arch_gbl_hist, took_branch, branch_fault, t_retire_pht_idx);
-     // 	    end
-     //   end
    
    always_comb
      begin
@@ -1028,7 +1047,10 @@ endfunction // is_nop
      begin
 	if(t_is_call)
 	  begin
-	     r_spec_return_stack[r_spec_rs_tos] <= r_cache_pc + 'd8;
+	     //$display("call at %x, place %x in pos %d of the rsb",
+	     //r_cache_pc, r_cache_pc + 'd4, r_spec_rs_tos);
+		 
+	     r_spec_return_stack[r_spec_rs_tos] <= r_cache_pc + 'd4;
 	  end
 	else if(n_restart_ack)
 	  begin
@@ -1068,23 +1090,6 @@ endfunction // is_nop
 	     n_spec_gbl_hist = {r_spec_gbl_hist[`GBL_HIST_LEN-2:0], t_take_br};
 	  end
      end // always_comb
-
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if(n_restart_ack)
-   // 	  begin
-   // 	     $display("fix = %b, r_cycle %d", n_spec_gbl_hist, r_cycle);
-   // 	  end
-	
-   // 	if(t_update_spec_hist)
-   // 	  begin
-   // 	     $display("take_br = %b, cycle %d", t_take_br, r_cycle);
-   // 	     $display("old = %b", r_spec_gbl_hist);
-   // 	     $display("new = %b", n_spec_gbl_hist);
-	     
-   // 	  end
-   //   end
-      
 
 
    always_comb
