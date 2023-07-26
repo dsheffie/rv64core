@@ -1087,9 +1087,11 @@ module exec(clk,
 
    wire [31:0] w_add_srcA = {w_c_sub32[30:0], 1'b0};
    wire [31:0] w_add_srcB = w_s_sub32;
-      
+
+   wire [31:0] w_indirect_target;
    ppa32 add0 (.A(w_add_srcA), .B(w_add_srcB), .Y(w_add32));
-   
+   ppa32 add1 (.A(t_srcA), .B(int_uop.rvimm), .Y(w_indirect_target));
+   wire        w_mispredicted_indirect = w_indirect_target != {int_uop.jmp_imm,int_uop.imm};   
    // always_ff@(negedge clk)
    //   begin
    // 	if(r_start_int)
@@ -1249,8 +1251,8 @@ module exec(clk,
 	  JALR:
 	    begin
 	       t_take_br = 1'b1;
-	       t_mispred_br = (t_srcA + int_uop.rvimm) != {int_uop.jmp_imm,int_uop.imm};	       
-	       t_pc = t_srcA + int_uop.rvimm;
+	       t_mispred_br = w_mispredicted_indirect;	       
+	       t_pc = w_indirect_target;
 	       t_alu_valid = 1'b1;
 	       t_result = int_uop.pc + 32'd4;
 	       t_wr_int_prf = 1'b1;
@@ -1258,16 +1260,16 @@ module exec(clk,
 	  JR:
 	     begin
 		t_take_br = 1'b1;
-		t_mispred_br = (t_srcA + int_uop.rvimm) != {int_uop.jmp_imm,int_uop.imm};
-		t_pc = t_srcA + int_uop.rvimm;
+		t_mispred_br = w_mispredicted_indirect;
+		t_pc = w_indirect_target;
 		t_alu_valid = 1'b1;
 	     end
 	  RET:
 	    begin
-		t_take_br = 1'b1;
-		t_mispred_br = (t_srcA + int_uop.rvimm) != {int_uop.jmp_imm,int_uop.imm};
-		t_pc = t_srcA + int_uop.rvimm;
-		t_alu_valid = 1'b1;
+	       t_take_br = 1'b1;
+	       t_mispred_br = w_mispredicted_indirect;
+	       t_pc = w_indirect_target;
+	       t_alu_valid = 1'b1;
 	    end
 	  LUI:
 	    begin
