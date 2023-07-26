@@ -637,8 +637,6 @@ endfunction // is_nop
 		 begin		    
 		    t_update_spec_hist = (t_pd != 4'd0);
 		    
-		    //if(r_cache_pc == 'h800004f0)
-		    //$display("800004f0 pd = %d", t_pd);
 		    
 		    if(t_pd == 4'd5 || t_pd == 4'd3) /* jal and j */
 		      begin
@@ -660,10 +658,10 @@ endfunction // is_nop
 			 t_is_ret = 1'b1;
 			 t_take_br = 1'b1;
 			 n_pc = r_spec_return_stack[t_next_spec_rs_tos];
+			 
 			 //$display("ret at %x, predict %x",
 			 //r_cache_pc, n_pc);
-			 
-			 
+			 			 
 		      end // if (t_pd == 4'd7)
 		    else if(t_pd == 4'd4 || t_pd == 4'd6)
 		      begin

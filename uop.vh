@@ -64,6 +64,7 @@ typedef enum logic [6:0]
    J,
    JAL,
    JR,
+   RET,
    JALR,
    BREAK,
    ADDI,

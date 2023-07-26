@@ -1262,6 +1262,13 @@ module exec(clk,
 		t_pc = t_srcA + int_uop.rvimm;
 		t_alu_valid = 1'b1;
 	     end
+	  RET:
+	    begin
+		t_take_br = 1'b1;
+		t_mispred_br = (t_srcA + int_uop.rvimm) != {int_uop.jmp_imm,int_uop.imm};
+		t_pc = t_srcA + int_uop.rvimm;
+		t_alu_valid = 1'b1;
+	    end
 	  LUI:
 	    begin
 	       t_result = int_uop.rvimm;

@@ -26,8 +26,7 @@ module decode_riscv(insn,
    wire [`LG_PRF_ENTRIES-1:0] rs2 = {{ZP{1'b0}},insn[24:20]};
    
    wire 	is_nop = (insn == 32'd0);
-   
-   
+   logic 	rd_is_link, rs1_is_link;   
    
 
    wire [`LG_PRF_ENTRIES-1:0] 	rt = {{ZP{1'b0}},insn[20:16]};
@@ -37,6 +36,8 @@ module decode_riscv(insn,
    
    always_comb
      begin
+	rd_is_link = (rd == 'd1) || (rd == 'd5);
+	rs1_is_link = (rs1 == 'd1) || (rs1 == 'd5);
 	uop.op = II;
 	uop.srcA = 'd0;
 	uop.srcB = 'd0;
@@ -66,6 +67,7 @@ module decode_riscv(insn,
 `ifdef ENABLE_CYCLE_ACCOUNTING
 	uop.fetch_cycle = fetch_cycle;
 `endif
+
 	case(opcode)
 	  7'h3:
 	    begin
@@ -399,7 +401,7 @@ module decode_riscv(insn,
 	       uop.br_pred = 1'b1;	       
 	       if(rd == 'd0)
 		 begin
-		    uop.op = JR;
+		    uop.op = rs1_is_link ? RET : JR;
 		 end
 	       else
 		 begin

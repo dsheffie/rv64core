@@ -1299,7 +1299,7 @@ module core(clk,
 	t_rob_tail.target_pc = 'd0;
 	
 	t_rob_tail.is_call = t_alloc_uop.op == JAL || t_alloc_uop.op == JALR;
-	t_rob_tail.is_ret = (t_alloc_uop.op == JR) && (t_uop.srcA == 'd5);
+	t_rob_tail.is_ret = (t_alloc_uop.op == RET);
 	t_rob_tail.is_break  = (t_alloc_uop.op == BREAK);
 	t_rob_tail.is_indirect = t_alloc_uop.op == JALR || t_alloc_uop.op == JR;
 	
@@ -1319,7 +1319,7 @@ module core(clk,
 	t_rob_next_tail.target_pc = 'd0;
 
 	t_rob_next_tail.is_call = t_alloc_uop2.op == JAL || t_alloc_uop2.op == JALR;
-	t_rob_next_tail.is_ret = (t_alloc_uop2.op == JR) && (t_uop.srcA == 'd5);
+	t_rob_next_tail.is_ret = (t_alloc_uop2.op == RET);
 	t_rob_next_tail.is_break  = (t_alloc_uop2.op == BREAK);
 	t_rob_next_tail.is_indirect = t_alloc_uop2.op == JALR || t_alloc_uop2.op == JR;
 	
