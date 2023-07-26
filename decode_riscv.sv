@@ -358,6 +358,7 @@ module decode_riscv(insn,
 	       uop.is_int = 1'b1;
 	       uop.rvimm = {{19{insn[31]}}, insn[31], insn[7], insn[30:25], insn[11:8], 1'b0};
 	       uop.br_pred = insn_pred;
+	       uop.is_br = 1'b1;
 	       case(insn[14:12])
 		 3'd0:
 		   begin
@@ -398,7 +399,8 @@ module decode_riscv(insn,
 	       uop.imm = insn_pred_target[15:0];
 	       uop.jmp_imm = insn_pred_target[`M_WIDTH-1:16];
 	       uop.rvimm = {{20{insn[31]}}, insn[31:20]};
-	       uop.br_pred = 1'b1;	       
+	       uop.br_pred = 1'b1;
+	       uop.is_br = 1'b1;
 	       if(rd == 'd0)
 		 begin
 		    uop.op = rs1_is_link ? RET : JR;
@@ -413,6 +415,7 @@ module decode_riscv(insn,
 	  7'h6f: /* jal and j */
 	    begin
 	       uop.rvimm = {{11{insn[31]}}, insn[31], insn[19:12], insn[20], insn[30:21], 1'b0};
+	       uop.is_br = 1'b1;	       
 	       if(rd == 'd0)
 		 begin
 		    uop.op = J;

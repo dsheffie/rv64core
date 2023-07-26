@@ -14,12 +14,11 @@ import "DPI-C" function void record_fetch(int push1, int push2, int push3, int p
 typedef enum logic [3:0] {
 			  NOT_CFLOW = 'd0,
 			  IS_COND_BR = 'd1,
-			  IS_L_COND_BR = 'd2,
+ 			  IS_RET = 'd2,
 			  IS_J = 'd3,
 			  IS_JR = 'd4,
 			  IS_JAL = 'd5,
-			  IS_JALR = 'd6,
-			  IS_RET = 'd7,
+			  IS_JALR = 'd6
 			  } jump_t;
 */
 
@@ -50,7 +49,7 @@ module predecode(insn, pd);
 	       //$display("rd = %d, rs1 = %d, rd link %b, rs1 link %b", rd, rs1, rd_is_link, rs1_is_link);
 	       if(rd == 'd0)
 		 begin
-		    pd = rs1_is_link ? 'd7 /* return */: 'd4; /*jr */
+		    pd = rs1_is_link ? 'd2 /* return */: 'd4; /*jr */
 		 end
 	       else
 		 begin
@@ -636,8 +635,11 @@ endfunction // is_nop
 	       else if(t_hit && !fq_full)
 		 begin		    
 		    t_update_spec_hist = (t_pd != 4'd0);
-		    
-		    
+		    //if(t_pd == 4'd1)
+		    //begin
+		    //$display("cycle %d : r_cache_pc %x is a cond br, predict %b, hist %b, r_pht_idx %d", 
+		    //r_cycle, r_cache_pc, r_pht_out, r_spec_gbl_hist, r_pht_idx);
+		    //end
 		    if(t_pd == 4'd5 || t_pd == 4'd3) /* jal and j */
 		      begin
 			 t_is_cflow = 1'b1;
@@ -652,16 +654,12 @@ endfunction // is_nop
 			 t_take_br = 1'b1;
 			 n_pc = (r_cache_pc + t_br_simm);
 		      end
-		    else if(t_pd == 4'd7) /* return */
+		    else if(t_pd == 4'd2) /* return */
 		      begin
 			 t_is_cflow = 1'b1;
 			 t_is_ret = 1'b1;
 			 t_take_br = 1'b1;
 			 n_pc = r_spec_return_stack[t_next_spec_rs_tos];
-			 
-			 //$display("ret at %x, predict %x",
-			 //r_cache_pc, n_pc);
-			 			 
 		      end // if (t_pd == 4'd7)
 		    else if(t_pd == 4'd4 || t_pd == 4'd6)
 		      begin
