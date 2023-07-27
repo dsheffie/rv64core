@@ -83,10 +83,11 @@ module compute_pht_idx(pc, hist, idx);
    input logic [`GBL_HIST_LEN-1:0] hist;
    output logic [`LG_PHT_SZ-1:0]   idx;
 
-   wire [31:0] 			   w_fold_0 = hist[31:0] ^ hist[63:32];
-   wire [15:0] 			   w_fold_1 = w_fold_0[31:16] ^ w_fold_0[15:0];
+   //wire [31:0] 			   w_fold_0 = hist[31:0] ^ hist[63:32];
+   //wire [15:0] 			   w_fold_1 = w_fold_0[31:16] ^ w_fold_0[15:0];
+   //assign idx = w_fold_1  ^ pc[17:2];
 
-   assign idx = w_fold_1  ^ pc[18:3];
+   assign idx = hist ^ pc[17:2];
    
 endmodule
 
