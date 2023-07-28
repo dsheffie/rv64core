@@ -22,6 +22,8 @@ struct state_t{
   uint64_t icnt;
 };
 
+void handle_syscall(state_t *s, uint64_t tohost);
+
 static inline int32_t checksum_gprs(const state_t *s) {
   int32_t h = 0;
   for(int i = 0; i < 32; i++) {
@@ -125,6 +127,7 @@ void execRiscv(state_t *s);
 #define SYS_ftruncate 46
 #define SYS_faccessat 48
 #define SYS_chdir 49
+#define SYS_open   55
 #define SYS_openat 56
 #define SYS_close 57
 #define SYS_lseek 62

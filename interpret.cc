@@ -55,36 +55,7 @@ void execRiscv(state_t *s) {
   tohost &= ((1UL<<32)-1);
   
   if(tohost) {
-    //std::cout << "tohost = " << std::hex << tohost << std::dec << "\n";
-    //exit(-1);
-    //std::cout << std::hex << s->pc << std::dec << "\n";
-    //std::cout << std::hex << s->last_pc << std::dec << "\n";
-    if(tohost & 1) {
-      /* exit */
-      s->brk = 1;
-      return;
-    }
-    uint64_t *buf = reinterpret_cast<uint64_t*>(mem + tohost);
-    //std::cout << "syscall number " << buf[0] << "\n";
-    //for(int i = 0; i < 4; i++) {
-    //std::cout << std::hex << "arg " << i << " : " << buf[i] << std::dec << "\n";
-    //}
-    switch(buf[0])
-      {
-      case SYS_write: /* int write(int file, char *ptr, int len) */
-	buf[0] = write(buf[1], (void*)(s->mem + buf[2]), buf[3]);
-	if(buf[1]==1)
-	  fflush(stdout);
-	else if(buf[1]==2)
-	  fflush(stderr);
-	break;
-      default:
-	std::cout << "syscall " << buf[0] << " unsupported\n";
-	exit(-1);
-      }
-    //ack
-    *reinterpret_cast<uint64_t*>(mem + globals::tohost_addr) = 0;
-    *reinterpret_cast<uint64_t*>(mem + globals::fromhost_addr) = 1;
+    handle_syscall(s, tohost);
   }
 
   if(globals::log) {
@@ -498,4 +469,39 @@ void execRiscv(state_t *s) {
     }
   }
 #endif
+}
+
+void handle_syscall(state_t *s, uint64_t tohost) {
+  uint8_t *mem = s->mem;
+  if(tohost & 1) {
+    /* exit */
+    s->brk = 1;
+    return;
+  }
+  uint64_t *buf = reinterpret_cast<uint64_t*>(mem + tohost);
+  switch(buf[0])
+    {
+    case SYS_write: /* int write(int file, char *ptr, int len) */
+      buf[0] = write(buf[1], (void*)(s->mem + buf[2]), buf[3]);
+      if(buf[1]==1)
+        fflush(stdout);
+      else if(buf[1]==2)
+        fflush(stderr);
+      break;
+    case SYS_open: {
+      const char *path = reinterpret_cast<const char*>(s->mem + buf[1]);
+      buf[0] = open(path, remapIOFlags(buf[2]), S_IRUSR|S_IWUSR);
+      break;
+    }
+    case SYS_read: {
+      buf[0] = read(buf[1], reinterpret_cast<char*>(s->mem + buf[2]), buf[3]);
+      break;
+    }
+    default:
+      std::cout << "syscall " << buf[0] << " unsupported\n";
+      exit(-1);
+    }
+  //ack                                                                                                                                                                                           
+  *reinterpret_cast<uint64_t*>(mem + globals::tohost_addr) = 0;
+  *reinterpret_cast<uint64_t*>(mem + globals::fromhost_addr) = 1;
 }

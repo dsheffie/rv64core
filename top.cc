@@ -480,22 +480,7 @@ int main(int argc, char **argv) {
 	if(to_host & 1) {
 	  break;
 	}
-	uint64_t *buf = reinterpret_cast<uint64_t*>(&s->mem[to_host]);
-	switch(buf[0])
-	  {
-	  case SYS_write: /* int write(int file, char *ptr, int len) */
-	    buf[0] = write(buf[1], (void*)(s->mem + buf[2]), buf[3]);
-	    if(buf[1]==1)
-	      fflush(stdout);
-	    else if(buf[1]==2)
-	      fflush(stderr);
-	    break;
-	  default:
-	    std::cout << "syscall " << buf[0] << " unsupported\n";
-	    exit(-1);
-	  }
-	mem_w64(s, globals::tohost_addr, 0);
-	mem_w64(s, globals::fromhost_addr, 1);
+	handle_syscall(s, to_host);
 	tb->monitor_ack = 1;
 	got_monitor = true;      
       }
