@@ -142,4 +142,26 @@ void execRiscv(state_t *s);
 #define SYS_getmainvars 2011
 
 std::ostream &operator<<(std::ostream &out, const state_t & s);
+
+struct stat32_t {
+  uint16_t st_dev;
+  uint16_t st_ino;
+  uint32_t st_mode;
+  uint16_t st_nlink;
+  uint16_t st_uid;
+  uint16_t st_gid;
+  uint16_t st_rdev;
+  uint32_t st_size;
+  uint32_t _st_atime;
+  uint32_t st_spare1;
+  uint32_t _st_mtime;
+  uint32_t st_spare2;
+  uint32_t _st_ctime;
+  uint32_t st_spare3;
+  uint32_t st_blksize;
+  uint32_t st_blocks;
+  uint32_t st_spare4[2];
+};
+
+
 #endif

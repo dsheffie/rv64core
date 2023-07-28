@@ -34,7 +34,7 @@ ifeq ($(UNAME_S),Darwin)
 	EXTRA_LD = -L/opt/local/lib -lboost_program_options-mt -lboost_serialization-mt -lcapstone
 endif
 
-OPT = -Og -g -std=c++14 #-fomit-frame-pointer
+OPT = -O3 -g -std=c++14 -fomit-frame-pointer
 CXXFLAGS = -std=c++11 -g  $(OPT) -I$(VERILATOR_INC) -I$(VERILATOR_DPI_INC) #-DLINUX_SYSCALL_EMULATION=1
 LIBS =  $(EXTRA_LD) -lpthread
 

@@ -1492,29 +1492,29 @@ module exec(clk,
 	  LW:
 	    begin
 	       t_mem_tail.op = MEM_LW;
-	       t_mem_tail.dst_valid = 1'b1;
+	       t_mem_tail.dst_valid = mem_uq.dst_valid;
 	       t_mem_tail.bad_addr = (w_agu32[1:0] != 2'd0);
 	    end // case: LW
 	  LB:
 	    begin
 	       t_mem_tail.op = MEM_LB;
-	       t_mem_tail.dst_valid = 1'b1;
+	       t_mem_tail.dst_valid = mem_uq.dst_valid;
 	    end
 	  LBU:
 	    begin
 	       t_mem_tail.op = MEM_LBU;
-	       t_mem_tail.dst_valid = 1'b1;
+	       t_mem_tail.dst_valid = mem_uq.dst_valid;
 	    end // case: LBU
 	  LHU:
 	    begin
 	       t_mem_tail.op = MEM_LHU;
-	       t_mem_tail.dst_valid = 1'b1;
+	       t_mem_tail.dst_valid = mem_uq.dst_valid;
 	       t_mem_tail.bad_addr = w_agu32[0];
 	    end // case: LBU
 	  LH:
 	    begin
 	       t_mem_tail.op = MEM_LH;
-	       t_mem_tail.dst_valid = 1'b1;
+	       t_mem_tail.dst_valid = mem_uq.dst_valid;
 	       t_mem_tail.bad_addr = w_agu32[0];
 	    end // case: LH
 	  default:

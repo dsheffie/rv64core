@@ -74,29 +74,29 @@ module decode_riscv(insn,
 	       uop.dst = rd;
 	       uop.srcA = rs1;
 	       uop.dst_valid = (rd != 'd0);
-	       uop.srcA_valid = (rd != 'd0);	       
+	       uop.srcA_valid = 1'b1;
 	       uop.is_mem = 1'b1;
 	       uop.rvimm = {{20{insn[31]}}, insn[31:20]};
 	       case(insn[14:12])
 		 3'd0:
 		   begin
-		      uop.op = (rd == 'd0) ? NOP : LB;
+		      uop.op = LB;
 		   end
 		 3'd1:
 		   begin
-		      uop.op = (rd == 'd0) ? NOP : LH;
+		      uop.op = LH;
 		   end
 		 3'd2:
 		   begin
-		      uop.op = (rd == 'd0) ? NOP : LW;
+		      uop.op = LW;
 		   end
 		 3'd4:
 		   begin
-		      uop.op = (rd == 'd0) ? NOP : LBU;
+		      uop.op = LBU;
 		   end
 		 3'd5:
 		   begin
-		      uop.op = (rd == 'd0) ? NOP : LHU;
+		      uop.op = LHU;
 		   end		 
 		 default:
 		   begin
