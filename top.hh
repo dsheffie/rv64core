@@ -239,6 +239,22 @@ static inline void mem_w64(state_t*s, uint32_t a, uint64_t x) {
   *reinterpret_cast<uint64_t*>(&s->mem[a]) = x;
 }
 
+static inline uint8_t *mmap4G() {
+  #ifdef __linux__
+  void* mempt = mmap(nullptr, 1UL<<32, PROT_READ | PROT_WRITE,
+#ifdef __amd64__
+		     (21 << MAP_HUGE_SHIFT) |
+#endif
+		     MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+#else
+  void* mempt = mmap(nullptr, 1UL<<32, PROT_READ | PROT_WRITE,
+		     MAP_PRIVATE | MAP_ANONYMOUS , -1, 0);
+#endif
+  assert(mempt != reinterpret_cast<void*>(-1));
+  assert(madvise(mempt, 1UL<<32, MADV_DONTNEED)==0);
+  
+  return reinterpret_cast<uint8_t*>(mempt);
+}
 
 
 #endif

@@ -316,7 +316,6 @@ int main(int argc, char **argv) {
   std::string pushout_name = "pushout.txt";
   std::string branch_name = "branch_info.txt";
   
-  bool use_checker_only = false;
   uint64_t heartbeat = 1UL<<36, start_trace_at = ~0UL;
   uint64_t max_cycle = 0, max_icnt = 0, mem_lat = 2;
   uint64_t last_store_addr = 0, last_load_addr = 0, last_addr = 0;
@@ -342,7 +341,6 @@ int main(int argc, char **argv) {
       ("maxicnt", po::value<uint64_t>(&max_icnt)->default_value(1UL<<50), "maximum icnt")
       ("trace,t", po::value<bool>(&trace_retirement)->default_value(false), "trace retired instruction stream")
       ("starttrace,s", po::value<uint64_t>(&start_trace_at)->default_value(~0UL), "start tracing retired instructions")
-      ("checkeronly,o", po::value<bool>(&use_checker_only)->default_value(false), "no RTL simulation, just run checker")
       ; 
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);
@@ -376,8 +374,10 @@ int main(int argc, char **argv) {
   
   initState(s);
   initState(ss);
-  s->mem = new uint8_t[1UL<<32];
-  ss->mem = new uint8_t[1UL<<32];
+
+  
+  s->mem = mmap4G();
+  ss->mem = mmap4G();
 
   
   globals::sysArgc = buildArgcArgv(mips_binary.c_str(),sysArgs.c_str(),&globals::sysArgv);
@@ -387,16 +387,6 @@ int main(int argc, char **argv) {
   load_elf(mips_binary.c_str(), s);
   
 
-  //debug interpreter functionality
-  if(use_checker_only) {
-    while((s->icnt < max_icnt) and (s->brk == 0)) {
-      execRiscv(s);
-    }
-    //std::cout << *s << "\n";
-    delete s;
-    stopCapstone();
-    exit(EXIT_SUCCESS);    
-  }
   
   //load checker
   load_elf(mips_binary.c_str(), ss);
@@ -1025,6 +1015,8 @@ int main(int argc, char **argv) {
 	    << " insns per second\n";
 
 
+  munmap(s->mem, 1UL<<32);
+  munmap(ss->mem, 1UL<<32);
   delete s;
   delete ss;
   delete [] insns_delivered;
