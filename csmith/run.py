@@ -18,7 +18,7 @@ if __name__ == '__main__':
     for test in tests:
         with open(test + '.rv32.out', 'w') as o:
             try:
-                subprocess.run(['../ooo_core', '-f', test], stdout=o, stderr=o, timeout=15)
+                subprocess.run(['../rv32_core', '-f', test], stdout=o, stderr=o, timeout=15)
             except subprocess.TimeoutExpired:
                 print('failure : timeout for %s' % test)
                 continue
