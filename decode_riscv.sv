@@ -426,7 +426,6 @@ module decode_riscv(insn,
 	       uop.imm = insn_pred_target[15:0];
 	       uop.jmp_imm = insn_pred_target[`M_WIDTH-1:16];
 	       uop.rvimm = {{20{insn[31]}}, insn[31:20]};
-	       t_imm = {{20{insn[31]}}, insn[31:20]};
 	       uop.br_pred = 1'b1;
 	       uop.is_br = 1'b1;
 	       if(rd == 'd0)
