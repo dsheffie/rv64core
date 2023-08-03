@@ -1075,10 +1075,11 @@ module exec(clk,
 
    wire [31:0] w_add32;
    wire [31:0] w_s_sub32, w_c_sub32;
+   logic       t_sub;
    
    csa #(.N(32)) csa0 (.a(t_srcA), 
-		       .b(int_uop.op == SUBU ? ~t_srcB : t_srcB), 
-		       .cin(int_uop.op == SUBU ? 32'd1 : 32'd0), .s(w_s_sub32), .cout(w_c_sub32) );
+		       .b(t_sub ? ~t_srcB : t_srcB), 
+		       .cin(t_sub ? 32'd1 : 32'd0), .s(w_s_sub32), .cout(w_c_sub32) );
 
    wire [31:0] w_add_srcA = {w_c_sub32[30:0], 1'b0};
    wire [31:0] w_add_srcB = w_s_sub32;
@@ -1097,6 +1098,7 @@ module exec(clk,
    
    always_comb
      begin
+	t_sub = 1'b0;
 	t_pc = int_uop.pc;
 	t_result = 32'd0;
 	t_unimp_op = 1'b0;
@@ -1164,6 +1166,7 @@ module exec(clk,
 	    end
 	  SUBU:
 	    begin
+	       t_sub = 1'b1;
 	       t_result = w_add32;
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
