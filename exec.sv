@@ -1075,19 +1075,16 @@ module exec(clk,
 
    wire [31:0] w_add32;
    wire [31:0] w_s_sub32, w_c_sub32;
-   logic       t_sub;
    
    csa #(.N(32)) csa0 (.a(t_srcA), 
-		       .b(t_sub ? ~t_srcB : t_srcB), 
-		       .cin(t_sub ? 32'd1 : 32'd0), .s(w_s_sub32), .cout(w_c_sub32) );
+		       .b(int_uop.op == SUBU ? ~t_srcB : t_srcB), 
+		       .cin(int_uop.op == SUBU ? 32'd1 : 32'd0), .s(w_s_sub32), .cout(w_c_sub32) );
 
    wire [31:0] w_add_srcA = {w_c_sub32[30:0], 1'b0};
    wire [31:0] w_add_srcB = w_s_sub32;
    wire [31:0] w_pc4, w_pc_plus_imm;
    wire [31:0] w_indirect_target;
-
-   wire        w_AeqB = (t_srcA == t_srcB);
-      
+  
    ppa32 add0 (.A(w_add_srcA), .B(w_add_srcB), .Y(w_add32));
    ppa32 add1 (.A(t_srcA), .B(int_uop.rvimm), .Y(w_indirect_target));
    wire        w_mispredicted_indirect = w_indirect_target != {int_uop.jmp_imm,int_uop.imm};   
@@ -1101,7 +1098,6 @@ module exec(clk,
    always_comb
      begin
 	t_pc = int_uop.pc;
-	t_sub = 1'b0;
 	t_result = 32'd0;
 	t_unimp_op = 1'b0;
 	t_fault = 1'b0;
@@ -1169,7 +1165,6 @@ module exec(clk,
 	  SUBU:
 	    begin
 	       t_result = w_add32;
-	       t_sub = 1'b1;
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
@@ -1187,7 +1182,7 @@ module exec(clk,
 	    end
 	  BEQ:
 	    begin
-	       t_take_br = w_AeqB;
+	       t_take_br = (t_srcA  == t_srcB);
 	       t_mispred_br = int_uop.br_pred != t_take_br;
 	       t_pc = t_take_br ? int_uop.rvimm : w_pc4;	       
 	       t_alu_valid = 1'b1;
@@ -1201,8 +1196,7 @@ module exec(clk,
 	    end
 	  BGEU:
 	    begin
-	       t_sub = 1;
-	       t_take_br = ~w_add32[31];
+	       t_take_br = (t_srcA  > t_srcB) | (t_srcA == t_srcB);
 	       t_mispred_br = int_uop.br_pred != t_take_br;
 	       t_pc = t_take_br ? int_uop.rvimm : w_pc4;
 	       t_alu_valid = 1'b1;
@@ -1216,8 +1210,7 @@ module exec(clk,
 	    end
 	  BLTU:
 	    begin
-	       t_sub = 1;
-	       t_take_br = w_add32[31];
+	       t_take_br = (t_srcA < t_srcB);
 	       t_mispred_br = int_uop.br_pred != t_take_br;
 	       t_pc = t_take_br ? int_uop.rvimm : w_pc4;
 	       t_alu_valid = 1'b1;
@@ -1225,7 +1218,7 @@ module exec(clk,
 	  
 	  BNE:
 	    begin
-	       t_take_br = !w_AeqB;
+	       t_take_br = (t_srcA  != t_srcB);
 	       t_mispred_br = int_uop.br_pred != t_take_br;
 	       t_pc = t_take_br ? int_uop.rvimm : w_pc4;
 	       t_alu_valid = 1'b1;
@@ -1300,8 +1293,7 @@ module exec(clk,
 	    end
 	  SLTU:
 	    begin
-	       t_sub = 1;
-	       t_result = {31'd0, w_add32[31]};
+	       t_result = (t_srcA <  t_srcB) ? 'd1 : 'd0;
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
@@ -1389,8 +1381,6 @@ module exec(clk,
    wire [31:0] w_agu32;
    ppa32 agu (.A(t_mem_srcA), .B(mem_uq.rvimm), .Y(w_agu32));
 
-
-   
    wire w_mem_srcA_ready = t_mem_uq.srcA_valid ? (!r_prf_inflight[t_mem_uq.srcA] | t_fwd_int_mem_srcA | t_fwd_mem_mem_srcA) : 1'b1;
 
 
