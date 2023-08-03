@@ -308,7 +308,6 @@ module core(clk,
    logic 		     n_l1d_flush_complete, r_l1d_flush_complete;
    logic 		     n_l2_flush_complete, r_l2_flush_complete;
    
-   logic [(`M_WIDTH-1):0]    t_cpr0_status_reg;
    
    logic [4:0] 		     n_cause, r_cause;
    
@@ -1837,7 +1836,6 @@ module core(clk,
 	   .ds_done(r_ds_done),
 	   .mem_dq_clr(t_clr_rob),
 	   .restart_complete(t_restart_complete),
-	   .cpr0_status_reg(t_cpr0_status_reg),
 	   .mq_wait(mq_wait),
 	   .uq_wait(uq_wait),
 	   .uq_full(t_uq_full),

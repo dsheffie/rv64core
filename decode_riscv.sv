@@ -3,7 +3,10 @@
 `include "uop.vh"
 
 module decode_riscv(insn, 
-		    pc, insn_pred, pht_idx, insn_pred_target,
+		    pc, 
+		    insn_pred, 
+		    pht_idx, 
+		    insn_pred_target,
 `ifdef ENABLE_CYCLE_ACCOUNTING   		     
 		    fetch_cycle,
 `endif
@@ -30,9 +33,33 @@ module decode_riscv(insn,
    
 
    wire [`LG_PRF_ENTRIES-1:0] 	rt = {{ZP{1'b0}},insn[20:16]};
-
-   
    wire [`LG_PRF_ENTRIES-1:0] 	shamt = {{ZP{1'b0}},insn[10:6]};
+
+   logic [31:0] 		t_imm;
+   wire [31:0] 			w_pc_imm;
+   always_comb
+     begin
+	t_imm = 'd0;
+	case(opcode)
+	  7'h17: /* auipc */
+	    begin
+	       t_imm = {insn[31:12], 12'd0};
+	    end
+	  7'h63: /* branches */
+	    begin
+	       t_imm = {{19{insn[31]}}, insn[31], insn[7], insn[30:25], insn[11:8], 1'b0};
+	    end
+	  7'h6f: /* jal and j */
+	    begin
+	       t_imm = {{11{insn[31]}}, insn[31], insn[19:12], insn[20], insn[30:21], 1'b0}; 
+	    end
+	  default:
+	    begin
+	    end
+	  endcase
+     end
+   
+   ppa32 imm_add (.A(pc), .B(t_imm), .Y(w_pc_imm));
    
    always_comb
      begin
@@ -168,7 +195,7 @@ module decode_riscv(insn,
 	       uop.dst = rd;
 	       uop.dst_valid = (rd != 'd0);
 	       uop.is_int = 1'b1;
-	       uop.rvimm = {insn[31:12], 12'd0};
+	       uop.rvimm = w_pc_imm;
 	    end
 	  7'h23:
 	    begin
@@ -356,7 +383,7 @@ module decode_riscv(insn,
 	       uop.srcA_valid = 1'b1;
 	       uop.srcB_valid = 1'b1;
 	       uop.is_int = 1'b1;
-	       uop.rvimm = {{19{insn[31]}}, insn[31], insn[7], insn[30:25], insn[11:8], 1'b0};
+	       uop.rvimm = w_pc_imm;
 	       uop.br_pred = insn_pred;
 	       uop.is_br = 1'b1;
 	       case(insn[14:12])
@@ -399,6 +426,7 @@ module decode_riscv(insn,
 	       uop.imm = insn_pred_target[15:0];
 	       uop.jmp_imm = insn_pred_target[`M_WIDTH-1:16];
 	       uop.rvimm = {{20{insn[31]}}, insn[31:20]};
+	       t_imm = {{20{insn[31]}}, insn[31:20]};
 	       uop.br_pred = 1'b1;
 	       uop.is_br = 1'b1;
 	       if(rd == 'd0)
@@ -414,7 +442,7 @@ module decode_riscv(insn,
 	    end // case: 7'h67
 	  7'h6f: /* jal and j */
 	    begin
-	       uop.rvimm = {{11{insn[31]}}, insn[31], insn[19:12], insn[20], insn[30:21], 1'b0};
+	       uop.rvimm = w_pc_imm;
 	       uop.is_br = 1'b1;	       
 	       if(rd == 'd0)
 		 begin
