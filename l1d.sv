@@ -1046,7 +1046,8 @@ endfunction
      begin
 	r_fwd_cnt <= reset ? 'd0 : (r_got_req && r_must_forward ? r_fwd_cnt + 'd1 : r_fwd_cnt);
 	//if(r_flush_req)
-	//$display("at cycle %d, state = %d, mem_q_empty= %b", r_cycle, r_state, mem_q_empty);
+	//$display("at cycle %d, state = %d, mem_q_empty= %b, drain_ds_complete %b",
+	//r_cycle, r_state, mem_q_empty, drain_ds_complete);
      end
 
    always_comb
@@ -1158,7 +1159,12 @@ endfunction
 		    n_core_mem_rsp.data = r_req2.addr;
 		    n_core_mem_rsp.rob_ptr = r_req2.rob_ptr;
 		    n_core_mem_rsp.dst_ptr = r_req2.dst_ptr;
-		    if(drain_ds_complete)
+		    //if(r_req2.op == MEM_NOP)
+		    //begin
+		    //$display("mem nop! - bad %b", r_req2.bad_addr);
+		    //end
+		    
+		    if(drain_ds_complete || r_req2.op == MEM_NOP)
 		      begin
 			 n_core_mem_rsp.dst_valid = r_req2.dst_valid;
 			 n_core_mem_rsp.bad_addr = r_req2.bad_addr;

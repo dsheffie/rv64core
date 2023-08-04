@@ -1021,6 +1021,7 @@ module core(clk,
 	       if(n_l1i_flush_complete && n_l1d_flush_complete && n_l2_flush_complete)
 		 begin
 		    n_state = HALT;
+		    n_ds_done = 1'b0;
 		    n_got_break = r_pending_break;
 		    n_got_ud = r_pending_ii;
 		    n_got_bad_addr = r_pending_badva;
@@ -1097,6 +1098,7 @@ module core(clk,
 	       t_exception_wr_cpr0_data = {32'd0, t_rob_head.pc};	       
 	       n_state = FLUSH_FOR_HALT;
 	       t_bump_rob_head = 1'b1;
+	       n_ds_done = 1'b1;
 	    end
 
 	  default:

@@ -1436,6 +1436,8 @@ module exec(clk,
    
    //$stop();
    //end
+   wire w_bad_16b_addr = w_agu32[0];
+   wire w_bad_32b_addr = w_agu32[1:0] != 2'd0;
    
    always_comb
      begin
@@ -1456,17 +1458,17 @@ module exec(clk,
 	    end // case: SB
 	  SH:
 	    begin
-	       t_mem_tail.op = w_agu32[0] ? MEM_LW : MEM_SH;
-	       t_mem_tail.is_store = w_agu32[0]==1'b0;
+	       t_mem_tail.op = w_bad_16b_addr ? MEM_NOP : MEM_SH;
+	       t_mem_tail.is_store = ~w_bad_16b_addr;
 	       t_mem_tail.dst_valid = 1'b0;
-	       t_mem_tail.bad_addr = w_agu32[0];
+	       t_mem_tail.bad_addr = w_bad_16b_addr;
 	    end // case: SW
 	  SW:
 	    begin
-	       t_mem_tail.op = (w_agu32[1:0] != 2'd0) ? MEM_LW : MEM_SW;
-	       t_mem_tail.is_store = w_agu32[1:0] == 2'd0;
+	       t_mem_tail.op = w_bad_32b_addr ? MEM_NOP : MEM_SW;
+	       t_mem_tail.is_store = ~w_bad_32b_addr;
 	       t_mem_tail.dst_valid = 1'b0;
-	       t_mem_tail.bad_addr = (w_agu32[1:0] != 2'd0);
+	       t_mem_tail.bad_addr = w_bad_32b_addr;
 	    end // case: SW
 	  SC:
 	    begin
@@ -1478,9 +1480,9 @@ module exec(clk,
 	    end // case: SW
 	  LW:
 	    begin
-	       t_mem_tail.op = MEM_LW;
+	       t_mem_tail.op = w_bad_32b_addr ? MEM_NOP : MEM_LW;
 	       t_mem_tail.dst_valid = mem_uq.dst_valid;
-	       t_mem_tail.bad_addr = (w_agu32[1:0] != 2'd0);
+	       t_mem_tail.bad_addr = w_bad_32b_addr;
 	    end // case: LW
 	  LB:
 	    begin
@@ -1500,9 +1502,9 @@ module exec(clk,
 	    end // case: LBU
 	  LH:
 	    begin
-	       t_mem_tail.op = MEM_LH;
+	       t_mem_tail.op = w_bad_16b_addr ? MEM_NOP : MEM_LH;
 	       t_mem_tail.dst_valid = mem_uq.dst_valid;
-	       t_mem_tail.bad_addr = w_agu32[0];
+	       t_mem_tail.bad_addr = w_bad_16b_addr;
 	    end // case: LH
 	  default:
 	    begin
