@@ -1456,15 +1456,15 @@ module exec(clk,
 	    end // case: SB
 	  SH:
 	    begin
-	       t_mem_tail.op = MEM_SH;
-	       t_mem_tail.is_store = 1'b1;
+	       t_mem_tail.op = w_agu32[0] ? MEM_LW : MEM_SH;
+	       t_mem_tail.is_store = w_agu32[0]==1'b0;
 	       t_mem_tail.dst_valid = 1'b0;
 	       t_mem_tail.bad_addr = w_agu32[0];
 	    end // case: SW
 	  SW:
 	    begin
-	       t_mem_tail.op = MEM_SW;
-	       t_mem_tail.is_store = 1'b1;
+	       t_mem_tail.op = (w_agu32[1:0] != 2'd0) ? MEM_LW : MEM_SW;
+	       t_mem_tail.is_store = w_agu32[1:0] == 2'd0;
 	       t_mem_tail.dst_valid = 1'b0;
 	       t_mem_tail.bad_addr = (w_agu32[1:0] != 2'd0);
 	    end // case: SW

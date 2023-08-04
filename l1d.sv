@@ -1045,7 +1045,8 @@ endfunction
    always_ff@(posedge clk)
      begin
 	r_fwd_cnt <= reset ? 'd0 : (r_got_req && r_must_forward ? r_fwd_cnt + 'd1 : r_fwd_cnt);
-	//$display("at cycle %d, state = %d", r_cycle, r_state);
+	//if(r_flush_req)
+	//$display("at cycle %d, state = %d, mem_q_empty= %b", r_cycle, r_state, mem_q_empty);
      end
 
    always_comb
@@ -1368,10 +1369,6 @@ endfunction
 		  core_mem_req_ack = 1'b1;
 		  t_got_req2 = 1'b1;
 
-		  //if(core_mem_req.op == MEM_LW && core_mem_req.addr[1:0] != 'd0)
-		  //begin
-		  //$display("unaligned load!!!! from pc %x", core_mem_req.pc);
-		  //end
 		  
 `ifdef VERBOSE_L1D		       
 		  $display("accepting new op %d, pc %x, addr %x for rob ptr %d at cycle %d, mem_q_empty %b, uuid %d", 

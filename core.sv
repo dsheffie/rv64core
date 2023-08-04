@@ -1035,6 +1035,7 @@ module core(clk,
 	    end
 	  HALT:
 	    begin
+	       //$display("HALTED");
 	       if(resume)
 		 begin
 		    n_restart_pc = resume_pc;
