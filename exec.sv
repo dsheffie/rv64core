@@ -1074,49 +1074,68 @@ module exec(clk,
 `endif //  `ifdef VERILATOR
 
    wire [31:0] w_add32;
-   wire [31:0] w_s_sub32, w_c_sub32;
-   logic       t_sub;
-   logic       t_addi;
+   wire [63:0] w_add64;
    
-   csa #(.N(32)) csa0 (.a(t_srcA), 
-		       .b(t_addi ? int_uop.rvimm : (t_sub ? ~t_srcB : t_srcB)), 
-		       .cin(t_sub ? 32'd1 : 32'd0), .s(w_s_sub32), .cout(w_c_sub32) );
+   wire [31:0] w_s_sub32, w_c_sub32;
+   wire [63:0] w_s_sub64, w_c_sub64;
+   logic       t_sub, t_addi, t_slti, t_sltiu;
 
-   wire [31:0] w_add_srcA = {w_c_sub32[30:0], 1'b0};
-   wire [31:0] w_add_srcB = w_s_sub32;
+   csa #(.N(32)) csa0 (.a(t_srcA), 
+		       .b(t_slti ? ~int_uop.rvimm  : (t_addi ? int_uop.rvimm : (t_sub ? ~t_srcB : t_srcB))), 
+		       .cin(t_sub|t_slti ? 32'd1 : 32'd0), .s(w_s_sub32), .cout(w_c_sub32) );
+   
+   wire [31:0] w_add32_srcA = {w_c_sub32[30:0], 1'b0};
+   wire [31:0] w_add32_srcB = w_s_sub32;
+   ppa32 add0 (.A(w_add32_srcA), .B(w_add32_srcB), .Y(w_add32));
+
+
+   csa #(.N(64)) csa1 (.a({32'd0, t_srcA}), 
+		       .b(~{32'd0, t_sltiu ? int_uop.rvimm : t_srcB}), 
+		       .cin(64'd1), 
+		       .s(w_s_sub64), 
+		       .cout(w_c_sub64) 
+		       );
+
+   wire [63:0] w_add64_srcA = {w_c_sub64[62:0], 1'b0};
+   wire [63:0] w_add64_srcB = w_s_sub64;
+   ppa64 add1 (.A(w_add64_srcA), .B(w_add64_srcB), .Y(w_add64));
+
    
    wire [31:0] w_pc4, w_pc_plus_imm;
    wire [31:0] w_indirect_target;
-  
-   ppa32 add0 (.A(w_add_srcA), .B(w_add_srcB), .Y(w_add32));
-   ppa32 add1 (.A(t_srcA), .B(int_uop.rvimm), .Y(w_indirect_target));
+   ppa32 add2 (.A(t_srcA), .B(int_uop.rvimm), .Y(w_indirect_target));
    wire        w_mispredicted_indirect = w_indirect_target != {int_uop.jmp_imm,int_uop.imm};   
-
-
-   ppa32 add2 (.A(int_uop.pc), .B(32'd4), .Y(w_pc4));
+   ppa32 add3 (.A(int_uop.pc), .B(32'd4), .Y(w_pc4));
 
    wire        w_AeqB = t_srcA == t_srcB;
    wire w_AltB = (t_srcA[31] & (~t_srcB[31])) ? 1'b1 :
 	((~t_srcA[31]) & t_srcB[31]) ? 1'b0 :
 	w_add32[31];
+   wire w_AltB_slti = (t_srcA[31] & (~int_uop.rvimm[31])) ? 1'b1 :
+	((~t_srcA[31]) & int_uop.rvimm[31]) ? 1'b0 :
+	w_add32[31];   
    
-   //ppa32 add2 (.A(int_uop.pc), .B(32'd4), .Y(w_pc4));
-   always_ff@(negedge clk)
-     begin
-	if(int_uop.op == BLTU && r_start_int && t_alu_valid )
-	  begin
-	     $display("t_take_br = %b", t_take_br);
-	     $display("should be %b", 
-		      (t_srcA <t_srcB));
-	     $display("t_srcA = %x, t_srcB = %x", t_srcA, t_srcB);
-	     $display("w_add32 = %x", w_add32);
-	  end
-     end
+
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if(int_uop.op == BGEU && r_start_int && t_alu_valid)
+   // 	  begin
+   // 	     $display("w_add64[32] = %b", 
+   // 		      !w_add64[32]);
+   // 	     $display("should be %b", 
+   // 		      (t_srcA  > t_srcB) | (t_srcA == t_srcB));
+   // 	     $display("t_srcA = %x, t_srcB = %x", t_srcA, t_srcB);
+   // 	     $display("w_add64 = %x", w_add64);
+   // 	     //$stop();
+   // 	  end
+   //   end
    
    always_comb
      begin
 	t_sub = 1'b0;
 	t_addi = 1'b0;
+	t_sltiu = 1'b0;
+	t_slti = 1'b0;
 	t_pc = int_uop.pc;
 	t_result = 32'd0;
 	t_unimp_op = 1'b0;
@@ -1221,14 +1240,13 @@ module exec(clk,
 	    end
 	  BGEU:
 	    begin
-	       t_take_br = (t_srcA  > t_srcB) | (t_srcA == t_srcB);
+	       t_take_br = !w_add64[32];
 	       t_mispred_br = int_uop.br_pred != t_take_br;
 	       t_pc = t_take_br ? int_uop.rvimm : w_pc4;
 	       t_alu_valid = 1'b1;
 	    end
 	  BLT:
 	    begin
-	       //t_take_br = ($signed(t_srcA) < $signed(t_srcB));
 	       t_sub = 1'b1;
 	       t_take_br = w_AltB;
 	       t_mispred_br = int_uop.br_pred != t_take_br;
@@ -1237,9 +1255,7 @@ module exec(clk,
 	    end
 	  BLTU:
 	    begin
-	      // t_sub = 1'b1;
-	       // t_take_br = w_add32[31];
-	       t_take_br = (t_srcA < t_srcB);
+	       t_take_br = w_add64[32];
 	       t_mispred_br = int_uop.br_pred != t_take_br;
 	       t_pc = t_take_br ? int_uop.rvimm : w_pc4;
 	       t_alu_valid = 1'b1;
@@ -1323,19 +1339,21 @@ module exec(clk,
 	    end
 	  SLTU:
 	    begin
-	       t_result = (t_srcA <  t_srcB) ? 'd1 : 'd0;
+	       t_result = {31'd0, w_add64[32]};
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
 	  SLTI:
 	    begin
-	       t_result = (($signed(t_srcA) < $signed(int_uop.rvimm)) ? 'd1 : 'd0);
+	       t_slti = 1'b1;
+	       t_result = {31'd0, w_AltB_slti};
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
 	  SLTIU:
 	    begin
-	       t_result = (t_srcA < int_uop.rvimm) ? 'd1 : 'd0;
+	       t_sltiu = 1'b1;
+	       t_result = {31'd0, w_add64[32]};
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end

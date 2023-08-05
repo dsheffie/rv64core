@@ -1,3 +1,4 @@
+`include "machine.vh"
 module ppa32(A, B, Y);
    input [31:0] A;
    input [31:0] B;
@@ -360,4 +361,6 @@ module ppa32(A, B, Y);
    assign Y[30] = pp_30 ^ gg_29_gg_28_gg_27_gg_26_gg_25_gg_24_gg_23_gg_22_gg_21_gg_20_gg_19_gg_18_gg_17_gg_16_gg_15_gg_14_gg_13_gg_12_gg_11_gg_10_gg_9_gg_8_gg_7_gg_6_gg_5_gg_4_gg_3_gg_2_gg_1_gg_0;
    assign Y[31] = pp_31 ^ gg_30_gg_29_gg_28_gg_27_gg_26_gg_25_gg_24_gg_23_gg_22_gg_21_gg_20_gg_19_gg_18_gg_17_gg_16_gg_15_gg_14_gg_13_gg_12_gg_11_gg_10_gg_9_gg_8_gg_7_gg_6_gg_5_gg_4_gg_3_gg_2_gg_1_gg_0;
 `endif
-endmodule
+endmodule // ppa32
+
+
