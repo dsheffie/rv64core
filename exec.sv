@@ -1076,13 +1076,15 @@ module exec(clk,
    wire [31:0] w_add32;
    wire [31:0] w_s_sub32, w_c_sub32;
    logic       t_sub;
+   logic       t_addi;
    
    csa #(.N(32)) csa0 (.a(t_srcA), 
-		       .b(t_sub ? ~t_srcB : t_srcB), 
+		       .b(t_addi ? int_uop.rvimm : (t_sub ? ~t_srcB : t_srcB)), 
 		       .cin(t_sub ? 32'd1 : 32'd0), .s(w_s_sub32), .cout(w_c_sub32) );
 
    wire [31:0] w_add_srcA = {w_c_sub32[30:0], 1'b0};
    wire [31:0] w_add_srcB = w_s_sub32;
+   
    wire [31:0] w_pc4, w_pc_plus_imm;
    wire [31:0] w_indirect_target;
   
@@ -1094,11 +1096,12 @@ module exec(clk,
    ppa32 add2 (.A(int_uop.pc), .B(32'd4), .Y(w_pc4));
 
    //ppa32 add2 (.A(int_uop.pc), .B(32'd4), .Y(w_pc4));
-   
+   //always_ff@(ngedge
    
    always_comb
      begin
 	t_sub = 1'b0;
+	t_addi = 1'b0;
 	t_pc = int_uop.pc;
 	t_result = 32'd0;
 	t_unimp_op = 1'b0;
@@ -1148,7 +1151,8 @@ module exec(clk,
 	    end
 	  ADDI:
 	    begin
-	       t_result = t_srcA + int_uop.rvimm;
+	       t_addi = 1'b1;
+	       t_result = w_add32;
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
@@ -1192,6 +1196,11 @@ module exec(clk,
 	    end
 	  BGE:
 	    begin
+	       //t_sub = 1'b1;
+	       //t_take_br = (t_srcA[31] & ~t_srcB[31]) ? 1'b1 :
+	       //(~t_srcA[31] & t_srcB[31]) ? 1'b0 :
+	       //(w_add32[31] == 1'b0);
+	       
 	       t_take_br = ($signed(t_srcA)  > $signed(t_srcB)) | (t_srcA == t_srcB);
 	       t_mispred_br = int_uop.br_pred != t_take_br;
 	       t_pc = t_take_br ? int_uop.rvimm : w_pc4;	       
