@@ -1095,8 +1095,23 @@ module exec(clk,
 
    ppa32 add2 (.A(int_uop.pc), .B(32'd4), .Y(w_pc4));
 
+   wire        w_AeqB = t_srcA == t_srcB;
+   wire w_AltB = (t_srcA[31] & (~t_srcB[31])) ? 1'b1 :
+	((~t_srcA[31]) & t_srcB[31]) ? 1'b0 :
+	w_add32[31];
+   
    //ppa32 add2 (.A(int_uop.pc), .B(32'd4), .Y(w_pc4));
-   //always_ff@(ngedge
+   always_ff@(negedge clk)
+     begin
+	if(int_uop.op == BLTU && r_start_int && t_alu_valid )
+	  begin
+	     $display("t_take_br = %b", t_take_br);
+	     $display("should be %b", 
+		      (t_srcA <t_srcB));
+	     $display("t_srcA = %x, t_srcB = %x", t_srcA, t_srcB);
+	     $display("w_add32 = %x", w_add32);
+	  end
+     end
    
    always_comb
      begin
@@ -1189,19 +1204,17 @@ module exec(clk,
 	    end
 	  BEQ:
 	    begin
-	       t_take_br = (t_srcA  == t_srcB);
+	       t_take_br = w_AeqB;
 	       t_mispred_br = int_uop.br_pred != t_take_br;
 	       t_pc = t_take_br ? int_uop.rvimm : w_pc4;	       
 	       t_alu_valid = 1'b1;
 	    end
 	  BGE:
 	    begin
-	       //t_sub = 1'b1;
-	       //t_take_br = (t_srcA[31] & ~t_srcB[31]) ? 1'b1 :
-	       //(~t_srcA[31] & t_srcB[31]) ? 1'b0 :
-	       //(w_add32[31] == 1'b0);
-	       
-	       t_take_br = ($signed(t_srcA)  > $signed(t_srcB)) | (t_srcA == t_srcB);
+	       t_sub = 1'b1;
+	       t_take_br = ((~t_srcA[31]) & t_srcB[31]) ? 1'b1 :
+			   (t_srcA[31] & (~t_srcB[31])) ? 1'b0 :
+			   (w_add32[31] == 1'b0);
 	       t_mispred_br = int_uop.br_pred != t_take_br;
 	       t_pc = t_take_br ? int_uop.rvimm : w_pc4;	       
 	       t_alu_valid = 1'b1;
@@ -1215,13 +1228,17 @@ module exec(clk,
 	    end
 	  BLT:
 	    begin
-	       t_take_br = ($signed(t_srcA) < $signed(t_srcB));
+	       //t_take_br = ($signed(t_srcA) < $signed(t_srcB));
+	       t_sub = 1'b1;
+	       t_take_br = w_AltB;
 	       t_mispred_br = int_uop.br_pred != t_take_br;
 	       t_pc = t_take_br ? int_uop.rvimm : w_pc4;
 	       t_alu_valid = 1'b1;
 	    end
 	  BLTU:
 	    begin
+	      // t_sub = 1'b1;
+	       // t_take_br = w_add32[31];
 	       t_take_br = (t_srcA < t_srcB);
 	       t_mispred_br = int_uop.br_pred != t_take_br;
 	       t_pc = t_take_br ? int_uop.rvimm : w_pc4;
@@ -1230,7 +1247,7 @@ module exec(clk,
 	  
 	  BNE:
 	    begin
-	       t_take_br = (t_srcA  != t_srcB);
+	       t_take_br = !w_AeqB;
 	       t_mispred_br = int_uop.br_pred != t_take_br;
 	       t_pc = t_take_br ? int_uop.rvimm : w_pc4;
 	       t_alu_valid = 1'b1;
@@ -1299,7 +1316,8 @@ module exec(clk,
 	    end
 	  SLT:
 	    begin
-	       t_result = ($signed(t_srcA) <  $signed(t_srcB)) ? 'd1 : 'd0;
+	       t_sub = 1'b1;
+	       t_result = {31'd0, w_AltB};
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end

@@ -157,7 +157,7 @@ module decode_riscv(insn,
 		   end
 		 3'd3:
 		   begin
-		      uop.op = (rd == 'd0) ? NOP : SLTIU;		      
+		      uop.op = (rd == 'd0) ? NOP : SLTIU;
 		   end
 		 3'd4:
 		   begin
