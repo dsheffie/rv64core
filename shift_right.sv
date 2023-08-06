@@ -14,23 +14,33 @@ module shift_right#(parameter LG_W=5)(y, is_left, is_signed, data, distance);
    wire w_sb = is_signed ? data[W-1] : 1'b0;
    wire [(2*W)-1:0] w_data = is_left ? {data, {W{1'b0}}} : {{W{w_sb}}, data};
 
-   wire [LG_W:0]    w_inv_dist = (6'd32 - {1'b0,distance});
-   wire [LG_W-1:0]  w_distance = is_left ? w_inv_dist[LG_W-1:0] : distance;
+   wire [LG_W:0]    w_inv_dist = (W - {1'b0,distance});
+   wire [LG_W:0]    w_distance = is_left ? w_inv_dist[LG_W:0] : {1'b0, distance};
 
 `ifdef FPGA
    wire [(2*W)-1:0] w_shift = w_data >> w_distance;
    assign y = w_shift[W-1:0];
 `else   
    /* verilator lint_off UNOPTFLAT */
-   wire [(2*W)-1:0] w_shift [LG_W-1:0];
-   
+   wire [(2*W)-1:0] w_shift [LG_W:0];
    assign w_shift[0] = w_distance[0] ? (w_data >> 1) : w_data;
-   assign w_shift[1] = w_distance[1] ? (w_shift[0] >> 2) : w_shift[0];
-   assign w_shift[2] = w_distance[2] ? (w_shift[1] >> 4) : w_shift[1];
-   assign w_shift[3] = w_distance[3] ? (w_shift[2] >> 8) : w_shift[2];
-   assign w_shift[4] = w_distance[4] ? (w_shift[3] >> 16) : w_shift[3];
-   assign y = w_shift[LG_W-1][W-1:0];
+   generate
+      for(genvar i = 1; i < (LG_W+1); i = i + 1)
+	begin
+	   assign w_shift[i] = w_distance[i] ? (w_shift[i-1] >> (1<<i)) : w_shift[i-1];
+	end
+   endgenerate
+   assign y = w_shift[LG_W][W-1:0];
 `endif
+
+   // always_comb
+   //   begin
+   // 	if(is_left)
+   // 	  begin
+   // 	     $display("y = %x, distance = %d, w_distance = %d, in = %b, w_shift = %b", 
+   // 		      y, distance, w_distance, data, w_shift);
+   // 	  end
+   //   end
    
    // logic 	    sb;
    // logic [31:0]    t_y;
