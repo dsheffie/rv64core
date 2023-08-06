@@ -109,7 +109,6 @@ module exec(clk,
    localparam N_MEM_UQ_ENTRIES = (1<<`LG_MEM_UQ_ENTRIES);
    localparam N_MEM_DQ_ENTRIES = (1<<`LG_MEM_DQ_ENTRIES);
    
-      
    logic [N_INT_PRF_ENTRIES-1:0]  r_prf_inflight, n_prf_inflight;
    
    logic 			  t_wr_int_prf;
@@ -118,8 +117,6 @@ module exec(clk,
    logic 	t_mispred_br;
    logic 	t_alu_valid;
    logic 	t_got_break;
-
-      
    
    mem_req_t r_mem_q[N_MQ_ENTRIES-1:0];
    logic [`LG_MQ_ENTRIES:0] r_mq_head_ptr, n_mq_head_ptr;
@@ -175,9 +172,11 @@ module exec(clk,
    logic 	t_fault;
    
    logic 	t_signed_shift;
+   logic 	t_left_shift;
+   
    logic [4:0] 	t_shift_amt;
    
-   logic [31:0] t_shift_right;
+   wire [31:0] w_shifter_out;
 
    logic 	t_start_mul;
    logic 	t_mul_complete;
@@ -823,8 +822,11 @@ module exec(clk,
      end
    
    
-   shift_right #(.LG_W(5)) s0(.is_signed(t_signed_shift), .data(t_srcA[31:0]), 
-			      .distance(t_shift_amt), .y(t_shift_right));
+   shift_right #(.LG_W(5)) s0(.is_left(t_left_shift), 
+			      .is_signed(t_signed_shift), 
+			      .data(t_srcA[31:0]), 
+			      .distance(t_shift_amt), 
+			      .y(w_shifter_out));
 
    wire [`LG_PRF_ENTRIES-1:0] w_mul_prf_ptr;
    logic [`LG_PRF_ENTRIES-1:0] r_mul_prf_ptr;
@@ -1146,6 +1148,7 @@ module exec(clk,
 	t_alu_valid = 1'b0;
 	t_got_break = 1'b0;
 	t_signed_shift = 1'b0;
+	t_left_shift = 1'b0;
 	t_shift_amt = 5'd0;
 	t_start_mul = 1'b0;
 	t_signed_div = 1'b0;
@@ -1320,13 +1323,17 @@ module exec(clk,
 	     end
 	  SLL:
 	    begin
-	       t_result = t_srcA << t_srcB[4:0];
+	       t_left_shift = 1'b1;
+	       t_shift_amt = t_srcB[4:0];
+	       t_result = w_shifter_out;
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
 	  SLLI:
 	    begin
-	       t_result = t_srcA << int_uop.rvimm[4:0];
+	       t_left_shift = 1'b1;
+	       t_shift_amt = int_uop.rvimm[4:0];
+	       t_result = w_shifter_out;
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
@@ -1361,7 +1368,7 @@ module exec(clk,
 	    begin
 	       t_signed_shift = 1'b1;
 	       t_shift_amt = int_uop.rvimm[4:0];
-	       t_result = {{HI_EBITS{t_shift_right[31]}}, t_shift_right};
+	       t_result = {{HI_EBITS{w_shifter_out[31]}}, w_shifter_out};
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
@@ -1369,19 +1376,21 @@ module exec(clk,
 	    begin
 	       t_signed_shift = 1'b1;
 	       t_shift_amt = t_srcB[4:0];
-	       t_result = {{HI_EBITS{t_shift_right[31]}}, t_shift_right};
+	       t_result = {{HI_EBITS{w_shifter_out[31]}}, w_shifter_out};
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
 	  SRL:
 	    begin
-	       t_result = t_srcA >> (t_srcB[4:0]);
+	       t_shift_amt = t_srcB[4:0];
+	       t_result = w_shifter_out;
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
 	  SRLI:
 	     begin
-		t_result = t_srcA >> int_uop.rvimm[4:0];	       
+		t_shift_amt = int_uop.rvimm[4:0];
+		t_result = w_shifter_out;
 		t_wr_int_prf = 1'b1;
 		t_alu_valid = 1'b1;
 	     end

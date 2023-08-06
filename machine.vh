@@ -9,8 +9,6 @@
 
 `define LG_M_WIDTH 5
 
-`define BIG_ENDIAN 1
-
 `define LG_INT_SCHED_ENTRIES 3
 
 //gshare branch predictor
