@@ -100,6 +100,7 @@ module core(clk,
 	    got_break,
 	    got_ud,
 	    got_bad_addr,
+	    got_monitor,
 	    inflight,
 	    epc);
    input logic clk;
@@ -185,6 +186,8 @@ module core(clk,
    output logic 			  got_break;
    output logic 			  got_ud;
    output logic 			  got_bad_addr;
+   output logic 			  got_monitor;
+   
    output logic [`LG_ROB_ENTRIES:0] 	  inflight;
    output logic [31:0] 			  epc;
    
@@ -301,6 +304,7 @@ module core(clk,
    logic 		     n_pending_badva, r_pending_badva;
    logic 		     n_pending_ii, r_pending_ii;
    logic 		     n_got_ud, r_got_ud;
+   logic 		     n_got_monitor, r_got_monitor;
    logic 		     n_got_bad_addr, r_got_bad_addr;
    
 
@@ -398,6 +402,7 @@ module core(clk,
    assign got_break = r_got_break;
    assign got_ud = r_got_ud;
    assign got_bad_addr = r_got_bad_addr;
+   assign got_monitor = r_got_monitor;
    assign epc = r_epc;
    
    popcount #(`LG_ROB_ENTRIES) inflight0 (.in(r_rob_inflight), 
@@ -477,6 +482,7 @@ module core(clk,
 	     r_pending_ii <= 1'b0;
 	     r_got_ud <= 1'b0;
 	     r_got_bad_addr <= 1'b0;
+	     r_got_monitor <= 1'b0;
 	     r_ready_for_resume <= 1'b0;
 	     r_l1i_flush_complete <= 1'b0;
 	     r_l1d_flush_complete <= 1'b0;
@@ -507,6 +513,7 @@ module core(clk,
 	     r_pending_ii <= n_pending_ii;	     
 	     r_got_ud <= n_got_ud;
 	     r_got_bad_addr <= n_got_bad_addr;
+	     r_got_monitor <= n_got_monitor;
 	     r_ready_for_resume <= n_ready_for_resume;
 	     r_l1i_flush_complete <= n_l1i_flush_complete;
 	     r_l1d_flush_complete <= n_l1d_flush_complete;
@@ -780,6 +787,7 @@ module core(clk,
 	n_got_ud = r_got_ud;
 	n_got_bad_addr = r_got_bad_addr;
 	n_got_restart_ack = r_got_restart_ack;
+	n_got_monitor = r_got_monitor;
 	n_ready_for_resume = 1'b0;
 	n_l1i_flush_complete = r_l1i_flush_complete || l1i_flush_complete;
 	n_l1d_flush_complete = r_l1d_flush_complete || l1d_flush_complete;
@@ -977,6 +985,7 @@ module core(clk,
 	    begin
 	       if(/*n_l1i_flush_complete &&*/ n_l1d_flush_complete && n_l2_flush_complete)
 		 begin
+		    n_got_monitor = 1'b1;
 		    n_state = HANDLE_MONITOR;
 		    n_l1i_flush_complete = 1'b0;
 		    n_l1d_flush_complete = 1'b0;
@@ -988,6 +997,7 @@ module core(clk,
 	       if(monitor_ack)
 		 begin
 		    //$display("monitor ack");
+		    n_got_monitor = 1'b0;
 		    n_state = ALLOC_FOR_MONITOR;
 		 end
 	    end

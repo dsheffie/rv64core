@@ -3,7 +3,6 @@
 import subprocess
 import glob
 import re
-import os
 
 if __name__ == '__main__':
     tests = glob.glob('*.rv32')
@@ -22,28 +21,14 @@ if __name__ == '__main__':
                 subprocess.run(['../rv32_core', '-f', test], stdout=o, stderr=o, timeout=15)
             except subprocess.TimeoutExpired:
                 print('failure : timeout for %s' % test)
-                for g in glob.glob(test+'*'):
-                    os.remove(g)
                 continue
 
         got_checksum = False
-        got_VA = False
         with open(test + '.rv32.out', 'r') as i:
             for line in i:
                 m = re.search('checksum', line)
                 if m:
                     got_checksum = True
                     break
-                m = re.search('GOT VA for', line)
-                if m:
-                    got_VA = True
-                    break
-
-        if got_checksum == True:
-            continue
-        elif got_VA == True:
-            print('test %s generated bad address' % test)
-            for g in glob.glob(test+'*'):
-                os.remove(g)
-        else:
-            print('test failed!' % test)
+        if got_checksum == False:
+            print('test %s didnt generate a checksum' % test)

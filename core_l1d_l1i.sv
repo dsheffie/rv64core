@@ -40,6 +40,7 @@ module core_l1d_l1i(clk,
 		    got_break,
 		    got_ud,
 		    got_bad_addr,
+		    got_monitor,
 		    inflight,
 		    epc);
 
@@ -117,6 +118,8 @@ module core_l1d_l1i(clk,
    output logic 			  got_break;
    output logic 			  got_ud;
    output logic 			  got_bad_addr;
+   output logic 			  got_monitor;
+   
    
    output logic [`LG_ROB_ENTRIES:0] 	  inflight;
    output logic [31:0] 			  epc;
@@ -573,6 +576,7 @@ module core_l1d_l1i(clk,
 	     .got_break(got_break),
 	     .got_ud(got_ud),
 	     .got_bad_addr(got_bad_addr),
+	     .got_monitor(got_monitor),
 	     .inflight(inflight),
 	     .epc(epc)
 	     );

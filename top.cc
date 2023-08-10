@@ -461,11 +461,12 @@ int main(int argc, char **argv) {
     tb->clk = 1;
     tb->eval();
 
-    uint32_t to_host = mem_r32(s, globals::tohost_addr);
+
     //std::cout << "got to host " << std::hex << to_host << std::dec << ", flush = " << static_cast<int>(tb->in_flush_mode) << "\n";
 
     
-    if(not(tb->in_flush_mode)) {
+    if(tb->got_monitor) {
+      uint32_t to_host = mem_r32(s, globals::tohost_addr);
       if(to_host) {
 	if(to_host & 1) {
 	  break;
