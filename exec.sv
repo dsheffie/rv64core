@@ -35,6 +35,8 @@ module exec(clk,
 	    uq_push_two,
 	    complete_bundle_1,
 	    complete_valid_1,
+	    complete_bundle_2,
+	    complete_valid_2,
 	    exception_wr_cpr0_val,
 	    exception_wr_cpr0_ptr,
 	    exception_wr_cpr0_data,
@@ -76,6 +78,8 @@ module exec(clk,
    
    output 	complete_t complete_bundle_1;
    output logic complete_valid_1;
+   output 	complete_t complete_bundle_2;
+   output logic complete_valid_2;   
 
 
    input logic 	exception_wr_cpr0_val;
@@ -138,6 +142,8 @@ module exec(clk,
    
 
    logic 	t_pop_uq,t_pop_mem_uq,t_pop_mem_dq;
+   logic 	t_pop_uq2;
+   
    logic 	r_mem_ready, r_dq_ready;
    
    
@@ -202,7 +208,7 @@ module exec(clk,
    
    
    
-   logic 			    t_uq_read, t_uq_empty, t_uq_full, t_uq_next_full;
+   logic 			    t_uq_read, t_uq_empty, t_uq_full, t_uq_next_full, t_uq_next_empty;
    logic [`LG_UQ_ENTRIES:0] 	    r_uq_head_ptr, n_uq_head_ptr;
    logic [`LG_UQ_ENTRIES:0] 	    r_uq_tail_ptr, n_uq_tail_ptr;
    logic [`LG_UQ_ENTRIES:0] 	    r_uq_next_head_ptr, n_uq_next_head_ptr;
@@ -490,9 +496,11 @@ module exec(clk,
 	
 	
 	t_uq_empty = (r_uq_head_ptr == r_uq_tail_ptr);
+	t_uq_next_empty = (r_uq_next_head_ptr == r_uq_tail_ptr);
+	
 	t_uq_full = (r_uq_head_ptr != r_uq_tail_ptr) && 
 		    (r_uq_head_ptr[`LG_UQ_ENTRIES-1:0] == r_uq_tail_ptr[`LG_UQ_ENTRIES-1:0]);
-	
+
 	t_uq_next_full = (r_uq_head_ptr != r_uq_next_tail_ptr) && 
 			 (r_uq_head_ptr[`LG_UQ_ENTRIES-1:0] == r_uq_next_tail_ptr[`LG_UQ_ENTRIES-1:0]);
 
@@ -788,6 +796,7 @@ module exec(clk,
    always_comb
      begin
 	t_pop_uq = 1'b0;
+	t_pop_uq2 = 1'b0;
 	t_alu_sched_full = (&r_alu_sched_valid);
 	
 	//t_pop_uq = t_flash_clear ? 1'b0 :
@@ -798,7 +807,7 @@ module exec(clk,
 	//(t_start_div32 & (!t_div_ready || r_wb_bitvec[`DIV32_LAT])) ? 1'b0 :
 	//1'b1;
 
-	t_pop_uq = !(t_flash_clear || t_uq_empty ||t_alu_sched_full);
+	t_pop_uq = !(t_flash_clear | t_uq_empty | t_alu_sched_full);
      end
    
    always_ff@(posedge clk)
@@ -1613,26 +1622,34 @@ module exec(clk,
    //   end
    
 
-   rf4r2w #(.WIDTH(32), .LG_DEPTH(`LG_PRF_ENTRIES)) 
+   rf6r3w #(.WIDTH(32), .LG_DEPTH(`LG_PRF_ENTRIES)) 
    intprf (.clk(clk),
 	   .rdptr0(t_picked_uop.srcA),
 	   .rdptr1(t_picked_uop.srcB),
 	   .rdptr2(t_mem_uq.srcA),
 	   .rdptr3(t_mem_dq.src_ptr),
+	   .rdptr4(),
+	   .rdptr5(),
 	   .wrptr0(t_mul_complete ? w_mul_prf_ptr :
 		   t_div_complete ? w_div_prf_ptr :
 		   int_uop.dst),
 	   .wrptr1(mem_rsp_dst_ptr),
+	   .wrptr2(),
 	   .wen0(t_mul_complete | t_div_complete | (r_start_int & t_wr_int_prf)),
 	   .wen1(mem_rsp_dst_valid),
+	   .wen2(1'b0),
 	   .wr0(t_mul_complete ? t_mul_result[31:0] :
 		t_div_complete ? t_div_result[31:0] :
 		t_result),
 	   .wr1(mem_rsp_load_data[31:0]),
+	   .wr2('d0),
 	   .rd0(w_srcA),
 	   .rd1(w_srcB),
 	   .rd2(w_mem_srcA),
-	   .rd3(w_mem_srcB)
+	   .rd3(w_mem_srcB),
+	   .rd4(),
+	   .rd5()
+	   
 	   );
    
    
@@ -1643,10 +1660,12 @@ module exec(clk,
 	if(reset)
 	  begin
 	     complete_valid_1 <= 1'b0;
+	     complete_valid_2 <= 1'b0;
 	  end
 	else
 	  begin
 	     complete_valid_1 <= r_start_int && t_alu_valid || t_mul_complete || t_div_complete;
+	     complete_valid_2 <= 1'b0;
 	  end
      end // always_ff@ (posedge clk)
 
