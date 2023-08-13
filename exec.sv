@@ -117,8 +117,8 @@ module exec(clk,
    
    logic 			  t_wr_int_prf, t_wr_int_prf2;
    
-   logic 	t_take_br;
-   logic 	t_mispred_br;
+   logic 	t_take_br, t_take_br2;
+   logic 	t_mispred_br, t_mispred_br2;
    logic 	t_alu_valid, t_alu_valid2;
    logic 	t_got_break;
    
@@ -154,7 +154,7 @@ module exec(clk,
 
    
    
-   logic [`M_WIDTH-1:0] t_pc;
+   logic [`M_WIDTH-1:0] t_pc, t_pc_2;
    logic 	t_srcs_rdy;
 
    
@@ -848,8 +848,14 @@ module exec(clk,
    
    
    logic t_error2;
+   wire [31:0] w_pc2_4;
+   ppa32 npc_2 (.A(int_uop2.pc), .B(32'd4), .Y(w_pc2_4));
+   
    always_comb
      begin
+	t_take_br2 = 1'b0;
+	t_mispred_br2= 1'b0;
+	t_pc_2 = int_uop2.pc;
 	t_left_shift2 = 1'b0;
 	t_signed_shift2 = 1'b0;
 	t_shift_amt2 = 5'd0;
@@ -858,6 +864,29 @@ module exec(clk,
 	t_error2 = 1'b0;
 	t_wr_int_prf2 = 1'b0;
 	case(int_uop2.op)
+	  BNE:
+	    begin
+	       t_take_br2 = w_srcA_2 != w_srcB_2;
+	       t_mispred_br2 = int_uop2.br_pred != t_take_br2;
+	       t_pc_2 = t_take_br2 ? int_uop2.rvimm : w_pc2_4;
+	       t_alu_valid2 = 1'b1;	       
+	    end
+	  BEQ:
+	    begin
+	       t_take_br2 = w_srcA_2 == w_srcB_2;
+	       t_mispred_br2 = int_uop2.br_pred != t_take_br2;
+	       t_pc_2 = t_take_br2 ? int_uop2.rvimm : w_pc2_4;
+	       t_alu_valid2 = 1'b1;	       
+	    end
+	  JAL:
+	    begin
+	       t_take_br2 = 1'b1;
+	       t_mispred_br2 = int_uop2.br_pred != 1'b1;
+	       t_pc_2 = int_uop2.rvimm;
+	       t_result2 = w_pc2_4;
+	       t_alu_valid2 = 1'b1;
+	       t_wr_int_prf2 = 1'b1;
+	    end
 	  ADDI:
 	    begin
 	       t_result2 = int_uop2.rvimm + w_srcA_2;
@@ -1850,10 +1879,10 @@ module exec(clk,
      begin
 	complete_bundle_2.rob_ptr <= int_uop2.rob_ptr;
 	complete_bundle_2.complete <= t_alu_valid2;
-	complete_bundle_2.faulted <= 1'b0;
-	complete_bundle_2.restart_pc <= 'd0;
+	complete_bundle_2.faulted <= t_mispred_br2;
+	complete_bundle_2.restart_pc <= t_pc_2;
 	complete_bundle_2.is_ii <= 'd0;
-	complete_bundle_2.take_br <= 1'b0;
+	complete_bundle_2.take_br <= t_take_br2;
 	complete_bundle_2.data <= t_result2;
      end
      

@@ -411,10 +411,12 @@ module decode_riscv(insn,
 		 3'd0:
 		   begin
 		      uop.op = BEQ;
+		      uop.is_cheap_int = 1'b1;
 		   end
 		 3'd1:
 		   begin
 		      uop.op = BNE;
+		      uop.is_cheap_int = 1'b1;
 		   end
 		 3'd4:
 		   begin
@@ -473,12 +475,13 @@ module decode_riscv(insn,
 		 end
 	       else
 		 begin
-		    uop.op = JAL;
+		    uop.op = JAL;		    
 		    uop.dst_valid = 1'b1;
 		    uop.dst = rd;	  
 		    uop.br_pred = 1'b1;
 		    uop.is_br = 1'b1;
-		    uop.is_int = 1'b1;	       
+		    uop.is_int = 1'b1;
+		    uop.is_cheap_int = 1'b1;
 		 end
 	    end
 	  7'h73: /* this is a bunch of system stuff I dont care about currently */
