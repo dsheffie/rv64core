@@ -203,7 +203,7 @@ module exec(clk,
    logic [N_ROB_ENTRIES-1:0] 	    r_uq_wait, r_mq_wait;
    /* non mem uop queue */
    uop_t r_uq[N_UQ_ENTRIES];
-   uop_t uq, int_uop;
+   uop_t uq, uq2, int_uop;
    logic 			    r_start_int;
    
    
@@ -226,8 +226,6 @@ module exec(clk,
    logic [`LG_MEM_UQ_ENTRIES:0] r_mem_uq_next_tail_ptr, n_mem_uq_next_tail_ptr;
 
    /* mem data queue */
-   //uop_t r_mem_uq[N_MEM_UQ_ENTRIES];
-  // uop_t t_mem_uq, mem_uq;
    dq_t r_mem_dq[N_MEM_DQ_ENTRIES];
    dq_t t_dq0, t_dq1, t_mem_dq, mem_dq;
    mem_data_t t_core_store_data;
@@ -508,6 +506,8 @@ module exec(clk,
 	t_push_one_int = ((uq_push && uq_uop.is_int) || (uq_push_two && uq_uop_two.is_int)) && !t_push_two_int;
 	
 	uq = r_uq[r_uq_head_ptr[`LG_UQ_ENTRIES-1:0]];
+	uq2 = r_uq[r_uq_next_head_ptr[`LG_UQ_ENTRIES-1:0]];
+
 	
 	if(t_push_two_int)
 	  begin	     
@@ -600,6 +600,10 @@ module exec(clk,
 
    //does this scheduler entry contain a valid uop?
    logic [N_INT_SCHED_ENTRIES-1:0] r_alu_sched_valid;
+   
+   wire [N_INT_SCHED_ENTRIES-1:0] w_alu_sched_valid_even;
+   wire [N_INT_SCHED_ENTRIES-1:0] w_alu_sched_valid_odd;
+   
    logic [`LG_INT_SCHED_ENTRIES:0] t_alu_sched_alloc_ptr;
    logic 			  t_alu_sched_full;
    
@@ -625,6 +629,7 @@ module exec(clk,
 	 t_alu_alloc_srcB_match;
    
    wire [N_INT_SCHED_ENTRIES-1:0] w_alu_sched_oldest_ready;
+
    
    find_first_set#(`LG_INT_SCHED_ENTRIES) ffs_int_sched_alloc( .in(~r_alu_sched_valid),
 							      .y(t_alu_sched_alloc_ptr));
@@ -632,7 +637,6 @@ module exec(clk,
    find_first_set#(`LG_INT_SCHED_ENTRIES) ffs_int_sched_select( .in(w_alu_sched_oldest_ready),
 								.y(t_alu_sched_select_ptr));
 
-   
    
    always_comb
      begin
@@ -673,18 +677,13 @@ module exec(clk,
 	//allocation forwarding
 	t_alu_alloc_srcA_match = uq.srcA_valid && (
 						   (mem_rsp_dst_valid & (mem_rsp_dst_ptr == uq.srcA)) ||
-						   //(r_mul_complete && (r_mul_prf_ptr == uq.srcA)) ||
-						   //(r_div_complete && (r_div_prf_ptr == uq.srcA)) ||
 						   (r_start_int && t_wr_int_prf & (int_uop.dst == uq.srcA))
 						   );
 	t_alu_alloc_srcB_match = uq.srcB_valid && (
 						   (mem_rsp_dst_valid & (mem_rsp_dst_ptr == uq.srcB)) ||
-						   //(r_mul_complete && (r_mul_prf_ptr == uq.srcB)) ||
-						   //(r_div_complete && (r_div_prf_ptr == uq.srcB)) ||						   
 						   (r_start_int && t_wr_int_prf & (int_uop.dst == uq.srcB))
 						   );
 
-	
      end // always_comb
   
 
@@ -792,22 +791,26 @@ module exec(clk,
    endgenerate
    
    
+   wire w_uq2_srcA_rdy = uq2.srcA_valid ? (!r_prf_inflight[uq2.srcA]) : 1'b1;
+   wire w_uq2_srcB_rdy = uq2.srcB_valid ? (!r_prf_inflight[uq2.srcB]) : 1'b1;
    
    always_comb
      begin
 	t_pop_uq = 1'b0;
 	t_pop_uq2 = 1'b0;
 	t_alu_sched_full = (&r_alu_sched_valid);
-	
-	//t_pop_uq = t_flash_clear ? 1'b0 :
-	//t_uq_empty ? 1'b0 : 
-	//!t_srcs_rdy ? 1'b0 : 
-	//(r_wb_bitvec[0]) ? 1'b0 :
-	//	   t_start_mul & r_wb_bitvec[`MUL_LAT] ? 1'b0 : 
-	//(t_start_div32 & (!t_div_ready || r_wb_bitvec[`DIV32_LAT])) ? 1'b0 :
-	//1'b1;
 
 	t_pop_uq = !(t_flash_clear | t_uq_empty | t_alu_sched_full);
+	t_pop_uq2 = t_uq_next_empty ? 1'b0 : (t_pop_uq & uq2.is_cheap_int & w_uq2_srcA_rdy & w_uq2_srcB_rdy);
+     end // always_comb
+
+   always_ff@(negedge clk)
+     begin
+	if(t_pop_uq2)
+	  begin
+	     $display("second uq op could get popped, inst 1 pc %x, inst 2 pc %x, ",
+		      uq.pc, uq2.pc);
+	  end
      end
    
    always_ff@(posedge clk)

@@ -142,7 +142,6 @@ module decode_riscv(insn,
 	       uop.dst_valid = (rd != 'd0);
 	       uop.srcA_valid = (rd != 'd0);	       	       
 	       uop.is_int = 1'b1;
-	       uop.is_cheap_int = 1'b1;
 	       uop.rvimm = {{20{insn[31]}}, insn[31:20]};
 	       case(insn[14:12])
 		 3'd0: /* addi */
@@ -243,7 +242,6 @@ module decode_riscv(insn,
 			7'h0:
 			  begin
 			     uop.op = (rd != 'd0) ? ADDU : NOP;
-			     uop.is_cheap_int = 1'b1;
 			  end
 			7'h1:
 			  begin
@@ -252,7 +250,6 @@ module decode_riscv(insn,
 			7'h20:
 			  begin
 			     uop.op = (rd != 'd0) ? SUBU : NOP;
-			     uop.is_cheap_int = 1'b1;
 			  end
 			default:
 			  begin
@@ -265,7 +262,6 @@ module decode_riscv(insn,
 			7'd0:
 			  begin
 			     uop.op = (rd != 'd0) ? SLL : NOP;
-			     uop.is_cheap_int = 1'b1;
 			  end
 			7'h1:
 			  begin
@@ -282,7 +278,6 @@ module decode_riscv(insn,
 			7'd0:
 			  begin
 			     uop.op = (rd != 'd0) ? SLT : NOP;
-			     uop.is_cheap_int = 1'b1;
 			  end
 			default:
 			  begin
@@ -295,7 +290,6 @@ module decode_riscv(insn,
 			7'h0:
 			  begin
 			     uop.op = (rd != 'd0) ? SLTU : NOP;
-			     uop.is_cheap_int = 1'b1;
 			  end
 			7'h1:
 			  begin
@@ -312,7 +306,6 @@ module decode_riscv(insn,
 			7'h0:
 			  begin
 			     uop.op = (rd != 'd0) ? XOR : NOP;
-			     uop.is_cheap_int = 1'b1;
 			  end
 			7'h1:
 			  begin
@@ -329,7 +322,6 @@ module decode_riscv(insn,
 			7'h0:
 			  begin
 			     uop.op = (rd != 'd0) ? SRL : NOP;
-			     uop.is_cheap_int = 1'b1;
 			  end
 			7'h1:
 			  begin
@@ -338,7 +330,6 @@ module decode_riscv(insn,
 			7'h20:
 			  begin
 			     uop.op = (rd != 'd0) ? SRA : NOP;
-			     uop.is_cheap_int = 1'b1;
 			  end
 			default:
 			  begin
@@ -351,7 +342,6 @@ module decode_riscv(insn,
 			7'h0:
 			  begin
 			     uop.op = (rd != 'd0) ? OR : NOP;
-			     uop.is_cheap_int = 1'b1;
 			  end
 			7'h1:
 			  begin
@@ -368,7 +358,6 @@ module decode_riscv(insn,
 			7'h0:
 			  begin
 			     uop.op = (rd != 'd0) ? AND : NOP;
-			     uop.is_cheap_int = 1'b1;
 			  end
 			7'h1:
 			  begin
