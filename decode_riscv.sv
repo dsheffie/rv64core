@@ -152,6 +152,7 @@ module decode_riscv(insn,
 		 3'd1:
 		   begin
 		      uop.op = (rd == 'd0) ? NOP : SLLI;
+		      uop.is_cheap_int = 1'b1;
 		   end
 		 3'd2:
 		   begin
@@ -172,10 +173,12 @@ module decode_riscv(insn,
 			7'h0:
 			  begin
 			     uop.op = (rd == 'd0) ? NOP : SRLI;
+			     uop.is_cheap_int = 1'b1;
 			  end
 			7'h20:
 			  begin
-			     uop.op = (rd == 'd0) ? NOP : SRAI;			     
+			     uop.op = (rd == 'd0) ? NOP : SRAI;
+			     uop.is_cheap_int = 1'b1;
 			  end
 			default:
 			  begin
@@ -267,6 +270,7 @@ module decode_riscv(insn,
 			7'd0:
 			  begin
 			     uop.op = (rd != 'd0) ? SLL : NOP;
+			     uop.is_cheap_int = 1'b1;			     
 			  end
 			7'h1:
 			  begin
@@ -311,6 +315,7 @@ module decode_riscv(insn,
 			7'h0:
 			  begin
 			     uop.op = (rd != 'd0) ? XOR : NOP;
+			     uop.is_cheap_int = 1'b1;			     
 			  end
 			7'h1:
 			  begin
@@ -327,6 +332,7 @@ module decode_riscv(insn,
 			7'h0:
 			  begin
 			     uop.op = (rd != 'd0) ? SRL : NOP;
+			     uop.is_cheap_int = 1'b1;			     
 			  end
 			7'h1:
 			  begin
@@ -335,6 +341,7 @@ module decode_riscv(insn,
 			7'h20:
 			  begin
 			     uop.op = (rd != 'd0) ? SRA : NOP;
+			     uop.is_cheap_int = 1'b1;
 			  end
 			default:
 			  begin
@@ -347,6 +354,7 @@ module decode_riscv(insn,
 			7'h0:
 			  begin
 			     uop.op = (rd != 'd0) ? OR : NOP;
+			     uop.is_cheap_int = 1'b1;
 			  end
 			7'h1:
 			  begin
@@ -363,6 +371,7 @@ module decode_riscv(insn,
 			7'h0:
 			  begin
 			     uop.op = (rd != 'd0) ? AND : NOP;
+			     uop.is_cheap_int = 1'b1;
 			  end
 			7'h1:
 			  begin

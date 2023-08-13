@@ -825,10 +825,34 @@ module exec(clk,
 	t_pop_uq = !(t_flash_clear | t_uq_empty | t_alu_sched_full);
 	t_pop_uq2 = t_uq_next_empty ? 1'b0 : (t_pop_uq & uq2.is_cheap_int & w_uq2_srcA_rdy & w_uq2_srcB_rdy);
      end // always_comb
+
+   always_ff@(negedge clk)
+     begin
+	if(!t_uq_next_empty && t_pop_uq && w_uq2_srcA_rdy && w_uq2_srcB_rdy &&
+	   !uq2.is_cheap_int && uq2.is_int && 1'b0)
+	  begin
+	     $display("could ex but op %d is not cheap, pc %x", 
+		      uq2.op, uq2.pc);
+	  end
+     end
+
+   logic t_left_shift2, t_signed_shift2;
+   wire [31:0] w_shifter_out2;
+   logic [4:0] t_shift_amt2;   
+   shift_right #(.LG_W(5)) s1(.is_left(t_left_shift2), 
+			      .is_signed(t_signed_shift2), 
+			      .data(w_srcA_2), 
+			      .distance(t_shift_amt2), 
+			      .y(w_shifter_out2));
+
+   
    
    logic t_error2;
    always_comb
      begin
+	t_left_shift2 = 1'b0;
+	t_signed_shift2 = 1'b0;
+	t_shift_amt2 = 5'd0;
 	t_alu_valid2 = 1'b0;
 	t_result2 = 'd0;
 	t_error2 = 1'b0;
@@ -845,12 +869,6 @@ module exec(clk,
 	       t_result2 = w_srcA_2 + w_srcB_2;
 	       t_alu_valid2 = 1'b1;
 	       t_wr_int_prf2 = 1'b1;
-	    end	  
-	  XORI:
-	    begin
-	       t_result2 = int_uop2.rvimm ^ w_srcA_2;
-	       t_alu_valid2 = 1'b1;
-	       t_wr_int_prf2 = 1'b1;
 	    end
 	  ANDI:
 	    begin
@@ -864,7 +882,76 @@ module exec(clk,
 	       t_alu_valid2 = 1'b1;
 	       t_wr_int_prf2 = 1'b1;
 	    end
-	  
+	  XORI:
+	    begin
+	       t_result2 = int_uop2.rvimm ^ w_srcA_2;
+	       t_alu_valid2 = 1'b1;
+	       t_wr_int_prf2 = 1'b1;
+	    end
+	  AND:
+	    begin
+	       t_result2 = w_srcA_2 & w_srcB_2;	       
+	       t_alu_valid2 = 1'b1;
+	       t_wr_int_prf2 = 1'b1;
+	    end
+	  OR:
+	    begin
+	       t_result2 = w_srcA_2 | w_srcB_2;
+	       t_alu_valid2 = 1'b1;
+	       t_wr_int_prf2 = 1'b1;
+	    end
+	  XOR:
+	    begin
+	       t_result2 = w_srcA_2 ^ w_srcB_2;
+	       t_alu_valid2 = 1'b1;
+	       t_wr_int_prf2 = 1'b1;
+	    end
+	  SRL:
+	    begin
+	       t_shift_amt2 = w_srcB_2[4:0];
+	       t_result2 = w_shifter_out2;
+	       t_wr_int_prf2 = 1'b1;
+	       t_alu_valid2 = 1'b1;
+	    end
+	  SRLI:
+	    begin
+		t_shift_amt2 = int_uop2.rvimm[4:0];
+		t_result2 = w_shifter_out2;
+		t_wr_int_prf2 = 1'b1;
+		t_alu_valid2 = 1'b1;	       
+	    end
+	  SRA:
+	    begin
+	       t_signed_shift2 = 1'b1;
+	       t_shift_amt2 = w_srcB_2[4:0];
+	       t_result2 = w_shifter_out2;
+	       t_wr_int_prf2 = 1'b1;
+	       t_alu_valid2 = 1'b1;
+	    end
+	  SRAI:
+	    begin
+	       t_signed_shift2 = 1'b1;
+	       t_shift_amt2 = int_uop2.rvimm[4:0];
+	       t_result2 = w_shifter_out2;
+	       t_wr_int_prf2 = 1'b1;
+	       t_alu_valid2 = 1'b1;		
+	    end	  
+	  SLL:
+	    begin
+	       t_left_shift2 = 1'b1;
+	       t_shift_amt2 = w_srcB_2[4:0];
+	       t_result2 = w_shifter_out2;
+	       t_wr_int_prf2 = 1'b1;
+	       t_alu_valid2 = 1'b1;
+	    end
+	  SLLI:
+	    begin
+	       t_left_shift2 = 1'b1;	       
+	       t_shift_amt2 = int_uop2.rvimm[4:0];
+	       t_result2 = w_shifter_out2;
+	       t_wr_int_prf2 = 1'b1;
+	       t_alu_valid2 = 1'b1;		
+	    end	  
 	  AUIPC:
 	    begin
 	       t_result2 = int_uop2.rvimm;
@@ -1186,6 +1273,7 @@ module exec(clk,
    
    wire [31:0] w_add32_srcA = {w_c_sub32[30:0], 1'b0};
    wire [31:0] w_add32_srcB = w_s_sub32;
+   
    ppa32 add0 (.A(w_add32_srcA), .B(w_add32_srcB), .Y(w_add32));
 
 
