@@ -147,6 +147,7 @@ module decode_riscv(insn,
 		 3'd0: /* addi */
 		   begin
 		      uop.op = (rd == 'd0) ? NOP : ADDI;
+		      uop.is_cheap_int = 1'b1;
 		   end
 		 3'd1:
 		   begin
@@ -162,7 +163,8 @@ module decode_riscv(insn,
 		   end
 		 3'd4:
 		   begin
-		      uop.op = (rd == 'd0) ? NOP : XORI;		      
+		      uop.op = (rd == 'd0) ? NOP : XORI;
+		      uop.is_cheap_int = 1'b1;		      
 		   end
 		 3'd5:
 		   begin
@@ -182,11 +184,13 @@ module decode_riscv(insn,
 		   end
 		 3'd6:
 		   begin
-		      uop.op = (rd == 'd0) ? NOP : ORI;		      		      
+		      uop.op = (rd == 'd0) ? NOP : ORI;	
+		      uop.is_cheap_int = 1'b1;		      	      		      
 		   end
 		 3'd7:
 		   begin
 		      uop.op = (rd == 'd0) ? NOP : ANDI;
+		      uop.is_cheap_int = 1'b1;		      		      
 		   end
 	       endcase // case (inst[14:12])
 	    end // case: 7'h13
@@ -242,6 +246,7 @@ module decode_riscv(insn,
 			7'h0:
 			  begin
 			     uop.op = (rd != 'd0) ? ADDU : NOP;
+			     uop.is_cheap_int = 1'b1;
 			  end
 			7'h1:
 			  begin

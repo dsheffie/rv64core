@@ -115,11 +115,11 @@ module exec(clk,
    
    logic [N_INT_PRF_ENTRIES-1:0]  r_prf_inflight, n_prf_inflight;
    
-   logic 			  t_wr_int_prf;
+   logic 			  t_wr_int_prf, t_wr_int_prf2;
    
    logic 	t_take_br;
    logic 	t_mispred_br;
-   logic 	t_alu_valid;
+   logic 	t_alu_valid, t_alu_valid2;
    logic 	t_got_break;
    
    mem_req_t r_mem_q[N_MQ_ENTRIES-1:0];
@@ -150,7 +150,7 @@ module exec(clk,
    localparam E_BITS = `M_WIDTH-16;
    localparam HI_EBITS = `M_WIDTH-32;
    
-   logic [`M_WIDTH-1:0] t_result;
+   logic [`M_WIDTH-1:0] t_result, t_result2;
 
    
    
@@ -159,6 +159,7 @@ module exec(clk,
 
    
    wire [31:0] w_srcA, w_srcB;
+   wire [31:0] w_srcA_2, w_srcB_2;
    wire [31:0] w_mem_srcA, w_mem_srcB;
    
    logic [31:0] r_mem_result, r_int_result;
@@ -203,7 +204,8 @@ module exec(clk,
    logic [N_ROB_ENTRIES-1:0] 	    r_uq_wait, r_mq_wait;
    /* non mem uop queue */
    uop_t r_uq[N_UQ_ENTRIES];
-   uop_t uq, uq2, int_uop;
+   uop_t uq, uq2, int_uop, int_uop2;
+   logic 			    r_start_int2;
    logic 			    r_start_int;
    
    
@@ -520,10 +522,15 @@ module exec(clk,
 	     n_uq_next_tail_ptr = r_uq_next_tail_ptr + 'd1;
 	  end
 
-	
-	if(t_pop_uq)
+	if(t_pop_uq2)
+	  begin
+	     n_uq_next_head_ptr = r_uq_next_head_ptr + 'd2;
+	     n_uq_head_ptr = r_uq_head_ptr + 'd2;
+	  end
+	else if(t_pop_uq)
 	  begin
 	     n_uq_head_ptr = r_uq_head_ptr + 'd1;
+	     n_uq_next_head_ptr = r_uq_next_head_ptr + 'd1;	     
 	  end
      end // always_comb
 
@@ -677,10 +684,12 @@ module exec(clk,
 	//allocation forwarding
 	t_alu_alloc_srcA_match = uq.srcA_valid && (
 						   (mem_rsp_dst_valid & (mem_rsp_dst_ptr == uq.srcA)) ||
+						   (r_start_int2 && t_wr_int_prf2 && (int_uop2.dst == uq.srcA)) ||
 						   (r_start_int && t_wr_int_prf & (int_uop.dst == uq.srcA))
 						   );
 	t_alu_alloc_srcB_match = uq.srcB_valid && (
 						   (mem_rsp_dst_valid & (mem_rsp_dst_ptr == uq.srcB)) ||
+						   (r_start_int2 && t_wr_int_prf2 && (int_uop2.dst == uq.srcB)) ||						   
 						   (r_start_int && t_wr_int_prf & (int_uop.dst == uq.srcB))
 						   );
 
@@ -742,12 +751,14 @@ module exec(clk,
 									 (mem_rsp_dst_valid & (mem_rsp_dst_ptr == r_alu_sched_uops[i].srcA)) ||
 									 (r_mul_complete && (r_mul_prf_ptr == r_alu_sched_uops[i].srcA)) ||
 									 (r_div_complete && (r_div_prf_ptr == r_alu_sched_uops[i].srcA)) ||
+									 (r_start_int2 && t_wr_int_prf2 & (int_uop2.dst == r_alu_sched_uops[i].srcA)) ||			 
 									 (r_start_int && t_wr_int_prf & (int_uop.dst == r_alu_sched_uops[i].srcA))
 									 );
 		t_alu_srcB_match[i] = r_alu_sched_uops[i].srcB_valid && (
 									 (mem_rsp_dst_valid & (mem_rsp_dst_ptr == r_alu_sched_uops[i].srcB)) ||
 									 (r_mul_complete && (r_mul_prf_ptr == r_alu_sched_uops[i].srcB)) ||
 									 (r_div_complete && (r_div_prf_ptr == r_alu_sched_uops[i].srcB)) ||
+									 (r_start_int2 && t_wr_int_prf2 & (int_uop2.dst == r_alu_sched_uops[i].srcB)) ||
 									 (r_start_int && t_wr_int_prf & (int_uop.dst == r_alu_sched_uops[i].srcB))
 									 );
 		
@@ -793,6 +804,17 @@ module exec(clk,
    
    wire w_uq2_srcA_rdy = uq2.srcA_valid ? (!r_prf_inflight[uq2.srcA]) : 1'b1;
    wire w_uq2_srcB_rdy = uq2.srcB_valid ? (!r_prf_inflight[uq2.srcB]) : 1'b1;
+
+   always_ff@(posedge clk)
+     begin
+	int_uop2 <= uq2;
+     end
+   
+   always_ff@(posedge clk)
+     begin
+	r_start_int2 <= reset ? 1'b0 : t_pop_uq2;
+     end
+   
    
    always_comb
      begin
@@ -803,13 +825,72 @@ module exec(clk,
 	t_pop_uq = !(t_flash_clear | t_uq_empty | t_alu_sched_full);
 	t_pop_uq2 = t_uq_next_empty ? 1'b0 : (t_pop_uq & uq2.is_cheap_int & w_uq2_srcA_rdy & w_uq2_srcB_rdy);
      end // always_comb
+   
+   logic t_error2;
+   always_comb
+     begin
+	t_alu_valid2 = 1'b0;
+	t_result2 = 'd0;
+	t_error2 = 1'b0;
+	t_wr_int_prf2 = 1'b0;
+	case(int_uop2.op)
+	  ADDI:
+	    begin
+	       t_result2 = int_uop2.rvimm + w_srcA_2;
+	       t_alu_valid2 = 1'b1;
+	       t_wr_int_prf2 = 1'b1;
+	    end
+	  ADDU:
+	    begin
+	       t_result2 = w_srcA_2 + w_srcB_2;
+	       t_alu_valid2 = 1'b1;
+	       t_wr_int_prf2 = 1'b1;
+	    end	  
+	  XORI:
+	    begin
+	       t_result2 = int_uop2.rvimm ^ w_srcA_2;
+	       t_alu_valid2 = 1'b1;
+	       t_wr_int_prf2 = 1'b1;
+	    end
+	  ANDI:
+	    begin
+	       t_result2 = int_uop2.rvimm & w_srcA_2;
+	       t_alu_valid2 = 1'b1;
+	       t_wr_int_prf2 = 1'b1;
+	    end
+	  ORI:
+	    begin
+	       t_result2 = int_uop2.rvimm | w_srcA_2;
+	       t_alu_valid2 = 1'b1;
+	       t_wr_int_prf2 = 1'b1;
+	    end
+	  
+	  AUIPC:
+	    begin
+	       t_result2 = int_uop2.rvimm;
+	       t_alu_valid2 = 1'b1;
+	       t_wr_int_prf2 = 1'b1;
+	    end
+	  LUI:
+	    begin
+	       t_result2 = int_uop2.rvimm;
+	       t_alu_valid2 = 1'b1;
+	       t_wr_int_prf2 = 1'b1;
+	    end
+	  default:
+	    begin
+	       t_error2 = r_start_int2;
+	    end
+	endcase
+     end
 
+   
    always_ff@(negedge clk)
      begin
-	if(t_pop_uq2)
+	if(t_error2)
 	  begin
-	     $display("second uq op could get popped, inst 1 pc %x, inst 2 pc %x, ",
-		      uq.pc, uq2.pc);
+	     $display("opcode %d for pc %x", int_uop2.op, int_uop2.pc);
+	     $stop();
 	  end
      end
    
@@ -1058,7 +1139,12 @@ module exec(clk,
 	else if(t_div_complete)
 	  begin
 	     n_prf_inflight[w_div_prf_ptr] = 1'b0;
-	  end	
+	  end
+	if(r_start_int2 && t_wr_int_prf2)
+	  begin
+	     n_prf_inflight[int_uop2.dst] = 1'b0;
+	  end
+	
      end // always_comb
 
    
@@ -1631,27 +1717,27 @@ module exec(clk,
 	   .rdptr1(t_picked_uop.srcB),
 	   .rdptr2(t_mem_uq.srcA),
 	   .rdptr3(t_mem_dq.src_ptr),
-	   .rdptr4(),
-	   .rdptr5(),
+	   .rdptr4(uq2.srcA),
+	   .rdptr5(uq2.srcB),
 	   .wrptr0(t_mul_complete ? w_mul_prf_ptr :
 		   t_div_complete ? w_div_prf_ptr :
 		   int_uop.dst),
 	   .wrptr1(mem_rsp_dst_ptr),
-	   .wrptr2(),
+	   .wrptr2(int_uop2.dst),
 	   .wen0(t_mul_complete | t_div_complete | (r_start_int & t_wr_int_prf)),
 	   .wen1(mem_rsp_dst_valid),
-	   .wen2(1'b0),
+	   .wen2(r_start_int2 & t_wr_int_prf2),
 	   .wr0(t_mul_complete ? t_mul_result[31:0] :
 		t_div_complete ? t_div_result[31:0] :
 		t_result),
 	   .wr1(mem_rsp_load_data[31:0]),
-	   .wr2('d0),
+	   .wr2(t_result2),
 	   .rd0(w_srcA),
 	   .rd1(w_srcB),
 	   .rd2(w_mem_srcA),
 	   .rd3(w_mem_srcB),
-	   .rd4(),
-	   .rd5()
+	   .rd4(w_srcA_2),
+	   .rd5(w_srcB_2)
 	   
 	   );
    
@@ -1668,9 +1754,21 @@ module exec(clk,
 	else
 	  begin
 	     complete_valid_1 <= r_start_int && t_alu_valid || t_mul_complete || t_div_complete;
-	     complete_valid_2 <= 1'b0;
+	     complete_valid_2 <= r_start_int2;
 	  end
      end // always_ff@ (posedge clk)
+
+   always_ff@(posedge clk)
+     begin
+	complete_bundle_2.rob_ptr <= int_uop2.rob_ptr;
+	complete_bundle_2.complete <= t_alu_valid2;
+	complete_bundle_2.faulted <= 1'b0;
+	complete_bundle_2.restart_pc <= 'd0;
+	complete_bundle_2.is_ii <= 'd0;
+	complete_bundle_2.take_br <= 1'b0;
+	complete_bundle_2.data <= t_result2;
+     end
+     
 
    
    always_ff@(posedge clk)
