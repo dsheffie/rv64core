@@ -864,6 +864,13 @@ module exec(clk,
 		.B(w_s_sub32_2), 
 		.Y(w_add32_2));
    
+
+   wire [31:0] w_indirect_target2;
+   ppa32 itgt (.A(w_srcA_2), .B(int_uop2.rvimm), .Y(w_indirect_target2));
+   
+   wire        w_mispredicted_indirect2 = w_indirect_target2 != 
+	       {int_uop2.jmp_imm,int_uop2.imm};   
+
    
    always_comb
      begin
@@ -894,6 +901,34 @@ module exec(clk,
 	       t_pc_2 = t_take_br2 ? int_uop2.rvimm : w_pc2_4;
 	       t_alu_valid2 = 1'b1;	       
 	    end
+	  BLT:
+	    begin
+	       t_take_br2 = $signed(w_srcA_2) < $signed(w_srcB_2);
+	       t_mispred_br2 = int_uop2.br_pred != t_take_br2;
+	       t_pc_2 = t_take_br2 ? int_uop2.rvimm : w_pc2_4;
+	       t_alu_valid2 = 1'b1;	       	       
+	    end
+	  BGE:
+	    begin
+	       t_take_br2 = $signed(w_srcA_2) >= $signed(w_srcB_2);
+	       t_mispred_br2 = int_uop2.br_pred != t_take_br2;
+	       t_pc_2 = t_take_br2 ? int_uop2.rvimm : w_pc2_4;
+	       t_alu_valid2 = 1'b1;	       	       
+	    end
+	  BLTU:
+	    begin
+	       t_take_br2 = w_srcA_2 < w_srcB_2;
+	       t_mispred_br2 = int_uop2.br_pred != t_take_br2;
+	       t_pc_2 = t_take_br2 ? int_uop2.rvimm : w_pc2_4;
+	       t_alu_valid2 = 1'b1;	       	       
+	    end
+	  BGEU:
+	    begin
+	       t_take_br2 = w_srcA_2 >= w_srcB_2;
+	       t_mispred_br2 = int_uop2.br_pred != t_take_br2;
+	       t_pc_2 = t_take_br2 ? int_uop2.rvimm : w_pc2_4;
+	       t_alu_valid2 = 1'b1;	       	       
+	    end
 	  JAL:
 	    begin
 	       t_take_br2 = 1'b1;
@@ -903,6 +938,29 @@ module exec(clk,
 	       t_alu_valid2 = 1'b1;
 	       t_wr_int_prf2 = 1'b1;
 	    end
+	  JALR:
+	    begin
+	       t_take_br2 = 1'b1;
+	       t_mispred_br2 = w_mispredicted_indirect2;	       
+	       t_pc_2 = w_indirect_target2;
+	       t_alu_valid2 = 1'b1;
+	       t_result2 = w_pc2_4;
+	       t_wr_int_prf2 = 1'b1;
+	    end
+	  JR:
+	    begin
+	       t_take_br2 = 1'b1;
+	       t_mispred_br2 = w_mispredicted_indirect2;	       
+	       t_pc_2 = w_indirect_target2;
+	       t_alu_valid2 = 1'b1;
+	    end
+	  RET:
+	    begin
+	       t_take_br2 = 1'b1;
+	       t_mispred_br2 = w_mispredicted_indirect2;	       
+	       t_pc_2 = w_indirect_target2;
+	       t_alu_valid2 = 1'b1;
+	    end	  
 	  ADDI:
 	    begin
 	       t_addi_2 = 1'b1;

@@ -408,16 +408,15 @@ module decode_riscv(insn,
 	       uop.rvimm = w_pc_imm;
 	       uop.br_pred = insn_pred;
 	       uop.is_br = 1'b1;
+	       uop.is_cheap_int = 1'b1;
 	       case(insn[14:12])
 		 3'd0:
 		   begin
 		      uop.op = BEQ;
-		      uop.is_cheap_int = 1'b1;
 		   end
 		 3'd1:
 		   begin
 		      uop.op = BNE;
-		      uop.is_cheap_int = 1'b1;
 		   end
 		 3'd4:
 		   begin
@@ -452,6 +451,7 @@ module decode_riscv(insn,
 	       uop.rvimm = {{20{insn[31]}}, insn[31:20]};
 	       uop.br_pred = 1'b1;
 	       uop.is_br = 1'b1;
+	       uop.is_cheap_int = 1'b1;	       
 	       if(rd == 'd0)
 		 begin
 		    uop.op = rs1_is_link ? RET : JR;
