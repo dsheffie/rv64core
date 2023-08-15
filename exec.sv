@@ -847,12 +847,28 @@ module exec(clk,
 
    
    
-   logic t_error2;
-   wire [31:0] w_pc2_4;
+   logic t_error2, t_sub2, t_addi_2;
+   wire [31:0] w_pc2_4, w_add32_2;
+   wire [31:0] w_s_sub32_2, w_c_sub32_2;   
    ppa32 npc_2 (.A(int_uop2.pc), .B(32'd4), .Y(w_pc2_4));
+
+   csa #(.N(32)) csa2 (
+		       .a(w_srcA_2), 
+		       .b(t_addi_2 ? int_uop2.rvimm : (t_sub2 ? ~w_srcB_2 : w_srcB_2)), 
+		       .cin(t_sub2 ? 32'd1 : 32'd0), 
+		       .s(w_s_sub32_2), 
+		       .cout(w_c_sub32_2) );
+
+   
+   ppa32 add32 (.A({w_c_sub32_2[30:0], 1'b0}), 
+		.B(w_s_sub32_2), 
+		.Y(w_add32_2));
+   
    
    always_comb
      begin
+	t_sub2 = 1'b0;
+	t_addi_2 = 1'b0;
 	t_take_br2 = 1'b0;
 	t_mispred_br2= 1'b0;
 	t_pc_2 = int_uop2.pc;
@@ -889,13 +905,21 @@ module exec(clk,
 	    end
 	  ADDI:
 	    begin
-	       t_result2 = int_uop2.rvimm + w_srcA_2;
+	       t_addi_2 = 1'b1;
+	       t_result2 = w_add32_2;
 	       t_alu_valid2 = 1'b1;
 	       t_wr_int_prf2 = 1'b1;
 	    end
 	  ADDU:
 	    begin
-	       t_result2 = w_srcA_2 + w_srcB_2;
+	       t_result2 = w_add32_2;
+	       t_alu_valid2 = 1'b1;
+	       t_wr_int_prf2 = 1'b1;
+	    end
+	  SUBU:
+	    begin
+	       t_sub2 = 1'b1;
+	       t_result2 = w_add32_2;
 	       t_alu_valid2 = 1'b1;
 	       t_wr_int_prf2 = 1'b1;
 	    end

@@ -258,6 +258,7 @@ module decode_riscv(insn,
 			7'h20:
 			  begin
 			     uop.op = (rd != 'd0) ? SUBU : NOP;
+			     uop.is_cheap_int = 1'b1;
 			  end
 			default:
 			  begin
