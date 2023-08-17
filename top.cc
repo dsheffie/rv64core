@@ -14,7 +14,7 @@ int globals::sysArgc = 0;
 
 static uint64_t cycle = 0;
 static bool trace_retirement = false;
-
+static uint64_t mem_reqs = 0;
 static state_t *s = nullptr;
 static state_t *ss = nullptr;
 static uint64_t insns_retired = 0;
@@ -537,8 +537,8 @@ int main(int argc, char **argv) {
 		  << ", " << static_cast<double>(insns_retired) / cycle << " IPC "
 		  << ", insns_retired "
 		  << insns_retired
-		  << ", mispredict rate "
-		  << ((static_cast<double>(n_mispredicts)/n_branches)*100.0)
+		  << ", mem pki "
+		  << ((static_cast<double>(mem_reqs)/insns_retired)*100.0)
 		  << ", mispredict pki "
 		  << (static_cast<double>(n_mispredicts) / insns_retired) * 1000.0
 		  << std::defaultfloat	  
@@ -559,8 +559,8 @@ int main(int argc, char **argv) {
 		    << ", " << static_cast<double>(insns_retired) / cycle << " IPC "	    
 		    << ", insns_retired "
 		    << insns_retired
-		    << ", mispredict rate "
-		    << ((static_cast<double>(n_mispredicts)/n_branches)*100.0)
+		    << ", mem pki "
+		    << ((static_cast<double>(mem_reqs)/insns_retired)*100.0)
 		    << ", mispredict pki "
 		    << (static_cast<double>(n_mispredicts) / insns_retired) * 1000.0
 		    << std::defaultfloat
@@ -762,7 +762,7 @@ int main(int argc, char **argv) {
     tb->mem_rsp_valid = 0;
 
     if(tb->mem_req_valid && (mem_reply_cycle == -1)) {
-      
+      ++mem_reqs;
       mem_reply_cycle = cycle + (tb->mem_req_opcode == 4 ? 1 : 2)*mem_lat;
       
     }

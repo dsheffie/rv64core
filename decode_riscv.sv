@@ -157,10 +157,12 @@ module decode_riscv(insn,
 		 3'd2:
 		   begin
 		      uop.op = (rd == 'd0) ? NOP : SLTI;
+		      uop.is_cheap_int = 1'b1;
 		   end
 		 3'd3:
 		   begin
 		      uop.op = (rd == 'd0) ? NOP : SLTIU;
+		      uop.is_cheap_int = 1'b1;
 		   end
 		 3'd4:
 		   begin
@@ -288,6 +290,7 @@ module decode_riscv(insn,
 			7'd0:
 			  begin
 			     uop.op = (rd != 'd0) ? SLT : NOP;
+			     uop.is_cheap_int = 1'b1;
 			  end
 			default:
 			  begin
@@ -300,6 +303,7 @@ module decode_riscv(insn,
 			7'h0:
 			  begin
 			     uop.op = (rd != 'd0) ? SLTU : NOP;
+			     uop.is_cheap_int = 1'b1;
 			  end
 			7'h1:
 			  begin

@@ -974,6 +974,30 @@ module exec(clk,
 	       t_alu_valid2 = 1'b1;
 	       t_wr_int_prf2 = 1'b1;
 	    end
+	  SLT:
+	    begin
+	       t_result2 = {31'd0, $signed(w_srcA_2) < $signed(w_srcB_2)};
+	       t_alu_valid2 = 1'b1;
+	       t_wr_int_prf2 = 1'b1;
+	    end
+	  SLTU:
+	    begin
+	       t_result2 = {31'd0, w_srcA_2 < w_srcB_2};
+	       t_alu_valid2 = 1'b1;
+	       t_wr_int_prf2 = 1'b1;
+	    end
+	  SLTI:
+	    begin
+	       t_result2 = {31'd0, $signed(w_srcA_2) < $signed(int_uop2.rvimm)};
+	       t_alu_valid2 = 1'b1;
+	       t_wr_int_prf2 = 1'b1;
+	    end
+	  SLTIU:
+	    begin
+	       t_result2 = {31'd0, w_srcA_2 < int_uop2.rvimm};
+	       t_alu_valid2 = 1'b1;
+	       t_wr_int_prf2 = 1'b1;
+	    end	       
 	  SUBU:
 	    begin
 	       t_sub2 = 1'b1;
