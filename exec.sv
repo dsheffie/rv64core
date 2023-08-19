@@ -160,15 +160,22 @@ module exec(clk,
 
    
    wire [31:0] w_srcA, w_srcB;
-   wire [31:0] w_srcA_2, w_srcB_2;
+   logic [31:0] t_srcA_2, t_srcB_2;
+   wire [31:0] 	w_srcA_2, w_srcB_2;
+   
    wire [31:0] w_mem_srcA, w_mem_srcB;
    
-   logic [31:0] r_mem_result, r_int_result;
-   logic 	r_fwd_int_srcA, r_fwd_int_srcB;
-   logic 	r_fwd_mem_srcA, r_fwd_mem_srcB;
+   logic [31:0] r_mem_result, r_int_result, r_int_result2;
+   
+   logic 	r_fwd_int_srcA, r_fwd_int_srcB, r_fwd_int2_srcA, r_fwd_int2_srcB;
+   logic 	r_fwd_int_srcA2, r_fwd_int_srcB2, r_fwd_int2_srcA2, r_fwd_int2_srcB2;
+   
+   logic 	r_fwd_mem_srcA, r_fwd_mem_srcB, r_fwd_mem_srcA2, r_fwd_mem_srcB2;
 
-   logic t_fwd_int_mem_srcA,t_fwd_int_mem_srcB,t_fwd_mem_mem_srcA,t_fwd_mem_mem_srcB;
-   logic r_fwd_int_mem_srcA,r_fwd_int_mem_srcB,r_fwd_mem_mem_srcA,r_fwd_mem_mem_srcB;
+   logic t_fwd_int_mem_srcA,t_fwd_int_mem_srcB,t_fwd_int2_mem_srcA, t_fwd_int2_mem_srcB, 
+	 t_fwd_mem_mem_srcA,t_fwd_mem_mem_srcB;
+   logic r_fwd_int_mem_srcA,r_fwd_int_mem_srcB,r_fwd_int2_mem_srcA,r_fwd_int2_mem_srcB,
+	 r_fwd_mem_mem_srcA,r_fwd_mem_mem_srcB;
    
       
    logic [31:0] t_srcA, t_srcB;
@@ -584,22 +591,38 @@ module exec(clk,
      end // always_comb
 
    
+   
    always_comb
      begin
 	t_srcA = r_fwd_int_srcA ? r_int_result :
+		 r_fwd_int2_srcA ? r_int_result2 :
 		 r_fwd_mem_srcA ? r_mem_result :
 		 w_srcA;
 	
 	t_srcB = r_fwd_int_srcB ? r_int_result :
+		 r_fwd_int2_srcB ? r_int_result2 :		 
 		 r_fwd_mem_srcB ? r_mem_result :
 		 w_srcB;
 
+	t_srcA_2 = r_fwd_int_srcA2 ? r_int_result :
+		   r_fwd_int2_srcA2 ? r_int_result2 :
+		   r_fwd_mem_srcA2 ? r_mem_result :
+		   w_srcA_2;
+
+	t_srcB_2 = r_fwd_int_srcB2 ? r_int_result :
+		   r_fwd_int2_srcB2 ? r_int_result2 :
+		   r_fwd_mem_srcB2 ? r_mem_result :
+		   w_srcB_2;
+	
+	
 	t_mem_srcA = r_fwd_int_mem_srcA ? r_int_result :
 		     r_fwd_mem_mem_srcA ? r_mem_result :
+		     r_fwd_int2_mem_srcA ? r_int_result2 :
 		     w_mem_srcA;
 
 	t_mem_srcB = r_fwd_int_mem_srcB ? r_int_result :
 		     r_fwd_mem_mem_srcB ? r_mem_result :
+		     r_fwd_int2_mem_srcB ? r_int_result2 :
 		     w_mem_srcB;	
      end // always_comb
 
@@ -607,45 +630,38 @@ module exec(clk,
 
 
    //does this scheduler entry contain a valid uop?
-   logic [N_INT_SCHED_ENTRIES-1:0] r_alu_sched_valid;
+   logic [N_INT_SCHED_ENTRIES-1:0] r_alu_sched_valid, r_alu_sched_valid2;
+   logic [`LG_INT_SCHED_ENTRIES:0] t_alu_sched_alloc_ptr, t_alu_sched_alloc_ptr2;
+   logic 			   t_alu_sched_full, t_alu_sched_full2;
+   logic [N_INT_SCHED_ENTRIES-1:0] t_alu_alloc_entry, t_alu_select_entry, t_alu_alloc_entry2, t_alu_select_entry2;
    
-   wire [N_INT_SCHED_ENTRIES-1:0] w_alu_sched_valid_even;
-   wire [N_INT_SCHED_ENTRIES-1:0] w_alu_sched_valid_odd;
-   
-   logic [`LG_INT_SCHED_ENTRIES:0] t_alu_sched_alloc_ptr;
-   logic 			  t_alu_sched_full;
-   
-   logic [N_INT_SCHED_ENTRIES-1:0] t_alu_alloc_entry, t_alu_select_entry;
-
-   uop_t r_alu_sched_uops[N_INT_SCHED_ENTRIES-1:0];
-   uop_t t_picked_uop;
-
-   
-   logic [N_INT_SCHED_ENTRIES-1:0] t_alu_entry_rdy;
-   logic [`LG_INT_SCHED_ENTRIES:0]  t_alu_sched_select_ptr;
+   uop_t r_alu_sched_uops[N_INT_SCHED_ENTRIES-1:0], t_picked_uop;
+   uop_t r_alu_sched_uops2[N_INT_SCHED_ENTRIES-1:0], t_picked_uop2;
+   logic [N_INT_SCHED_ENTRIES-1:0] t_alu_entry_rdy, t_alu_entry_rdy2;
+   logic [`LG_INT_SCHED_ENTRIES:0] t_alu_sched_select_ptr, t_alu_sched_select_ptr2;
    
 	
-   logic [N_INT_SCHED_ENTRIES-1:0] r_alu_srcA_rdy, 
-				   r_alu_srcB_rdy;
+   logic [N_INT_SCHED_ENTRIES-1:0] r_alu_srcA_rdy, r_alu_srcB_rdy, r_alu_srcA_rdy2, r_alu_srcB_rdy2;
+   logic [N_INT_SCHED_ENTRIES-1:0] t_alu_srcA_match, t_alu_srcB_match, t_alu_srcA_match2, t_alu_srcB_match2;
    
-   logic [N_INT_SCHED_ENTRIES-1:0] t_alu_srcA_match, 
-				   t_alu_srcB_match;
+   logic 			   t_alu_alloc_srcA_match, t_alu_alloc_srcB_match, t_alu_alloc_srcA_match2, t_alu_alloc_srcB_match2;
    
-
-
-   logic t_alu_alloc_srcA_match, 
-	 t_alu_alloc_srcB_match;
    
-   wire [N_INT_SCHED_ENTRIES-1:0] w_alu_sched_oldest_ready;
+   wire [N_INT_SCHED_ENTRIES-1:0] w_alu_sched_oldest_ready, w_alu_sched_oldest_ready2;
 
    
    find_first_set#(`LG_INT_SCHED_ENTRIES) ffs_int_sched_alloc( .in(~r_alu_sched_valid),
 							      .y(t_alu_sched_alloc_ptr));
-
+   
    find_first_set#(`LG_INT_SCHED_ENTRIES) ffs_int_sched_select( .in(w_alu_sched_oldest_ready),
 								.y(t_alu_sched_select_ptr));
 
+   find_first_set#(`LG_INT_SCHED_ENTRIES) ffs_int_sched_alloc2( .in(~r_alu_sched_valid2),
+								.y(t_alu_sched_alloc_ptr2));
    
+   find_first_set#(`LG_INT_SCHED_ENTRIES) ffs_int_sched_select2( .in(w_alu_sched_oldest_ready2),
+								 .y(t_alu_sched_select_ptr2));
+     
    always_comb
      begin
 	t_alu_alloc_entry = 'd0;
@@ -660,13 +676,31 @@ module exec(clk,
 	  end
      end // always_comb
 
-
+   always_comb
+     begin
+	t_alu_alloc_entry2 = 'd0;
+	t_alu_select_entry2 = 'd0;
+	if(t_pop_uq2)
+	  begin
+	     t_alu_alloc_entry2[t_alu_sched_alloc_ptr2[`LG_INT_SCHED_ENTRIES-1:0]] = 1'b1;
+	  end
+	if(t_alu_entry_rdy2 != 'd0)
+	  begin
+	     t_alu_select_entry2[t_alu_sched_select_ptr2[`LG_INT_SCHED_ENTRIES-1:0]] = 1'b1;
+	  end
+     end // always_comb
 
 
    always_comb
      begin
 	t_picked_uop = r_alu_sched_uops[t_alu_sched_select_ptr[`LG_INT_SCHED_ENTRIES-1:0]];
      end
+
+   always_comb
+     begin
+	t_picked_uop2 = r_alu_sched_uops2[t_alu_sched_select_ptr2[`LG_INT_SCHED_ENTRIES-1:0]];
+     end
+   
    
    always_ff@(posedge clk)
      begin
@@ -677,8 +711,33 @@ module exec(clk,
      begin
 	r_start_int <= reset ? 1'b0 : ((t_alu_entry_rdy != 'd0) & !ds_done);
      end // always_comb
-
    
+   always_ff@(posedge clk)
+     begin
+	int_uop2 <= t_picked_uop2;
+     end
+   
+   always_ff@(posedge clk)
+     begin
+	r_start_int2 <= reset ? 1'b0 : ((t_alu_entry_rdy2 != 'd0) & !ds_done);
+     end
+
+   // always@(negedge clk)
+   //   begin
+   // 	if(r_start_int)
+   // 	  $display("cycle %d : starting %x on port 0, %x, %x -> %x", 
+   // 		   r_cycle, int_uop.pc, t_srcA, t_srcB, t_result);
+   // 	if(r_start_int2)
+   // 	  begin
+   // 	     $display("cycle %d : starting %x on port 1, %x, %x -> %x", 
+   // 		      r_cycle, int_uop2.pc, t_srcA_2, t_srcB_2, t_result2);
+   // 	     //if(int_uop2.pc == 'h80011b5c)
+   // 	       //begin
+   // 	     //$display("Src ptr A %d", int_uop2.srcA);
+   // 	     //$stop();
+   // 	     //end
+   // 	  end
+   //   end
    
    always_comb
      begin
@@ -693,17 +752,31 @@ module exec(clk,
 						   (r_start_int2 && t_wr_int_prf2 && (int_uop2.dst == uq.srcB)) ||						   
 						   (r_start_int && t_wr_int_prf & (int_uop.dst == uq.srcB))
 						   );
-
+	
+	t_alu_alloc_srcA_match2 = uq2.srcA_valid && (
+						     (mem_rsp_dst_valid & (mem_rsp_dst_ptr == uq2.srcA)) ||
+						     (r_start_int2 && t_wr_int_prf2 && (int_uop2.dst == uq2.srcA)) ||
+						     (r_start_int && t_wr_int_prf & (int_uop.dst == uq2.srcA))
+						     );
+	t_alu_alloc_srcB_match2 = uq2.srcB_valid && (
+						     (mem_rsp_dst_valid & (mem_rsp_dst_ptr == uq2.srcB)) ||
+						     (r_start_int2 && t_wr_int_prf2 && (int_uop2.dst == uq2.srcB)) ||						   
+						     (r_start_int && t_wr_int_prf & (int_uop.dst == uq2.srcB))
+						     );		
      end // always_comb
   
 
    logic [N_INT_SCHED_ENTRIES-1:0] t_alu_sched_mask_valid;
    logic [N_INT_SCHED_ENTRIES-1:0] r_alu_sched_matrix [N_INT_SCHED_ENTRIES-1:0];
 
+   logic [N_INT_SCHED_ENTRIES-1:0] t_alu_sched_mask_valid2;
+   logic [N_INT_SCHED_ENTRIES-1:0] r_alu_sched_matrix2 [N_INT_SCHED_ENTRIES-1:0];
+   
    
    always_comb
      begin
 	t_alu_sched_mask_valid = r_alu_sched_valid & (~t_alu_select_entry);
+	t_alu_sched_mask_valid2 = r_alu_sched_valid2 & (~t_alu_select_entry2);	
      end
 
    generate
@@ -719,6 +792,7 @@ module exec(clk,
 		else if(t_alu_alloc_entry[i])
 		  begin
 		     r_alu_sched_matrix[i] <= t_alu_sched_mask_valid;
+		     
 		  end
 		else if(t_alu_entry_rdy != 'd0)
 		  begin
@@ -728,6 +802,31 @@ module exec(clk,
 	end // for (genvar i = 0; i < N_INT_SCHED_ENTRIES; i=i+1)
    endgenerate
 
+   generate
+      for(genvar i = 0; i < N_INT_SCHED_ENTRIES; i=i+1)
+	begin
+	   assign w_alu_sched_oldest_ready2[i] = t_alu_entry_rdy2[i] & (~(|(t_alu_entry_rdy2 & r_alu_sched_matrix2[i])));
+	   always_ff@(posedge clk)
+	     begin
+		if(reset || t_flash_clear)
+		  begin
+		     r_alu_sched_matrix2[i] <= 'd0;
+		  end
+		else if(t_alu_alloc_entry2[i])
+		  begin
+		     r_alu_sched_matrix2[i] <= t_alu_sched_mask_valid2;
+		     
+		  end
+		else if(t_alu_entry_rdy2 != 'd0)
+		  begin
+		     r_alu_sched_matrix2[i] <= r_alu_sched_matrix2[i] & (~t_alu_select_entry2);
+		  end
+	     end
+	end // for (genvar i = 0; i < N_INT_SCHED_ENTRIES; i=i+1)
+   endgenerate
+   
+
+   
    // always_ff@(negedge clk)
    //   begin
    // 	for(integer i = 0; i < N_INT_SCHED_ENTRIES; i=i+1)
@@ -801,20 +900,65 @@ module exec(clk,
 	     end // always_ff@ (posedge clk)
 	end // for (genvar i = 0; i < LG_INT_SCHED_ENTRIES; i=i+1)
    endgenerate
-   
-   
-   wire w_uq2_srcA_rdy = uq2.srcA_valid ? (!r_prf_inflight[uq2.srcA]) : 1'b1;
-   wire w_uq2_srcB_rdy = uq2.srcB_valid ? (!r_prf_inflight[uq2.srcB]) : 1'b1;
 
-   always_ff@(posedge clk)
-     begin
-	int_uop2 <= uq2;
-     end
-   
-   always_ff@(posedge clk)
-     begin
-	r_start_int2 <= reset ? 1'b0 : t_pop_uq2;
-     end
+
+   generate
+      for(genvar i = 0; i < N_INT_SCHED_ENTRIES; i=i+1)
+	begin
+	   always_comb
+	     begin
+		t_alu_srcA_match2[i] = r_alu_sched_uops2[i].srcA_valid && (
+									   (mem_rsp_dst_valid & (mem_rsp_dst_ptr == r_alu_sched_uops2[i].srcA)) ||
+									   (r_mul_complete && (r_mul_prf_ptr == r_alu_sched_uops2[i].srcA)) ||
+									   (r_div_complete && (r_div_prf_ptr == r_alu_sched_uops2[i].srcA)) ||
+									   (r_start_int2 && t_wr_int_prf2 & (int_uop2.dst == r_alu_sched_uops2[i].srcA)) ||			 
+									   (r_start_int && t_wr_int_prf & (int_uop.dst == r_alu_sched_uops2[i].srcA))
+									   );
+		
+		t_alu_srcB_match2[i] = r_alu_sched_uops2[i].srcB_valid && (
+									   (mem_rsp_dst_valid & (mem_rsp_dst_ptr == r_alu_sched_uops2[i].srcB)) ||
+									   (r_mul_complete && (r_mul_prf_ptr == r_alu_sched_uops2[i].srcB)) ||
+									   (r_div_complete && (r_div_prf_ptr == r_alu_sched_uops2[i].srcB)) ||
+									   (r_start_int2 && t_wr_int_prf2 & (int_uop2.dst == r_alu_sched_uops2[i].srcB)) ||
+									   (r_start_int && t_wr_int_prf & (int_uop.dst == r_alu_sched_uops2[i].srcB))
+									   );
+		
+		t_alu_entry_rdy2[i] = r_alu_sched_valid2[i] 
+				      ? (
+					 (t_alu_srcA_match2[i] |r_alu_srcA_rdy2[i]) & 
+					 (t_alu_srcB_match2[i] |r_alu_srcB_rdy2[i]) 
+					 ) : 1'b0;
+	     end // always_comb
+	   
+	   always_ff@(posedge clk)
+	     begin
+		if(reset)
+		  begin
+		     r_alu_srcA_rdy2[i] <= 1'b0;
+		     r_alu_srcB_rdy2[i] <= 1'b0;
+		  end
+		else
+		  begin
+		     if(t_alu_alloc_entry2[i])
+		       begin //allocating to this entry
+			  r_alu_srcA_rdy2[i] <= uq2.srcA_valid ? (!r_prf_inflight[uq2.srcA] | t_alu_alloc_srcA_match2) : 1'b1;
+			  r_alu_srcB_rdy2[i] <= uq2.srcB_valid ? (!r_prf_inflight[uq2.srcB] | t_alu_alloc_srcB_match2) : 1'b1;
+		       end
+		     else if(t_alu_select_entry2[i])
+		       begin
+			  r_alu_srcA_rdy2[i] <= 1'b0;
+			  r_alu_srcB_rdy2[i] <= 1'b0;
+		       end
+		     else if(r_alu_sched_valid2[i])
+		       begin
+			  r_alu_srcA_rdy2[i] <= r_alu_srcA_rdy2[i] | t_alu_srcA_match2[i];
+			  r_alu_srcB_rdy2[i] <= r_alu_srcB_rdy2[i] | t_alu_srcB_match2[i];
+		       end // else: !if(t_pop_uq&&(t_alu_sched_alloc_ptr == i))
+		     
+		  end // else: !if(reset)
+	     end // always_ff@ (posedge clk)
+	end // for (genvar i = 0; i < LG_INT_SCHED_ENTRIES; i=i+1)
+   endgenerate
    
    
    always_comb
@@ -822,27 +966,19 @@ module exec(clk,
 	t_pop_uq = 1'b0;
 	t_pop_uq2 = 1'b0;
 	t_alu_sched_full = (&r_alu_sched_valid);
-
+	t_alu_sched_full2 = (&r_alu_sched_valid2);
+	
 	t_pop_uq = !(t_flash_clear | t_uq_empty | t_alu_sched_full);
-	t_pop_uq2 = t_uq_next_empty ? 1'b0 : (t_pop_uq & uq2.is_cheap_int & w_uq2_srcA_rdy & w_uq2_srcB_rdy);
+	t_pop_uq2 = t_uq_next_empty ? 1'b0 : (t_pop_uq & uq2.is_cheap_int & (!t_alu_sched_full2));
      end // always_comb
 
-   always_ff@(negedge clk)
-     begin
-	if(!t_uq_next_empty && t_pop_uq && w_uq2_srcA_rdy && w_uq2_srcB_rdy &&
-	   !uq2.is_cheap_int && uq2.is_int && 1'b0)
-	  begin
-	     $display("could ex but op %d is not cheap, pc %x", 
-		      uq2.op, uq2.pc);
-	  end
-     end
 
    logic t_left_shift2, t_signed_shift2;
    wire [31:0] w_shifter_out2;
    logic [4:0] t_shift_amt2;   
    shift_right #(.LG_W(5)) s1(.is_left(t_left_shift2), 
 			      .is_signed(t_signed_shift2), 
-			      .data(w_srcA_2), 
+			      .data(t_srcA_2), 
 			      .distance(t_shift_amt2), 
 			      .y(w_shifter_out2));
 
@@ -854,8 +990,8 @@ module exec(clk,
    ppa32 npc_2 (.A(int_uop2.pc), .B(32'd4), .Y(w_pc2_4));
 
    csa #(.N(32)) csa2 (
-		       .a(w_srcA_2), 
-		       .b(t_addi_2 ? int_uop2.rvimm : (t_sub2 ? ~w_srcB_2 : w_srcB_2)), 
+		       .a(t_srcA_2), 
+		       .b(t_addi_2 ? int_uop2.rvimm : (t_sub2 ? ~t_srcB_2 : t_srcB_2)), 
 		       .cin(t_sub2 ? 32'd1 : 32'd0), 
 		       .s(w_s_sub32_2), 
 		       .cout(w_c_sub32_2) );
@@ -867,7 +1003,7 @@ module exec(clk,
    
 
    wire [31:0] w_indirect_target2;
-   ppa32 itgt (.A(w_srcA_2), .B(int_uop2.rvimm), .Y(w_indirect_target2));
+   ppa32 itgt (.A(t_srcA_2), .B(int_uop2.rvimm), .Y(w_indirect_target2));
    
    wire        w_mispredicted_indirect2 = w_indirect_target2 != 
 	       {int_uop2.jmp_imm,int_uop2.imm};   
@@ -890,42 +1026,42 @@ module exec(clk,
 	case(int_uop2.op)
 	  BNE:
 	    begin
-	       t_take_br2 = w_srcA_2 != w_srcB_2;
+	       t_take_br2 = t_srcA_2 != t_srcB_2;
 	       t_mispred_br2 = int_uop2.br_pred != t_take_br2;
 	       t_pc_2 = t_take_br2 ? int_uop2.rvimm : w_pc2_4;
 	       t_alu_valid2 = 1'b1;	       
 	    end
 	  BEQ:
 	    begin
-	       t_take_br2 = w_srcA_2 == w_srcB_2;
+	       t_take_br2 = t_srcA_2 == t_srcB_2;
 	       t_mispred_br2 = int_uop2.br_pred != t_take_br2;
 	       t_pc_2 = t_take_br2 ? int_uop2.rvimm : w_pc2_4;
 	       t_alu_valid2 = 1'b1;	       
 	    end
 	  BLT:
 	    begin
-	       t_take_br2 = $signed(w_srcA_2) < $signed(w_srcB_2);
+	       t_take_br2 = $signed(t_srcA_2) < $signed(t_srcB_2);
 	       t_mispred_br2 = int_uop2.br_pred != t_take_br2;
 	       t_pc_2 = t_take_br2 ? int_uop2.rvimm : w_pc2_4;
 	       t_alu_valid2 = 1'b1;	       	       
 	    end
 	  BGE:
 	    begin
-	       t_take_br2 = $signed(w_srcA_2) >= $signed(w_srcB_2);
+	       t_take_br2 = $signed(t_srcA_2) >= $signed(t_srcB_2);
 	       t_mispred_br2 = int_uop2.br_pred != t_take_br2;
 	       t_pc_2 = t_take_br2 ? int_uop2.rvimm : w_pc2_4;
 	       t_alu_valid2 = 1'b1;	       	       
 	    end
 	  BLTU:
 	    begin
-	       t_take_br2 = w_srcA_2 < w_srcB_2;
+	       t_take_br2 = t_srcA_2 < t_srcB_2;
 	       t_mispred_br2 = int_uop2.br_pred != t_take_br2;
 	       t_pc_2 = t_take_br2 ? int_uop2.rvimm : w_pc2_4;
 	       t_alu_valid2 = 1'b1;	       	       
 	    end
 	  BGEU:
 	    begin
-	       t_take_br2 = w_srcA_2 >= w_srcB_2;
+	       t_take_br2 = t_srcA_2 >= t_srcB_2;
 	       t_mispred_br2 = int_uop2.br_pred != t_take_br2;
 	       t_pc_2 = t_take_br2 ? int_uop2.rvimm : w_pc2_4;
 	       t_alu_valid2 = 1'b1;	       	       
@@ -977,25 +1113,25 @@ module exec(clk,
 	    end
 	  SLT:
 	    begin
-	       t_result2 = {31'd0, $signed(w_srcA_2) < $signed(w_srcB_2)};
+	       t_result2 = {31'd0, $signed(t_srcA_2) < $signed(t_srcB_2)};
 	       t_alu_valid2 = 1'b1;
 	       t_wr_int_prf2 = 1'b1;
 	    end
 	  SLTU:
 	    begin
-	       t_result2 = {31'd0, w_srcA_2 < w_srcB_2};
+	       t_result2 = {31'd0, t_srcA_2 < t_srcB_2};
 	       t_alu_valid2 = 1'b1;
 	       t_wr_int_prf2 = 1'b1;
 	    end
 	  SLTI:
 	    begin
-	       t_result2 = {31'd0, $signed(w_srcA_2) < $signed(int_uop2.rvimm)};
+	       t_result2 = {31'd0, $signed(t_srcA_2) < $signed(int_uop2.rvimm)};
 	       t_alu_valid2 = 1'b1;
 	       t_wr_int_prf2 = 1'b1;
 	    end
 	  SLTIU:
 	    begin
-	       t_result2 = {31'd0, w_srcA_2 < int_uop2.rvimm};
+	       t_result2 = {31'd0, t_srcA_2 < int_uop2.rvimm};
 	       t_alu_valid2 = 1'b1;
 	       t_wr_int_prf2 = 1'b1;
 	    end	       
@@ -1008,43 +1144,43 @@ module exec(clk,
 	    end
 	  ANDI:
 	    begin
-	       t_result2 = int_uop2.rvimm & w_srcA_2;
+	       t_result2 = int_uop2.rvimm & t_srcA_2;
 	       t_alu_valid2 = 1'b1;
 	       t_wr_int_prf2 = 1'b1;
 	    end
 	  ORI:
 	    begin
-	       t_result2 = int_uop2.rvimm | w_srcA_2;
+	       t_result2 = int_uop2.rvimm | t_srcA_2;
 	       t_alu_valid2 = 1'b1;
 	       t_wr_int_prf2 = 1'b1;
 	    end
 	  XORI:
 	    begin
-	       t_result2 = int_uop2.rvimm ^ w_srcA_2;
+	       t_result2 = int_uop2.rvimm ^ t_srcA_2;
 	       t_alu_valid2 = 1'b1;
 	       t_wr_int_prf2 = 1'b1;
 	    end
 	  AND:
 	    begin
-	       t_result2 = w_srcA_2 & w_srcB_2;	       
+	       t_result2 = t_srcA_2 & t_srcB_2;	       
 	       t_alu_valid2 = 1'b1;
 	       t_wr_int_prf2 = 1'b1;
 	    end
 	  OR:
 	    begin
-	       t_result2 = w_srcA_2 | w_srcB_2;
+	       t_result2 = t_srcA_2 | t_srcB_2;
 	       t_alu_valid2 = 1'b1;
 	       t_wr_int_prf2 = 1'b1;
 	    end
 	  XOR:
 	    begin
-	       t_result2 = w_srcA_2 ^ w_srcB_2;
+	       t_result2 = t_srcA_2 ^ t_srcB_2;
 	       t_alu_valid2 = 1'b1;
 	       t_wr_int_prf2 = 1'b1;
 	    end
 	  SRL:
 	    begin
-	       t_shift_amt2 = w_srcB_2[4:0];
+	       t_shift_amt2 = t_srcB_2[4:0];
 	       t_result2 = w_shifter_out2;
 	       t_wr_int_prf2 = 1'b1;
 	       t_alu_valid2 = 1'b1;
@@ -1059,7 +1195,7 @@ module exec(clk,
 	  SRA:
 	    begin
 	       t_signed_shift2 = 1'b1;
-	       t_shift_amt2 = w_srcB_2[4:0];
+	       t_shift_amt2 = t_srcB_2[4:0];
 	       t_result2 = w_shifter_out2;
 	       t_wr_int_prf2 = 1'b1;
 	       t_alu_valid2 = 1'b1;
@@ -1075,7 +1211,7 @@ module exec(clk,
 	  SLL:
 	    begin
 	       t_left_shift2 = 1'b1;
-	       t_shift_amt2 = w_srcB_2[4:0];
+	       t_shift_amt2 = t_srcB_2[4:0];
 	       t_result2 = w_shifter_out2;
 	       t_wr_int_prf2 = 1'b1;
 	       t_alu_valid2 = 1'b1;
@@ -1135,7 +1271,30 @@ module exec(clk,
 		  r_alu_sched_valid[t_alu_sched_select_ptr[`LG_INT_SCHED_ENTRIES-1:0]] <= 1'b0;
 	       end
 	  end // else: !if(reset)
-     end
+     end // always_ff@ (posedge clk)
+
+
+   always_ff@(posedge clk)
+     begin
+	if(reset || t_flash_clear)
+	  begin
+	     r_alu_sched_valid2 <= 'd0;
+	  end
+	else
+	  begin
+	     if(t_pop_uq2)
+	       begin
+		  r_alu_sched_valid2[t_alu_sched_alloc_ptr2[`LG_INT_SCHED_ENTRIES-1:0]] <= 1'b1;
+		  r_alu_sched_uops2[t_alu_sched_alloc_ptr2[`LG_INT_SCHED_ENTRIES-1:0]] <= uq2;
+	       end
+	     if(t_alu_entry_rdy2 != 'd0)
+	       begin
+		  r_alu_sched_valid2[t_alu_sched_select_ptr2[`LG_INT_SCHED_ENTRIES-1:0]] <= 1'b0;
+	       end
+	  end // else: !if(reset)
+     end // always_ff@ (posedge clk)
+   
+   
    
    
    shift_right #(.LG_W(5)) s0(.is_left(t_left_shift), 
@@ -1766,10 +1925,10 @@ module exec(clk,
    wire [31:0] w_agu32;
    ppa32 agu (.A(t_mem_srcA), .B(mem_uq.rvimm), .Y(w_agu32));
 
-   wire w_mem_srcA_ready = t_mem_uq.srcA_valid ? (!r_prf_inflight[t_mem_uq.srcA] | t_fwd_int_mem_srcA | t_fwd_mem_mem_srcA) : 1'b1;
+   wire w_mem_srcA_ready = t_mem_uq.srcA_valid ? (!r_prf_inflight[t_mem_uq.srcA] | t_fwd_int_mem_srcA | t_fwd_int2_mem_srcA | t_fwd_mem_mem_srcA) : 1'b1;
 
 
-   wire w_dq_ready = !r_prf_inflight[t_mem_dq.src_ptr] | t_fwd_int_mem_srcB | t_fwd_mem_mem_srcB;
+   wire w_dq_ready = !r_prf_inflight[t_mem_dq.src_ptr] | t_fwd_int_mem_srcB | t_fwd_mem_mem_srcB | t_fwd_int2_mem_srcB;
    	
    always_comb
      begin
@@ -1900,6 +2059,7 @@ module exec(clk,
    always_ff@(posedge clk)
      begin
 	r_int_result <= t_result;
+	r_int_result2 <= t_result2;
 	r_mem_result <= mem_rsp_load_data[31:0];
      end
 
@@ -1907,6 +2067,8 @@ module exec(clk,
      begin
 	t_fwd_int_mem_srcA = r_start_int && t_wr_int_prf &&(t_mem_uq.srcA == int_uop.dst);
 	t_fwd_int_mem_srcB = r_start_int && t_wr_int_prf &&(t_mem_dq.src_ptr == int_uop.dst);
+	t_fwd_int2_mem_srcA = r_start_int2 && t_wr_int_prf2 &&(t_mem_uq.srcA == int_uop2.dst);
+	t_fwd_int2_mem_srcB = r_start_int2 && t_wr_int_prf2 &&(t_mem_dq.src_ptr == int_uop2.dst);
 	
 	t_fwd_mem_mem_srcA = mem_rsp_dst_valid && (t_mem_uq.srcA == mem_rsp_dst_ptr);
 	t_fwd_mem_mem_srcB = mem_rsp_dst_valid && (t_mem_dq.src_ptr == mem_rsp_dst_ptr);
@@ -1916,16 +2078,58 @@ module exec(clk,
      begin
 	r_fwd_int_mem_srcA <= t_fwd_int_mem_srcA;
 	r_fwd_int_mem_srcB <= t_fwd_int_mem_srcB;
+	r_fwd_int2_mem_srcA <= t_fwd_int2_mem_srcA;
+	r_fwd_int2_mem_srcB <= t_fwd_int2_mem_srcB;
+	
 	r_fwd_mem_mem_srcA <= t_fwd_mem_mem_srcA;
 	r_fwd_mem_mem_srcB <= t_fwd_mem_mem_srcB;
 	
 	r_fwd_int_srcA <= r_start_int && t_wr_int_prf && (t_picked_uop.srcA == int_uop.dst);
 	r_fwd_int_srcB <= r_start_int && t_wr_int_prf && (t_picked_uop.srcB == int_uop.dst);
+	r_fwd_int2_srcA <= r_start_int2 && t_wr_int_prf2 && (t_picked_uop.srcA == int_uop2.dst);
+	r_fwd_int2_srcB <= r_start_int2 && t_wr_int_prf2 && (t_picked_uop.srcB == int_uop2.dst);
+
+	r_fwd_int_srcA2 <= r_start_int && t_wr_int_prf && (t_picked_uop2.srcA == int_uop.dst);
+	r_fwd_int_srcB2 <= r_start_int && t_wr_int_prf && (t_picked_uop2.srcB == int_uop.dst);
+	r_fwd_int2_srcA2 <= r_start_int2 && t_wr_int_prf2 && (t_picked_uop2.srcA == int_uop2.dst);
+	r_fwd_int2_srcB2 <= r_start_int2 && t_wr_int_prf2 && (t_picked_uop2.srcB == int_uop2.dst);
+	
 	
 	r_fwd_mem_srcA <= mem_rsp_dst_valid && (t_picked_uop.srcA == mem_rsp_dst_ptr);
 	r_fwd_mem_srcB <= mem_rsp_dst_valid && (t_picked_uop.srcB == mem_rsp_dst_ptr);
+	r_fwd_mem_srcA2 <= mem_rsp_dst_valid && (t_picked_uop2.srcA == mem_rsp_dst_ptr);
+	r_fwd_mem_srcB2 <= mem_rsp_dst_valid && (t_picked_uop2.srcB == mem_rsp_dst_ptr);	
      end
 
+   // always@(negedge clk)
+   //   begin
+   // 	if(r_fwd_int2_srcA | r_fwd_int2_srcB)
+   // 	  begin
+   // 	     $display("need forward (1->2) %b, %b, int_uop.pc %x",
+   // 		      r_fwd_int2_srcA, r_fwd_int2_srcB, int_uop.pc);
+   // 	     //$stop();
+   // 	  end
+	
+   // 	if(r_fwd_int_srcA2 | r_fwd_int_srcB2)
+   // 	  begin
+   // 	     $display("need forward (1->2) %b, %b, %x, %x, %x, %x, int_uop2.pc %x",
+   // 		      r_fwd_int_srcA2, r_fwd_int_srcB2,
+   // 		      t_srcA_2, t_srcB_2,
+   // 		      w_srcA_2, w_srcB_2,
+   // 		      int_uop2.pc);
+   // 	     //$stop();
+   // 	  end
+	
+   // 	if(r_fwd_int2_srcA2 | r_fwd_int2_srcB2)
+   // 	  begin
+   // 	     $display("need forward (2->2) %b, %b, int_uop2.pc %x",
+   // 		      r_fwd_int2_srcA2, r_fwd_int2_srcB2, int_uop2.pc);
+	     
+   // 	      //   $stop();
+   // 	   end	
+   //   end
+   
+   
    // always_ff@(negedge clk)
    //   begin
 	
@@ -1943,8 +2147,8 @@ module exec(clk,
 	   .rdptr1(t_picked_uop.srcB),
 	   .rdptr2(t_mem_uq.srcA),
 	   .rdptr3(t_mem_dq.src_ptr),
-	   .rdptr4(uq2.srcA),
-	   .rdptr5(uq2.srcB),
+	   .rdptr4(t_picked_uop2.srcA),
+	   .rdptr5(t_picked_uop2.srcB),
 	   .wrptr0(t_mul_complete ? w_mul_prf_ptr :
 		   t_div_complete ? w_div_prf_ptr :
 		   int_uop.dst),
