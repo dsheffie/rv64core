@@ -39,6 +39,7 @@ static uint64_t n_alloc[3] = {0};
 static uint64_t n_rdy[3] = {0};
 
 static uint64_t n_int_exec[2] = {0};
+static uint64_t n_int2_exec[2] = {0};
 static uint64_t n_mem_exec[3] = {0};
 
 static uint64_t q_full[3] = {0};
@@ -113,6 +114,7 @@ void record_l1d(int req, int ack, int ack_st, int blocked, int stall_reason) {
 static std::map<int, uint64_t> int_sched_rdy_map;
 
 void report_exec(int int_valid, int int_ready,
+		 int int2_valid, int int2_ready,		 
 		 int mem_valid, int mem_ready,
 		 int fp_valid,  int fp_ready,
 		 int intq_full, int memq_full,
@@ -121,6 +123,8 @@ void report_exec(int int_valid, int int_ready,
 		 int ready_int) {
   n_int_exec[0] += int_valid;
   n_int_exec[1] += int_ready;
+  n_int2_exec[0] += int2_valid;
+  n_int2_exec[1] += int2_ready;  
   n_mem_exec[0] += mem_valid;
   n_mem_exec[1] += mem_ready;
   n_mem_exec[2] += blocked_by_store;
@@ -889,6 +893,8 @@ int main(int argc, char **argv) {
     // }
     out << n_int_exec[0] << " cycles where int exec queue is not empty\n";
     out << n_int_exec[1] << " cycles where int exec queue dispatches\n";
+    out << n_int2_exec[0] << " cycles where int2 exec queue is not empty\n";
+    out << n_int2_exec[1] << " cycles where int2 exec queue dispatches\n";    
     out << n_mem_exec[0] << " cycles where mem exec queue is not empty\n";
     out << n_mem_exec[1] << " cycles where mem exec queue dispatches\n";
     out << n_mem_exec[2] << " cycles where mem exec queue is blocked by a store\n";

@@ -4,6 +4,8 @@
 `ifdef VERILATOR
 import "DPI-C" function void report_exec(input int int_valid, 
 					 input int int_blocked,
+					 input int int2_valid, 
+					 input int int2_blocked, 
 					 input int mem_valid, 
 					 input int mem_blocked,
 					 input int fp_valid, 
@@ -141,8 +143,7 @@ module exec(clk,
    
    
 
-   logic 	t_pop_uq,t_pop_mem_uq,t_pop_mem_dq;
-   logic 	t_pop_uq2;
+   logic 	t_pop_uq,t_pop_mem_uq,t_pop_mem_dq,t_pop_uq2;
    
    logic 	r_mem_ready, r_dq_ready;
    
@@ -1382,6 +1383,8 @@ module exec(clk,
      begin
 	report_exec(t_uq_empty ? 32'd0 : 32'd1,
 		    t_pop_uq ? 32'd1 : 32'd0,
+		    !t_uq_next_empty & t_pop_uq & uq2.is_cheap_int ? 32'd1 : 32'd0,
+		    t_pop_uq2 ? 32'd1 : 32'd0,
 		    t_mem_uq_empty ? 32'd0 : 32'd1,
 		    t_pop_mem_uq ? 32'd1 : 32'd0,
 		    32'd1,
