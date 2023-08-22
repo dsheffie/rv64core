@@ -491,24 +491,44 @@ module decode_riscv(insn,
 	    end
 	  7'h73: /* this is a bunch of system stuff I dont care about currently */
 	    begin
+	       uop.is_int = 1'b1;
+	       uop.op = NOP;	       	       
 	       if(insn[31:7] == 'd0) /* treat as brk */
 		 begin
 		    uop.op = BREAK;
 		    uop.serializing_op = 1'b1;
-		    uop.is_int = 1'b1;		    
 		 end
 	       else if(insn[31:20] == 'd1 && insn[19:7] == 'd0)
 		 begin
 		    uop.op = MONITOR;
 		    uop.serializing_op = 1'b1;
 		    uop.must_restart = 1'b1;		    
-		    uop.is_int = 1'b1;
 		 end
 	       else
 		 begin
-		    uop.op = NOP;
+		    case(insn[14:12])
+		      3'd2: /*CSRRS */
+			begin
+			   if(insn[31:20] == 12'hc00)
+			     begin
+				uop.op = (rd == 'd0) ? NOP : RDCYCLE;
+				uop.dst = rd;
+				uop.dst_valid = (rd != 'd0);
+				uop.is_cheap_int = 1'b1;
+			     end
+			   else if(insn[31:20] == 12'hc80)
+			     begin
+				uop.op = (rd == 'd0) ? NOP : RDCYCLEH;
+				uop.dst = rd;
+				uop.dst_valid = (rd != 'd0);
+				uop.is_cheap_int = 1'b1;				
+			     end
+			end
+		      default:
+			begin
+			end
+		    endcase
 		 end
-	       uop.is_int = 1'b1;
 	    end
 	  default:
 	    begin

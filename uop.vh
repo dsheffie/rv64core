@@ -9,25 +9,16 @@ typedef enum logic [6:0]
    SRA,
    SRLV,
    SRAV,
-   MFHI,
-   MTHI,
    
    SLT,
    SLTU,
-   MFLO,
-   MTLO,
    ADDIU,
 
-   MFC0,
-   MTC0,
-   MFC1,
-   MTC1,
-
-   TEQ,
    SC,
-   MOVI,
-   MOV,
    MONITOR,
+   
+   RDCYCLE,
+   RDCYCLEH,
    
    //known used in riscv design
    MUL,

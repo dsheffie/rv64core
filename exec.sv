@@ -556,7 +556,7 @@ module exec(clk,
 	
      end // always_ff@ (posedge clk)
    
-   logic [31:0]        r_cycle;
+   logic [63:0]        r_cycle;
    always_ff@(posedge clk)
      begin
 	r_cycle <= reset ? 'd0 : r_cycle + 'd1;
@@ -1108,6 +1108,18 @@ module exec(clk,
 	  ADDU:
 	    begin
 	       t_result2 = w_add32_2;
+	       t_alu_valid2 = 1'b1;
+	       t_wr_int_prf2 = 1'b1;
+	    end
+	  RDCYCLE:
+	    begin
+	       t_result2 = r_cycle[31:0];
+	       t_alu_valid2 = 1'b1;
+	       t_wr_int_prf2 = 1'b1;
+	    end
+	  RDCYCLEH:
+	    begin
+	       t_result2 = r_cycle[63:32];
 	       t_alu_valid2 = 1'b1;
 	       t_wr_int_prf2 = 1'b1;
 	    end
@@ -1685,6 +1697,18 @@ module exec(clk,
 	       t_result = w_add32;
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
+	    end
+	  RDCYCLE:
+	    begin
+	       t_result = r_cycle[31:0];
+	       t_alu_valid = 1'b1;
+	       t_wr_int_prf = 1'b1;
+	    end
+	  RDCYCLEH:
+	    begin
+	       t_result = r_cycle[63:32];
+	       t_alu_valid = 1'b1;
+	       t_wr_int_prf = 1'b1;
 	    end
 	  AND:
 	    begin
