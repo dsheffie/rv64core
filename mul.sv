@@ -61,13 +61,16 @@ module mul(clk,
 `ifdef FPGA
    logic [63:0] 			   t_mul;
    logic [63:0] 			   r_mul[`MUL_LAT:0];
+   wire [63:0] 				   w_sext_A = {{32{src_A[31]}}, src_A};
+   wire [63:0] 				   w_sext_B = {{32{src_B[31]}}, src_B};   
+				   
    always_comb
      begin
-	t_mul = is_signed ? ($signed(src_A) * $signed(src_B)) 
+	t_mul = is_signed ? ($signed(w_sext_A) * $signed(w_sext_B)) 
 	  : src_A * src_B;
 	y = r_is_high[`MUL_LAT] ? {32'd0, r_mul[`MUL_LAT][63:32]} : r_mul[`MUL_LAT];
      end
-
+   
    always_ff@(posedge clk)
      begin
 	r_mul[0] <= t_mul;
