@@ -261,6 +261,10 @@ module decode_riscv(insn,
 			  begin
 			     uop.op = (rd != 'd0) ? SLL : NOP;
 			  end
+			7'h1:
+			  begin
+			     uop.op = (rd != 'd0) ? MULH : NOP;
+			  end
 			default:
 			  begin
 			  end

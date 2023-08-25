@@ -31,6 +31,7 @@ typedef enum logic [6:0]
    
    //known used in riscv design
    MUL,
+   MULH,
    MULHU,
    DIV,
    DIVU,
@@ -83,6 +84,8 @@ function logic uses_mul(opcode_t op);
      MUL:
        x = 1'b1;
      MULHU:
+       x = 1'b1;
+     MULH:
        x = 1'b1;
      default:
        x = 1'b0;

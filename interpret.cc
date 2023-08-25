@@ -285,6 +285,11 @@ void execRiscv(state_t *s) {
 	      case 0x0:
 		s->gpr[m.r.rd] = s->gpr[m.r.rs1] << (s->gpr[m.r.rs2] & 31);
 		break;
+	      case 0x1: { /* MULH */
+		int64_t t = static_cast<int64_t>(s->gpr[m.r.rs1]) * static_cast<int64_t>(s->gpr[m.r.rs2]);
+		s->gpr[m.r.rd] = (t>>32);
+		break;
+	      }		
 	      default:
 		std::cout << "sel = " << m.r.sel << ", special = " << m.r.special << "\n";
 		assert(0);

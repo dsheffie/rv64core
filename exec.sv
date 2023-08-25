@@ -846,8 +846,8 @@ module exec(clk,
    
    mul m(.clk(clk), 
 	 .reset(reset), 
-	 .is_signed(int_uop.op == MUL),
-	 .is_high(int_uop.op == MULHU),
+	 .is_signed(int_uop.op == MUL || int_uop.op == MULH),
+	 .is_high(int_uop.op == MULHU || int_uop.op == MULH),
 	 .go(t_start_mul&r_start_int),
 	 .src_A(t_srcA[31:0]),
 	 .src_B(t_srcB[31:0]),
@@ -1179,6 +1179,10 @@ module exec(clk,
 	    end
 	  
 	  MUL:
+	    begin
+	       t_start_mul = r_start_int&!ds_done;
+	    end
+	  MULH:
 	    begin
 	       t_start_mul = r_start_int&!ds_done;
 	    end
