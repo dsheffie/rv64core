@@ -1869,6 +1869,8 @@ module core(clk,
    exec e (
 	   .clk(clk), 
 	   .reset(reset),
+	   .retire(t_retire),
+	   .retire_two(t_retire_two),
 	   .divide_ready(t_divide_ready),
 `ifdef VERILATOR
 	   .clear_cnt(r_clear_cnt),

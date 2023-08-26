@@ -20,6 +20,8 @@ import "DPI-C" function void report_exec(input int int_valid,
 
 module exec(clk, 
 	    reset,
+	    retire,
+	    retire_two,
 `ifdef VERILATOR
 	    clear_cnt,
 `endif
@@ -57,6 +59,9 @@ module exec(clk,
 	    mem_rsp_load_data);
    input logic clk;
    input logic reset;
+   input logic retire;
+   input logic retire_two;
+   
 `ifdef VERILATOR
    input logic [31:0] clear_cnt;
 `endif
@@ -556,12 +561,26 @@ module exec(clk,
 	
      end // always_ff@ (posedge clk)
    
-   logic [63:0]        r_cycle;
+   logic [63:0]        r_cycle, r_retired_insns;
    always_ff@(posedge clk)
      begin
 	r_cycle <= reset ? 'd0 : r_cycle + 'd1;
      end
-   
+   always_ff@(posedge clk)
+     begin
+	if(reset)
+	  begin
+	     r_retired_insns <= 'd0;
+	  end
+	else if(retire_two)
+	  begin
+	     r_retired_insns <= r_retired_insns + 'd2;
+	  end
+	else if(retire) 
+	  begin
+	     r_retired_insns <= r_retired_insns + 'd1;
+	  end
+     end // always_ff@ (posedge clk)
 
 
    always_ff@(posedge clk)
@@ -1709,6 +1728,20 @@ module exec(clk,
 	       t_result = r_cycle[63:32];
 	       t_alu_valid = 1'b1;
 	       t_wr_int_prf = 1'b1;
+	    end
+	  RDINSTRET:
+	    begin
+	       t_result = r_retired_insns[31:0];
+	       t_alu_valid = 1'b1;
+	       t_wr_int_prf = 1'b1;
+	       t_pc = w_pc4;
+	    end
+	  RDINSTRETH:
+	    begin
+	       t_result = r_retired_insns[63:32];
+	       t_alu_valid = 1'b1;
+	       t_wr_int_prf = 1'b1;
+	       t_pc = w_pc4;
 	    end
 	  AND:
 	    begin
