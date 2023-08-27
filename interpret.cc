@@ -530,6 +530,10 @@ void handle_syscall(state_t *s, uint64_t tohost) {
       buf[0] = rc;
       break;
     }
+    case SYS_stat : {
+      buf[0] = 0;
+      break;
+    }
     default:
       std::cout << "syscall " << buf[0] << " unsupported\n";
       exit(-1);

@@ -315,7 +315,7 @@ int main(int argc, char **argv) {
   // Initialize Verilators variables
   bool enable_checker = true;
   std::string sysArgs, pipelog;
-  std::string mips_binary = "dhrystone3";
+  std::string rv32_binary = "dhrystone3";
   std::string log_name = "log.txt";
   std::string pushout_name = "pushout.txt";
   std::string branch_name = "branch_info.txt";
@@ -332,7 +332,7 @@ int main(int argc, char **argv) {
       ("help", "Print help messages")
       ("args,a", po::value<std::string>(&sysArgs), "arguments to mips binary")
       ("checker,c", po::value<bool>(&enable_checker)->default_value(true), "use checker")
-      ("file,f", po::value<std::string>(&mips_binary), "mips binary")
+      ("file,f", po::value<std::string>(&rv32_binary), "mips binary")
       ("heartbeat,h", po::value<uint64_t>(&heartbeat)->default_value(1<<24), "heartbeat for stats")
       ("log,l", po::value<std::string>(&log_name), "stats log filename")
       ("pushout", po::value<std::string>(&pushout_name), "pushout log filename")
@@ -384,16 +384,12 @@ int main(int argc, char **argv) {
   ss->mem = mmap4G();
 
   
-  globals::sysArgc = buildArgcArgv(mips_binary.c_str(),sysArgs.c_str(),&globals::sysArgv);
+  globals::sysArgc = buildArgcArgv(rv32_binary.c_str(),sysArgs.c_str(),&globals::sysArgv);
   initCapstone();
 
 
-  load_elf(mips_binary.c_str(), s);
-  
-
-  
-  //load checker
-  load_elf(mips_binary.c_str(), ss);
+  load_elf(rv32_binary.c_str(), s);
+  load_elf(rv32_binary.c_str(), ss);
   
   
   // Create an instance of our module under test

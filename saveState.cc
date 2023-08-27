@@ -11,8 +11,10 @@ struct page {
   uint8_t data[4096];
 } __attribute__((packed));
 
+static const uint64_t MAGICNUM = 0xbeefd00d12345670UL;
+
 struct header {
-  static const uint64_t magic = 0xbeefcafefaced00d;
+  uint64_t magic;
   uint32_t pc;
   int32_t gpr[32];
   uint64_t icnt;
@@ -38,6 +40,7 @@ void dumpState(const state_t &s, const std::string &filename) {
   }
   int fd = ::open(filename.c_str(), O_RDWR|O_CREAT|O_TRUNC, 0600);
   assert(fd != -1);
+  h.magic = MAGICNUM;
   h.pc = s.pc;
   memcpy(&h.gpr,&s.gpr,sizeof(s.gpr));
   h.icnt = s.icnt;
@@ -57,12 +60,12 @@ void dumpState(const state_t &s, const std::string &filename) {
 }
 
 void loadState(state_t &s, const std::string &filename) {
+  header h;
   int fd = ::open(filename.c_str(), O_RDONLY, 0600);
   assert(fd != -1);
-  header h;
   size_t sz = read(fd, &h, sizeof(h));
   assert(sz == sizeof(h));
-  
+  assert(h.magic == MAGICNUM);
   s.pc = h.pc;
   memcpy(&s.gpr,&h.gpr,sizeof(s.gpr));
   s.icnt = h.icnt;
