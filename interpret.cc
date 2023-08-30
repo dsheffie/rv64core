@@ -330,7 +330,7 @@ void execRiscv(state_t *s) {
 		s->gpr[m.r.rd] = s->gpr[m.r.rs1] ^ s->gpr[m.r.rs2];
 		break;
 	      case 0x1:
-		s->gpr[m.r.rd] = s->gpr[m.r.rs1] / s->gpr[m.r.rs2];
+		s->gpr[m.r.rd] = (s->gpr[m.r.rs2]==0) ? ~0 : s->gpr[m.r.rs1] / s->gpr[m.r.rs2];
 		break;
 	      default:
 		std::cout << "sel = " << m.r.sel << ", special = " << m.r.special << "\n";
@@ -344,7 +344,7 @@ void execRiscv(state_t *s) {
 		s->gpr[rd] = (*reinterpret_cast<uint32_t*>(&s->gpr[m.r.rs1]) >> (s->gpr[m.r.rs2] & 31));
 		break;
 	      case 0x1: {
-		*reinterpret_cast<uint32_t*>(&s->gpr[m.r.rd]) = u_rs1 / u_rs2;
+		*reinterpret_cast<uint32_t*>(&s->gpr[m.r.rd]) = u_rs2 ? (u_rs1 / u_rs2) : ~0U;
 		break;
 	      }
 	      case 0x20: /* sra */
@@ -362,7 +362,7 @@ void execRiscv(state_t *s) {
 		s->gpr[m.r.rd] = s->gpr[m.r.rs1] | s->gpr[m.r.rs2];
 		break;
 	      case 0x1:
-		s->gpr[m.r.rd] = s->gpr[m.r.rs1] % s->gpr[m.r.rs2];
+		s->gpr[m.r.rd] = s->gpr[m.r.rs2] ? (s->gpr[m.r.rs1] % s->gpr[m.r.rs2]) : ~0;
 		break;		
 	      default:
 		std::cout << "sel = " << m.r.sel << ", special = " << m.r.special << "\n";
@@ -376,7 +376,7 @@ void execRiscv(state_t *s) {
 		s->gpr[m.r.rd] = s->gpr[m.r.rs1] & s->gpr[m.r.rs2];
 		break;
 	      case 0x1: { /* remu */
-		*reinterpret_cast<uint32_t*>(&s->gpr[m.r.rd]) = u_rs1 % u_rs2;
+		*reinterpret_cast<uint32_t*>(&s->gpr[m.r.rd]) = u_rs2 ? (u_rs1 % u_rs2) : ~0U;
 		break;
 	      }
 	      default:
