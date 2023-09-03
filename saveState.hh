@@ -9,4 +9,6 @@
 void dumpState(const state_t &s, const std::string &filename);
 void loadState(state_t &s, const std::string &filename);
 
+void emitCodeForInitialRegisterValues(state_t &s, uint32_t pc);
+
 #endif

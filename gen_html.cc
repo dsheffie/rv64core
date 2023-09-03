@@ -26,6 +26,76 @@ static void read_template(list<string> &pre, list<string> &post) {
   }
 }
 
+enum class eventtype {FETCH, ALLOC, COMPLETE, RETIRE};
+
+struct event_t {
+  eventtype t;
+  pipeline_record *rec;
+  event_t(eventtype t, pipeline_record *rec) :
+    t(t), rec(rec) {}
+};
+
+void generate_kanata(pipeline_reader &r, size_t start, size_t len) {
+  size_t cnt = 0;
+  /* at each cycle, these events happen */
+  std::map<uint64_t, std::list<event_t>> cycle_map;
+  std::map<uint64_t, uint64_t> remap_table;
+  
+  std::ofstream out("kanata.log");
+  out << "Kanata\t004\n";
+
+
+  uint64_t first_cycle = ~(0UL);
+  uint64_t id = 0;
+  for(pipeline_record &rec : r.get_records()) {
+    ++cnt;
+    if(cnt < start)
+      continue;
+    if(cnt > (start + len))
+      break;
+
+    first_cycle = std::min(first_cycle, rec.fetch_cycle);
+    remap_table[rec.uuid] = id++;
+    cycle_map[rec.fetch_cycle].emplace_back(eventtype::FETCH, &rec);
+    cycle_map[rec.alloc_cycle].emplace_back(eventtype::ALLOC, &rec);
+    cycle_map[rec.complete_cycle].emplace_back(eventtype::COMPLETE, &rec);
+    cycle_map[rec.retire_cycle].emplace_back(eventtype::RETIRE, &rec);        
+  }
+
+  uint64_t last_cycle = ~(0UL);
+  for(auto &p : cycle_map) {
+    std::cout << "cycle " << p.first << " has " << p.second.size() << " events\n";
+    if(last_cycle == (~(0UL))) {
+      out << "C=\t"<<first_cycle<<"\n";
+    }
+    else {
+      uint64_t d = p.first - last_cycle;
+      out << "C\t"<<d<<"\n";
+    }
+    for(event_t &e : p.second) {
+      uint64_t ii = remap_table.at(e.rec->uuid);
+      switch(e.t)
+	{
+	case eventtype::FETCH:
+	  out << "I\t"<<ii<<"\t"<<ii<<"\t"<<"0\n";
+	  out << "L\t"<<ii<<"\t0\t"<< e.rec->disasm << "\n";
+	  out << "S\t"<<ii<<"0\t"<<"F\n";
+	  //out << "E\t"<<ii<<"0\t"<<"F\n";
+	  break;
+	case eventtype::ALLOC:
+	case eventtype::COMPLETE:
+	case eventtype::RETIRE:
+
+	  out << "R\t"<<ii<<"\t"<<ii<<"\t"<<"0\n";
+	  break;
+	}
+    }
+    last_cycle = p.first;
+  }
+  
+  out.close();
+
+}
 
 int main(int argc, char *argv[]) {
   namespace po = boost::program_options;
@@ -57,9 +127,14 @@ int main(int argc, char *argv[]) {
     cout << "exception occured loading " << fname << "\n";
     exit(-1);
   }
-    
-  size_t cnt = 0;
+  cout << r.get_records().size() << " records read\n";
   cout << "Start at " << start << " and complete at " << len+start << "\n";
+  
+  generate_kanata(r, start, len);
+  
+  size_t cnt = 0;
+
+
   for(auto &rec : r.get_records()) {
     ++cnt;
     if(cnt < start)

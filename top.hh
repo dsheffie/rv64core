@@ -256,5 +256,51 @@ static inline uint8_t *mmap4G() {
   return reinterpret_cast<uint8_t*>(mempt);
 }
 
+static inline
+void reset_core(std::unique_ptr<Vcore_l1d_l1i> &tb, uint64_t &cycle,
+		uint32_t init_pc) {
+  for(; (cycle < 4) && !Verilated::gotFinish(); ++cycle) {
+    tb->mem_rsp_valid = 0;
+    tb->monitor_ack = 0;
+    tb->reset = 1;
+    tb->extern_irq = 0;
+    tb->clk = 1;
+    tb->eval();
+    tb->clk = 0;
+    tb->eval();
+    ++cycle;
+  }
+  //deassert reset
+  tb->reset = 0;
+  tb->clk = 1;
+  tb->eval();
+  tb->clk = 0;
+  tb->eval();
+
+  tb->resume_pc = init_pc;
+  while(!tb->ready_for_resume) {
+    ++cycle;  
+    tb->clk = 1;
+    tb->eval();
+    tb->clk = 0;
+    tb->eval();
+  }
+  
+  ++cycle;
+  tb->resume = 1;
+
+  tb->clk = 1;
+  tb->eval();
+  tb->clk = 0;
+  tb->eval();
+  
+  ++cycle;  
+  tb->resume = 0;
+  tb->clk = 1;
+  tb->eval();
+  tb->clk = 0;
+  tb->eval();
+}
+
 
 #endif

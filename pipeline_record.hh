@@ -76,6 +76,9 @@ public:
   const std::list<pipeline_record> &get_records() const {
     return records;
   }
+  std::list<pipeline_record> &get_records() {
+    return records;
+  }  
 };
 
 class pipeline_logger : public pipeline_data {
