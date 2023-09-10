@@ -13,6 +13,7 @@ char **globals::sysArgv = nullptr;
 int globals::sysArgc = 0;
 
 static uint64_t cycle = 0;
+static uint64_t fetch_slots = 0;
 static bool trace_retirement = false;
 static uint64_t mem_reqs = 0;
 static state_t *s = nullptr;
@@ -161,12 +162,17 @@ void record_alloc(int rf,
   else
     ++n_uq_full[0];
   
-  if(r2)
+  if(r2) {
     ++n_rdy[2];
-  else if(r1)
+    fetch_slots += 2;
+  }
+  else if(r1) {
     ++n_rdy[1];
-  else
+    fetch_slots += 1;
+  }
+  else {
     ++n_rdy[0];
+  }
   
 }
 
@@ -957,6 +963,9 @@ int main(int argc, char **argv) {
     out << "avg fetch = " << static_cast<double>(total_fetch) / total_fetch_cycles << "\n";
     out << "resteer bubble = " << n_resteer_bubble << "\n";
     out << "front-end queues full = " << n_fq_full << "\n";
+    out << "fetch_slots = " << fetch_slots << "\n";
+    out << "total_slots = " << (cycle*2) << "\n";
+    out << "retire_slots = " << insns_retired << "\n";
     double total_fetch_cap = 0.0;
 
   

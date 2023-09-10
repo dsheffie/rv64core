@@ -26,11 +26,11 @@ endif
 
 ifeq ($(UNAME_S),Darwin)
 	CXX = clang++ -I/opt/local/include -flto
-	VERILATOR_SRC = /opt/local/share/verilator/include/verilated.cpp
-	VERILATOR_INC = /opt/local/share/verilator/include
-	VERILATOR_VCD = /opt/local/share/verilator/include/verilated_vcd_c.cpp
-	VERILATOR_DPI_INC = /opt/local/share/verilator/include/vltstd/
-	VERILATOR = /opt/local/bin/verilator
+	VERILATOR_SRC = /Users/dsheffie/local/share/verilator/include/verilated.cpp
+	VERILATOR_INC = /Users/dsheffie/local/share/verilator/include
+	VERILATOR_VCD = /Users/dsheffie/local/share/verilator/include/verilated_vcd_c.cpp
+	VERILATOR_DPI_INC = /Users/dsheffie/local/share/verilator/include/vltstd/
+	VERILATOR = /Users/dsheffie/local/bin/verilator
 	EXTRA_LD = -L/opt/local/lib -lboost_program_options-mt -lboost_serialization-mt -lcapstone
 endif
 
