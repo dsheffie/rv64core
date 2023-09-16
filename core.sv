@@ -25,7 +25,8 @@ import "DPI-C" function void record_retirement(input longint pc,
 					       input int     fault,
 					       input int     is_mem,
 					       input int     is_fp,
-					       input int     missed_l1d);
+					       input int     missed_l1d,
+					       input int     br_mispredict);
 
 import "DPI-C" function void record_restart(input int restart_cycles);
 import "DPI-C" function void record_ds_restart(input int delay_cycles);
@@ -618,7 +619,9 @@ module core(clk,
 			       t_rob_head.faulted ? 32'd1 : 32'd0,
 			       32'd0,
 			       32'd0,
-			       32'd0);
+			       32'd0,
+			       t_rob_head.faulted & !(t_rob_head.is_break | t_rob_head.is_ii | t_rob_head.is_bad_addr) ? 32'd1 : 32'd0			       
+			       );
    	  end
    	if(t_retire_two)
    	  begin
@@ -628,6 +631,7 @@ module core(clk,
    			       t_rob_next_head.complete_cycle,
    			       r_cycle,
 			       t_rob_next_head.faulted ? 32'd1 : 32'd0,
+			       32'd0,
 			       32'd0,
 			       32'd0,
 			       32'd0);	     

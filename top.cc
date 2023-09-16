@@ -216,7 +216,7 @@ void record_fetch(int p1, int p2, int p3, int p4,
     ++n_fetch[0];
 }
 
-static std::map<int, uint64_t> mem_lat_map, fp_lat_map, non_mem_lat_map;
+static std::map<int, uint64_t> mem_lat_map, fp_lat_map, non_mem_lat_map, mispred_lat_map;
 
 int check_insn_bytes(long long pc, int data) {
   uint32_t insn = get_insn(pc, s);
@@ -227,7 +227,7 @@ static long long lrc = -1;
 static uint64_t record_insns_retired = 0;
 
 void record_retirement(long long pc, long long fetch_cycle, long long alloc_cycle, long long complete_cycle, long long retire_cycle,
-		       int faulted , int is_mem, int is_fp, int missed_l1d) {
+		       int faulted , int is_mem, int is_fp, int missed_l1d, int br_mispredict) {
 
   //if(pc == 0x2033c || pc == 0x20340 || pc == 0x20344 || pc == 0x20348) {
   //auto i = getAsmString(get_insn(pc, s), pc);
@@ -243,6 +243,15 @@ void record_retirement(long long pc, long long fetch_cycle, long long alloc_cycl
     exit(-1);
   }
   lrc = retire_cycle;
+
+  if(br_mispredict) {
+    //long long t = retire_cycle - alloc_cycle;
+    //long long tt = retire_cycle - fetch_cycle;
+    //std::cout << "mispredict at " << std::hex << pc << std::dec << " took " << t
+    //<< " cycles from alloc to retire and "
+    //<< tt << " cycles from fetch to retire\n";
+    mispred_lat_map[complete_cycle-alloc_cycle]++;
+  }
   
   if(is_mem) {
     //auto i = getAsmString(insn, pc);
@@ -1078,6 +1087,9 @@ int main(int argc, char **argv) {
     out << "avg non-mem alloc to complete = " << avg_mem_lat << "\n";
     out << "median non-mem alloc to complete = " << median_mem_lat << "\n";
 
+    avg_mem_lat = histo_mean_median(mispred_lat_map, median_mem_lat);
+    out << "avg mispred branch alloc to complete = " << avg_mem_lat << "\n";
+    out << "median mispred branch alloc to complete = " << median_mem_lat << "\n";
     
     out << "l1d_reqs = " << l1d_reqs << "\n";
     out << "l1d_acks = " << l1d_acks << "\n";
