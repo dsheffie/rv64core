@@ -316,7 +316,6 @@ endfunction
 
    localparam N_ROB_ENTRIES = (1<<`LG_ROB_ENTRIES);
    logic [1:0] r_graduated [N_ROB_ENTRIES-1:0];
-   logic [N_ROB_ENTRIES-1:0] r_missed;
    logic [N_ROB_ENTRIES-1:0] r_rob_inflight;
    
    
@@ -407,20 +406,6 @@ endfunction
      end // always_comb
 
 
-   always_ff@(posedge clk)
-     begin
-	if(reset)
-	  begin
-	     r_missed <= 'd0;
-	  end
-	else
-	  begin
-	     if(t_push_miss)
-	       begin
-		  r_missed[r_req2.rob_ptr] <= !t_port2_hit_cache;
-	       end
-	  end
-     end // always_ff@ (posedge clk)
 
    always_ff@(posedge clk)
      begin
@@ -464,14 +449,6 @@ endfunction
    // 		      r_req2.rob_ptr,
    // 		      r_req2.addr,
    // 		      r_req2.is_store);
-   // 	  end
-   // 	if(t_pop_mq && r_missed[t_mem_head.rob_ptr])
-   // 	  begin
-   // 	     $display("cycle %d : popping rob ptr %d, addr %x -> was store %b",
-   // 		      r_cycle,
-   // 		      t_mem_head.rob_ptr,
-   // 		      t_mem_head.addr,
-   // 		      t_mem_head.is_store);
    // 	  end
    //   end
    
@@ -1363,7 +1340,6 @@ endfunction
 		  !t_got_rd_retry &&
 		  !(r_last_wr2 && (r_cache_idx2 == core_mem_req.addr[IDX_STOP-1:IDX_START]) && !core_mem_req.is_store) && 
 		  !t_cm_block_stall &&
-		  /*(r_graduated[core_mem_req.rob_ptr] == 2'b00) && */
 		  (!r_rob_inflight[core_mem_req.rob_ptr])
 		  )
 	       begin
