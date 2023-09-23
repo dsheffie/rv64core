@@ -81,7 +81,7 @@ module l2(clk,
    localparam LG_L2_LINES = `LG_L2_NUM_SETS;
    localparam L2_LINES = 1<<LG_L2_LINES;
    
-   localparam TAG_BITS = 32 - (LG_L2_LINES + 6);
+   localparam TAG_BITS = `M_WIDTH - (LG_L2_LINES + 6);
 
    logic 		t_wr_dirty, t_wr_valid;
    logic 		t_wr_d0, t_wr_d1, t_wr_d2, t_wr_d3, t_wr_tag;
@@ -89,6 +89,12 @@ module l2(clk,
    logic 		t_valid, t_dirty;
    logic [LG_L2_LINES-1:0] t_idx, r_idx;
    logic [TAG_BITS-1:0]    n_tag, r_tag;
+
+   logic [`M_WIDTH-7:0]    n_last_l1i_addr, r_last_l1i_addr;
+   logic [`M_WIDTH-7:0]    n_last_l1d_addr, r_last_l1d_addr;
+   logic 		   t_gnt_l1i, t_gnt_l1d;
+   
+   
    logic [1:0] 		 n_bank, r_bank;
    logic [31:0] 	 n_addr, r_addr;
    logic [31:0] 	 n_saveaddr, r_saveaddr;
@@ -222,6 +228,8 @@ module l2(clk,
 	     r_l1i_req <= 1'b0;
 	     r_last_gnt <= 1'b0;
 	     r_req <= 1'b0;
+	     r_last_l1i_addr <= 'd0;
+	     r_last_l1d_addr <= 'd0;
 	  end
 	else
 	  begin
@@ -251,7 +259,8 @@ module l2(clk,
 	     r_l1i_req <= n_l1i_req;
 	     r_last_gnt <= n_last_gnt;
 	     r_req <= n_req;
-
+	     r_last_l1i_addr <= n_last_l1i_addr;
+	     r_last_l1d_addr <= n_last_l1d_addr;	     
 	  end
      end // always_ff@ (posedge clk)
 
@@ -324,6 +333,18 @@ module l2(clk,
    wire w_l1i_req = r_l1i_req | l1i_req;
    wire w_l1d_req = r_l1d_req | l1d_req;
 
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if(t_gnt_l1i)
+   // 	  begin
+   // 	     $display("l1i curr tag %x, last tag %x at cycle %d", 
+   // 		      {n_addr[31:6],6'd0}, 
+   // 		      {r_last_l1i_addr,6'd0},
+   // 		      r_cycle);
+   // 	  end
+   //   end
+
+   
    always_comb
      begin
 	n_last_gnt = r_last_gnt;
@@ -372,6 +393,12 @@ module l2(clk,
 
 	n_cache_hits = r_cache_hits;
 	n_cache_accesses = r_cache_accesses;
+
+	n_last_l1i_addr = r_last_l1i_addr;
+	n_last_l1d_addr = r_last_l1d_addr;
+
+	t_gnt_l1i = 1'b0;
+	t_gnt_l1d = 1'b0;
 	
 	case(r_state)
 	  INITIALIZE:
@@ -413,11 +440,13 @@ module l2(clk,
 			 n_last_gnt = 1'b0;			 
 			 t_idx = l1i_addr[LG_L2_LINES+5:6];
 			 n_tag = l1i_addr[31:LG_L2_LINES+6];
+			 n_last_l1i_addr = l1i_addr[31:6];
 			 n_bank = l1i_addr[5:4];
 			 n_addr = {l1i_addr[31:6], 6'd0};
 			 n_saveaddr = {l1i_addr[31:6], 6'd0};
 			 n_opcode = MEM_LW;
 			 n_l1i_req = 1'b0;
+			 t_gnt_l1i = 1'b1;
 		      end
 		    else if((!w_l1i_req) & w_l1d_req)
 		      begin
@@ -428,6 +457,7 @@ module l2(clk,
 			 n_tag = l1d_addr[31:LG_L2_LINES+6];
 			 n_bank = l1d_addr[5:4];
 			 n_addr = {l1d_addr[31:6], 6'd0};
+			 n_last_l1d_addr = l1d_addr[31:6];			 
 			 n_saveaddr = {l1d_addr[31:6], 6'd0};
 			 n_store_data = l1_mem_req_store_data;
 			 n_opcode = l1d_opcode;
@@ -436,7 +466,7 @@ module l2(clk,
 			   begin
 			      n_l1d_rsp_valid = 1'b1;
 			   end
-			 
+			 t_gnt_l1d = 1'b1;
 		      end
 		    else
 		      begin
@@ -446,10 +476,12 @@ module l2(clk,
 			      t_idx = l1i_addr[LG_L2_LINES+5:6];
 			      n_tag = l1i_addr[31:LG_L2_LINES+6];
 			      n_bank = l1i_addr[5:4];
+			      n_last_l1i_addr = l1i_addr[31:6];
 			      n_addr = {l1i_addr[31:6], 6'd0};
 			      n_saveaddr = {l1i_addr[31:6], 6'd0};
 			      n_opcode = MEM_LW;
-			      n_l1i_req = 1'b0;			 			      
+			      n_l1i_req = 1'b0;	
+			      t_gnt_l1i = 1'b1;
 			   end
 			 else
 			   begin
@@ -458,6 +490,7 @@ module l2(clk,
 			      n_tag = l1d_addr[31:LG_L2_LINES+6];
 			      n_bank = l1d_addr[5:4];
 			      n_addr = {l1d_addr[31:6], 6'd0};
+			      n_last_l1d_addr = l1d_addr[31:6];
 			      n_saveaddr = {l1d_addr[31:6], 6'd0};
 			      n_store_data = l1_mem_req_store_data;
 			      n_opcode = l1d_opcode;
@@ -466,6 +499,7 @@ module l2(clk,
 				begin
 				   n_l1d_rsp_valid = 1'b1;
 				end
+			      t_gnt_l1d = 1'b1;
 			   end
 		      end
 		    n_req_ack = 1'b1;
