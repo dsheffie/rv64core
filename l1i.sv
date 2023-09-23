@@ -627,6 +627,7 @@ endfunction // is_nop
 		 end // if (n_restart_req)
 	       else if(t_miss)
 		 begin
+		    //$display("MISSED in the icache at cycle %d", r_cycle);
 		    n_state = INJECT_RELOAD;
 		    n_mem_req_addr = {r_cache_pc[`M_WIDTH-1:`LG_L1D_CL_LEN], {`LG_L1D_CL_LEN{1'b0}}};
 		    n_mem_req_valid = 1'b1;

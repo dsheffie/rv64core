@@ -1,6 +1,15 @@
 module l2(clk,
 	  reset,
 
+	  l1d_req,
+	  l1i_req,
+
+	  l1d_addr,
+	  l1i_addr,
+	  l1d_opcode,
+	  l1d_rsp_valid,
+	  l1i_rsp_valid,
+	  
 	  l1i_flush_req,
 	  l1d_flush_req,
 
@@ -10,14 +19,10 @@ module l2(clk,
 	  flush_complete,
 
 	  //l1 -> l2
-	  l1_mem_req_valid,
 	  l1_mem_req_ack,
-	  l1_mem_req_addr,
 	  l1_mem_req_store_data,
-	  l1_mem_req_opcode,
 
 	  //l2 -> l1
-	  l1_mem_rsp_valid,
 	  l1_mem_load_data,
 
 	  //l2 -> mem
@@ -38,6 +43,14 @@ module l2(clk,
 
    input logic clk;
    input logic reset;
+   input logic l1d_req;
+   input logic l1i_req;
+   input logic [(`M_WIDTH-1):0] l1d_addr;
+   input logic [(`M_WIDTH-1):0] l1i_addr;   
+   input logic [3:0] 		l1d_opcode;
+   output logic l1d_rsp_valid;
+   output logic l1i_rsp_valid;
+   
    input logic l1i_flush_req;
    input logic l1d_flush_req;
    input logic l1i_flush_complete;
@@ -45,13 +58,9 @@ module l2(clk,
    
    output logic flush_complete;
 
-   input logic 	l1_mem_req_valid;
    output logic l1_mem_req_ack;
-   input logic [31:0] l1_mem_req_addr;
    input logic [127:0] l1_mem_req_store_data;
-   input logic [3:0]   l1_mem_req_opcode;
 
-   output logic        l1_mem_rsp_valid;
    output logic [127:0] l1_mem_load_data;
    
    input logic 	mem_req_ack;
@@ -88,7 +97,8 @@ module l2(clk,
    logic [3:0] 		   r_mem_opcode, n_mem_opcode;
    logic 		   r_req_ack, n_req_ack;
    
-   logic 		   r_rsp_valid, n_rsp_valid;
+   logic 		   r_l1d_rsp_valid, n_l1d_rsp_valid;
+   logic 		   r_l1i_rsp_valid, n_l1i_rsp_valid;
    logic [127:0] 	   r_rsp_data, n_rsp_data;
    logic [127:0] 	   r_store_data, n_store_data;
    
@@ -132,7 +142,9 @@ module l2(clk,
    assign mem_req_opcode = r_mem_opcode;
    assign mem_req_store_data = r_mem_req_store_data;
    
-   assign l1_mem_rsp_valid = r_rsp_valid;
+   assign l1d_rsp_valid = r_l1d_rsp_valid;
+   assign l1i_rsp_valid = r_l1i_rsp_valid;
+   
    assign l1_mem_load_data = r_rsp_data;
    assign l1_mem_req_ack = r_req_ack;
    
@@ -170,6 +182,13 @@ module l2(clk,
 
    wire 		w_hit = w_valid ? (r_tag == w_tag) : 1'b0;
    wire 		w_need_wb = w_valid ? w_dirty : 1'b0;
+
+   logic 		r_l1d_req, n_l1d_req;
+   logic 		r_l1i_req, n_l1i_req;
+   logic 		r_last_gnt, n_last_gnt;
+   logic 		n_req, r_req;
+
+
       
    always_ff@(posedge clk)
      begin
@@ -187,7 +206,8 @@ module l2(clk,
 	     r_mem_req <= 1'b0;
 	     r_mem_opcode <= 4'd0;
 	     r_rsp_data <= 'd0;
-	     r_rsp_valid <= 1'b0;
+	     r_l1d_rsp_valid <= 1'b0;
+	     r_l1i_rsp_valid <= 1'b0;
 	     r_reload <= 1'b0;
 	     r_req_ack <= 1'b0;
 	     r_store_data <= 'd0;
@@ -196,6 +216,10 @@ module l2(clk,
 	     r_need_l1i <= 1'b0;
 	     r_cache_hits <= 'd0;
 	     r_cache_accesses <= 'd0;
+	     r_l1d_req <= 1'b0;
+	     r_l1i_req <= 1'b0;
+	     r_last_gnt <= 1'b0;
+	     r_req <= 1'b0;
 	  end
 	else
 	  begin
@@ -211,7 +235,8 @@ module l2(clk,
 	     r_mem_req <= n_mem_req;
 	     r_mem_opcode <= n_mem_opcode;
 	     r_rsp_data <= n_rsp_data;
-	     r_rsp_valid <= n_rsp_valid;
+	     r_l1d_rsp_valid <= n_l1d_rsp_valid;
+	     r_l1i_rsp_valid <= n_l1i_rsp_valid;
 	     r_reload <= n_reload;
 	     r_req_ack <= n_req_ack;
 	     r_store_data <= n_store_data;
@@ -219,7 +244,12 @@ module l2(clk,
 	     r_need_l1i <= n_need_l1i;
 	     r_need_l1d <= n_need_l1d;
 	     r_cache_hits <= n_cache_hits;
-	     r_cache_accesses <= n_cache_accesses;	     
+	     r_cache_accesses <= n_cache_accesses;
+	     r_l1d_req <= n_l1d_req;
+	     r_l1i_req <= n_l1i_req;
+	     r_last_gnt <= n_last_gnt;
+	     r_req <= n_req;
+
 	  end
      end // always_ff@ (posedge clk)
 
@@ -284,27 +314,22 @@ module l2(clk,
 
    //always_ff@(negedge clk)
    //begin
-   // 	if(r_state == IDLE && l1_mem_req_valid)
-   // 	  begin
-   // 	     $display("cycle %d : request for address %x", r_cycle, l1_mem_req_addr);
-   // 	     $display("tag = %x, index = %d, bank = %d", n_tag, t_idx, n_bank);
-   // 	  end
-   // 	if(r_state == CLEAN_RELOAD && mem_rsp_valid)
-   // 	  begin
-   // 	     $display("cycle %d : clean reload for address %x", r_cycle, r_addr);
-   // 	     $display("load data %x%x", 
-   // 		      mem_rsp_load_data[511:256],
-   // 		      mem_rsp_load_data[255:0]
-   // 		      );
-   // 	  end
-   // 	if(r_rsp_valid)
-   // 	  begin
-   // 	     $display("cycle %d : reply data : %x", r_cycle, r_rsp_data);
-   // 	  end
-   //   end
+      //$display("cycle %d : L2 cache FSM in state %d", r_cycle, r_state);
+      //if(l1i_req) $display("cycle %d : l1i req, state %d", r_cycle, r_state);
+      //if(l1d_req) $display("cycle %d : l1d req, state %d", r_cycle, r_state);
+   //end
+
+   wire w_l1i_req = r_l1i_req | l1i_req;
+   wire w_l1d_req = r_l1d_req | l1d_req;
 
    always_comb
      begin
+	n_last_gnt = r_last_gnt;
+	n_l1i_req = r_l1i_req | l1i_req;
+	n_l1d_req = r_l1d_req | l1d_req;
+	n_req = r_req;
+	
+	
 	n_state = r_state;
 	n_flush_complete = 1'b0;
 	t_wr_valid = 1'b0;
@@ -335,7 +360,8 @@ module l2(clk,
 	t_d3 = mem_rsp_load_data[511:384];
 
 	n_rsp_data = r_rsp_data;
-	n_rsp_valid = 1'b0;
+	n_l1i_rsp_valid = 1'b0;
+	n_l1d_rsp_valid = 1'b0;	
 
 	n_reload = r_reload;
 	n_store_data = r_store_data;
@@ -363,27 +389,85 @@ module l2(clk,
 	    end // case: INITIALIZE
 	  IDLE:
 	    begin
-	       t_idx = l1_mem_req_addr[LG_L2_LINES+5:6];
-	       n_tag = l1_mem_req_addr[31:LG_L2_LINES+6];
-	       n_bank = l1_mem_req_addr[5:4];
-	       n_addr = {l1_mem_req_addr[31:6], 6'd0};
-	       n_saveaddr = {l1_mem_req_addr[31:6], 6'd0};
-	       n_opcode = l1_mem_req_opcode;
-	       n_store_data = l1_mem_req_store_data;
+	       t_idx = 'd0;
+	       n_tag = r_tag;
+	       n_bank = r_bank;
+	       n_addr = r_addr;
+	       
+	       n_opcode = MEM_LW;
+	       n_store_data = r_store_data;
 	       
 	       if(n_flush_req)
 		 begin
 		    t_idx = 'd0;
 		    n_state = FLUSH_WAIT;
-		    //$display("GOT FLUSH REQUEST at cycle %d", r_cycle);
 		 end
-	       else if(l1_mem_req_valid)
+	       else if(w_l1d_req | w_l1i_req)
 		 begin
-		    //$display("accept request for addr %x at cycle %d, type %d", 
-		    //l1_mem_req_addr, r_cycle, n_opcode);
+		    if(w_l1i_req & (!w_l1d_req))
+		      begin
+			 //$display("accepting i-side, addr=%x", 
+			 //l1i_addr);			 
+			 n_last_gnt = 1'b0;			 
+			 t_idx = l1i_addr[LG_L2_LINES+5:6];
+			 n_tag = l1i_addr[31:LG_L2_LINES+6];
+			 n_bank = l1i_addr[5:4];
+			 n_addr = {l1i_addr[31:6], 6'd0};
+			 n_saveaddr = {l1i_addr[31:6], 6'd0};
+			 n_opcode = MEM_LW;
+			 n_l1i_req = 1'b0;
+		      end
+		    else if((!w_l1i_req) & w_l1d_req)
+		      begin
+			 //$display("accepting d-side, addr = %x, store=%b", 
+			 //l1d_addr, l1d_opcode == MEM_SW);
+			 n_last_gnt = 1'b1;
+			 t_idx = l1d_addr[LG_L2_LINES+5:6];
+			 n_tag = l1d_addr[31:LG_L2_LINES+6];
+			 n_bank = l1d_addr[5:4];
+			 n_addr = {l1d_addr[31:6], 6'd0};
+			 n_saveaddr = {l1d_addr[31:6], 6'd0};
+			 n_store_data = l1_mem_req_store_data;
+			 n_opcode = l1d_opcode;
+			 n_l1d_req = 1'b0;			 
+			 if(l1d_opcode == MEM_SW)
+			   begin
+			      n_l1d_rsp_valid = 1'b1;
+			   end
+			 
+		      end
+		    else
+		      begin
+			 if(r_last_gnt)
+			   begin
+			      n_last_gnt = 1'b0;			 
+			      t_idx = l1i_addr[LG_L2_LINES+5:6];
+			      n_tag = l1i_addr[31:LG_L2_LINES+6];
+			      n_bank = l1i_addr[5:4];
+			      n_addr = {l1i_addr[31:6], 6'd0};
+			      n_saveaddr = {l1i_addr[31:6], 6'd0};
+			      n_opcode = MEM_LW;
+			      n_l1i_req = 1'b0;			 			      
+			   end
+			 else
+			   begin
+			      n_last_gnt = 1'b1;
+			      t_idx = l1d_addr[LG_L2_LINES+5:6];
+			      n_tag = l1d_addr[31:LG_L2_LINES+6];
+			      n_bank = l1d_addr[5:4];
+			      n_addr = {l1d_addr[31:6], 6'd0};
+			      n_saveaddr = {l1d_addr[31:6], 6'd0};
+			      n_store_data = l1_mem_req_store_data;
+			      n_opcode = l1d_opcode;
+			      n_l1d_req = 1'b0;			 			      
+			      if(l1d_opcode == MEM_SW)
+				begin
+				   n_l1d_rsp_valid = 1'b1;
+				end
+			   end
+		      end
 		    n_req_ack = 1'b1;
 		    n_state = WAIT_FOR_RAM;
-		    n_rsp_valid = (l1_mem_req_opcode == 4'd7);
 		    n_cache_accesses = r_cache_accesses + 64'd1;
 		    n_cache_hits = r_cache_hits + 64'd1;
 		 end
@@ -391,7 +475,7 @@ module l2(clk,
 	  WAIT_FOR_RAM:
 	    begin
 	       n_state = CHECK_VALID_AND_TAG;
-	    end
+	    end // case: WAIT_FOR_RAM
 	
 	  CHECK_VALID_AND_TAG:
 	    begin
@@ -406,8 +490,16 @@ module l2(clk,
 				      r_bank == 'd2 ? w_d2 :
 				      w_d3;
 			 n_state = IDLE;
-			 n_rsp_valid = 1'b1;
-			 //n_cache_hits = r_cache_hits + 64'd1;			 
+			 if(r_last_gnt == 1'b0)
+			   begin
+			      n_l1i_rsp_valid  = 1'b1;
+			   end
+			 else
+			   begin
+			      n_l1d_rsp_valid  = 1'b1;
+			   end
+			 //$display("cycle %d : ack'd for address %x, n_l1i_req = %b, n_l1d_req = %b, n_l1i_rsp_valid =%b, n_l1d_rsp_valid = %b", 
+			 //r_cycle, r_addr, n_l1i_req, n_l1d_req, n_l1i_rsp_valid,n_l1d_rsp_valid);			 
 		      end
 		    else if(r_opcode == 4'd7)
 		      begin

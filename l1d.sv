@@ -40,7 +40,6 @@ module l1d(clk,
 	   core_mem_rsp,
 	   core_mem_rsp_valid,
 	   //output to the memory system
-	   mem_req_ack,
 	   mem_req_valid, 
 	   mem_req_addr, 
 	   mem_req_store_data, 
@@ -86,8 +85,6 @@ module l1d(clk,
    output 	mem_rsp_t core_mem_rsp;
    output logic core_mem_rsp_valid;
 
-   input logic 	mem_req_ack;
-   
    output logic mem_req_valid;
    output logic [(`M_WIDTH-1):0] mem_req_addr;
    output logic [L1D_CL_LEN_BITS-1:0] mem_req_store_data;
@@ -685,6 +682,7 @@ endfunction
      end
 `endif
 
+   
  ram2r1w #(.WIDTH(N_TAG_BITS), .LG_DEPTH(`LG_L1D_NUM_SETS)) dc_tag
      (
       .clk(clk),
@@ -1443,7 +1441,7 @@ endfunction
 	       t_cache_idx = r_cache_idx + 'd1;
 	       //$display("flush line %x was %b", 
 	       //{r_tag_out,r_cache_idx,{`LG_L1D_CL_LEN{1'b0}}},
-	       //r_dirty_out);
+	       //	r_dirty_out);
 	       
 	       if(!r_dirty_out)
 		 begin
