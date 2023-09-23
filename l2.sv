@@ -1,3 +1,5 @@
+`include "machine.vh"
+
 module l2(clk,
 	  reset,
 
