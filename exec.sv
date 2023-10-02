@@ -55,7 +55,6 @@ module exec(clk,
 	    core_store_data_ptr_valid,
 	    mem_rsp_dst_ptr,
 	    mem_rsp_dst_valid,
-	    mem_rsp_rob_ptr,
 	    mem_rsp_load_data);
    input logic clk;
    input logic reset;
@@ -108,7 +107,6 @@ module exec(clk,
    input logic [`LG_PRF_ENTRIES-1:0] mem_rsp_dst_ptr;
    input logic 			     mem_rsp_dst_valid;
    input logic [31:0] 		     mem_rsp_load_data;
-   input logic [`LG_ROB_ENTRIES-1:0] mem_rsp_rob_ptr;
    
    
    localparam N_INT_SCHED_ENTRIES = 1<<`LG_INT_SCHED_ENTRIES;

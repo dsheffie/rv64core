@@ -1314,7 +1314,7 @@ module core(clk,
 	t_rob_tail.pdst  = 'd0;
 	t_rob_tail.old_pdst  = 'd0;
 	t_rob_tail.pc = t_alloc_uop.pc;
-	t_rob_tail.target_pc = 'd0;
+	t_rob_tail.target_pc = t_alloc_uop.pc + 32'd4;
 	
 	t_rob_tail.is_call = t_alloc_uop.op == JAL || t_alloc_uop.op == JALR;
 	t_rob_tail.is_ret = (t_alloc_uop.op == RET);
@@ -1334,7 +1334,7 @@ module core(clk,
 	t_rob_next_tail.pdst  = 'd0;
 	t_rob_next_tail.old_pdst  = 'd0;
 	t_rob_next_tail.pc = t_alloc_uop2.pc;
-	t_rob_next_tail.target_pc = 'd0;
+	t_rob_next_tail.target_pc = t_alloc_uop2.pc + 32'd4;
 
 	t_rob_next_tail.is_call = t_alloc_uop2.op == JAL || t_alloc_uop2.op == JALR;
 	t_rob_next_tail.is_ret = (t_alloc_uop2.op == RET);
@@ -1909,8 +1909,7 @@ module core(clk,
 	   .core_store_data_ptr(t_core_store_data_ptr),
 	   .mem_rsp_dst_ptr(core_mem_rsp.dst_ptr),
 	   .mem_rsp_dst_valid(core_mem_rsp.dst_valid),
-	   .mem_rsp_load_data(core_mem_rsp.data),
-	   .mem_rsp_rob_ptr(core_mem_rsp.rob_ptr)
+	   .mem_rsp_load_data(core_mem_rsp.data)
 	   );
 
 
