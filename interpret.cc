@@ -476,6 +476,8 @@ void execRiscv(state_t *s) {
 #endif
 }
 
+
+
 void handle_syscall(state_t *s, uint64_t tohost) {
   uint8_t *mem = s->mem;  
   if(tohost & 1) {
@@ -499,16 +501,15 @@ void handle_syscall(state_t *s, uint64_t tohost) {
       break;
     }
     case SYS_close: {
-      if(buf[1] > 2) {
-	buf[0] = close(buf[1]);
-      }
-      else {
-	buf[0] = 0;
-      }
+      buf[0] = close(buf[1]);
       break;
     }
     case SYS_read: {
       buf[0] = read(buf[1], reinterpret_cast<char*>(s->mem + buf[2]), buf[3]); 
+      break;
+    }
+    case SYS_lseek: {
+      buf[0] = lseek(buf[1], buf[2], buf[3]);
       break;
     }
     case SYS_fstat : {
@@ -527,7 +528,7 @@ void handle_syscall(state_t *s, uint64_t tohost) {
       host_stat->_st_ctime = 0;
       host_stat->st_blksize = native_stat.st_blksize;
       host_stat->st_blocks = native_stat.st_blocks;
-      buf[0] = rc;
+            buf[0] = rc;
       break;
     }
     case SYS_stat : {

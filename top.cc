@@ -121,7 +121,8 @@ void report_exec(int int_valid, int int_ready,
 		 int intq_full, int memq_full,
 		 int fpq_full,
 		 int blocked_by_store,
-		 int ready_int) {
+		 int ready_int,
+		 int ready_int2) {
   n_int_exec[0] += int_valid;
   n_int_exec[1] += int_ready;
   n_int2_exec[0] += int2_valid;
@@ -133,8 +134,10 @@ void report_exec(int int_valid, int int_ready,
   q_full[0] += intq_full;
   q_full[1] += memq_full;
   q_full[2] += fpq_full;
-  
-  int_sched_rdy_map[__builtin_popcount(ready_int)]++;
+
+  int total_ready = __builtin_popcount(ready_int) +
+    __builtin_popcount(ready_int2);
+  int_sched_rdy_map[total_ready]++;
 }
 
 

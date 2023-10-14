@@ -14,7 +14,8 @@ import "DPI-C" function void report_exec(input int int_valid,
 					 input int mq_full,
 					 input int fq_full,
 					 input int blocked_by_store,
-					 input int int_ready
+					 input int int_ready,
+					 input int int_ready2
 					 );
 `endif
 
@@ -1581,7 +1582,8 @@ module exec(clk,
 		    t_mem_uq_full ? 32'd1 : 32'd0,
 		    32'd0,
 		    t_blocked_by_store ? 32'd1 : 32'd0,
-		    {{(32-N_INT_SCHED_ENTRIES){1'b0}}, t_alu_entry_rdy}
+		    {{(32-N_INT_SCHED_ENTRIES){1'b0}}, t_alu_entry_rdy},
+		    {{(32-N_INT_SCHED_ENTRIES){1'b0}}, t_alu_entry_rdy2}
 		    );
      end
 `endif //  `ifdef VERILATOR
