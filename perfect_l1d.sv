@@ -155,7 +155,7 @@ endfunction
    logic 				  r_got_req2, r_last_wr2, n_last_wr2;
    logic 				  r_last_rd2, n_last_rd2;
    
-   logic 				  rr_got_req, rr_last_wr, rr_is_retry, rr_did_reload;
+   logic 				  rr_got_req, rr_last_wr, rr_is_retry;
 
    logic 				  r_lock_cache, n_lock_cache;
    
@@ -192,7 +192,6 @@ endfunction
 
    logic 				  t_got_rd_retry, t_port2_hit_cache;
       
-   logic 				  t_mark_invalid;
    logic 				  t_wr_array;
    logic 				  t_hit_cache;
    logic 				  t_rsp_dst_valid;
@@ -242,21 +241,13 @@ endfunction
    mem_req_t t_mem_tail, t_mem_head;
    logic 	mem_q_full, mem_q_empty, mem_q_almost_full;
    
-   typedef enum logic [3:0] {INITIALIZE,
-			     INIT_CACHE,
-			     ACTIVE,
-                             FLUSH_CACHE,
-                             FLUSH_CACHE_WAIT,
-                             FLUSH_CL,
-                             FLUSH_CL_WAIT,
-                             HANDLE_RELOAD
+   typedef enum logic [2:0] {INITIALIZE,
+			     ACTIVE
                              } state_t;
 
    
    state_t r_state, n_state;
    logic 	t_pop_mq;
-   logic 	n_reload_issue, r_reload_issue;
-   logic 	n_did_reload, r_did_reload;
    
    
    
@@ -552,9 +543,6 @@ endfunction
 	if(reset)
 	  begin
 
-	     r_reload_issue <= 1'b0;
-	     r_did_reload <= 1'b0;
-	     
 	     r_stall_store <= 1'b0;
 	     r_is_retry <= 1'b0;
 	     r_flush_complete <= 1'b0;
@@ -574,7 +562,6 @@ endfunction
 	     rr_got_req <= 1'b0;
 	     r_lock_cache <= 1'b0;
 	     rr_is_retry <= 1'b0;
-	     rr_did_reload <= 1'b0;
 	     
 	     rr_last_wr <= 1'b0;
 	     r_last_wr <= 1'b0;
@@ -597,8 +584,6 @@ endfunction
 	  end
 	else
 	  begin
-	     r_reload_issue <= n_reload_issue;
-	     r_did_reload <= n_did_reload;
 	     r_stall_store <= n_stall_store;
 	     r_is_retry <= n_is_retry;
 	     r_flush_complete <= n_flush_complete;
@@ -620,7 +605,6 @@ endfunction
 	     rr_got_req <= r_got_req;
 	     r_lock_cache <= n_lock_cache;
 	     rr_is_retry <= r_is_retry;
-	     rr_did_reload <= r_did_reload;
 	     
 	     rr_last_wr <= r_last_wr;
 	     r_last_wr <= n_last_wr;
@@ -867,11 +851,6 @@ endfunction
 	endcase // case r_req.op
      end
 
-   always_ff@(negedge clk)
-     begin
-
-     end
-
    
    logic [31:0] r_fwd_cnt;
    always_ff@(posedge clk)
@@ -935,7 +914,6 @@ endfunction
 	
 	n_inhibit_write = r_inhibit_write;
 	
-	t_mark_invalid = 1'b0;
 	n_is_retry = 1'b0;
 	t_reset_graduated = 1'b0;
 	t_force_clear_busy = 1'b0;
@@ -944,8 +922,6 @@ endfunction
 	
 	n_stall_store = 1'b0;
 	
-	n_reload_issue = r_reload_issue;
-	n_did_reload = 1'b0;
 	n_lock_cache = r_lock_cache;
 	
 	t_mh_block = r_got_req && r_last_wr && 
@@ -956,28 +932,13 @@ endfunction
 		     (r_cache_tag == core_mem_req.addr[`M_WIDTH-1:IDX_STOP]);
 
 
-	t_cm_block_stall = t_cm_block && !(r_did_reload||r_is_retry);//1'b0;
+	t_cm_block_stall = t_cm_block && !(r_is_retry);//1'b0;
 	
 	case(r_state)
 	  INITIALIZE:
 	    begin
-	       n_state = INIT_CACHE;
-	       t_cache_idx = 'd0;	       
-	    end
-	  INIT_CACHE:
-	    begin
-	       t_cache_idx = r_cache_idx + 'd1;
-	       if(r_cache_idx == (L1D_NUM_SETS-1))
-		 begin
-		    //$display("flush done at cycle %d", r_cycle);
-		    n_state = ACTIVE;
-		    n_flush_complete = 1'b1;
-		 end
-	       else
-		 begin
-		    t_mark_invalid = 1'b1;
-		    t_cache_idx = r_cache_idx + 'd1;		    
-		 end
+	       n_state = ACTIVE;
+	       n_flush_complete = 1'b1;
 	    end
 	  ACTIVE:
 	    begin
@@ -1017,11 +978,6 @@ endfunction
 		      end
 		    else
 		      begin
-			 //$stop();
-			 //$display("cycle %d port2 wtf for op %d, addr %x, data %x, hit cache %b, hit busy %b", 
-			 //r_cycle, r_req2.op, r_req2.addr, t_rsp_data2, 
-			 //t_port2_hit_cache, r_hit_busy_addr2);
-
 			 t_push_miss = 1'b1;
 			 if(t_port2_hit_cache)
 			   begin
@@ -1129,7 +1085,6 @@ endfunction
 		  !t_got_rd_retry &&
 		  !(r_last_wr2 && (r_cache_idx2 == core_mem_req.addr[IDX_STOP-1:IDX_START]) && !core_mem_req.is_store) && 
 		  !t_cm_block_stall &&
-		  /*(r_graduated[core_mem_req.rob_ptr] == 2'b00) && */
 		  (!r_rob_inflight[core_mem_req.rob_ptr])
 		  )
 	       begin
@@ -1141,11 +1096,6 @@ endfunction
 		  core_mem_req_ack = 1'b1;
 		  t_got_req2 = 1'b1;
 
-		  //if(core_mem_req.op == MEM_LW && core_mem_req.addr[1:0] != 'd0)
-		  //begin
-		  //$display("unaligned load!!!! from pc %x", core_mem_req.pc);
-		  //end
-		  
 `ifdef VERBOSE_L1D		       
 		  $display("accepting new op %d, pc %x, addr %x for rob ptr %d at cycle %d, mem_q_empty %b, uuid %d", 
 			   core_mem_req.op, core_mem_req.pc, core_mem_req.addr,
@@ -1159,37 +1109,16 @@ endfunction
 	       end // if (core_mem_req_valid &&...
 	       else if(r_flush_req && mem_q_empty && !(r_got_req && r_last_wr))
 		 begin
-		    n_state = FLUSH_CACHE;
+		    n_state = ACTIVE;
 		    t_cache_idx = 'd0;
 		    n_flush_req = 1'b0;
+		    n_flush_complete = 1'b1;
 		 end
 	       else if(r_flush_cl_req && mem_q_empty && !(r_got_req && r_last_wr))
 		 begin
-		    if(!mem_q_empty) $stop();
-		    if(r_got_req && r_last_wr) $stop();
-		    t_cache_idx = flush_cl_addr[IDX_STOP-1:IDX_START];
-		    //$display("flush addr %x, maps to cl %d at cycle", flush_cl_addr, t_cache_idx, r_cycle);
-		    n_flush_cl_req = 1'b0;
-		    n_state = FLUSH_CL;
+		    $stop();
 		 end
 	    end // case: ACTIVE
-	  HANDLE_RELOAD:
-	    begin
-	       t_cache_idx = r_req.addr[IDX_STOP-1:IDX_START];
-	       t_cache_tag = r_req.addr[`M_WIDTH-1:IDX_STOP];
-	       n_last_wr = n_req.is_store;
-	       t_got_req = 1'b1;
-	       //$display("firing got req at cycle %d, rob ptr %d from HANDLE_RELOAD for uuid %d", r_cycle, r_req.rob_ptr, r_req.uuid);
-	       t_addr = r_req.addr;
-	       //n_is_retry = 1'b1;
-	       n_did_reload = 1'b1;
-	       n_state = ACTIVE;
-	    end
-	  FLUSH_CACHE:
-	    begin
-	       n_state = ACTIVE;
-	       n_flush_complete = 1'b1;
-	    end // case: FLUSH_CACHE
 	  
 	  default:
 	    begin
