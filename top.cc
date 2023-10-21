@@ -112,6 +112,35 @@ void record_l1d(int req, int ack, int ack_st, int blocked, int stall_reason) {
   l1d_stall_reasons[stall_reason&15]++;
 }
 
+int read_word(int addr) {
+  uint32_t a = *reinterpret_cast<uint32_t*>(&addr);
+  int d = -1;
+  if((a & 3) == 0) {
+    d  = *reinterpret_cast<int*>(s->mem + a);
+  }
+  return d;
+}
+
+void write_byte(int addr, char data) {
+  uint32_t a = *reinterpret_cast<uint32_t*>(&addr);
+  uint8_t d = *reinterpret_cast<uint8_t*>(&data);
+  *reinterpret_cast<uint8_t*>(s->mem + a) = d;  
+}
+
+void write_half(int addr, short data) {
+  uint32_t a = *reinterpret_cast<uint32_t*>(&addr);
+  uint16_t d = *reinterpret_cast<uint16_t*>(&data);
+  *reinterpret_cast<uint16_t*>(s->mem + a) = d;  
+
+}
+
+void write_word(int addr, int data) {
+  uint32_t a = *reinterpret_cast<uint32_t*>(&addr);
+  uint32_t d = *reinterpret_cast<uint32_t*>(&data);
+  assert((a & 3) == 0);
+  *reinterpret_cast<uint32_t*>(s->mem + a) = d;
+}
+
 static std::map<int, uint64_t> int_sched_rdy_map;
 
 void report_exec(int int_valid, int int_ready,

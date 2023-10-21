@@ -328,8 +328,13 @@ module core_l1d_l1i(clk,
 
    logic 			  drain_ds_complete;
    logic [(1<<`LG_ROB_ENTRIES)-1:0] dead_rob_mask;
-   
-   l1d dcache (
+
+`ifdef PERFECT_L1D
+   perfect_l1d 
+`else
+     l1d
+`endif
+     dcache (
 	       .clk(clk),
 	       .reset(reset),
 	       .head_of_rob_ptr_valid(head_of_rob_ptr_valid),
