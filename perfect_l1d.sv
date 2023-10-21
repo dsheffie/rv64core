@@ -215,7 +215,6 @@ endfunction
 
    logic 				  r_must_forward, r_must_forward2;
       
-   logic 				  n_inhibit_write, r_inhibit_write;
 
    logic                                  t_incr_busy,t_force_clear_busy;
    logic 				  n_stall_store, r_stall_store;
@@ -577,7 +576,6 @@ endfunction
 	     r_cache_hits <= 'd0;
 	     r_cache_accesses <= 'd0;
 	     r_store_stalls <= 'd0;
-	     r_inhibit_write <= 1'b0;
 	     memq_empty <= 1'b1;
 	     r_must_forward <= 1'b0;
 	     r_must_forward2 <= 1'b0;
@@ -620,7 +618,6 @@ endfunction
 	     r_cache_hits <= n_cache_hits;
 	     r_cache_accesses <= n_cache_accesses;
 	     r_store_stalls <= n_store_stalls;
-	     r_inhibit_write <= n_inhibit_write;
 	     memq_empty <= mem_q_empty 
 			   && drain_ds_complete 
 			   && !core_mem_req_valid 
@@ -912,8 +909,6 @@ endfunction
 	n_flush_complete = 1'b0;
 	t_addr = 'd0;
 	
-	n_inhibit_write = r_inhibit_write;
-	
 	n_is_retry = 1'b0;
 	t_reset_graduated = 1'b0;
 	t_force_clear_busy = 1'b0;
@@ -1001,32 +996,7 @@ endfunction
 			      n_core_mem_rsp_valid = 1'b1;
 			   end // else: !if(r_req.is_store)
 		      end // if (r_valid_out && (r_tag_out == r_cache_tag))
-		  else
-		    begin
-		       
-`ifdef VERBOSE_L1D
-		       $display("at cycle %d : cache invalid miss for rob ptr %d, r_is_retry %b, addr %x, uuid %d, is store %b, r_cache_idx = %d, r_cache_tag = %d, valid %b",
-				r_cycle, r_req.rob_ptr, r_is_retry, r_req.addr, r_req.uuid, r_req.is_store, r_cache_idx, r_cache_tag, r_valid_out);
-`endif
-
-		       t_got_miss = 1'b1;
-		       n_inhibit_write = 1'b0;
-
-		       $display("r_hit_busy_addr=%b,r_is_retry=%b,r_lock_cache=%b", 
-				r_hit_busy_addr, r_is_retry,r_lock_cache);
-		       
-
-		       if(r_hit_busy_addr && r_is_retry || !r_hit_busy_addr || r_lock_cache)
-			 begin
-			    $stop();
-			 end
-		       
-		    end // else: !if(r_valid_out && r_dirty_out && (r_tag_out != r_cache_tag)...
-	       end // if (r_got_req)
-
-
-
-
+		 end // if (r_got_req)
 
 	       
 	     if(!mem_q_empty && !r_lock_cache)
@@ -1071,10 +1041,6 @@ endfunction
 			    n_is_retry = 1'b1;
 			    n_last_rd = 1'b1;
 			    t_got_rd_retry = 1'b1;
-			    
-			    //$display("firing load for %x at cycle %d for rob ptr %d", 
-			    //t_mem_head.addr, r_cycle, t_mem_head.rob_ptr);
-
 			 end
 		    end
 	       end

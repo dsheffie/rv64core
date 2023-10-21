@@ -114,11 +114,7 @@ void record_l1d(int req, int ack, int ack_st, int blocked, int stall_reason) {
 
 int read_word(int addr) {
   uint32_t a = *reinterpret_cast<uint32_t*>(&addr);
-  int d = -1;
-  if((a & 3) == 0) {
-    d  = *reinterpret_cast<int*>(s->mem + a);
-  }
-  return d;
+  return *reinterpret_cast<int*>(s->mem + a);
 }
 
 void write_byte(int addr, char data) {
