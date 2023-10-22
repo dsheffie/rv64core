@@ -111,37 +111,6 @@ module l1d(clk,
    localparam DWORD_STOP = DWORD_START + LG_DWORDS_PER_CL;
   
    localparam N_MQ_ENTRIES = (1<<`LG_MRQ_ENTRIES);
-
-         
-function logic [L1D_CL_LEN_BITS-1:0] merge_cl32(logic [L1D_CL_LEN_BITS-1:0] cl, logic [31:0] w32, logic[LG_WORDS_PER_CL-1:0] pos);
-   logic [L1D_CL_LEN_BITS-1:0] 		 cl_out;
-   case(pos)
-     2'd0:
-       cl_out = {cl[127:32], w32};
-     2'd1:
-       cl_out = {cl[127:64], w32, cl[31:0]};
-     2'd2:
-       cl_out = {cl[127:96], w32, cl[63:0]};
-     2'd3:
-       cl_out = {w32, cl[95:0]};
-   endcase // case (pos)
-   return cl_out;
-endfunction
-
-function logic [31:0] select_cl32(logic [L1D_CL_LEN_BITS-1:0] cl, logic[LG_WORDS_PER_CL-1:0] pos);
-   logic [31:0] 			 w32;
-   case(pos)
-     2'd0:
-       w32 = cl[31:0];
-     2'd1:
-       w32 = cl[63:32];
-     2'd2:
-       w32 = cl[95:64];
-     2'd3:
-       w32 = cl[127:96];
-   endcase // case (pos)
-   return w32;
-endfunction
    
    logic 				  r_got_req, r_last_wr, n_last_wr;
    logic 				  r_last_rd, n_last_rd;
@@ -186,8 +155,9 @@ endfunction
    
 
    logic [31:0] 			  t_array_out_b32[WORDS_PER_CL-1:0];
-   logic [31:0] 			  t_w32;
    logic [L1D_CL_LEN_BITS-1:0] 		  t_shift, t_shift_2;
+   logic [L1D_CL_LEN_BITS-1:0] 		  t_store_shift, t_store_mask;
+   
    
    logic 				  t_got_rd_retry, t_port2_hit_cache;
       
@@ -833,12 +803,17 @@ endfunction
 	    end
 	endcase
      end
-   
+
+   wire [31:0] w_store_mask = 
+	       r_req.op == MEM_SB ? 32'hff :
+	       r_req.op == MEM_SH ? 32'hffff :
+	       r_req.op == MEM_SW ? 32'hffffffff :
+	       32'd0;
+
    always_comb
      begin
 	t_data = r_got_req && r_must_forward ? r_array_wr_data : r_array_out;
 	
-	t_w32 = (select_cl32(t_data, r_req.addr[WORD_STOP-1:WORD_START]));
 	t_hit_cache = r_valid_out && (r_tag_out == r_cache_tag) && r_got_req && 
 		      (r_state == ACTIVE || r_state == INJECT_RELOAD);
 	t_array_data = 'd0;
@@ -848,6 +823,8 @@ endfunction
 	t_rsp_data = 'd0;
 
 	t_shift = t_data >> {r_req.addr[`LG_L1D_CL_LEN-1:0], 3'd0};
+	t_store_shift = {96'd0, r_req.data[31:0]} << {r_req.addr[`LG_L1D_CL_LEN-1:0], 3'd0};
+	t_store_mask = {96'd0, w_store_mask} << {r_req.addr[`LG_L1D_CL_LEN-1:0], 3'd0};
 	
 	case(r_req.op)
 	  MEM_LB:
@@ -877,50 +854,22 @@ endfunction
 	    end
 	  MEM_SB:
 	    begin
-	       case(r_req.addr[1:0])
-		 2'd0:
-		   begin
-		      t_array_data = merge_cl32(t_data, {t_w32[31:8], r_req.data[7:0]}, r_req.addr[WORD_STOP-1:WORD_START]);
-		   end
-		 2'd1:
-		   begin
-		      t_array_data = merge_cl32(t_data, {t_w32[31:16], r_req.data[7:0], t_w32[7:0]}, r_req.addr[WORD_STOP-1:WORD_START]);				     				     
-		   end
-		 2'd2:
-		   begin
-		      t_array_data = merge_cl32(t_data, {t_w32[31:24], r_req.data[7:0], t_w32[15:0]}, r_req.addr[WORD_STOP-1:WORD_START]);				     
-		   end
-		 2'd3:
-		   begin
-		      t_array_data = merge_cl32(t_data, {r_req.data[7:0], t_w32[23:0]}, r_req.addr[WORD_STOP-1:WORD_START]);
-		   end
-	       endcase // case (r_req.addr[1:0])
+	       t_array_data = (t_store_shift & t_store_mask) | ((~t_store_mask) & t_data);	       
 	       t_wr_array = t_hit_cache && (r_is_retry || r_did_reload);
 	    end
 	  MEM_SH:
 	    begin
-	       case(r_req.addr[1])
-		 1'b0:
-		   begin
-		      t_array_data = merge_cl32(t_data, {t_w32[31:16], bswap16(r_req.data[15:0])}, r_req.addr[WORD_STOP-1:WORD_START]);
-		   end
-		 1'b1:
-		   begin
-		      t_array_data = merge_cl32(t_data, {bswap16(r_req.data[15:0]), t_w32[15:0]}, r_req.addr[WORD_STOP-1:WORD_START]);				     
-		   end
-	       endcase
-	       //t_wr_array = t_hit_cache && t_can_release_store;
+	       t_array_data = (t_store_shift & t_store_mask) | ((~t_store_mask) & t_data);	       
 	       t_wr_array = t_hit_cache && (r_is_retry || r_did_reload);
 	    end
 	  MEM_SW:
 	    begin
-	       t_array_data = merge_cl32(t_data, bswap32(r_req.data[31:0]), r_req.addr[WORD_STOP-1:WORD_START]);
-	       //t_wr_array = t_hit_cache && t_can_release_store;
+	       t_array_data = (t_store_shift & t_store_mask) | ((~t_store_mask) & t_data);
 	       t_wr_array = t_hit_cache && (r_is_retry || r_did_reload);
 	    end
 	  MEM_SC:
 	    begin
-	       t_array_data = merge_cl32(t_data, bswap32(r_req.data[31:0]), r_req.addr[WORD_STOP-1:WORD_START]);
+	       t_array_data = (t_store_shift & t_store_mask) | ((~t_store_mask) & t_data);	       
 	       t_rsp_data = 64'd1;
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
 	       t_wr_array = t_hit_cache && (r_is_retry || r_did_reload);
@@ -930,7 +879,6 @@ endfunction
 	    end
 	endcase // case r_req.op
      end
-
 
 
    
