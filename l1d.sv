@@ -102,6 +102,8 @@ module l1d(clk,
    localparam LG_DWORDS_PER_CL = `LG_L1D_CL_LEN - 3;
    
    localparam WORDS_PER_CL = 1<<(LG_WORDS_PER_CL);
+   localparam BYTES_PER_CL = 1 << `LG_L1D_CL_LEN;
+   
    localparam N_TAG_BITS = `M_WIDTH - `LG_L1D_NUM_SETS - `LG_L1D_CL_LEN;
    localparam IDX_START = `LG_L1D_CL_LEN;
    localparam IDX_STOP  = `LG_L1D_CL_LEN + `LG_L1D_NUM_SETS;
@@ -157,6 +159,7 @@ module l1d(clk,
    logic [31:0] 			  t_array_out_b32[WORDS_PER_CL-1:0];
    logic [L1D_CL_LEN_BITS-1:0] 		  t_shift, t_shift_2;
    logic [L1D_CL_LEN_BITS-1:0] 		  t_store_shift, t_store_mask;
+
    
    
    logic 				  t_got_rd_retry, t_port2_hit_cache;
@@ -666,7 +669,7 @@ module l1d(clk,
       );
      
 
-   ram2r1w #(.WIDTH(L1D_CL_LEN_BITS), .LG_DEPTH(`LG_L1D_NUM_SETS)) dc_data
+   ram2r1w_byte_en #(.WIDTH(L1D_CL_LEN_BITS), .LG_DEPTH(`LG_L1D_NUM_SETS)) dc_data
      (
       .clk(clk),
       .rd_addr0(t_cache_idx),
@@ -674,6 +677,7 @@ module l1d(clk,
       .wr_addr(t_array_wr_addr),
       .wr_data(t_array_wr_data),
       .wr_en(t_array_wr_en),
+      .wr_byte_en(w_store_byte_en),
       .rd_data0(r_array_out),
       .rd_data1(r_array_out2)
       );
@@ -880,6 +884,15 @@ module l1d(clk,
 	endcase // case r_req.op
      end
 
+
+   wire [BYTES_PER_CL-1:0] w_store_byte_en;
+   generate
+       for(genvar i = 0; i < BYTES_PER_CL; i=i+1)
+	 begin
+	    assign w_store_byte_en[i] = mem_rsp_valid ? 1'b1 : (t_wr_array & t_store_mask[i*8]);
+	 end
+   endgenerate
+   
 
    
    logic [31:0] r_fwd_cnt;
