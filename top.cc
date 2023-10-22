@@ -133,7 +133,6 @@ void write_half(int addr, short data) {
 void write_word(int addr, int data) {
   uint32_t a = *reinterpret_cast<uint32_t*>(&addr);
   uint32_t d = *reinterpret_cast<uint32_t*>(&data);
-  assert((a & 3) == 0);
   *reinterpret_cast<uint32_t*>(s->mem + a) = d;
 }
 

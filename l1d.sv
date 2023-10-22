@@ -186,9 +186,9 @@ endfunction
    
 
    logic [31:0] 			  t_array_out_b32[WORDS_PER_CL-1:0];
-   logic [31:0] 			  t_w32, t_bswap_w32;
-   logic [31:0] 			  t_w32_2, t_bswap_w32_2;
-
+   logic [31:0] 			  t_w32;
+   logic [L1D_CL_LEN_BITS-1:0] 		  t_shift, t_shift_2;
+   
    logic 				  t_got_rd_retry, t_port2_hit_cache;
       
    logic 				  t_mark_invalid;
@@ -782,90 +782,50 @@ endfunction
    generate
       for(genvar i = 0; i < WORDS_PER_CL; i=i+1)
 	begin
-	   assign t_array_out_b32[i] = bswap32(t_data[((i+1)*32)-1:i*32]);
+	   assign t_array_out_b32[i] = t_data[((i+1)*32)-1:i*32];
 	end
    endgenerate
 
 
+
+ 
+   
+   
    always_comb
      begin
 	t_data2 = r_got_req2 && r_must_forward2 ? r_array_wr_data : r_array_out2;
-	t_w32_2 = (select_cl32(t_data2, r_req2.addr[WORD_STOP-1:WORD_START]));
-	t_bswap_w32_2 = bswap32(t_w32_2);
-
 	t_hit_cache2 = r_valid_out2 && (r_tag_out2 == r_cache_tag2) && r_got_req2 && 
 		      (r_state == ACTIVE);
 	t_rsp_dst_valid2 = 1'b0;
 	t_rsp_fp_dst_valid2 = 1'b0;
 	t_rsp_data2 = 'd0;
+
+	t_shift_2 = t_data2 >> {r_req2.addr[`LG_L1D_CL_LEN-1:0], 3'd0};
 	
 	case(r_req2.op)
 	  MEM_LB:
 	    begin
-	       case(r_req2.addr[1:0])
-		 2'd0:
-		   begin
-		      t_rsp_data2 = {{56{t_w32_2[7]}}, t_w32_2[7:0]};
-		   end
-		 2'd1:
-		   begin
-		      t_rsp_data2 = {{56{t_w32_2[15]}}, t_w32_2[15:8]};
-		   end
-		 2'd2:
-		   begin
-		      t_rsp_data2 = {{56{t_w32_2[23]}}, t_w32_2[23:16]};
-		   end
-		 2'd3:
-		   begin
-		      t_rsp_data2 = {{56{t_w32_2[31]}}, t_w32_2[31:24]};
-		   end
-	       endcase
+	       t_rsp_data2 = {{56{t_shift_2[7]}}, t_shift_2[7:0]};
 	       t_rsp_dst_valid2 = r_req2.dst_valid & t_hit_cache2;
 	    end
 	  MEM_LBU:
 	    begin
-	       case(r_req2.addr[1:0])
-		 2'd0:
-		   begin
-		      t_rsp_data2 = {56'd0, t_w32_2[7:0]};
-		   end
-		 2'd1:
-		   begin
-		      t_rsp_data2 = {56'd0, t_w32_2[15:8]};
-		   end
-		 2'd2:
-		   begin
-		      t_rsp_data2 = {56'd0, t_w32_2[23:16]};
-		   end
-		 2'd3:
-		   begin
-		      t_rsp_data2 = {56'd0, t_w32_2[31:24]};
-		   end
-	       endcase 
+	       t_rsp_data2 = {56'd0, t_shift_2[7:0]};	       
 	       t_rsp_dst_valid2 = r_req2.dst_valid & t_hit_cache2;	       
 	    end
 	  MEM_LH:
 	    begin
-	       case(r_req2.addr[1])
-		 1'b0:
-		   begin
-		      t_rsp_data2 = {{48{sext16(t_w32_2[15:0])}}, bswap16(t_w32_2[15:0])};
-		   end
-		 1'b1:
-		   begin
-		      t_rsp_data2 = {{48{sext16(t_w32_2[31:16])}}, bswap16(t_w32_2[31:16])};	     
-		   end
-	       endcase 
+	       t_rsp_data2 = {{48{t_shift_2[15]}}, t_shift_2[15:0]};	       
 	       t_rsp_dst_valid2 = r_req2.dst_valid & t_hit_cache2;
 	    end
 	  MEM_LHU:
 	    begin
-	       t_rsp_data2 = {48'd0, bswap16(r_req2.addr[1] ? t_w32_2[31:16] : t_w32_2[15:0])};
+	       t_rsp_data2 = {48'd0, t_shift_2[15:0]};
 	       t_rsp_dst_valid2 = r_req2.dst_valid & t_hit_cache2;	       
 	    end
 	  MEM_LW:
 	    begin
-	       t_rsp_data2 = {{32{t_bswap_w32_2[31]}}, t_bswap_w32_2};
+	       t_rsp_data2 = {{32{t_shift_2[31]}}, t_shift_2[31:0]};
 	       t_rsp_dst_valid2 = r_req2.dst_valid & t_hit_cache2;
 	    end
 	  default:
@@ -879,7 +839,6 @@ endfunction
 	t_data = r_got_req && r_must_forward ? r_array_wr_data : r_array_out;
 	
 	t_w32 = (select_cl32(t_data, r_req.addr[WORD_STOP-1:WORD_START]));
-	t_bswap_w32 = bswap32(t_w32);
 	t_hit_cache = r_valid_out && (r_tag_out == r_cache_tag) && r_got_req && 
 		      (r_state == ACTIVE || r_state == INJECT_RELOAD);
 	t_array_data = 'd0;
@@ -887,74 +846,33 @@ endfunction
 	t_rsp_dst_valid = 1'b0;
 	t_rsp_fp_dst_valid = 1'b0;
 	t_rsp_data = 'd0;
+
+	t_shift = t_data >> {r_req.addr[`LG_L1D_CL_LEN-1:0], 3'd0};
 	
 	case(r_req.op)
 	  MEM_LB:
 	    begin
-	       case(r_req.addr[1:0])
-		 2'd0:
-		   begin
-		      t_rsp_data = {{56{t_w32[7]}}, t_w32[7:0]};
-		   end
-		 2'd1:
-		   begin
-		      t_rsp_data = {{56{t_w32[15]}}, t_w32[15:8]};
-		   end
-		 2'd2:
-		   begin
-		      t_rsp_data = {{56{t_w32[23]}}, t_w32[23:16]};
-		   end
-		 2'd3:
-		   begin
-		      t_rsp_data = {{56{t_w32[31]}}, t_w32[31:24]};
-		   end
-	       endcase
+	       t_rsp_data = {{56{t_shift[7]}}, t_shift[7:0]};	       
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
 	    end
 	  MEM_LBU:
 	    begin
-	       case(r_req.addr[1:0])
-		 2'd0:
-		   begin
-		      t_rsp_data = {56'd0, t_w32[7:0]};
-		   end
-		 2'd1:
-		   begin
-		      t_rsp_data = {56'd0, t_w32[15:8]};
-		   end
-		 2'd2:
-		   begin
-		      t_rsp_data = {56'd0, t_w32[23:16]};
-		   end
-		 2'd3:
-		   begin
-		      t_rsp_data = {56'd0, t_w32[31:24]};
-		   end
-	       endcase // case (r_req.addr[1:0])
+	       t_rsp_data = {56'd0, t_shift[7:0]};	       	       
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;	       
 	    end
 	  MEM_LH:
 	    begin
-	       case(r_req.addr[1])
-		 1'b0:
-		   begin
-		      t_rsp_data = {{48{sext16(t_w32[15:0])}}, bswap16(t_w32[15:0])};
-		   end
-		 1'b1:
-		   begin
-		      t_rsp_data = {{48{sext16(t_w32[31:16])}}, bswap16(t_w32[31:16])};	     
-		   end
-	       endcase // case (r_req.addr[1])
+	       t_rsp_data = {{48{t_shift[15]}}, t_shift[15:0]};	       	       
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
 	    end
 	  MEM_LHU:
 	    begin
-	       t_rsp_data = {48'd0, bswap16(r_req.addr[1] ? t_w32[31:16] : t_w32[15:0])};
+	       t_rsp_data = {48'd0, t_shift[15:0]};	       
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;	       
 	    end
 	  MEM_LW:
 	    begin
-	       t_rsp_data = {{32{t_bswap_w32[31]}}, t_bswap_w32};
+	       t_rsp_data = {{32{t_shift[31]}}, t_shift[31:0]};	       
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
 	    end
 	  MEM_SB:
