@@ -501,7 +501,8 @@ module l1d(clk,
 
    always_ff@(posedge clk)
      begin
-	r_array_wr_data <= t_array_wr_data;
+	//r_array_wr_data <= t_array_wr_data;
+	r_array_wr_data <= t_array_data;
      end
   
    always_ff@(posedge clk)
@@ -630,7 +631,7 @@ module l1d(clk,
    always_comb
      begin
 	t_array_wr_addr = mem_rsp_valid ? r_mem_req_addr[IDX_STOP-1:IDX_START] : r_cache_idx;
-	t_array_wr_data = mem_rsp_valid ? mem_rsp_load_data : t_array_data;
+	t_array_wr_data = mem_rsp_valid ? mem_rsp_load_data : t_store_shift;
 	t_array_wr_en = mem_rsp_valid || t_wr_array;
      end
 
@@ -669,7 +670,7 @@ module l1d(clk,
       );
      
 
-   ram2r1w_byte_en #(.WIDTH(L1D_CL_LEN_BITS), .LG_DEPTH(`LG_L1D_NUM_SETS)) dc_data
+   ram2r1w_l1d_data #(.LG_DEPTH(`LG_L1D_NUM_SETS)) dc_data
      (
       .clk(clk),
       .rd_addr0(t_cache_idx),
@@ -869,6 +870,7 @@ module l1d(clk,
 	  MEM_SW:
 	    begin
 	       t_array_data = (t_store_shift & t_store_mask) | ((~t_store_mask) & t_data);
+	       //t_array_data = t_store_shift;
 	       t_wr_array = t_hit_cache && (r_is_retry || r_did_reload);
 	    end
 	  MEM_SC:
@@ -893,7 +895,6 @@ module l1d(clk,
 	 end
    endgenerate
    
-
    
    logic [31:0] r_fwd_cnt;
    always_ff@(posedge clk)

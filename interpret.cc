@@ -486,6 +486,7 @@ void handle_syscall(state_t *s, uint64_t tohost) {
     return;
   }
   uint64_t *buf = reinterpret_cast<uint64_t*>(mem + tohost);
+  //std::cout << "syscall id " << buf[0] << "\n";
   switch(buf[0])
     {
     case SYS_write: /* int write(int file, char *ptr, int len) */
@@ -501,7 +502,12 @@ void handle_syscall(state_t *s, uint64_t tohost) {
       break;
     }
     case SYS_close: {
-      buf[0] = close(buf[1]);
+      if(buf[1] > 2) {
+	buf[0] = close(buf[1]);
+      }
+      else {
+	buf[0] = 0;
+      }
       break;
     }
     case SYS_read: {

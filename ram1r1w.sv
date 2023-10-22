@@ -24,10 +24,12 @@ module ram1r1w(clk, rd_addr, wr_addr, wr_data, wr_en, rd_data);
 endmodule // ram1r1w
 
 
-module ram1r1w_byte_en(clk, rd_addr, wr_addr, wr_data, wr_en, wr_byte_en, rd_data);
+module ram1r1w_l1d_data(clk, rd_addr, wr_addr, wr_data, wr_en, wr_byte_en, rd_data);
    input logic clk;
-   parameter WIDTH = 1;
+
    parameter LG_DEPTH = 1;
+   
+   localparam WIDTH = 128;
    localparam NUM_BYTES = WIDTH/8;
    
    input logic [LG_DEPTH-1:0] rd_addr;
@@ -46,6 +48,7 @@ module ram1r1w_byte_en(clk, rd_addr, wr_addr, wr_data, wr_en, wr_byte_en, rd_dat
 	rd_data <= r_ram[rd_addr];
 	if(wr_en)
 	  begin
+	     //$display("mask %b", wr_byte_en);
 	     if(wr_byte_en[0])
 	       begin
 		  r_ram[wr_addr][0] <= wr_data[7:0];
@@ -64,21 +67,20 @@ module ram1r1w_byte_en(clk, rd_addr, wr_addr, wr_data, wr_en, wr_byte_en, rd_dat
 	       end
 	     if(wr_byte_en[4])
 	       begin
-		  r_ram[wr_addr][4] <= wr_data[(5*8)-1:4*8];
+		  r_ram[wr_addr][4] <= wr_data[39:32];
 	       end
 	     if(wr_byte_en[5])
 	       begin
-		  r_ram[wr_addr][5] <= wr_data[(6*8)-1:5*8];
+		  r_ram[wr_addr][5] <= wr_data[47:40];
 	       end
 	     if(wr_byte_en[6])
 	       begin
-		  r_ram[wr_addr][6] <= wr_data[(7*8)-1:6*8];
+		  r_ram[wr_addr][6] <= wr_data[55:48];
 	       end
 	     if(wr_byte_en[7])
 	       begin
-		  r_ram[wr_addr][7] <= wr_data[(8*8)-1:7*8];
+		  r_ram[wr_addr][7] <= wr_data[63:56];
 	       end
-
 	     if(wr_byte_en[8])
 	       begin
 		  r_ram[wr_addr][8] <= wr_data[(9*8)-1:8*8];

@@ -2032,10 +2032,13 @@ module exec(clk,
      end // always_ff@ (posedge clk)
 
    
-   //$stop();
-   //end
-   wire w_bad_16b_addr = w_agu32[0];
-   wire w_bad_32b_addr = w_agu32[1:0] != 2'd0;
+   //cases were address wraps the cacheline
+   
+   wire w_bad_16b_addr = &w_agu32[3:0];
+   wire w_bad_32b_addr = (&w_agu32[3:2]) & (|w_agu32[1:0]);
+
+   //wire w_bad_16b_addr = w_agu32[0];
+   //wire w_bad_32b_addr = w_agu32[1:0] != 2'd0;   
    
    always_comb
      begin
