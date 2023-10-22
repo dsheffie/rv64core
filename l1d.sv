@@ -1016,13 +1016,13 @@ module l1d(clk,
 		    n_core_mem_rsp.dst_ptr = r_req2.dst_ptr;
 		    //if(r_req2.op == MEM_NOP)
 		    //begin
-		    //$display("mem nop! - bad %b", r_req2.bad_addr);
+		    //$display("mem nop! - bad %b", r_req2.spans_cacheline);
 		    //end
 		    
 		    if(drain_ds_complete || r_req2.op == MEM_NOP)
 		      begin
 			 n_core_mem_rsp.dst_valid = r_req2.dst_valid;
-			 n_core_mem_rsp.bad_addr = r_req2.bad_addr;
+			 n_core_mem_rsp.bad_addr = r_req2.spans_cacheline;
 			 n_core_mem_rsp_valid = 1'b1;
 		      end
 		    else if(r_req2.is_store)
@@ -1037,7 +1037,7 @@ module l1d(clk,
 			      n_cache_hits = r_cache_hits + 'd1;
 			   end
 			 n_core_mem_rsp_valid = 1'b1;
-			 n_core_mem_rsp.bad_addr = r_req2.bad_addr;
+			 n_core_mem_rsp.bad_addr = r_req2.spans_cacheline;
 		      end // if (r_req2.is_store)
 		    else if(t_port2_hit_cache && !r_hit_busy_addr2)
 		      begin
@@ -1048,7 +1048,7 @@ module l1d(clk,
                          n_core_mem_rsp.dst_valid = t_rsp_dst_valid2;
                          n_cache_hits = r_cache_hits + 'd1;
                          n_core_mem_rsp_valid = 1'b1;
-			 n_core_mem_rsp.bad_addr = r_req2.bad_addr;
+			 n_core_mem_rsp.bad_addr = r_req2.spans_cacheline;
 		      end
 		    else
 		      begin
@@ -1074,7 +1074,7 @@ module l1d(clk,
 			      n_core_mem_rsp.data = t_rsp_data[31:0];
 			      n_core_mem_rsp.dst_valid = t_rsp_dst_valid;
 			      n_core_mem_rsp_valid = 1'b1;
-			      n_core_mem_rsp.bad_addr = r_req.bad_addr;
+			      n_core_mem_rsp.bad_addr = r_req.spans_cacheline;
 			   end // else: !if(r_req.is_store)
 		      end // if (r_valid_out && (r_tag_out == r_cache_tag))
 		    else if(r_valid_out && r_dirty_out && (r_tag_out != r_cache_tag) )
