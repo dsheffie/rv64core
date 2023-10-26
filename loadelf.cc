@@ -164,8 +164,8 @@ void load_elf(const char* fn, state_t *ms) {
   WRITE_WORD(0x1008, 0xf1402573); //2
   WRITE_WORD(0x100c, 0x0182a283); //3
   WRITE_WORD(0x1010, 0x00028067); //4
-  WRITE_WORD(0x1014, 0x80000000);
-  WRITE_WORD(0x1018, 0x80000000);
+  WRITE_WORD(0x1014, ms->pc);
+  WRITE_WORD(0x1018, ms->pc);
 
   ms->pc = 0x1000;
 }
