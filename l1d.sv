@@ -234,7 +234,6 @@ module l1d(clk,
    
    state_t r_state, n_state;
    logic 	t_pop_mq;
-   logic 	n_reload_issue, r_reload_issue;
    logic 	n_did_reload, r_did_reload;
    
    
@@ -509,10 +508,7 @@ module l1d(clk,
      begin
 	if(reset)
 	  begin
-
-	     r_reload_issue <= 1'b0;
 	     r_did_reload <= 1'b0;
-	     
 	     r_stall_store <= 1'b0;
 	     r_is_retry <= 1'b0;
 	     r_flush_complete <= 1'b0;
@@ -557,7 +553,6 @@ module l1d(clk,
 	  end
 	else
 	  begin
-	     r_reload_issue <= n_reload_issue;
 	     r_did_reload <= n_did_reload;
 	     r_stall_store <= n_stall_store;
 	     r_is_retry <= n_is_retry;
@@ -972,7 +967,6 @@ module l1d(clk,
 	n_stall_store = 1'b0;
 	n_q_priority = !r_q_priority;
 	
-	n_reload_issue = r_reload_issue;
 	n_did_reload = 1'b0;
 	n_lock_cache = r_lock_cache;
 	
@@ -1079,13 +1073,10 @@ module l1d(clk,
 		      end // if (r_valid_out && (r_tag_out == r_cache_tag))
 		    else if(r_valid_out && r_dirty_out && (r_tag_out != r_cache_tag) )
 		      begin
-			 
-			 n_reload_issue = 1'b1; //r_is_retry;			 			 
 			 t_got_miss = 1'b1;
 			 n_inhibit_write = 1'b1;
 			 if(r_hit_busy_addr && r_is_retry || !r_hit_busy_addr)
 			   begin
-			      n_reload_issue = 1'b1;
 			      n_mem_req_addr = {r_tag_out,r_cache_idx,{`LG_L1D_CL_LEN{1'b0}}};
 			      n_mem_req_opcode = MEM_SW;
 			      n_mem_req_store_data = t_data;
@@ -1122,9 +1113,6 @@ module l1d(clk,
 
 		       if(r_hit_busy_addr && r_is_retry || !r_hit_busy_addr || r_lock_cache)
 			 begin
-			    n_reload_issue = 1'b1; 
-
-
 			    t_miss_idx = r_cache_idx;
 			    t_miss_addr = r_req.addr;		       
 
@@ -1272,9 +1260,8 @@ module l1d(clk,
 	       //$display("waiting reload for addr %x at cycle %d", r_req.addr, r_cycle);
 	       	if(mem_rsp_valid)
 		  begin
-		     n_state = r_reload_issue ? HANDLE_RELOAD : ACTIVE;
+		     n_state = HANDLE_RELOAD;
 		     n_inhibit_write = 1'b0;
-		     n_reload_issue = 1'b0;
 		  end
 	    end
 	  HANDLE_RELOAD:
@@ -1284,7 +1271,7 @@ module l1d(clk,
 	       n_last_wr = n_req.is_store;
 	       t_got_req = 1'b1;
 	       //$display("firing got req at cycle %d, rob ptr %d from HANDLE_RELOAD for uuid %d", r_cycle, r_req.rob_ptr, r_req.uuid);
-	       t_addr = r_req.addr;
+	       t_addr  = r_req.addr;
 	       //n_is_retry = 1'b1;
 	       n_did_reload = 1'b1;
 	       n_state = ACTIVE;
