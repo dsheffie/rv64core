@@ -125,7 +125,8 @@ module l1d(clk,
    
    logic [`LG_MRQ_ENTRIES:0] 		  r_n_inflight;   
 
-
+   
+   
    
    //1st read port
    logic [`LG_L1D_NUM_SETS-1:0] 	  t_cache_idx, r_cache_idx, rr_cache_idx;
@@ -150,7 +151,7 @@ module l1d(clk,
 
    logic 				  t_array_wr_en;
 		  
-
+   logic 				  t_ack_ld_early, r_ack_ld_early;
    logic 				  r_flush_req, n_flush_req;
    logic 				  r_flush_cl_req, n_flush_cl_req;
    logic 				  r_flush_complete, n_flush_complete;
@@ -168,12 +169,10 @@ module l1d(clk,
    logic 				  t_wr_array;
    logic 				  t_hit_cache;
    logic 				  t_rsp_dst_valid;
-   logic 				  t_rsp_fp_dst_valid;
    logic [63:0] 			  t_rsp_data;
    
    logic 				  t_hit_cache2;
    logic 				  t_rsp_dst_valid2;
-   logic 				  t_rsp_fp_dst_valid2;
    logic [63:0] 			  t_rsp_data2;
 
 
@@ -393,7 +392,7 @@ module l1d(clk,
 		  
 		  r_rob_inflight[r_req2.rob_ptr] <= 1'b1;
 	       end
-	     if(r_got_req && r_valid_out && (r_tag_out == r_cache_tag))
+	     if(r_got_req && r_valid_out && (r_tag_out == r_cache_tag) || t_ack_ld_early)
 	       begin
 		  //$display("rob entry %d leaves at cycle %d", r_req.rob_ptr, r_cycle);
 		  if(r_rob_inflight[r_req.rob_ptr] == 1'b0) 
@@ -479,23 +478,7 @@ module l1d(clk,
      end
 
 
-   
-   
-`ifdef VERBOSE_L1D
-   always_ff@(negedge clk)
-   begin
-      if(t_push_miss)
-   	begin
-	   $display("pushing uuid %d rob ptr %d at cycle %d", 
-		    r_req2.uuid, r_req2.rob_ptr, r_cycle);  
-	end
-      if(t_pop_mq)
-	begin
-	   $display("popping uuid %d rob ptr %d at cycle %d", 
-		     t_mem_head.uuid, t_mem_head.rob_ptr, r_cycle);
-	end
-   end
-`endif
+
 
 
    always_ff@(posedge clk)
@@ -508,6 +491,7 @@ module l1d(clk,
      begin
 	if(reset)
 	  begin
+	     r_ack_ld_early <= 1'b0;
 	     r_did_reload <= 1'b0;
 	     r_stall_store <= 1'b0;
 	     r_is_retry <= 1'b0;
@@ -553,6 +537,7 @@ module l1d(clk,
 	  end
 	else
 	  begin
+	     r_ack_ld_early <= t_ack_ld_early;
 	     r_did_reload <= n_did_reload;
 	     r_stall_store <= n_stall_store;
 	     r_is_retry <= n_is_retry;
@@ -635,8 +620,8 @@ module l1d(clk,
      begin
    	if(t_wr_array)
    	  begin
-   	     $display("cycle %d : WRITING set %d WITH data %x, addr %x, op %d ptr %d, retry %b, uuid %d", 
-   		      r_cycle, r_cache_idx, t_array_data, r_req.addr, r_req.op, r_req.rob_ptr, r_is_retry, r_req.uuid);
+   	     $display("cycle %d : WRITING set %d WITH data %x, addr %x, op %d ptr %d, retry %b", 
+   		      r_cycle, r_cache_idx, t_array_data, r_req.addr, r_req.op, r_req.rob_ptr, r_is_retry);
    	  end	
      end // always_ff@ (negedge clk)
    
@@ -767,7 +752,6 @@ module l1d(clk,
 	t_hit_cache2 = r_valid_out2 && (r_tag_out2 == r_cache_tag2) && r_got_req2 && 
 		      (r_state == ACTIVE);
 	t_rsp_dst_valid2 = 1'b0;
-	t_rsp_fp_dst_valid2 = 1'b0;
 	t_rsp_data2 = 'd0;
 
 	t_shift_2 = t_data2 >> {r_req2.addr[`LG_L1D_CL_LEN-1:0], 3'd0};
@@ -812,14 +796,15 @@ module l1d(clk,
 
    always_comb
      begin
-	t_data = r_got_req && r_must_forward ? r_array_wr_data : r_array_out;
+	t_data = mem_rsp_valid ? mem_rsp_load_data : 
+		 (r_got_req && r_must_forward) ? r_array_wr_data : 
+		 r_array_out;
 	
 	t_hit_cache = r_valid_out && (r_tag_out == r_cache_tag) && r_got_req && 
 		      (r_state == ACTIVE || r_state == INJECT_RELOAD);
 	t_array_data = 'd0;
 	t_wr_array = 1'b0;
 	t_rsp_dst_valid = 1'b0;
-	t_rsp_fp_dst_valid = 1'b0;
 	t_rsp_data = 'd0;
 
 	t_shift = t_data >> {r_req.addr[`LG_L1D_CL_LEN-1:0], 3'd0};
@@ -895,13 +880,11 @@ module l1d(clk,
    always_ff@(posedge clk)
      begin
 	r_fwd_cnt <= reset ? 'd0 : (r_got_req && r_must_forward ? r_fwd_cnt + 'd1 : r_fwd_cnt);
-	//if(r_flush_req)
-	//$display("at cycle %d, state = %d, mem_q_empty= %b, drain_ds_complete %b",
-	//r_cycle, r_state, mem_q_empty, drain_ds_complete);
      end
 
    always_comb
      begin
+	t_ack_ld_early = 1'b0;
 	t_got_rd_retry = 1'b0;
 	t_port2_hit_cache = r_valid_out2 && (r_tag_out2 == r_cache_tag2);
 	
@@ -1036,7 +1019,7 @@ module l1d(clk,
 		    else if(t_port2_hit_cache && !r_hit_busy_addr2)
 		      begin
 `ifdef VERBOSE_L1D
-			 $display("cycle %d port2 hit for uuid %d, addr %x, data %x", r_cycle, r_req2.uuid, r_req2.addr, t_rsp_data2);
+			 $display("cycle %d port2 hit for addr %x, data %x", r_cycle, r_req2.addr, t_rsp_data2);
 `endif
 			 n_core_mem_rsp.data = t_rsp_data2[31:0];
                          n_core_mem_rsp.dst_valid = t_rsp_dst_valid2;
@@ -1069,6 +1052,14 @@ module l1d(clk,
 			      n_core_mem_rsp.dst_valid = t_rsp_dst_valid;
 			      n_core_mem_rsp_valid = 1'b1;
 			      n_core_mem_rsp.bad_addr = r_req.spans_cacheline;
+
+			      if(r_did_reload)
+				begin
+				   $display("late ack at cycle %d for load with rob ptr %d, data %x, dst valid %b", 
+					    r_cycle, r_req.rob_ptr, n_core_mem_rsp.data , n_core_mem_rsp.dst_valid );
+				end
+
+			      
 			   end // else: !if(r_req.is_store)
 		      end // if (r_valid_out && (r_tag_out == r_cache_tag))
 		    else if(r_valid_out && r_dirty_out && (r_tag_out != r_cache_tag) )
@@ -1104,8 +1095,8 @@ module l1d(clk,
 		    begin
 		       
 `ifdef VERBOSE_L1D
-		       $display("at cycle %d : cache invalid miss for rob ptr %d, r_is_retry %b, addr %x, uuid %d, is store %b, r_cache_idx = %d, r_cache_tag = %d, valid %b",
-				r_cycle, r_req.rob_ptr, r_is_retry, r_req.addr, r_req.uuid, r_req.is_store, r_cache_idx, r_cache_tag, r_valid_out);
+		       $display("at cycle %d : cache invalid miss for rob ptr %d, r_is_retry %b, addr %x, is store %b, r_cache_idx = %d, r_cache_tag = %d, valid %b",
+				r_cycle, r_req.rob_ptr, r_is_retry, r_req.addr, r_req.is_store, r_cache_idx, r_cache_tag, r_valid_out);
 `endif
 
 		       t_got_miss = 1'b1;
@@ -1156,8 +1147,8 @@ module l1d(clk,
 			    if(r_graduated[t_mem_head.rob_ptr] == 2'b10 && (core_store_data_valid ? (t_mem_head.rob_ptr == core_store_data.rob_ptr) : 1'b0) )
 			      begin
 `ifdef VERBOSE_L1D
-				 $display("firing store for %x with data %x at cycle %d for rob ptr %d, uuid %d", 
-					  t_mem_head.addr, t_mem_head.data, r_cycle, t_mem_head.rob_ptr, t_mem_head.uuid);
+				 $display("firing store for %x with data %x at cycle %d for rob ptr %d", 
+					  t_mem_head.addr, t_mem_head.data, r_cycle, t_mem_head.rob_ptr);
 `endif
 				 t_pop_mq = 1'b1;
 				 core_store_data_ack = 1'b1;
@@ -1193,8 +1184,8 @@ module l1d(clk,
 			    t_got_rd_retry = 1'b1;
 			    
 `ifdef VERBOSE_L1D			    
-			    $display("firing load for %x at cycle %d for rob ptr %d, uuid %d", 
-				     t_mem_head.addr, r_cycle, t_mem_head.rob_ptr, t_mem_head.uuid);
+			    $display("firing load for %x at cycle %d for rob ptr %d, state = %d", 
+				     t_mem_head.addr, r_cycle, t_mem_head.rob_ptr, r_state);
 `endif
 			 end
 		    end
@@ -1219,9 +1210,9 @@ module l1d(clk,
 
 		  
 `ifdef VERBOSE_L1D		       
-		  $display("accepting new op %d, pc %x, addr %x for rob ptr %d at cycle %d, mem_q_empty %b, uuid %d", 
-			   core_mem_req.op, core_mem_req.pc, core_mem_req.addr,
-			   core_mem_req.rob_ptr, r_cycle, mem_q_empty, core_mem_req.uuid);
+		  $display("accepting new op %d, addr %x for rob ptr %d at cycle %d, mem_q_empty %b", 
+			   core_mem_req.op, core_mem_req.addr,
+			   core_mem_req.rob_ptr, r_cycle, mem_q_empty);
 `endif
 		  
 		  n_last_wr2 = core_mem_req.is_store;
@@ -1257,22 +1248,33 @@ module l1d(clk,
 	    end
 	  INJECT_RELOAD:
 	    begin
-	       //$display("waiting reload for addr %x at cycle %d", r_req.addr, r_cycle);
-	       	if(mem_rsp_valid)
-		  begin
-		     n_state = HANDLE_RELOAD;
-		     n_inhibit_write = 1'b0;
-		  end
+	       if(mem_rsp_valid)
+		 begin
+		    n_state = HANDLE_RELOAD;
+		    n_inhibit_write = 1'b0;
+		    if(!(r_req.is_store || r_lock_cache))
+		      begin
+			 t_ack_ld_early = 1'b1;
+			 n_core_mem_rsp.rob_ptr = r_req.rob_ptr;
+			 n_core_mem_rsp.dst_ptr = r_req.dst_ptr;			 
+			 n_core_mem_rsp.data = t_rsp_data[31:0];
+			 
+			 n_core_mem_rsp.bad_addr = r_req.spans_cacheline;
+			 n_core_mem_rsp_valid = 1'b1;
+			 n_core_mem_rsp.dst_valid = r_req.dst_valid & n_core_mem_rsp_valid;
+			 //
+			 $display("early ack at cycle %d for load with rob ptr %d, data %x, dst valid %b, addr %x, r_lock_cache = %b",
+				  r_cycle, r_req.rob_ptr, n_core_mem_rsp.data , n_core_mem_rsp.dst_valid, r_req.addr, r_lock_cache );
+		      end
+		 end
 	    end
 	  HANDLE_RELOAD:
 	    begin
 	       t_cache_idx = r_req.addr[IDX_STOP-1:IDX_START];
 	       t_cache_tag = r_req.addr[`M_WIDTH-1:IDX_STOP];
-	       n_last_wr = n_req.is_store;
-	       t_got_req = 1'b1;
-	       //$display("firing got req at cycle %d, rob ptr %d from HANDLE_RELOAD for uuid %d", r_cycle, r_req.rob_ptr, r_req.uuid);
+	       n_last_wr = r_req.is_store;
+	       t_got_req = r_req.is_store | (r_ack_ld_early == 1'b0);
 	       t_addr  = r_req.addr;
-	       //n_is_retry = 1'b1;
 	       n_did_reload = 1'b1;
 	       n_state = ACTIVE;
 	    end
