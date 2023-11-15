@@ -541,6 +541,13 @@ void handle_syscall(state_t *s, uint64_t tohost) {
       buf[0] = 0;
       break;
     }
+    case SYS_gettimeofday: {
+      static_assert(sizeof(struct timeval)==16);
+      struct timeval *tp = reinterpret_cast<struct timeval*>(s->mem + buf[1]);
+      struct timezone *tzp = reinterpret_cast<struct timezone*>(s->mem + buf[2]);
+      buf[0] = gettimeofday(tp, tzp);
+      break;
+    }
     default:
       std::cout << "syscall " << buf[0] << " unsupported\n";
       exit(-1);

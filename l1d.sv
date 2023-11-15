@@ -1263,8 +1263,8 @@ module l1d(clk,
 			 n_core_mem_rsp_valid = 1'b1;
 			 n_core_mem_rsp.dst_valid = r_req.dst_valid & n_core_mem_rsp_valid;
 			 //
-			 $display("early ack at cycle %d for load with rob ptr %d, data %x, dst valid %b, addr %x, r_lock_cache = %b",
-				  r_cycle, r_req.rob_ptr, n_core_mem_rsp.data , n_core_mem_rsp.dst_valid, r_req.addr, r_lock_cache );
+			 //$display("early ack at cycle %d for load with rob ptr %d, data %x, dst valid %b, addr %x, r_lock_cache = %b",
+			 //r_cycle, r_req.rob_ptr, n_core_mem_rsp.data , n_core_mem_rsp.dst_valid, r_req.addr, r_lock_cache );
 		      end
 		 end
 	    end
