@@ -14,6 +14,10 @@
 #include <map>
 #include <stack>
 
+#ifdef USE_SDL
+#include <SDL2/SDL.h>
+#endif
+
 #include "interpret.hh"
 #include "disassemble.hh"
 #include "helper.hh"
@@ -546,6 +550,18 @@ void handle_syscall(state_t *s, uint64_t tohost) {
       struct timeval *tp = reinterpret_cast<struct timeval*>(s->mem + buf[1]);
       struct timezone *tzp = reinterpret_cast<struct timezone*>(s->mem + buf[2]);
       buf[0] = gettimeofday(tp, tzp);
+      break;
+    }
+    case 0x1337: {
+#ifdef USE_SDL
+      printf("draw frame syscall\n");
+      SDL_LockSurface(globals::sdlscr);
+      uint8_t *px = reinterpret_cast<uint8_t*>(globals::sdlscr->pixels);
+      memcpy(px, (s->mem + buf[1]), sizeof(uint32_t)*FB_WIDTH*FB_HEIGHT);
+      SDL_UnlockSurface(globals::sdlscr);
+      SDL_UpdateWindowSurface(globals::sdlwin);
+      SDL_PumpEvents();
+#endif
       break;
     }
     default:
