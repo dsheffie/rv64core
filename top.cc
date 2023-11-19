@@ -1,5 +1,9 @@
 #include "top.hh"
 
+#ifdef USE_SDL
+#include <SDL2/SDL.h>
+#endif
+
 #define BRANCH_DEBUG 1
 #define CACHE_STATS 1
 
@@ -11,6 +15,9 @@ std::map<std::string, uint32_t> globals::symtab;
 
 char **globals::sysArgv = nullptr;
 int globals::sysArgc = 0;
+
+SDL_Window *globals::sdlwin = nullptr;
+SDL_Surface *globals::sdlscr = nullptr;
 
 static uint64_t cycle = 0;
 static uint64_t fetch_slots = 0;
@@ -363,7 +370,7 @@ int main(int argc, char **argv) {
   std::string log_name = "log.txt";
   std::string pushout_name = "pushout.txt";
   std::string branch_name = "branch_info.txt";
-  
+  bool use_fb = false;
   uint64_t heartbeat = 1UL<<36, start_trace_at = ~0UL;
   uint64_t max_cycle = 0, max_icnt = 0, mem_lat = 2;
   uint64_t last_store_addr = 0, last_load_addr = 0, last_addr = 0;
@@ -390,6 +397,7 @@ int main(int argc, char **argv) {
       ("maxicnt", po::value<uint64_t>(&max_icnt)->default_value(1UL<<50), "maximum icnt")
       ("trace,t", po::value<bool>(&trace_retirement)->default_value(false), "trace retired instruction stream")
       ("starttrace,s", po::value<uint64_t>(&start_trace_at)->default_value(~0UL), "start tracing retired instructions")
+      ("fb", po::value<bool>(&use_fb)->default_value(false), "use an SDL framebuffer")
       ; 
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);
@@ -439,6 +447,20 @@ int main(int argc, char **argv) {
   uint64_t n_branches = 0, n_mispredicts = 0, n_checks = 0, n_flush_cycles = 0;
   bool got_mem_req = false, got_mem_rsp = false, got_monitor = false, incorrect = false;
 
+#ifdef USE_SDL
+  if(use_fb) {
+    assert(SDL_Init(SDL_INIT_VIDEO) == 0);
+    globals::sdlwin = SDL_CreateWindow("FRAMEBUFFER",
+				       SDL_WINDOWPOS_UNDEFINED,
+				       SDL_WINDOWPOS_UNDEFINED,
+				       FB_WIDTH,
+				       FB_HEIGHT,
+				       SDL_WINDOW_SHOWN);
+    assert(globals::sdlwin != nullptr);
+    globals::sdlscr = SDL_GetWindowSurface(globals::sdlwin);
+    assert(globals::sdlscr);
+  }
+#endif  
   
   if(use_checkpoint) {
     loadState(*s, rv32_binary.c_str());
@@ -1155,5 +1177,11 @@ int main(int argc, char **argv) {
   }
   //delete tb;
   stopCapstone();
+#ifdef USE_SDL
+  if(globals::sdlwin) {
+    SDL_DestroyWindow(globals::sdlwin);
+    SDL_Quit();
+  }
+#endif
   exit(EXIT_SUCCESS);
 }

@@ -542,7 +542,7 @@ void handle_syscall(state_t *s, uint64_t tohost) {
       break;
     }
     case SYS_gettimeofday: {
-      static_assert(sizeof(struct timeval)==16);
+      static_assert(sizeof(struct timeval)==16, "timeval has a weird size");
       struct timeval *tp = reinterpret_cast<struct timeval*>(s->mem + buf[1]);
       struct timezone *tzp = reinterpret_cast<struct timezone*>(s->mem + buf[2]);
       buf[0] = gettimeofday(tp, tzp);
