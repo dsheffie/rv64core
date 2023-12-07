@@ -16,7 +16,9 @@ module core_l1d_l1i(clk,
 		    mem_req_opcode,
 		    mem_rsp_valid,
 		    mem_rsp_load_data,
-		    
+		    alloc_valid,
+		    alloc_two_valid,
+		    pending_fault,
 		    retire_reg_ptr,
 		    retire_reg_data,
 		    retire_reg_valid,
@@ -92,6 +94,10 @@ module core_l1d_l1i(clk,
    input logic  			  mem_rsp_valid;
    input logic [511:0] 			  mem_rsp_load_data;
 
+   output logic 			  alloc_valid;
+   output logic 			  alloc_two_valid;
+   output logic 			  pending_fault;
+   
    output logic [4:0] 			  retire_reg_ptr;
    output logic [31:0] 			  retire_reg_data;
    output logic 			  retire_reg_valid;
@@ -457,7 +463,9 @@ module core_l1d_l1i(clk,
 	     
 	     .core_mem_rsp_valid(core_mem_rsp_valid),
 	     .core_mem_rsp(core_mem_rsp),
-	     
+	     .alloc_valid(alloc_valid),
+	     .alloc_two_valid(alloc_two_valid),
+	     .pending_fault(pending_fault),
 	     .retire_reg_ptr(retire_reg_ptr),
 	     .retire_reg_data(retire_reg_data),
 	     .retire_reg_valid(retire_reg_valid),

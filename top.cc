@@ -25,7 +25,8 @@ static bool trace_retirement = false;
 static uint64_t mem_reqs = 0;
 static state_t *s = nullptr;
 static state_t *ss = nullptr;
-static uint64_t insns_retired = 0;
+static uint64_t insns_retired = 0, insns_allocated = 0;
+static uint64_t cycles_in_faulted = 0;
 static uint64_t pipestart = 0, pipeend = ~(0UL);
 
 static boost::dynamic_bitset<> touched_lines(1UL<<28);
@@ -531,7 +532,6 @@ int main(int argc, char **argv) {
 		    << std::defaultfloat
 		    <<" \n";
       }
-
       
       
       if(tb->retire_reg_valid) {
@@ -651,8 +651,18 @@ int main(int argc, char **argv) {
     if(tb->in_flush_mode) {
       ++n_flush_cycles;
     }
-
     
+    if(tb->alloc_two_valid) {
+      insns_allocated+=2;
+    }
+    else if(tb->alloc_valid) {
+      insns_allocated++;
+    }
+
+    if(tb->pending_fault) {
+      cycles_in_faulted++;
+    }
+
     if(tb->retire_valid) {
       ++insns_retired;
       if(last_retire > 1) {
@@ -710,6 +720,8 @@ int main(int argc, char **argv) {
 		    <<" \n";
 	}
       }
+
+      
       if(tb->got_bad_addr) {
 	std::cout << "fatal - unaligned address\n";
 	break;
@@ -978,8 +990,9 @@ int main(int argc, char **argv) {
     }
     avg_inflight /= sum;
     out << insns_retired << " insns retired\n";
-
-  
+    out << insns_allocated << " insns allocated\n";
+    out << cycles_in_faulted << " cycles in faulted\n";
+    
     out << "avg insns in ROB = " << avg_inflight
 	      << ", max inflight = " << max_inflight << "\n";
   
@@ -1030,9 +1043,12 @@ int main(int argc, char **argv) {
     // for(int i = 0; i < 3; i++) {
     //   out << "uq_full[" << i << "] = " << n_uq_full[i] << "\n";
     // }
-    // for(int i = 0; i < 3; i++) {
-    //   out << "alloc[" << i << "] = " << n_alloc[i] << "\n";
-    // }
+    uint64_t total_alloc = 0;
+    for(int i = 0; i < 3; i++) {
+      out << "alloc[" << i << "] = " << n_alloc[i] << "\n";
+      total_alloc += i*n_alloc[i];
+    }
+    out << total_alloc << " total allocated uops\n";
     out << n_int_exec[0] << " cycles where int exec queue is not empty\n";
     out << n_int_exec[1] << " cycles where int exec queue dispatches\n";
     out << n_int2_exec[0] << " cycles where int2 exec queue is not empty\n";
