@@ -81,7 +81,9 @@ module core(clk,
 	    core_mem_rsp_valid,
 	    alloc_valid,
 	    alloc_two_valid,
-	    pending_fault,
+	    iq_none_valid,
+	    iq_one_valid,
+	    in_branch_recovery,
 	    retire_reg_ptr,
 	    retire_reg_data,
 	    retire_reg_valid,
@@ -172,7 +174,11 @@ module core(clk,
 
    output logic 			  alloc_valid;
    output logic 			  alloc_two_valid;
-   output logic 			  pending_fault;
+
+   output logic 			  iq_one_valid;
+   output logic 			  iq_none_valid;
+      
+   output logic 			  in_branch_recovery;
    
    output logic 			  retire_valid;
    output logic 			  retire_two_valid;
@@ -397,8 +403,8 @@ module core(clk,
    
 
    assign ready_for_resume = r_ready_for_resume;
-   assign pending_fault = r_pending_fault;
-   
+   assign in_branch_recovery = (r_state == DRAIN) || (r_state == RAT);
+      
    assign head_of_rob_ptr_valid = (r_state == ACTIVE);
    assign head_of_rob_ptr = r_rob_head_ptr[`LG_ROB_ENTRIES-1:0];
    
@@ -570,6 +576,8 @@ module core(clk,
 	     retire_two_valid <= 1'b0;
 	     alloc_valid <= 1'b0;
 	     alloc_two_valid <= 1'b0;
+	     iq_one_valid <= 1'b0;
+	     iq_none_valid <= 1'b0;
    	     retire_pc <= 'd0;
 	     retire_two_pc <= 'd0;
 	     retired_call <= 1'b0;
@@ -593,7 +601,8 @@ module core(clk,
 	     retire_two_valid <= t_retire_two;
 	     alloc_valid <= t_alloc;
 	     alloc_two_valid <= t_alloc_two;
-	     
+	     iq_one_valid <= !t_dq_empty && t_dq_next_empty;
+	     iq_none_valid <= t_dq_empty;
    	     retire_pc <= t_rob_head.pc;
 	     retire_two_pc <= t_rob_next_head.pc;
 	     retired_ret <= t_rob_head.is_ret && t_retire;

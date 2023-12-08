@@ -26,7 +26,8 @@ static uint64_t mem_reqs = 0;
 static state_t *s = nullptr;
 static state_t *ss = nullptr;
 static uint64_t insns_retired = 0, insns_allocated = 0;
-static uint64_t cycles_in_faulted = 0;
+static uint64_t cycles_in_faulted = 0, fetch_stalls = 0;
+
 static uint64_t pipestart = 0, pipeend = ~(0UL);
 
 static boost::dynamic_bitset<> touched_lines(1UL<<28);
@@ -659,7 +660,14 @@ int main(int argc, char **argv) {
       insns_allocated++;
     }
 
-    if(tb->pending_fault) {
+    if(tb->iq_one_valid) {
+      fetch_stalls++;
+    }
+    else if(tb->iq_none_valid) {
+      fetch_stalls+=2;
+    }
+    
+    if(tb->in_branch_recovery) {
       cycles_in_faulted++;
     }
 
@@ -991,7 +999,21 @@ int main(int argc, char **argv) {
     avg_inflight /= sum;
     out << insns_retired << " insns retired\n";
     out << insns_allocated << " insns allocated\n";
-    out << cycles_in_faulted << " cycles in faulted\n";
+    out << cycles_in_faulted*2 << " slots in faulted\n";
+    out << fetch_stalls << " fetch stalls\n";
+    
+    uint64_t totalSlots = 2*cycle;
+    uint64_t badSpecSlots = insns_allocated - insns_retired + (2*cycles_in_faulted);
+    double rr = static_cast<double>(insns_retired)/totalSlots;
+    double bs = static_cast<double>(badSpecSlots) / totalSlots;
+    double fe = static_cast<double>(fetch_stalls) / totalSlots;
+    out << "top-down bb = " << (1.0 - (rr+bs+fe)) << "\n";     
+    out << "top-down rr = " << rr << "\n";
+    out << "top-down bs = " << bs << "\n";
+    out << "top-down fe = " << fe << "\n";
+										
+		              
+    //(SlotsIssued – SlotsRetired + RecoveryBubbles) / TotalSlots
     
     out << "avg insns in ROB = " << avg_inflight
 	      << ", max inflight = " << max_inflight << "\n";
