@@ -144,8 +144,12 @@ module exec(clk,
    logic [`LG_MQ_ENTRIES:0] r_mdq_next_tail_ptr, n_mdq_next_tail_ptr;
    logic 		    mem_mdq_full,mem_mdq_next_full, mem_mdq_empty;
    
-   
-   
+   wire [`LG_PRF_ENTRIES-1:0] w_mul_prf_ptr;
+   logic [`LG_PRF_ENTRIES-1:0] r_mul_prf_ptr;
+   logic 		       r_mul_complete;
+   wire [`LG_PRF_ENTRIES-1:0] w_div_prf_ptr;
+   logic [`LG_PRF_ENTRIES-1:0] r_div_prf_ptr;
+   logic 		       r_div_complete;
 
    logic 	t_pop_uq,t_pop_mem_uq,t_pop_mem_dq,t_pop_uq2;
    
@@ -1333,12 +1337,6 @@ module exec(clk,
 			      .distance(t_shift_amt), 
 			      .y(w_shifter_out));
 
-   wire [`LG_PRF_ENTRIES-1:0] w_mul_prf_ptr;
-   logic [`LG_PRF_ENTRIES-1:0] r_mul_prf_ptr;
-   logic 		       r_mul_complete;
-   wire [`LG_PRF_ENTRIES-1:0] w_div_prf_ptr;
-   logic [`LG_PRF_ENTRIES-1:0] r_div_prf_ptr;
-   logic 		       r_div_complete;
 
    
    always_ff@(posedge clk)

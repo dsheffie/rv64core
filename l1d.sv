@@ -212,7 +212,7 @@ module l1d(clk,
    
    logic [N_MQ_ENTRIES-1:0] r_mq_addr_valid;
    logic [IDX_STOP-IDX_START-1:0] r_mq_addr[N_MQ_ENTRIES-1:0];
-  
+   wire [BYTES_PER_CL-1:0] 	  w_store_byte_en;  
    
    mem_req_t t_mem_tail, t_mem_head;
    logic 	mem_q_full, mem_q_empty, mem_q_almost_full;
@@ -867,7 +867,6 @@ module l1d(clk,
      end
 
 
-   wire [BYTES_PER_CL-1:0] w_store_byte_en;
    generate
        for(genvar i = 0; i < BYTES_PER_CL; i=i+1)
 	 begin
