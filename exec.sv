@@ -1006,7 +1006,7 @@ module exec(clk,
 
    
    
-   logic t_error2, t_sub2, t_addi_2;
+   logic  t_sub2, t_addi_2;
    wire [31:0] w_pc2_4, w_add32_2;
    wire [31:0] w_s_sub32_2, w_c_sub32_2;   
    ppa32 npc_2 (.A(int_uop2.pc), .B(32'd4), .Y(w_pc2_4));
@@ -1043,7 +1043,6 @@ module exec(clk,
 	t_shift_amt2 = 5'd0;
 	t_alu_valid2 = 1'b0;
 	t_result2 = 'd0;
-	t_error2 = 1'b0;
 	t_wr_int_prf2 = 1'b0;
 	case(int_uop2.op)
 	  BNE:
@@ -1272,20 +1271,11 @@ module exec(clk,
 	    end
 	  default:
 	    begin
-	       t_error2 = r_start_int2;
 	    end
 	endcase
      end
 
    
-   always_ff@(negedge clk)
-     begin
-	if(t_error2)
-	  begin
-	     $display("opcode %d for pc %x", int_uop2.op, int_uop2.pc);
-	     $stop();
-	  end
-     end
    
    always_ff@(posedge clk)
      begin
