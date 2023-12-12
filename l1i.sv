@@ -121,7 +121,6 @@ module l1i(clk,
 	   insn_ack_two,
 	   
 	   //output to the memory system
-	   mem_req_ack,
 	   mem_req_valid, 
 	   mem_req_addr, 
 	   mem_req_opcode,
@@ -168,7 +167,6 @@ module l1i(clk,
    output logic insn_valid_two;
    input logic 	insn_ack_two;
 
-   input logic 	mem_req_ack;
    output logic mem_req_valid;
    
    localparam L1I_NUM_SETS = 1 << `LG_L1I_NUM_SETS;

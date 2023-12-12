@@ -282,7 +282,6 @@ module core_l1d_l1i(clk,
    logic [L1D_CL_LEN_BITS-1:0] 		  l1d_mem_req_store_data;
    logic [3:0] 				  l1d_mem_req_opcode;
 
-   logic 				  l1i_mem_req_ack;   
    logic 				  l1i_mem_req_valid;
    logic [(`M_WIDTH-1):0] 		  l1i_mem_req_addr;
    logic [3:0] 				  l1i_mem_req_opcode;
@@ -412,7 +411,6 @@ module core_l1d_l1i(clk,
 	      .insn_two(insn2),
 	      .insn_valid_two(insn_valid2),
 	      .insn_ack_two(insn_ack2),
-	      .mem_req_ack(l1i_mem_req_ack),
 	      .mem_req_valid(l1i_mem_req_valid),
 	      .mem_req_addr(l1i_mem_req_addr),
 	      .mem_req_opcode(l1i_mem_req_opcode),
