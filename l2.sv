@@ -28,7 +28,6 @@ module l2(clk,
 	  l1_mem_load_data,
 
 	  //l2 -> mem
-	  mem_req_ack,
 	  mem_req_valid, 
 	  mem_req_addr, 
 	  mem_req_store_data, 
@@ -65,7 +64,6 @@ module l2(clk,
 
    output logic [127:0] l1_mem_load_data;
    
-   input logic 	mem_req_ack;
    output logic mem_req_valid;
    output logic [31:0] mem_req_addr;
    output logic [511:0] mem_req_store_data;

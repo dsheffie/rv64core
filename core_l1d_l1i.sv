@@ -321,7 +321,6 @@ module core_l1d_l1i(clk,
 	       
 	       .l1_mem_load_data(w_l1_mem_load_data),
 	       
-	       .mem_req_ack(),
 	       .mem_req_valid(mem_req_valid),
 	       .mem_req_addr(mem_req_addr),
 	       .mem_req_store_data(mem_req_store_data),
