@@ -124,7 +124,6 @@ module l2(clk,
    typedef enum 	logic [3:0] {
 				     INITIALIZE,
 				     IDLE,
-				     WAIT_FOR_RAM,
 				     CHECK_VALID_AND_TAG,
 				     CLEAN_RELOAD,
 				     DIRTY_STORE,
@@ -501,16 +500,11 @@ module l2(clk,
 			   end
 		      end
 		    n_req_ack = 1'b1;
-		    n_state = WAIT_FOR_RAM;
+		    n_state = CHECK_VALID_AND_TAG;
 		    n_cache_accesses = r_cache_accesses + 64'd1;
 		    n_cache_hits = r_cache_hits + 64'd1;
 		 end
 	    end
-	  WAIT_FOR_RAM:
-	    begin
-	       n_state = CHECK_VALID_AND_TAG;
-	    end // case: WAIT_FOR_RAM
-	
 	  CHECK_VALID_AND_TAG:
 	    begin
 	       //load hit
@@ -618,7 +612,7 @@ module l2(clk,
 	    end // case: CLEAN_RELOAD
 	  WAIT_CLEAN_RELOAD: /* need a cycle to turn around */
 	    begin
-	       n_state = WAIT_FOR_RAM;
+	       n_state = CHECK_VALID_AND_TAG;
 	    end
 	  WAIT_STORE_IDLE:
 	    begin

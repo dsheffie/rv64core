@@ -9,21 +9,13 @@ module reg_ram1rw(clk, addr, wr_data, wr_en, rd_data);
 
    localparam DEPTH = 1<<LG_DEPTH;
    logic [WIDTH-1:0] 	    r_ram[DEPTH-1:0];
-   
-   logic [LG_DEPTH-1:0]     r_addr;
-   logic 		    r_wr_en;
-   logic [WIDTH-1:0] 	    r_wr_data;
-   
+      
    always_ff@(posedge clk)
      begin
-	r_addr <= addr;
-	r_wr_en <= wr_en;
-	r_wr_data <= wr_data;
-	
-	rd_data <= r_ram[r_addr];
-	if(r_wr_en)
+	rd_data <= r_ram[addr];
+	if(wr_en)
 	  begin
-	     r_ram[r_addr] <= r_wr_data;
+	     r_ram[addr] <= wr_data;
 	  end
      end
    
