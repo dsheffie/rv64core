@@ -350,7 +350,6 @@ module core(clk,
    
    logic 		     t_uq_full, t_uq_next_full;
    
-   logic 		     t_uq_read;
    logic 		     n_ready_for_resume, r_ready_for_resume;
    
    logic 		     t_exception_wr_cpr0_val;
