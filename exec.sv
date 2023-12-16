@@ -2038,6 +2038,7 @@ module exec(clk,
 	t_mem_tail.is_store = 1'b0;
 	t_mem_tail.data = 32'd0;
 	t_mem_tail.spans_cacheline = 1'b0;
+	t_mem_tail.pc = mem_uq.pc;
 	case(mem_uq.op)
 	  SB:
 	    begin

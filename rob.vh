@@ -61,6 +61,7 @@ typedef struct packed {
    logic [`LG_PRF_ENTRIES-1:0] dst_ptr;
    logic 		       dst_valid;
    logic [31:0] 	       data;
+   logic [`M_WIDTH-1:0]        pc;
 } mem_req_t;
 
 typedef struct packed {

@@ -61,7 +61,7 @@ static uint64_t rob_full = 0;
 static uint64_t l1d_reqs = 0;
 static uint64_t l1d_acks = 0;
 static uint64_t l1d_stores = 0;
-
+static std::map<uint32_t, uint64_t> busy_loads, missed_loads;
 static std::map<int,uint64_t> block_distribution;
 static std::map<int,uint64_t> restart_distribution;
 static std::map<int,uint64_t> restart_ds_distribution;
@@ -112,6 +112,15 @@ void record_ds_restart(int cycles) {
   restart_ds_distribution[cycles]++;
 }
 
+void record_miss(int pc_, int hit, int busy) {
+  uint32_t pc = *reinterpret_cast<uint32_t*>(&pc_);
+  if(hit and busy) {
+    busy_loads[pc]++;
+  }
+  else if(not(hit)) {
+    missed_loads[pc]++;
+  }
+}
 
 void record_l1d(int req, int ack, int ack_st, int blocked, int stall_reason) {
   l1d_reqs += req;
@@ -1150,6 +1159,8 @@ int main(int argc, char **argv) {
     out << total_pushout << " cycles of pushout\n";
     dump_histo(pushout_name, pushout_histo, s);
 
+    dump_histo("busy_loads.txt", busy_loads, s);
+    
     //std::ofstream branch_info("retire_info.csv");
     uint64_t total_retire = 0, total_cycle = 0;
     for(auto &p : retire_map) {
