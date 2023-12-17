@@ -55,8 +55,10 @@ typedef struct packed {
 typedef struct packed {
    logic [31:0] addr;
    logic 	is_store;
+   logic 	is_load;
    mem_op_t op;
    logic 	spans_cacheline;
+   logic 	unaligned;
    logic [`LG_ROB_ENTRIES-1:0] rob_ptr;
    logic [`LG_PRF_ENTRIES-1:0] dst_ptr;
    logic 		       dst_valid;
@@ -80,6 +82,7 @@ typedef struct packed {
    logic [`LG_PRF_ENTRIES-1:0] dst_ptr;
    logic 		       dst_valid;
    logic 		       bad_addr;
+   logic [`M_WIDTH-1:0]        pc;
 } mem_rsp_t;
 
 typedef struct packed {

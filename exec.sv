@@ -2035,9 +2035,11 @@ module exec(clk,
 	t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 	t_mem_tail.dst_valid = 1'b0;
 	t_mem_tail.dst_ptr = mem_uq.dst;
+	t_mem_tail.is_load = 1'b0;
 	t_mem_tail.is_store = 1'b0;
 	t_mem_tail.data = 32'd0;
 	t_mem_tail.spans_cacheline = 1'b0;
+	t_mem_tail.unaligned = 1'b0;
 	t_mem_tail.pc = mem_uq.pc;
 	case(mem_uq.op)
 	  SB:
@@ -2052,6 +2054,7 @@ module exec(clk,
 	       t_mem_tail.is_store = ~w_bad_16b_addr;
 	       t_mem_tail.dst_valid = 1'b0;
 	       t_mem_tail.spans_cacheline = w_bad_16b_addr;
+	       t_mem_tail.unaligned = w_agu32[0];
 	    end // case: SW
 	  SW:
 	    begin
@@ -2059,6 +2062,7 @@ module exec(clk,
 	       t_mem_tail.is_store = ~w_bad_32b_addr;
 	       t_mem_tail.dst_valid = 1'b0;
 	       t_mem_tail.spans_cacheline = w_bad_32b_addr;
+	       t_mem_tail.unaligned = |w_agu32[1:0];
 	    end // case: SW
 	  SC:
 	    begin
@@ -2066,35 +2070,44 @@ module exec(clk,
 	       t_mem_tail.is_store = 1'b1;
 	       t_mem_tail.dst_valid = 1'b1;
 	       t_mem_tail.dst_ptr = mem_uq.dst;
-	       t_mem_tail.spans_cacheline = (w_agu32[1:0] != 2'd0);		    
+	       t_mem_tail.spans_cacheline = (w_agu32[1:0] != 2'd0);
+	       t_mem_tail.unaligned = |w_agu32[1:0];	       
 	    end // case: SW
 	  LW:
 	    begin
+	       t_mem_tail.is_load = 1'b1;
 	       t_mem_tail.op = w_bad_32b_addr ? MEM_NOP : MEM_LW;
 	       t_mem_tail.dst_valid = mem_uq.dst_valid;
 	       t_mem_tail.spans_cacheline = w_bad_32b_addr;
+	       t_mem_tail.unaligned = |w_agu32[1:0];
 	    end // case: LW
 	  LB:
 	    begin
+	       t_mem_tail.is_load = 1'b1;	       
 	       t_mem_tail.op = MEM_LB;
 	       t_mem_tail.dst_valid = mem_uq.dst_valid;
 	    end
 	  LBU:
 	    begin
+	       t_mem_tail.is_load = 1'b1;	       
 	       t_mem_tail.op = MEM_LBU;
 	       t_mem_tail.dst_valid = mem_uq.dst_valid;
 	    end // case: LBU
 	  LHU:
 	    begin
+	       t_mem_tail.is_load = 1'b1;
 	       t_mem_tail.op = MEM_LHU;
 	       t_mem_tail.dst_valid = mem_uq.dst_valid;
 	       t_mem_tail.spans_cacheline = w_agu32[0];
+	       t_mem_tail.unaligned = w_agu32[0];
 	    end // case: LBU
 	  LH:
 	    begin
+	       t_mem_tail.is_load = 1'b1;
 	       t_mem_tail.op = w_bad_16b_addr ? MEM_NOP : MEM_LH;
 	       t_mem_tail.dst_valid = mem_uq.dst_valid;
 	       t_mem_tail.spans_cacheline = w_bad_16b_addr;
+	       t_mem_tail.unaligned = w_agu32[0];
 	    end // case: LH
 	  default:
 	    begin
