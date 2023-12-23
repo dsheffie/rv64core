@@ -22,10 +22,10 @@ import "DPI-C" function void record_retirement(input longint pc,
 					       input longint alloc_cycle,
 					       input longint complete_cycle,
 					       input longint retire_cycle,
+					       input int     retire_val,
+					       input int     retire_ptr,
+					       input int     retire_data,
 					       input int     fault,
-					       input int     is_mem,
-					       input int     is_fp,
-					       input int     missed_l1d,
 					       input int     br_mispredict);
 
 import "DPI-C" function void record_restart(input int restart_cycles);
@@ -636,10 +636,10 @@ module core(clk,
    			       t_rob_head.alloc_cycle,
    			       t_rob_head.complete_cycle,
    			       r_cycle,
+			       t_rob_head.valid_dst ? 32'd1 : 32'd0,
+			       {27'd0, t_rob_head.ldst},
+			       t_rob_head.data,
 			       t_rob_head.faulted ? 32'd1 : 32'd0,
-			       32'd0,
-			       32'd0,
-			       32'd0,
 			       t_rob_head.faulted & !(t_rob_head.is_break | t_rob_head.is_ii | t_rob_head.is_bad_addr) ? 32'd1 : 32'd0			       
 			       );
    	  end
@@ -650,10 +650,10 @@ module core(clk,
    			       t_rob_next_head.alloc_cycle,
    			       t_rob_next_head.complete_cycle,
    			       r_cycle,
+			       t_rob_next_head.valid_dst ? 32'd1 : 32'd0,
+			       {27'd0, t_rob_next_head.ldst},
+			       t_rob_next_head.data,
 			       t_rob_next_head.faulted ? 32'd1 : 32'd0,
-			       32'd0,
-			       32'd0,
-			       32'd0,
 			       32'd0);	     
    	  end // if (t_retire_two)
 	if(r_state == RAT && n_state == ACTIVE)

@@ -271,16 +271,26 @@ int check_insn_bytes(long long pc, int data) {
 static long long lrc = -1;
 static uint64_t record_insns_retired = 0;
 
-void record_retirement(long long pc, long long fetch_cycle, long long alloc_cycle, long long complete_cycle, long long retire_cycle,
-		       int faulted , int is_mem, int is_fp, int missed_l1d, int br_mispredict) {
+static int pl_regs[32] = {0};
 
-  //if(pc == 0x2033c || pc == 0x20340 || pc == 0x20344 || pc == 0x20348) {
-  //auto i = getAsmString(get_insn(pc, s), pc);
-  //std::cout << std::hex << pc << std::dec << " " << i << " : " << alloc_cycle << "," << complete_cycle << "," << retire_cycle << "," << faulted << "\n";
-  //}
+void record_retirement(long long pc,
+		       long long fetch_cycle,
+		       long long alloc_cycle,
+		       long long complete_cycle,
+		       long long retire_cycle,
+		       int retire_reg_val,
+		       int retire_reg_ptr,
+		       int retire_reg_data,
+		       int faulted ,
+		       int br_mispredict) {
+
   uint32_t insn = get_insn(pc, s);
   uint64_t delta = retire_cycle - last_retire_cycle;
 
+  if(retire_reg_val) {
+    pl_regs[retire_reg_ptr & 31] = retire_reg_data;
+  }
+  
   if(retire_cycle < lrc) {
     std::cout << "retirement cycle out-of-order\n";
     std::cout << "lrc = " << lrc << "\n";
@@ -298,40 +308,37 @@ void record_retirement(long long pc, long long fetch_cycle, long long alloc_cycl
     mispred_lat_map[complete_cycle-alloc_cycle]++;
   }
   
-  if(is_mem) {
-    //auto i = getAsmString(insn, pc);
-    //std::cout << std::hex << pc << std::dec << " " << i << " : " << alloc_cycle << ","
-    //<< complete_cycle << "," << retire_cycle << "," << faulted << "\n";
-    //std::cout << std::hex << pc << std::dec << " " << i << " : "
-    mem_lat_map[(complete_cycle-alloc_cycle)]++;
-    //<< (complete_cycle-alloc_cycle) << "\n";    
-  }
-  else if(is_fp) {
-    fp_lat_map[(complete_cycle-alloc_cycle)]++;
-  }
-  else {
-    non_mem_lat_map[(complete_cycle-alloc_cycle)]++;
-  }
-  //if(delta == 3) {
-  //std::cout << "curr = " << std::hex << pc << std::dec << " : " << getAsmString(get_insn(pc, s), pc) << "\n";
-  //std::cout << "last = " << std::hex << last_retire_pc << std::dec << " : " << getAsmString(get_insn(last_retire_pc, s), last_retire_pc) << "\n";
-  //}
-  //std::cout << "delta = " << delta << "\n";
   retire_map[delta]++;
   
   last_retire_cycle = retire_cycle;
   last_retire_pc = pc;
   
-  if(missed_l1d) {
-    //std::cout << "pc = " << std::hex << pc << " missed cache " << std::dec
-    //<< " : " << getAsmString(get_insn(pc, s), pc)
-    //<< "\n";
-    ++l1d_misses;
-  }
-  l1d_insns += is_mem;
   
   if((pl != nullptr) and (record_insns_retired >= pipestart) and (record_insns_retired < pipeend)) {
-    pl->append(record_insns_retired, getAsmString(get_insn(pc, s), pc), pc, fetch_cycle, alloc_cycle, complete_cycle, retire_cycle, faulted);
+    uint32_t insn = get_insn(pc, s);
+    uint32_t opcode = insn & 127;
+    auto disasm = getAsmString(insn, pc);
+    riscv_t m(insn);
+    if(opcode == 0x3 ) {
+      std::stringstream ss;
+      int32_t disp = m.l.imm11_0;
+      if((insn>>31)&1) {
+	disp |= 0xfffff000;
+      }
+      uint32_t ea = disp + pl_regs[m.l.rs1];
+      ss << std::hex << ea << std::dec;
+      disasm += " EA :  " + ss.str();
+    }
+    else if(opcode == 0x23) {
+      std::stringstream ss;
+      int32_t disp = m.s.imm4_0 | (m.s.imm11_5 << 5);
+      disp |= ((insn>>31)&1) ? 0xfffff000 : 0x0;
+      uint32_t ea = disp + pl_regs[m.s.rs1];
+      ss << std::hex << ea << std::dec;
+      disasm += " EA :  " + ss.str();
+    }
+
+    pl->append(record_insns_retired, disasm, pc, fetch_cycle, alloc_cycle, complete_cycle, retire_cycle, faulted);
   }
   ++record_insns_retired;
 }
