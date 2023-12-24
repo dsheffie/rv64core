@@ -169,7 +169,6 @@ module core_l1d_l1i(clk,
    logic 	r_flush, n_flush;
    logic 	r_flush_l2, n_flush_l2;
    wire 	w_l2_flush_complete;
-   wire 	w_l1_mem_rsp_valid;   
    logic 	memq_empty;   
    assign in_flush_mode = r_flush;
 

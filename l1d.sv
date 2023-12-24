@@ -1012,6 +1012,7 @@ module l1d(clk,
 	  INIT_CACHE:
 	    begin
 	       t_cache_idx = r_cache_idx + 'd1;
+	       t_mark_invalid = 1'b1;
 	       if(r_cache_idx == (L1D_NUM_SETS-1))
 		 begin
 		    //$display("flush done at cycle %d", r_cycle);
@@ -1020,7 +1021,6 @@ module l1d(clk,
 		 end
 	       else
 		 begin
-		    t_mark_invalid = 1'b1;
 		    t_cache_idx = r_cache_idx + 'd1;		    
 		 end
 	    end

@@ -405,6 +405,11 @@ module l2(clk,
 	       
 	       t_wr_valid = 1'b1;
 	       t_wr_dirty = 1'b1;
+	       t_wr_tag = 1'b1;
+	       t_wr_d0 = 1'b1;
+	       t_wr_d1 = 1'b1;
+	       t_wr_d2 = 1'b1;
+	       t_wr_d3 = 1'b1;	       
 	       
 	       t_idx = r_idx + 'd1;
 	       if(r_idx == (L2_LINES-1))
