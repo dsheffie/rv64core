@@ -56,7 +56,9 @@ module exec(clk,
 	    core_store_data_ptr_valid,
 	    mem_rsp_dst_ptr,
 	    mem_rsp_dst_valid,
-	    mem_rsp_load_data);
+	    mem_rsp_load_data,
+	    branch_valid,
+	    branch_fault);
    input logic clk;
    input logic reset;
    input logic retire;
@@ -108,6 +110,9 @@ module exec(clk,
    input logic [`LG_PRF_ENTRIES-1:0] mem_rsp_dst_ptr;
    input logic 			     mem_rsp_dst_valid;
    input logic [31:0] 		     mem_rsp_load_data;
+
+   input logic 			     branch_valid;
+   input logic 			     branch_fault;
    
    
    localparam N_INT_SCHED_ENTRIES = 1<<`LG_INT_SCHED_ENTRIES;
@@ -564,11 +569,15 @@ module exec(clk,
 	
      end // always_ff@ (posedge clk)
    
-   logic [63:0]        r_cycle, r_retired_insns;
+   logic [63:0]        r_cycle, r_retired_insns, r_branches, r_branch_faults;
    always_ff@(posedge clk)
      begin
 	r_cycle <= reset ? 'd0 : r_cycle + 'd1;
+	r_branches <= reset ? 'd0 : branch_valid ? (r_branches + 'd1) : r_branches;
+	r_branch_faults <= reset ? 'd0 : branch_fault ? (r_branch_faults + 'd1) : r_branch_faults;
      end
+
+   
    always_ff@(posedge clk)
      begin
 	if(reset)
@@ -1727,6 +1736,7 @@ module exec(clk,
 	  RDINSTRETH:
 	    begin
 	       t_result = r_retired_insns[63:32];
+	       //t_result = r_branch_faults[31:0];
 	       t_alu_valid = 1'b1;
 	       t_wr_int_prf = 1'b1;
 	       t_pc = w_pc4;

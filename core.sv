@@ -1320,7 +1320,7 @@ module core(clk,
 	     n_branch_pc = t_retire_two ? t_rob_next_head.pc : t_rob_head.pc;
 	     n_took_branch = t_retire_two ? t_rob_next_head.take_br : t_rob_head.take_br;
 	     n_branch_valid = t_retire_two ? t_rob_next_head.is_br :  t_rob_head.is_br;
-	     n_branch_fault = t_rob_head.faulted;
+	     n_branch_fault = t_rob_head.faulted & !(t_rob_head.is_break | t_rob_head.is_ii | t_rob_head.is_bad_addr);
 	     n_branch_pht_idx = t_retire_two ? t_rob_next_head.pht_idx : t_rob_head.pht_idx;
 	  end // if (t_retire)
 	
@@ -1930,7 +1930,9 @@ module core(clk,
 	   .core_store_data_ptr(t_core_store_data_ptr),
 	   .mem_rsp_dst_ptr(core_mem_rsp.dst_ptr),
 	   .mem_rsp_dst_valid(core_mem_rsp.dst_valid),
-	   .mem_rsp_load_data(core_mem_rsp.data)
+	   .mem_rsp_load_data(core_mem_rsp.data),
+	   .branch_valid(r_branch_valid),
+	   .branch_fault(r_branch_fault)
 	   );
 
 
