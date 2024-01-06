@@ -1736,7 +1736,20 @@ module exec(clk,
 	  RDINSTRETH:
 	    begin
 	       t_result = r_retired_insns[63:32];
-	       //t_result = r_branch_faults[31:0];
+	       t_alu_valid = 1'b1;
+	       t_wr_int_prf = 1'b1;
+	       t_pc = w_pc4;
+	    end
+	  RDBRANCH:
+	    begin
+	       t_result = r_branches[31:0];
+	       t_alu_valid = 1'b1;
+	       t_wr_int_prf = 1'b1;
+	       t_pc = w_pc4;	       
+	    end
+	  RDFAULTEDBRANCH:
+	    begin
+	       t_result = r_branch_faults[31:0];
 	       t_alu_valid = 1'b1;
 	       t_wr_int_prf = 1'b1;
 	       t_pc = w_pc4;

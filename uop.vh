@@ -21,6 +21,9 @@ typedef enum logic [6:0]
    RDCYCLEH,
    RDINSTRET,
    RDINSTRETH,
+
+   RDBRANCH,
+   RDFAULTEDBRANCH,
    
    //known used in riscv design
    MUL,

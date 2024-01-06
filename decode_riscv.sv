@@ -523,7 +523,7 @@ module decode_riscv(insn,
 				uop.dst_valid = (rd != 'd0);
 				uop.is_cheap_int = 1'b1;	
 			     end
-			   if(insn[31:20] == 12'hc02)
+			   else if(insn[31:20] == 12'hc02)
 			     begin
 				uop.op = (rd == 'd0) ? NOP : RDINSTRET;
 				uop.dst = rd;
@@ -537,6 +537,25 @@ module decode_riscv(insn,
 				uop.dst_valid = (rd != 'd0);
 				uop.serializing_op = 1'b1;
 			     end
+			   else if(insn[31:20] == 12'hc03)
+			     begin
+				uop.op = (rd == 'd0) ? NOP : RDBRANCH;
+				uop.dst = rd;
+				uop.dst_valid = (rd != 'd0);
+				uop.serializing_op = 1'b1;
+			     end
+			   else if(insn[31:20] == 12'hc04)
+			     begin
+				uop.op = (rd == 'd0) ? NOP : RDFAULTEDBRANCH;
+				uop.dst = rd;
+				uop.dst_valid = (rd != 'd0);
+				uop.serializing_op = 1'b1;
+			     end
+			   // else
+			   //   begin
+			   // 	$display("wtf is at pc %x, sel %x", 
+			   // 		 pc, insn[31:20]);
+			   //   end
 			end
 		      default:
 			begin
