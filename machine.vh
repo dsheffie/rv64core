@@ -55,8 +55,11 @@
 `define MAX_LAT (`DIV32_LAT)
 
 
-// cacheline length (in bytes)
+// l1 cacheline length (in bytes)
 `define LG_L1D_CL_LEN 4
+
+// l2 cacheline length (in bytes)
+`define LG_L2_CL_LEN 6
 
 //number of sets in direct mapped cache
 `define LG_L1D_NUM_SETS 12

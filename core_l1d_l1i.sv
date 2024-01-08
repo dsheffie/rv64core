@@ -88,15 +88,15 @@ module core_l1d_l1i(clk,
 
    
    /* mem port */
-   output logic 		 mem_req_valid;
-   output logic [`M_WIDTH-1:0] 	 mem_req_addr;
-   output logic [511:0] 	 mem_req_store_data;
-   output logic [3:0] 		 mem_req_opcode;
+   output logic 			mem_req_valid;
+   output logic [`M_WIDTH-1:0] 		mem_req_addr;
+   output logic [(1 << (`LG_L2_CL_LEN+3)) - 1:0] mem_req_store_data;
+   output logic [3:0] 				 mem_req_opcode;
    
-   input logic  			  mem_rsp_valid;
-   input logic [511:0] 			  mem_rsp_load_data;
-
-   output logic 			  alloc_valid;
+   input logic 					 mem_rsp_valid;
+   input logic [(1 << (`LG_L2_CL_LEN+3)) - 1:0]  mem_rsp_load_data;
+   
+   output logic 				alloc_valid;
    output logic 			  alloc_two_valid;
    output logic 			  iq_one_valid;
    output logic 			  iq_none_valid;

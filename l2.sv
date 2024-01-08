@@ -60,17 +60,16 @@ module l2(clk,
    output logic flush_complete;
 
    output logic l1_mem_req_ack;
-   input logic [127:0] l1_mem_req_store_data;
-
-   output logic [127:0] l1_mem_load_data;
+   input logic [(1 << (`LG_L1D_CL_LEN+3)) - 1 :0] l1_mem_req_store_data;
+   output logic [(1 << (`LG_L1D_CL_LEN+3)) - 1 :0] l1_mem_load_data;
    
    output logic mem_req_valid;
    output logic [31:0] mem_req_addr;
-   output logic [511:0] mem_req_store_data;
+   output logic [(1 << (`LG_L2_CL_LEN+3)) - 1 :0] mem_req_store_data;
    output logic [3:0] 	mem_req_opcode;
    
    input logic 		mem_rsp_valid;
-   input logic [511:0] 	mem_rsp_load_data;
+   input logic [(1 << (`LG_L2_CL_LEN+3)) - 1 :0] mem_rsp_load_data;
 
    output logic [63:0] cache_hits;
    output logic [63:0] cache_accesses;
@@ -79,7 +78,7 @@ module l2(clk,
    localparam LG_L2_LINES = `LG_L2_NUM_SETS;
    localparam L2_LINES = 1<<LG_L2_LINES;
    
-   localparam TAG_BITS = `M_WIDTH - (LG_L2_LINES + 6);
+   localparam TAG_BITS = `M_WIDTH - (LG_L2_LINES + `LG_L2_CL_LEN);
 
    logic 		t_wr_dirty, t_wr_valid;
    logic 		t_wr_d0, t_wr_d1, t_wr_d2, t_wr_d3, t_wr_tag;
@@ -88,8 +87,8 @@ module l2(clk,
    logic [LG_L2_LINES-1:0] t_idx, r_idx;
    logic [TAG_BITS-1:0]    n_tag, r_tag;
 
-   logic [`M_WIDTH-7:0]    n_last_l1i_addr, r_last_l1i_addr;
-   logic [`M_WIDTH-7:0]    n_last_l1d_addr, r_last_l1d_addr;
+   logic [`M_WIDTH-(`LG_L2_CL_LEN+1):0]    n_last_l1i_addr, r_last_l1i_addr;
+   logic [`M_WIDTH-(`LG_L2_CL_LEN+1):0]    n_last_l1d_addr, r_last_l1d_addr;
    logic 		   t_gnt_l1i, t_gnt_l1d;
    
    
@@ -105,8 +104,8 @@ module l2(clk,
    
    logic 		   r_l1d_rsp_valid, n_l1d_rsp_valid;
    logic 		   r_l1i_rsp_valid, n_l1i_rsp_valid;
-   logic [127:0] 	   r_rsp_data, n_rsp_data;
-   logic [127:0] 	   r_store_data, n_store_data;
+   logic [(1 << (`LG_L1D_CL_LEN+3)) - 1:0] 	   r_rsp_data, n_rsp_data;
+   logic [(1 << (`LG_L1D_CL_LEN+3)) - 1:0] 	   r_store_data, n_store_data;
    
    logic 		   r_reload, n_reload;
    
@@ -138,7 +137,7 @@ module l2(clk,
    state_t n_state, r_state;
    logic 		n_flush_complete, r_flush_complete;
    logic 		r_flush_req, n_flush_req;
-   logic [511:0] 	r_mem_req_store_data, n_mem_req_store_data;
+   logic [(1 << (`LG_L2_CL_LEN+3)) - 1:0] r_mem_req_store_data, n_mem_req_store_data;
    logic [63:0] 	r_cache_hits, n_cache_hits, r_cache_accesses, n_cache_accesses;
    
    assign flush_complete = r_flush_complete;
