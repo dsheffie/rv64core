@@ -11,6 +11,15 @@ module ram1r1w(clk, rd_addr, wr_addr, wr_data, wr_en, rd_data);
    localparam DEPTH = 1<<LG_DEPTH;
    logic [WIDTH-1:0] 	    r_ram[DEPTH-1:0];
    
+`ifdef XILINX_FPGA
+   integer 		    i;
+   initial
+     begin
+        for (i=0; i<DEPTH; i=i+1)
+          r_ram[i] = 0;
+     end
+`endif
+
    
    always_ff@(posedge clk)
      begin
@@ -41,6 +50,15 @@ module ram1r1w_l1d_data(clk, rd_addr, wr_addr, wr_data, wr_en, wr_byte_en, rd_da
 
    localparam DEPTH = 1<<LG_DEPTH;
    logic [NUM_BYTES-1:0][7:0] r_ram[DEPTH-1:0];
+
+`ifdef XILINX_FPGA
+   integer 		    i;
+   initial
+     begin
+        for (i=0; i<DEPTH; i=i+1)
+          r_ram[i] = 0;
+     end
+`endif
    
    
    always_ff@(posedge clk)

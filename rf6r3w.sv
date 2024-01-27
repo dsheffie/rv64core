@@ -44,8 +44,30 @@ module rf6r3w(clk,
    // 		      wr0, wrptr0);
    // 	  end
    //   end
-  
-   
+
+`ifdef XILINX_FPGA
+   integer 		    i;
+   initial
+     begin
+        for (i=0; i<DEPTH; i=i+1)
+          r_ram[i] = 0;
+     end
+   always_ff@(posedge clk)
+     begin
+      rd0 <= r_ram[rdptr0];
+      rd1 <= r_ram[rdptr1];
+      rd2 <= r_ram[rdptr2];
+      rd3 <= r_ram[rdptr3];
+      rd4 <= r_ram[rdptr4];
+      rd5 <= r_ram[rdptr5];
+      if (wen0 & (wrptr0 != 'd0))
+        r_ram[wrptr0] <= wr0;
+      if (wen1 & (wrptr1 != 'd0))
+        r_ram[wrptr1] <= wr1;
+      if (wen2 & (wrptr2 != 'd0))
+        r_ram[wrptr2] <= wr2;
+     end // always_ff@ (posedge clk)
+`else
    always_ff@(posedge clk)
      begin
 	rd0 <= rdptr0=='d0 ? 'd0 : r_ram[rdptr0];
@@ -60,6 +82,9 @@ module rf6r3w(clk,
 	  r_ram[wrptr1] <= wr1;
 	if(wen2)
 	  r_ram[wrptr2] <= wr2;	
-     end // always_ff@ (posedge clk)
+     end // always_ff@ (posedge clk)   
+`endif
+   
+
 
 endmodule
