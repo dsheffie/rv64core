@@ -1141,6 +1141,18 @@ module exec(clk,
 	       t_alu_valid2 = 1'b1;
 	       t_wr_int_prf2 = 1'b1;
 	    end
+	  RDCYCLE:
+	    begin
+	       t_result2 = r_cycle[31:0];
+	       t_alu_valid2 = 1'b1;
+	       t_wr_int_prf2 = 1'b1;
+	    end
+	  RDCYCLEH:
+	    begin
+	       t_result2 = r_cycle[63:32];
+	       t_alu_valid2 = 1'b1;
+	       t_wr_int_prf2 = 1'b1;
+	    end
 	  SLT:
 	    begin
 	       t_result2 = {31'd0, $signed(t_srcA_2) < $signed(t_srcB_2)};
