@@ -24,7 +24,7 @@ import "DPI-C" function void record_retirement(input longint pc,
 					       input longint retire_cycle,
 					       input int     retire_val,
 					       input int     retire_ptr,
-					       input int     retire_data,
+					       input longint retire_data,
 					       input int     fault,
 					       input int     br_mispredict);
 
@@ -631,7 +631,9 @@ module core(clk,
 			    
    	if(t_retire)
    	  begin
-	     record_retirement({32'd0,t_rob_head.pc}, 
+	     record_retirement(
+			       //{ {(64-`M_WIDTH){1'b0}},t_rob_head.pc},
+			       t_rob_head.pc, 			       
    			       t_rob_head.fetch_cycle,
    			       t_rob_head.alloc_cycle,
    			       t_rob_head.complete_cycle,
@@ -645,7 +647,9 @@ module core(clk,
    	  end
    	if(t_retire_two)
    	  begin
-	     record_retirement({32'd0, t_rob_next_head.pc}, 
+	     record_retirement(
+			       //{ {(64-`M_WIDTH){1'b0}},t_rob_next_head.pc},
+			       t_rob_next_head.pc,			       
    			       t_rob_next_head.fetch_cycle,
    			       t_rob_next_head.alloc_cycle,
    			       t_rob_next_head.complete_cycle,
@@ -1858,7 +1862,7 @@ module core(clk,
      end // always_comb
 
    
-   decode_riscv dec0 (.insn(insn.data), 
+   decode_riscv dec0 (.insn(insn.insn_bytes), 
 		      .pc(insn.pc), 
 		      .insn_pred(insn.pred), 
 		      .pht_idx(insn.pht_idx),
@@ -1868,7 +1872,7 @@ module core(clk,
 `endif		      
 		      .uop(t_dec_uop));
 
-   decode_riscv dec1 (.insn(insn_two.data), 
+   decode_riscv dec1 (.insn(insn_two.insn_bytes), 
 		      .pc(insn_two.pc), 
 		      .insn_pred(insn_two.pred), 
 		      .pht_idx(insn_two.pht_idx),

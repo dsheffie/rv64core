@@ -1612,8 +1612,9 @@ module exec(clk,
    
    wire [`M_WIDTH-1:0] w_pc4;
    
-   wire [31:0] w_indirect_target;
-   ppa32 add2 (.A(t_srcA), .B(int_uop.rvimm), .Y(w_indirect_target));
+   wire [`M_WIDTH-1:0] w_indirect_target;
+   mwidth_add add2 (.A(t_srcA), .B(int_uop.rvimm), .Y(w_indirect_target));
+   
    wire        w_mispredicted_indirect = w_indirect_target != {int_uop.jmp_imm,int_uop.imm};
    
    mwidth_add add3 (.A(int_uop.pc), .B('d4), .Y(w_pc4));

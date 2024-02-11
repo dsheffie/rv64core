@@ -8,7 +8,7 @@
 
 `define FPGA 1
 
-`define LG_M_WIDTH 5
+`define LG_M_WIDTH 6
 
 `define LG_INT_SCHED_ENTRIES 3
 

@@ -280,7 +280,7 @@ void record_retirement(long long pc,
 		       long long retire_cycle,
 		       int retire_reg_val,
 		       int retire_reg_ptr,
-		       int retire_reg_data,
+		       long long retire_reg_data,
 		       int faulted ,
 		       int br_mispredict) {
 

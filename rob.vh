@@ -42,7 +42,7 @@ typedef struct packed {
 } complete_t;
 
 typedef struct packed {
-   logic [`M_WIDTH-1:0] data;
+   logic [31:0] insn_bytes;
    logic [(`M_WIDTH-1):0] pc;
    logic [(`M_WIDTH-1):0] pred_target;
    logic 		  pred;

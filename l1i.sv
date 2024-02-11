@@ -278,11 +278,6 @@ function logic [3:0] select_pd(logic [15:0] cl, logic[LG_WORDS_PER_CL-1:0] pos);
    return j;
 endfunction
 
-function logic is_nop(logic [31:0] insn);
-   return (insn == 32'd0);
-endfunction // is_nop
-      
-      
    
    typedef enum logic [2:0] {INITIALIZE = 'd0,
 			     IDLE = 'd1,
@@ -479,7 +474,7 @@ endfunction // is_nop
    always_ff@(posedge clk)
      begin
 	r_btb_pc <= reset ? 'd0 : 
-		    r_btb_valid[n_cache_pc[(`LG_BTB_SZ+1):2]] ? r_btb[n_cache_pc[(`LG_BTB_SZ+1):2]] : 32'd0;
+		    r_btb_valid[n_cache_pc[(`LG_BTB_SZ+1):2]] ? r_btb[n_cache_pc[(`LG_BTB_SZ+1):2]] : 'd0;
 	
      end
 
@@ -821,7 +816,7 @@ endfunction // is_nop
    
    always_comb
      begin
-	t_insn.data = t_insn_data;
+	t_insn.insn_bytes = t_insn_data;
 	t_insn.pc = r_cache_pc;
 	t_insn.pred_target = n_pc;
 	t_insn.pred = t_take_br;
@@ -829,7 +824,7 @@ endfunction // is_nop
 `ifdef	ENABLE_CYCLE_ACCOUNTING
 	t_insn.fetch_cycle = r_cycle;
 `endif
-	t_insn2.data = t_insn_data2;
+	t_insn2.insn_bytes = t_insn_data2;
 	t_insn2.pc = r_cache_pc + 'd4;
 	t_insn2.pred_target = 'd0;
 	t_insn2.pred = 1'b0;
@@ -837,7 +832,7 @@ endfunction // is_nop
 `ifdef	ENABLE_CYCLE_ACCOUNTING
 	t_insn2.fetch_cycle = r_cycle;
 `endif
-	t_insn3.data = t_insn_data3;
+	t_insn3.insn_bytes = t_insn_data3;
 	t_insn3.pc = r_cache_pc + 'd8;
 	t_insn3.pred_target = 'd0;
 	t_insn3.pred = 1'b0;
@@ -845,7 +840,7 @@ endfunction // is_nop
 `ifdef	ENABLE_CYCLE_ACCOUNTING
 	t_insn3.fetch_cycle = r_cycle;
 `endif
-	t_insn4.data = t_insn_data4;
+	t_insn4.insn_bytes = t_insn_data4;
 	t_insn4.pc = r_cache_pc + 'd12;
 	t_insn4.pred_target = 'd0;
 	t_insn4.pred = 1'b0;
