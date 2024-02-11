@@ -1062,7 +1062,7 @@ module l1d(clk,
 `ifdef VERBOSE_L1D
 			 $display("cycle %d port2 hit for addr %x, data %x", r_cycle, r_req2.addr, t_rsp_data2);
 `endif
-			 n_core_mem_rsp.data = t_rsp_data2[31:0];
+			 n_core_mem_rsp.data = t_rsp_data2[`M_WIDTH-1:0];
                          n_core_mem_rsp.dst_valid = t_rsp_dst_valid2;
                          n_cache_hits = r_cache_hits + 'd1;
                          n_core_mem_rsp_valid = 1'b1;
@@ -1089,7 +1089,7 @@ module l1d(clk,
 			   end
 			 else
 			   begin
-			      n_core_mem_rsp.data = t_rsp_data[31:0];
+			      n_core_mem_rsp.data = t_rsp_data[`M_WIDTH-1:0];
 			      n_core_mem_rsp.dst_valid = t_rsp_dst_valid;
 			      n_core_mem_rsp_valid = 1'b1;
 			      n_core_mem_rsp.bad_addr = r_req.spans_cacheline;
@@ -1298,7 +1298,7 @@ module l1d(clk,
 			 t_ack_ld_early = 1'b1;
 			 n_core_mem_rsp.rob_ptr = r_req.rob_ptr;
 			 n_core_mem_rsp.dst_ptr = r_req.dst_ptr;			 
-			 n_core_mem_rsp.data = t_rsp_data[31:0];
+			 n_core_mem_rsp.data = t_rsp_data[`M_WIDTH-1:0];
 			 n_core_mem_rsp.pc = r_req.pc;
 			 n_core_mem_rsp.bad_addr = r_req.spans_cacheline;
 			 n_core_mem_rsp_valid = 1'b1;

@@ -1926,7 +1926,7 @@ module exec(clk,
 	    begin
 	       t_signed_shift = 1'b1;
 	       t_shift_amt = {1'b0,int_uop.rvimm[4:0]};
-	       t_result = {{HI_EBITS{w_shifter_out[31]}}, w_shifter_out};
+	       t_result = w_shifter_out;
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
@@ -1934,7 +1934,7 @@ module exec(clk,
 	    begin
 	       t_signed_shift = 1'b1;
 	       t_shift_amt = {1'b0,t_srcB[4:0]};
-	       t_result = {{HI_EBITS{w_shifter_out[31]}}, w_shifter_out};
+	       t_result = w_shifter_out;
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end

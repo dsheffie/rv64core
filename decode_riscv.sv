@@ -402,7 +402,7 @@ module decode_riscv(insn,
 	       uop.dst_valid = (rd != 'd0);
 	       uop.is_int = 1'b1;
 	       uop.is_cheap_int = 1'b1;
-	       uop.rvimm = {insn[31:12], 12'd0};
+	       uop.rvimm = { {PP{1'b0}}, insn[31:12], 12'd0};
 	    end
 	  7'h63: /* branches */
 	    begin

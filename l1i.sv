@@ -315,7 +315,7 @@ endfunction
    logic 		  t_init_pht;
    logic [`LG_PHT_SZ-1:0] r_init_pht_idx, n_init_pht_idx;
    
-
+   localparam PP = (`M_WIDTH-32);
    localparam SEXT = `M_WIDTH-16;
    insn_fetch_t t_insn, t_insn2, t_insn3, t_insn4;
    logic [3:0] t_pd, r_pd;
@@ -543,9 +543,9 @@ endfunction
 		       {2'd0, select_pd(r_jump_out, 'd3) != 4'd0};
 	
 		
-	t_jal_simm = {{11{t_insn_data[31]}}, t_insn_data[31], t_insn_data[19:12], t_insn_data[20], t_insn_data[30:21], 1'b0};
+	t_jal_simm = {{(11+PP){t_insn_data[31]}}, t_insn_data[31], t_insn_data[19:12], t_insn_data[20], t_insn_data[30:21], 1'b0};
 	
-	t_br_simm = {{19{t_insn_data[31]}}, t_insn_data[31], t_insn_data[7], t_insn_data[30:25], t_insn_data[11:8], 1'b0};
+	t_br_simm = {{(19+PP){t_insn_data[31]}}, t_insn_data[31], t_insn_data[7], t_insn_data[30:25], t_insn_data[11:8], 1'b0};
 	
 	t_clear_fq = 1'b0;
 	t_push_insn = 1'b0;
