@@ -2,7 +2,7 @@ UNAME_S = $(shell uname -s)
 
 OBJ = top.o verilated.o verilated_vcd_c.o loadelf.o interpret.o disassemble.o helper.o saveState.o
 
-SV_SRC = core_l1d_l1i.sv core.sv exec.sv decode_riscv.sv shiftregbit.sv shift_right.sv mul.sv find_first_set.sv divider.sv l1d.sv l1i.sv machine.vh rob.vh uop.vh ram1r1w.sv ram2r1w.sv popcount.sv count_leading_zeros.sv fair_sched.sv ppa32.sv ppa64.sv csa.sv rf6r3w.sv reg_ram1rw.sv perfect_l1d.sv l2.sv
+SV_SRC = core_l1d_l1i.sv core.sv exec.sv decode_riscv.sv shiftregbit.sv shift_right.sv mul.sv find_first_set.sv divider.sv l1d.sv l1i.sv machine.vh rob.vh uop.vh ram1r1w.sv ram2r1w.sv popcount.sv count_leading_zeros.sv fair_sched.sv ppa32.sv ppa64.sv csa.sv rf6r3w.sv reg_ram1rw.sv perfect_l1d.sv l2.sv mwidth_add.sv
 
 ifeq ($(UNAME_S),Linux)
 	CXX = clang++-12 -flto -DUSE_SDL

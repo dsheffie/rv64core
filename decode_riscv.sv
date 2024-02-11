@@ -28,7 +28,6 @@ module decode_riscv(insn,
    wire [`LG_PRF_ENTRIES-1:0] rs1 = {{ZP{1'b0}},insn[19:15]};
    wire [`LG_PRF_ENTRIES-1:0] rs2 = {{ZP{1'b0}},insn[24:20]};
    
-   wire 	is_nop = (insn == 32'd0);
    logic 	rd_is_link, rs1_is_link;   
    
 
@@ -36,30 +35,33 @@ module decode_riscv(insn,
    wire [`LG_PRF_ENTRIES-1:0] 	shamt = {{ZP{1'b0}},insn[10:6]};
 
    logic [31:0] 		t_imm;
-   wire [31:0] 			w_pc_imm;
+   localparam PP = (`M_WIDTH-32);
+   
+   wire [`M_WIDTH-1:0] 		w_pc_imm;
    always_comb
      begin
 	t_imm = 'd0;
 	case(opcode)
 	  7'h17: /* auipc */
 	    begin
-	       t_imm = {insn[31:12], 12'd0};
+	       t_imm = {{PP{1'b0}}, insn[31:12], 12'd0};
 	    end
 	  7'h63: /* branches */
 	    begin
-	       t_imm = {{19{insn[31]}}, insn[31], insn[7], insn[30:25], insn[11:8], 1'b0};
+	       t_imm = {{(19+PP){insn[31]}}, insn[31], insn[7], insn[30:25], insn[11:8], 1'b0};
 	    end
 	  7'h6f: /* jal and j */
 	    begin
-	       t_imm = {{11{insn[31]}}, insn[31], insn[19:12], insn[20], insn[30:21], 1'b0}; 
+	       t_imm = {{(11+PP){insn[31]}}, insn[31], insn[19:12], insn[20], insn[30:21], 1'b0}; 
 	    end
 	  default:
 	    begin
 	    end
 	  endcase
      end
+
    
-   ppa32 imm_add (.A(pc), .B(t_imm), .Y(w_pc_imm));
+   mwidth_add imm_add (.A(pc), .B(t_imm), .Y(w_pc_imm));
    
    always_comb
      begin
@@ -104,7 +106,7 @@ module decode_riscv(insn,
 	       uop.dst_valid = (rd != 'd0);
 	       uop.srcA_valid = 1'b1;
 	       uop.is_mem = 1'b1;
-	       uop.rvimm = {{20{insn[31]}}, insn[31:20]};
+	       uop.rvimm = {{(20+PP){insn[31]}}, insn[31:20]};
 	       case(insn[14:12])
 		 3'd0:
 		   begin
@@ -142,7 +144,7 @@ module decode_riscv(insn,
 	       uop.dst_valid = (rd != 'd0);
 	       uop.srcA_valid = (rd != 'd0);	       	       
 	       uop.is_int = 1'b1;
-	       uop.rvimm = {{20{insn[31]}}, insn[31:20]};
+	       uop.rvimm = {{(20+PP){insn[31]}}, insn[31:20]};
 	       case(insn[14:12])
 		 3'd0: /* addi */
 		   begin
@@ -216,7 +218,7 @@ module decode_riscv(insn,
 	       uop.srcB_valid = 1'b1;
 	       uop.is_mem = 1'b1;
 	       uop.is_store = 1'b1;
-	       uop.rvimm = {{20{insn[31]}}, insn[31:25], insn[11:7]};
+	       uop.rvimm = {{(20+PP){insn[31]}}, insn[31:25], insn[11:7]};
 	       case(insn[14:12])
 		 3'd0:
 		   begin
@@ -452,7 +454,7 @@ module decode_riscv(insn,
 	       uop.is_br = 1'b1;
 	       uop.imm = insn_pred_target[15:0];
 	       uop.jmp_imm = insn_pred_target[`M_WIDTH-1:16];
-	       uop.rvimm = {{20{insn[31]}}, insn[31:20]};
+	       uop.rvimm = {{(20+PP){insn[31]}}, insn[31:20]};
 	       uop.br_pred = 1'b1;
 	       uop.is_br = 1'b1;
 	       uop.is_cheap_int = 1'b1;	       

@@ -172,13 +172,13 @@ module exec(clk,
    logic 	t_srcs_rdy;
 
    
-   wire [31:0] w_srcA, w_srcB;
-   logic [31:0] t_srcA_2, t_srcB_2;
-   wire [31:0] 	w_srcA_2, w_srcB_2;
+   wire [`M_WIDTH-1:0] w_srcA, w_srcB;
+   logic [`M_WIDTH-1:0] t_srcA_2, t_srcB_2;
+   wire [`M_WIDTH-1:0] 	w_srcA_2, w_srcB_2;
    
-   wire [31:0] w_mem_srcA, w_mem_srcB;
+   wire [`M_WIDTH-1:0] w_mem_srcA, w_mem_srcB;
    
-   logic [31:0] r_mem_result, r_int_result, r_int_result2;
+   logic [`M_WIDTH-1:0] r_mem_result, r_int_result, r_int_result2;
    
    logic 	r_fwd_int_srcA, r_fwd_int_srcB, r_fwd_int2_srcA, r_fwd_int2_srcB;
    logic 	r_fwd_int_srcA2, r_fwd_int_srcB2, r_fwd_int2_srcA2, r_fwd_int2_srcB2;
@@ -191,8 +191,8 @@ module exec(clk,
 	 r_fwd_mem_mem_srcA,r_fwd_mem_mem_srcB;
    
       
-   logic [31:0] t_srcA, t_srcB;
-   logic [31:0] t_mem_srcA, t_mem_srcB;
+   logic [`M_WIDTH-1:0] t_srcA, t_srcB;
+   logic [`M_WIDTH-1:0] t_mem_srcA, t_mem_srcB;
    
    
    
@@ -1016,24 +1016,28 @@ module exec(clk,
    
    
    logic  t_sub2, t_addi_2;
-   wire [31:0] w_pc2_4, w_add32_2;
-   wire [31:0] w_s_sub32_2, w_c_sub32_2;   
+
+   wire [31:0] w_s_sub32_2, w_c_sub32_2;
+   
+   wire [`M_WIDTH-1:0] w_pc2_4, w_add32_2;
+   
    ppa32 npc_2 (.A(int_uop2.pc), .B(32'd4), .Y(w_pc2_4));
 
-   csa #(.N(32)) csa2 (
-		       .a(t_srcA_2), 
-		       .b(t_addi_2 ? int_uop2.rvimm : (t_sub2 ? ~t_srcB_2 : t_srcB_2)), 
-		       .cin(t_sub2 ? 32'd1 : 32'd0), 
-		       .s(w_s_sub32_2), 
-		       .cout(w_c_sub32_2) );
-
+   
+   csa #(.N(`M_WIDTH)) csa2 (
+			     .a(t_srcA_2), 
+			     .b(t_addi_2 ? int_uop2.rvimm : (t_sub2 ? ~t_srcB_2 : t_srcB_2)), 
+			     .cin(t_sub2 ? 32'd1 : 32'd0), 
+			     .s(w_s_sub32_2), 
+			     .cout(w_c_sub32_2) );
+   
    
    ppa32 add32 (.A({w_c_sub32_2[30:0], 1'b0}), 
 		.B(w_s_sub32_2), 
 		.Y(w_add32_2));
    
 
-   wire [31:0] w_indirect_target2;
+   wire [`M_WIDTH-1:0] w_indirect_target2;
    ppa32 itgt (.A(t_srcA_2), .B(int_uop2.rvimm), .Y(w_indirect_target2));
    
    wire        w_mispredicted_indirect2 = w_indirect_target2 != 
@@ -2216,7 +2220,7 @@ module exec(clk,
    //   end
    
 
-   rf6r3w #(.WIDTH(32), .LG_DEPTH(`LG_PRF_ENTRIES)) 
+   rf6r3w #(.WIDTH(`M_WIDTH), .LG_DEPTH(`LG_PRF_ENTRIES)) 
    intprf (.clk(clk),
 	   .rdptr0(t_picked_uop.srcA),
 	   .rdptr1(t_picked_uop.srcB),
