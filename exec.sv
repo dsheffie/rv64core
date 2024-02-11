@@ -165,8 +165,8 @@ module exec(clk,
    localparam HI_EBITS = `M_WIDTH-32;
    
    logic [`M_WIDTH-1:0] t_result, t_result2;
-
-   
+   wire [`M_WIDTH-2:0] 	w_zf = 'd0;
+      
    
    logic [`M_WIDTH-1:0] t_pc, t_pc_2;
    logic 	t_srcs_rdy;
@@ -1148,25 +1148,25 @@ module exec(clk,
 	    end
 	  SLT:
 	    begin
-	       t_result2 = {31'd0, $signed(t_srcA_2) < $signed(t_srcB_2)};
+	       t_result2 = {w_zf, $signed(t_srcA_2) < $signed(t_srcB_2)};
 	       t_alu_valid2 = 1'b1;
 	       t_wr_int_prf2 = 1'b1;
 	    end
 	  SLTU:
 	    begin
-	       t_result2 = {31'd0, t_srcA_2 < t_srcB_2};
+	       t_result2 = {w_zf, t_srcA_2 < t_srcB_2};
 	       t_alu_valid2 = 1'b1;
 	       t_wr_int_prf2 = 1'b1;
 	    end
 	  SLTI:
 	    begin
-	       t_result2 = {31'd0, $signed(t_srcA_2) < $signed(int_uop2.rvimm)};
+	       t_result2 = {w_zf, $signed(t_srcA_2) < $signed(int_uop2.rvimm)};
 	       t_alu_valid2 = 1'b1;
 	       t_wr_int_prf2 = 1'b1;
 	    end
 	  SLTIU:
 	    begin
-	       t_result2 = {31'd0, t_srcA_2 < int_uop2.rvimm};
+	       t_result2 = {w_zf, t_srcA_2 < int_uop2.rvimm};
 	       t_alu_valid2 = 1'b1;
 	       t_wr_int_prf2 = 1'b1;
 	    end	       
@@ -1898,27 +1898,27 @@ module exec(clk,
 	  SLT:
 	    begin
 	       t_sub = 1'b1;
-	       t_result = {31'd0, w_AltB};
+	       t_result = {w_zf, w_AltB};
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
 	  SLTU:
 	    begin
-	       t_result = {31'd0, w_add64[32]};
+	       t_result = {w_zf, w_add64[32]};
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
 	  SLTI:
 	    begin
 	       t_slti = 1'b1;
-	       t_result = {31'd0, w_AltB_slti};
+	       t_result = {w_zf, w_AltB_slti};
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
 	  SLTIU:
 	    begin
 	       t_sltiu = 1'b1;
-	       t_result = {31'd0, w_add64[32]};
+	       t_result = {w_zf, w_add64[32]};
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
