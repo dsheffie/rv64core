@@ -354,7 +354,7 @@ module core(clk,
    
    logic 		     t_exception_wr_cpr0_val;
    logic [4:0] 		     t_exception_wr_cpr0_ptr;
-   logic [63:0] 	     t_exception_wr_cpr0_data;
+   logic [`M_WIDTH-1:0]      t_exception_wr_cpr0_data;
    
    mem_req_t t_mem_req;
    logic 		     t_mem_req_valid;
@@ -1123,7 +1123,7 @@ module core(clk,
 	    begin
 	       t_exception_wr_cpr0_val = 1'b1;
 	       t_exception_wr_cpr0_ptr = 5'd14;
-	       t_exception_wr_cpr0_data = {32'd0, t_rob_head.pc};
+	       t_exception_wr_cpr0_data = t_rob_head.pc;
 	       n_state = WRITE_CAUSE;
 	       $display("write epc, pc = %x", t_rob_head.pc);
 	       n_epc = t_rob_head.pc;
@@ -1132,7 +1132,7 @@ module core(clk,
 	    begin
 	       t_exception_wr_cpr0_val = 1'b1;
 	       t_exception_wr_cpr0_ptr = 5'd13;
-	       t_exception_wr_cpr0_data = {32'd0, t_rob_head.pc};	       
+	       t_exception_wr_cpr0_data = t_rob_head.pc;	       
 	       n_state = FLUSH_FOR_HALT;
 	       t_bump_rob_head = 1'b1;
 	       n_ds_done = 1'b1;
@@ -1919,7 +1919,7 @@ module core(clk,
 	   
 	   .exception_wr_cpr0_val(t_exception_wr_cpr0_val),
 	   .exception_wr_cpr0_ptr(t_exception_wr_cpr0_ptr),
-	   .exception_wr_cpr0_data(t_exception_wr_cpr0_data[31:0]),
+	   .exception_wr_cpr0_data(t_exception_wr_cpr0_data),
 	   .mem_req(t_mem_req),
 	   .mem_req_valid(t_mem_req_valid),
 	   .mem_req_ack(core_mem_req_ack),

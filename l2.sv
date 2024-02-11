@@ -64,7 +64,7 @@ module l2(clk,
    output logic [(1 << (`LG_L1D_CL_LEN+3)) - 1 :0] l1_mem_load_data;
    
    output logic mem_req_valid;
-   output logic [31:0] mem_req_addr;
+   output logic [`M_WIDTH-1:0] mem_req_addr;
    output logic [(1 << (`LG_L2_CL_LEN+3)) - 1 :0] mem_req_store_data;
    output logic [3:0] 	mem_req_opcode;
    
@@ -92,8 +92,8 @@ module l2(clk,
    logic 		   t_gnt_l1i, t_gnt_l1d;
    
    
-   logic [31:0] 	 n_addr, r_addr;
-   logic [31:0] 	 n_saveaddr, r_saveaddr;
+   logic [`M_WIDTH-1:0]    n_addr, r_addr;
+   logic [`M_WIDTH-1:0] 	 n_saveaddr, r_saveaddr;
    
    logic [3:0] 		   n_opcode, r_opcode;
 
@@ -300,32 +300,10 @@ module l2(clk,
      end // always_comb
 
 
-   logic [31:0] r_cycle;
-   always_ff@(posedge clk)
-     begin
-	r_cycle <= reset ? 'd0 : (r_cycle + 'd1);
-     end
-
-   //always_ff@(negedge clk)
-   //begin
-      //$display("cycle %d : L2 cache FSM in state %d", r_cycle, r_state);
-      //if(l1i_req) $display("cycle %d : l1i req, state %d", r_cycle, r_state);
-      //if(l1d_req) $display("cycle %d : l1d req, state %d", r_cycle, r_state);
-   //end
 
    wire w_l1i_req = r_l1i_req | l1i_req;
    wire w_l1d_req = r_l1d_req | l1d_req;
 
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if(t_gnt_l1i)
-   // 	  begin
-   // 	     $display("l1i curr tag %x, last tag %x at cycle %d", 
-   // 		      {n_addr[31:6],6'd0}, 
-   // 		      {r_last_l1i_addr,6'd0},
-   // 		      r_cycle);
-   // 	  end
-   //   end
 
    
    always_comb
@@ -416,10 +394,10 @@ module l2(clk,
 			 //l1i_addr);			 
 			 n_last_gnt = 1'b0;			 
 			 t_idx = l1i_addr[LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN];
-			 n_tag = l1i_addr[31:LG_L2_LINES+`LG_L2_CL_LEN];
-			 n_last_l1i_addr = l1i_addr[31:`LG_L2_CL_LEN];
-			 n_addr = {l1i_addr[31:`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
-			 n_saveaddr = {l1i_addr[31:`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
+			 n_tag = l1i_addr[(`M_WIDTH-1):LG_L2_LINES+`LG_L2_CL_LEN];
+			 n_last_l1i_addr = l1i_addr[(`M_WIDTH-1):`LG_L2_CL_LEN];
+			 n_addr = {l1i_addr[(`M_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
+			 n_saveaddr = {l1i_addr[(`M_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
 			 n_opcode = MEM_LW;
 			 n_l1i_req = 1'b0;
 			 t_gnt_l1i = 1'b1;
@@ -430,10 +408,10 @@ module l2(clk,
 			 //l1d_addr, l1d_opcode == MEM_SW);
 			 n_last_gnt = 1'b1;
 			 t_idx = l1d_addr[LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN];			 
-			 n_tag = l1d_addr[31:LG_L2_LINES+`LG_L2_CL_LEN];
-			 n_addr = {l1d_addr[31:`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
-			 n_last_l1d_addr = l1d_addr[31:`LG_L2_CL_LEN];			 
-			 n_saveaddr = {l1d_addr[31:`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
+			 n_tag = l1d_addr[(`M_WIDTH-1):LG_L2_LINES+`LG_L2_CL_LEN];
+			 n_addr = {l1d_addr[(`M_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
+			 n_last_l1d_addr = l1d_addr[(`M_WIDTH-1):`LG_L2_CL_LEN];			 
+			 n_saveaddr = {l1d_addr[(`M_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
 			 n_store_data = l1_mem_req_store_data;
 			 n_opcode = l1d_opcode;
 			 n_l1d_req = 1'b0;			 
@@ -449,10 +427,10 @@ module l2(clk,
 			   begin
 			      n_last_gnt = 1'b0;			 
 			      t_idx = l1i_addr[LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN];			 			      
-			      n_tag = l1i_addr[31:LG_L2_LINES+`LG_L2_CL_LEN];
-			      n_last_l1i_addr = l1i_addr[31:`LG_L2_CL_LEN];
-			      n_addr = {l1i_addr[31:`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
-			      n_saveaddr = {l1i_addr[31:`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
+			      n_tag = l1i_addr[(`M_WIDTH-1):LG_L2_LINES+`LG_L2_CL_LEN];
+			      n_last_l1i_addr = l1i_addr[(`M_WIDTH-1):`LG_L2_CL_LEN];
+			      n_addr = {l1i_addr[(`M_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
+			      n_saveaddr = {l1i_addr[(`M_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
 			      n_opcode = MEM_LW;
 			      n_l1i_req = 1'b0;	
 			      t_gnt_l1i = 1'b1;
@@ -461,10 +439,10 @@ module l2(clk,
 			   begin
 			      n_last_gnt = 1'b1;
 			      t_idx = l1d_addr[LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN];			 			      			      
-			      n_tag = l1d_addr[31:LG_L2_LINES+`LG_L2_CL_LEN];
-			      n_addr = {l1d_addr[31:`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
-			      n_last_l1d_addr = l1d_addr[31:`LG_L2_CL_LEN];
-			      n_saveaddr = {l1d_addr[31:`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
+			      n_tag = l1d_addr[(`M_WIDTH-1):LG_L2_LINES+`LG_L2_CL_LEN];
+			      n_addr = {l1d_addr[(`M_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
+			      n_last_l1d_addr = l1d_addr[(`M_WIDTH-1):`LG_L2_CL_LEN];
+			      n_saveaddr = {l1d_addr[(`M_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
 			      n_store_data = l1_mem_req_store_data;
 			      n_opcode = l1d_opcode;
 			      n_l1d_req = 1'b0;			 			      

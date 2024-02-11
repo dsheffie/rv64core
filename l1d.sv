@@ -1454,29 +1454,21 @@ module l1d(clk,
 	  end // if (core_mem_req_valid && !core_mem_req_ack)
      end // always_comb
    
-   always_ff@(negedge clk)
-     begin
-	record_l1d(core_mem_req_valid ? 32'd1 : 32'd0,
-		   core_mem_req_ack & core_mem_req_valid ? 32'd1 : 32'd0,
-		   core_mem_req_ack & core_mem_req_valid & core_mem_req.is_store ? 32'd1 : 32'd0,		   
-		   {{32-N_MQ_ENTRIES{1'b0}},r_hit_busy_addrs},
-		   t_stall_reason);
+   // always_ff@(negedge clk)
+   //   begin
+   // 	record_l1d(core_mem_req_valid ? 32'd1 : 32'd0,
+   // 		   core_mem_req_ack & core_mem_req_valid ? 32'd1 : 32'd0,
+   // 		   core_mem_req_ack & core_mem_req_valid & core_mem_req.is_store ? 32'd1 : 32'd0,		   
+   // 		   {{32-N_MQ_ENTRIES{1'b0}},r_hit_busy_addrs},
+   // 		   t_stall_reason);
 
-	if(t_push_miss && (r_req2.is_store == 1'b0))
-	  begin
-	     record_miss(r_req2.pc, 
-			 t_port2_hit_cache ? 32'd1 : 32'd0,
-			 r_hit_busy_addr2 ? 32'd1 : 32'd0);
-	     //$display("miss to %x at cycle %d, is store %b,hit %b, full match = %b, line match = %b, word match %b", 
-	     //r_req2.pc, r_cycle, r_req2.is_store, t_port2_hit_cache, r_hit_busy_full_addrs2, r_hit_busy_addrs2, 
-	     //r_hit_busy_word_addrs2);
-	  end // if (t_push_miss && (r_req2.is_store == 1'b0))
-	
-	// if(core_mem_rsp_valid)
-	//   begin
-	//      $display("mem op for %x completes at cycle %d", core_mem_rsp.pc, r_cycle);
-	//   end
-     end
+   // 	if(t_push_miss && (r_req2.is_store == 1'b0))
+   // 	  begin
+   // 	     record_miss(r_req2.pc, 
+   // 			 t_port2_hit_cache ? 32'd1 : 32'd0,
+   // 			 r_hit_busy_addr2 ? 32'd1 : 32'd0);
+   // 	  end // if (t_push_miss && (r_req2.is_store == 1'b0))
+   //   end
 `endif
     
 endmodule // l1d

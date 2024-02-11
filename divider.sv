@@ -31,7 +31,7 @@ module divider(clk,
    input logic 	      is_rem;
    input logic 	      start_div;
    
-   output logic [W2-1:0] y;
+   output logic [W-1:0] y;
    
    output logic [`LG_ROB_ENTRIES-1:0] rob_ptr_out;
    output logic [`LG_PRF_ENTRIES-1:0] prf_ptr_out;
@@ -126,7 +126,7 @@ module divider(clk,
 	ready = (r_state == IDLE) & !start_div;
 	rob_ptr_out = r_rob_ptr;
 	prf_ptr_out = r_gpr_prf_ptr;
-	y = r_Y;
+	y = r_Y[31:0];
 	complete = 1'b0;
 	
 	unique case (r_state)
