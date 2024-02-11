@@ -34,7 +34,7 @@ module decode_riscv(insn,
    wire [`LG_PRF_ENTRIES-1:0] 	rt = {{ZP{1'b0}},insn[20:16]};
    wire [`LG_PRF_ENTRIES-1:0] 	shamt = {{ZP{1'b0}},insn[10:6]};
 
-   logic [31:0] 		t_imm;
+   logic [`M_WIDTH-1:0] 		t_imm;
    localparam PP = (`M_WIDTH-32);
    
    wire [`M_WIDTH-1:0] 		w_pc_imm;
@@ -81,7 +81,7 @@ module decode_riscv(insn,
 	
 	uop.imm = 16'd0;
 	uop.jmp_imm = {(`M_WIDTH-16){1'b0}};
-	uop.rvimm = 32'd0;
+	uop.rvimm = 'd0;
 	
 	uop.pc = pc;
 	uop.serializing_op = 1'b0;

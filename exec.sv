@@ -1021,7 +1021,7 @@ module exec(clk,
    
    wire [`M_WIDTH-1:0] w_pc2_4, w_add32_2;
    
-   ppa32 npc_2 (.A(int_uop2.pc), .B(32'd4), .Y(w_pc2_4));
+   mwidth_add npc_2 (.A(int_uop2.pc), .B('d4), .Y(w_pc2_4));
 
    
    csa #(.N(`M_WIDTH)) csa2 (
@@ -1038,7 +1038,7 @@ module exec(clk,
    
 
    wire [`M_WIDTH-1:0] w_indirect_target2;
-   ppa32 itgt (.A(t_srcA_2), .B(int_uop2.rvimm), .Y(w_indirect_target2));
+   mwidth_add itgt (.A(t_srcA_2), .B(int_uop2.rvimm), .Y(w_indirect_target2));
    
    wire        w_mispredicted_indirect2 = w_indirect_target2 != 
 	       {int_uop2.jmp_imm,int_uop2.imm};   
@@ -1606,11 +1606,13 @@ module exec(clk,
    ppa64 add1 (.A(w_add64_srcA), .B(w_add64_srcB), .Y(w_add64));
 
    
-   wire [31:0] w_pc4, w_pc_plus_imm;
+   wire [`M_WIDTH-1:0] w_pc4;
+   
    wire [31:0] w_indirect_target;
    ppa32 add2 (.A(t_srcA), .B(int_uop.rvimm), .Y(w_indirect_target));
-   wire        w_mispredicted_indirect = w_indirect_target != {int_uop.jmp_imm,int_uop.imm};   
-   ppa32 add3 (.A(int_uop.pc), .B(32'd4), .Y(w_pc4));
+   wire        w_mispredicted_indirect = w_indirect_target != {int_uop.jmp_imm,int_uop.imm};
+   
+   mwidth_add add3 (.A(int_uop.pc), .B('d4), .Y(w_pc4));
 
    wire        w_AeqB = t_srcA == t_srcB;
    wire w_AltB = (t_srcA[31] & (~t_srcB[31])) ? 1'b1 :
@@ -1984,8 +1986,8 @@ module exec(clk,
 
 
 
-   wire [31:0] w_agu32;
-   ppa32 agu (.A(t_mem_srcA), .B(mem_uq.rvimm), .Y(w_agu32));
+   wire [`M_WIDTH-1:0] w_agu_addr;
+   mwidth_add agu (.A(t_mem_srcA), .B(mem_uq.rvimm), .Y(w_agu_addr));
 
    wire w_mem_srcA_ready = t_mem_uq.srcA_valid ? (!r_prf_inflight[t_mem_uq.srcA] | t_fwd_int_mem_srcA | t_fwd_int2_mem_srcA | t_fwd_mem_mem_srcA) : 1'b1;
 
@@ -2039,16 +2041,16 @@ module exec(clk,
    
    //cases were address wraps the cacheline
    
-   wire w_bad_16b_addr = &w_agu32[3:0];
-   wire w_bad_32b_addr = (&w_agu32[3:2]) & (|w_agu32[1:0]);
+   wire w_bad_16b_addr = &w_agu_addr[3:0];
+   wire w_bad_32b_addr = (&w_agu_addr[3:2]) & (|w_agu_addr[1:0]);
 
-   //wire w_bad_16b_addr = w_agu32[0];
-   //wire w_bad_32b_addr = w_agu32[1:0] != 2'd0;   
+   //wire w_bad_16b_addr = w_agu_addr[0];
+   //wire w_bad_32b_addr = w_agu_addr[1:0] != 2'd0;   
    
    always_comb
      begin
 	t_mem_tail.op = MEM_LW;
-	t_mem_tail.addr = w_agu32;
+	t_mem_tail.addr = w_agu_addr;
 	t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 	t_mem_tail.dst_valid = 1'b0;
 	t_mem_tail.dst_ptr = mem_uq.dst;
@@ -2071,7 +2073,7 @@ module exec(clk,
 	       t_mem_tail.is_store = ~w_bad_16b_addr;
 	       t_mem_tail.dst_valid = 1'b0;
 	       t_mem_tail.spans_cacheline = w_bad_16b_addr;
-	       t_mem_tail.unaligned = w_agu32[0];
+	       t_mem_tail.unaligned = w_agu_addr[0];
 	    end // case: SW
 	  SW:
 	    begin
@@ -2079,7 +2081,7 @@ module exec(clk,
 	       t_mem_tail.is_store = ~w_bad_32b_addr;
 	       t_mem_tail.dst_valid = 1'b0;
 	       t_mem_tail.spans_cacheline = w_bad_32b_addr;
-	       t_mem_tail.unaligned = |w_agu32[1:0];
+	       t_mem_tail.unaligned = |w_agu_addr[1:0];
 	    end // case: SW
 	  SC:
 	    begin
@@ -2087,8 +2089,8 @@ module exec(clk,
 	       t_mem_tail.is_store = 1'b1;
 	       t_mem_tail.dst_valid = 1'b1;
 	       t_mem_tail.dst_ptr = mem_uq.dst;
-	       t_mem_tail.spans_cacheline = (w_agu32[1:0] != 2'd0);
-	       t_mem_tail.unaligned = |w_agu32[1:0];	       
+	       t_mem_tail.spans_cacheline = (w_agu_addr[1:0] != 2'd0);
+	       t_mem_tail.unaligned = |w_agu_addr[1:0];	       
 	    end // case: SW
 	  LW:
 	    begin
@@ -2096,7 +2098,7 @@ module exec(clk,
 	       t_mem_tail.op = w_bad_32b_addr ? MEM_NOP : MEM_LW;
 	       t_mem_tail.dst_valid = mem_uq.dst_valid;
 	       t_mem_tail.spans_cacheline = w_bad_32b_addr;
-	       t_mem_tail.unaligned = |w_agu32[1:0];
+	       t_mem_tail.unaligned = |w_agu_addr[1:0];
 	    end // case: LW
 	  LB:
 	    begin
@@ -2115,8 +2117,8 @@ module exec(clk,
 	       t_mem_tail.is_load = 1'b1;
 	       t_mem_tail.op = MEM_LHU;
 	       t_mem_tail.dst_valid = mem_uq.dst_valid;
-	       t_mem_tail.spans_cacheline = w_agu32[0];
-	       t_mem_tail.unaligned = w_agu32[0];
+	       t_mem_tail.spans_cacheline = w_agu_addr[0];
+	       t_mem_tail.unaligned = w_agu_addr[0];
 	    end // case: LBU
 	  LH:
 	    begin
@@ -2124,7 +2126,7 @@ module exec(clk,
 	       t_mem_tail.op = w_bad_16b_addr ? MEM_NOP : MEM_LH;
 	       t_mem_tail.dst_valid = mem_uq.dst_valid;
 	       t_mem_tail.spans_cacheline = w_bad_16b_addr;
-	       t_mem_tail.unaligned = w_agu32[0];
+	       t_mem_tail.unaligned = w_agu_addr[0];
 	    end // case: LH
 	  default:
 	    begin

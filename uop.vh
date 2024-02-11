@@ -140,7 +140,7 @@ typedef struct packed {
    logic 		       fp_dst_valid;
 
 
-   logic [31:0] 		    rvimm;
+   logic [`M_WIDTH-1:0]        rvimm;
    logic [15:0] 		    imm;
    logic [`M_WIDTH-17:0] 	    jmp_imm;
    

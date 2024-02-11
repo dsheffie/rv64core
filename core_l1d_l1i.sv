@@ -104,11 +104,11 @@ module core_l1d_l1i(clk,
    output logic 			  in_branch_recovery;
    
    output logic [4:0] 			  retire_reg_ptr;
-   output logic [31:0] 			  retire_reg_data;
+   output logic [`M_WIDTH-1:0] 		  retire_reg_data;
    output logic 			  retire_reg_valid;
 
    output logic [4:0] 			  retire_reg_two_ptr;
-   output logic [31:0] 			  retire_reg_two_data;
+   output logic [`M_WIDTH-1:0] 		  retire_reg_two_data;
    output logic 			  retire_reg_two_valid;
    
    output logic 			  retire_valid;
@@ -133,7 +133,7 @@ module core_l1d_l1i(clk,
    
    
    output logic [`LG_ROB_ENTRIES:0] 	  inflight;
-   output logic [31:0] 			  epc;
+   output logic [`M_WIDTH-1:0] 		  epc;
       
 
 

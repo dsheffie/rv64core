@@ -38,7 +38,7 @@ typedef struct packed {
    logic [`M_WIDTH-1:0]        restart_pc;
    logic 		       take_br;
    logic 		       is_ii;
-   logic [31:0] 	       data;
+   logic [`M_WIDTH-1:0]        data;
 } complete_t;
 
 typedef struct packed {

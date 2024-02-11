@@ -136,8 +136,8 @@ module l1i(clk,
    input logic 	      flush_req;
    output logic       flush_complete;
    //restart signals
-   input logic [31:0] restart_pc;
-   input logic [31:0] restart_src_pc;
+   input logic [`M_WIDTH-1:0] restart_pc;
+   input logic [`M_WIDTH-1:0] restart_src_pc;
    input logic 	      restart_src_is_indirect;
    input logic 	      restart_valid;
    output logic       restart_ack;
@@ -147,11 +147,11 @@ module l1i(clk,
    input logic 			retired_ret;
 
    input logic [4:0] 		retire_reg_ptr;
-   input logic [31:0] 		retire_reg_data;
+   input logic [`M_WIDTH-1:0] 	retire_reg_data;
    input logic 			retire_reg_valid;
 
    input logic 			branch_pc_valid;
-   input logic [31:0] 		branch_pc;
+   input logic [`M_WIDTH-1:0] 	branch_pc;
    
    input logic 			took_branch;
    input logic 			branch_fault;

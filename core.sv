@@ -165,11 +165,11 @@ module core(clk,
 
    		
    output logic [4:0] 			  retire_reg_ptr;
-   output logic [31:0] 			  retire_reg_data;
+   output logic [`M_WIDTH-1:0] 		  retire_reg_data;
    output logic 			  retire_reg_valid;
 
    output logic [4:0] 			  retire_reg_two_ptr;
-   output logic [31:0] 			  retire_reg_two_data;
+   output logic [`M_WIDTH-1:0] 		  retire_reg_two_data;
    output logic 			  retire_reg_two_valid;
 
    output logic 			  alloc_valid;
@@ -203,9 +203,9 @@ module core(clk,
    output logic 			  got_monitor;
    
    output logic [`LG_ROB_ENTRIES:0] 	  inflight;
-   output logic [31:0] 			  epc;
+   output logic [`M_WIDTH-1:0] 		  epc;
    
-   logic [31:0] 			  r_epc, n_epc;
+   logic [`M_WIDTH-1:0] 		  r_epc, n_epc;
    
    localparam N_PRF_ENTRIES = (1<<`LG_PRF_ENTRIES);
    localparam N_ROB_ENTRIES = (1<<`LG_ROB_ENTRIES);
@@ -1335,7 +1335,7 @@ module core(clk,
 	t_rob_tail.pdst  = 'd0;
 	t_rob_tail.old_pdst  = 'd0;
 	t_rob_tail.pc = t_alloc_uop.pc;
-	t_rob_tail.target_pc = t_alloc_uop.pc + 32'd4;
+	t_rob_tail.target_pc = t_alloc_uop.pc + 'd4;
 	
 	t_rob_tail.is_call = t_alloc_uop.op == JAL || t_alloc_uop.op == JALR;
 	t_rob_tail.is_ret = (t_alloc_uop.op == RET);
@@ -1355,7 +1355,7 @@ module core(clk,
 	t_rob_next_tail.pdst  = 'd0;
 	t_rob_next_tail.old_pdst  = 'd0;
 	t_rob_next_tail.pc = t_alloc_uop2.pc;
-	t_rob_next_tail.target_pc = t_alloc_uop2.pc + 32'd4;
+	t_rob_next_tail.target_pc = t_alloc_uop2.pc + 'd4;
 
 	t_rob_next_tail.is_call = t_alloc_uop2.op == JAL || t_alloc_uop2.op == JALR;
 	t_rob_next_tail.is_ret = (t_alloc_uop2.op == RET);
