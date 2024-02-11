@@ -1011,26 +1011,24 @@ module exec(clk,
    s1(.is_left(t_left_shift2), 
       .is_signed(t_signed_shift2), 
       .data(t_srcA_2), 
-      .distance(t_shift_amt2[4:0]), 
+      .distance(t_shift_amt2[`LG_M_WIDTH-1:0]), 
       .y(w_shifter_out2));
    
    
-   
-   logic  t_sub2, t_addi_2;
-
-   wire [31:0] w_s_sub32_2, w_c_sub32_2;
-   
-   wire [`M_WIDTH-1:0] w_pc2_4, w_add32_2;
-   
+  
+   wire [`M_WIDTH-1:0] w_pc2_4;
    mwidth_add npc_2 (.A(int_uop2.pc), .B('d4), .Y(w_pc2_4));
-
+ 
+   logic  t_sub2, t_addi_2;
+   wire [31:0] w_s_sub32_2, w_c_sub32_2;
+   wire [31:0] w_add32_2;
    
-   csa #(.N(`M_WIDTH)) csa2 (
-			     .a(t_srcA_2), 
-			     .b(t_addi_2 ? int_uop2.rvimm : (t_sub2 ? ~t_srcB_2 : t_srcB_2)), 
-			     .cin(t_sub2 ? 32'd1 : 32'd0), 
-			     .s(w_s_sub32_2), 
-			     .cout(w_c_sub32_2) );
+   csa #(.N(32)) csa2 (
+		       .a(t_srcA_2[31:0]), 
+		       .b(t_addi_2 ? int_uop2.rvimm[31:0] : (t_sub2 ? ~t_srcB_2[31:0] : t_srcB_2[31:0])), 
+		       .cin(t_sub2 ? 32'd1 : 32'd0), 
+		       .s(w_s_sub32_2), 
+		       .cout(w_c_sub32_2) );
    
    
    ppa32 add32 (.A({w_c_sub32_2[30:0], 1'b0}), 
@@ -1136,13 +1134,13 @@ module exec(clk,
 	  ADDI:
 	    begin
 	       t_addi_2 = 1'b1;
-	       t_result2 = w_add32_2;
+	       t_result2 = { {(`M_WIDTH-32){w_add32_2[31]}}, w_add32_2};
 	       t_alu_valid2 = 1'b1;
 	       t_wr_int_prf2 = 1'b1;
 	    end
 	  ADDU:
 	    begin
-	       t_result2 = w_add32_2;
+	       t_result2 = { {(`M_WIDTH-32){w_add32_2[31]}}, w_add32_2};
 	       t_alu_valid2 = 1'b1;
 	       t_wr_int_prf2 = 1'b1;
 	    end
@@ -1173,7 +1171,7 @@ module exec(clk,
 	  SUBU:
 	    begin
 	       t_sub2 = 1'b1;
-	       t_result2 = w_add32_2;
+	       t_result2 = { {(`M_WIDTH-32){w_add32_2[31]}}, w_add32_2};
 	       t_alu_valid2 = 1'b1;
 	       t_wr_int_prf2 = 1'b1;
 	    end
@@ -1327,7 +1325,7 @@ module exec(clk,
    s0(.is_left(t_left_shift), 
       .is_signed(t_signed_shift), 
       .data(t_srcA), 
-      .distance(t_shift_amt[4:0]), 
+      .distance(t_shift_amt[`LG_M_WIDTH-1:0]), 
       .y(w_shifter_out));
    
 
@@ -1347,8 +1345,8 @@ module exec(clk,
 	 .is_high(int_uop.op == MULHU || int_uop.op == MULH),
 	 .go(t_start_mul&r_start_int),
 	 .is_64b_mul(t_is_64b_mul),
-	 .src_A(t_srcA[31:0]),
-	 .src_B(t_srcB[31:0]),
+	 .src_A(t_srcA),
+	 .src_B(t_srcB),
 	 .rob_ptr_in(int_uop.rob_ptr),
 	 .prf_ptr_in(int_uop.dst),
 	 .y(t_mul_result),
@@ -1389,24 +1387,24 @@ module exec(clk,
 	  $stop();	
      end
    
-   
 
-   divider #(.LG_W(5)) d32 (
-	   .clk(clk), 
-	   .reset(reset),
-	   .srcA(t_srcA[31:0]),
-	   .srcB(t_srcB[31:0]),
-	   .rob_ptr_in(int_uop.rob_ptr),
-	   .prf_ptr_in(int_uop.dst),
-	   .is_signed_div(t_signed_div),
-           .is_rem(t_is_rem),
-	   .start_div(t_start_div32),
-	   .y(t_div_result),
-	   .rob_ptr_out(t_div_rob_ptr),
-	   .prf_ptr_out(w_div_prf_ptr),
-	   .complete(t_div_complete),
-	   .ready(t_div_ready)
-	   );
+   divider #(.LG_W(5))
+   d32 (
+	.clk(clk), 
+	.reset(reset),
+	.inA(t_srcA),
+	.inB(t_srcB),
+	.rob_ptr_in(int_uop.rob_ptr),
+	.prf_ptr_in(int_uop.dst),
+	.is_signed_div(t_signed_div),
+        .is_rem(t_is_rem),
+	.start_div(t_start_div32),
+	.y(t_div_result),
+	.rob_ptr_out(t_div_rob_ptr),
+	.prf_ptr_out(w_div_prf_ptr),
+	.complete(t_div_complete),
+	.ready(t_div_ready)
+	);
 
    assign divide_ready = t_div_ready;
 
@@ -1588,8 +1586,8 @@ module exec(clk,
    wire [63:0] w_s_sub64, w_c_sub64;
    logic       t_sub, t_addi, t_slti, t_sltiu;
 
-   csa #(.N(32)) csa0 (.a(t_srcA), 
-		       .b(t_slti ? ~int_uop.rvimm  : (t_addi ? int_uop.rvimm : (t_sub ? ~t_srcB : t_srcB))), 
+   csa #(.N(32)) csa0 (.a(t_srcA[31:0]), 
+		       .b(t_slti ? ~int_uop.rvimm[31:0]  : (t_addi ? int_uop.rvimm[31:0] : (t_sub ? ~t_srcB[31:0] : t_srcB[31:0]))), 
 		       .cin(t_sub|t_slti ? 32'd1 : 32'd0), .s(w_s_sub32), .cout(w_c_sub32) );
    
    wire [31:0] w_add32_srcA = {w_c_sub32[30:0], 1'b0};
@@ -1598,8 +1596,8 @@ module exec(clk,
    ppa32 add0 (.A(w_add32_srcA), .B(w_add32_srcB), .Y(w_add32));
 
 
-   csa #(.N(64)) csa1 (.a({32'd0, t_srcA}), 
-		       .b(~{32'd0, t_sltiu ? int_uop.rvimm : t_srcB}), 
+   csa #(.N(64)) csa1 (.a({32'd0, t_srcA[31:0]}), 
+		       .b(~{32'd0, t_sltiu ? int_uop.rvimm[31:0] : t_srcB[31:0]}), 
 		       .cin(64'd1), 
 		       .s(w_s_sub64), 
 		       .cout(w_c_sub64) 
@@ -1705,13 +1703,13 @@ module exec(clk,
 	  ADDI:
 	    begin
 	       t_addi = 1'b1;
-	       t_result = w_add32;
+	       t_result = { {(`M_WIDTH-32){w_add32[31]}}, w_add32};	       
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
 	  ADDU:
 	    begin
-	       t_result = w_add32;
+	       t_result = { {(`M_WIDTH-32){w_add32[31]}}, w_add32};
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
@@ -1766,7 +1764,7 @@ module exec(clk,
 	  SUBU:
 	    begin
 	       t_sub = 1'b1;
-	       t_result = w_add32;
+	       t_result = { {(`M_WIDTH-32){w_add32[31]}}, w_add32};
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end

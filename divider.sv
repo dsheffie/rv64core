@@ -1,9 +1,10 @@
 `include "uop.vh"
+`include "machine.vh"
 
 module divider(clk,
 	       reset,
-	       srcA,
-	       srcB,
+	       inA,
+	       inB,
 	       rob_ptr_in,
 	       prf_ptr_in,	     
 	       is_signed_div,
@@ -21,9 +22,9 @@ module divider(clk,
    localparam W2 = 2*W;
    input logic clk;
    input logic reset;
-   input logic [W-1:0] srcA;
-   input logic [W-1:0] srcB;
-
+   input logic [`M_WIDTH-1:0] inA;
+   input logic [`M_WIDTH-1:0] inB;
+   
    input logic [`LG_ROB_ENTRIES-1:0] rob_ptr_in;
    input logic [`LG_PRF_ENTRIES-1:0] prf_ptr_in;
    
@@ -31,7 +32,7 @@ module divider(clk,
    input logic 	      is_rem;
    input logic 	      start_div;
    
-   output logic [W-1:0] y;
+   output logic [`M_WIDTH-1:0] y;
    
    output logic [`LG_ROB_ENTRIES-1:0] rob_ptr_out;
    output logic [`LG_PRF_ENTRIES-1:0] prf_ptr_out;
@@ -62,6 +63,9 @@ module divider(clk,
    
    logic [LG_W-1:0] 		    r_idx, n_idx;
    logic 			    t_bit,t_valid;
+
+   wire [W-1:0] 		    srcA = inA[W-1:0];
+   wire [W-1:0] 		    srcB = inB[W-1:0];
    
       
    always_ff@(posedge clk)
@@ -126,7 +130,7 @@ module divider(clk,
 	ready = (r_state == IDLE) & !start_div;
 	rob_ptr_out = r_rob_ptr;
 	prf_ptr_out = r_gpr_prf_ptr;
-	y = r_Y[31:0];
+	y = r_Y;
 	complete = 1'b0;
 	
 	unique case (r_state)
@@ -168,6 +172,10 @@ module divider(clk,
 	       n_state = WAIT_FOR_WB;	       
 	       n_Y[W-1:0] = t_ss;
 	       n_Y[W2-1:W] = n_R[W2-1:W];
+	       if(r_is_signed)
+		 begin
+		    $stop();
+		 end
 	       if(r_is_signed && r_sign)
 		 begin
 		    n_Y[W-1:0] = (~t_ss) +'d1;
