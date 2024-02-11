@@ -639,7 +639,7 @@ module core(clk,
    			       r_cycle,
 			       t_rob_head.valid_dst ? 32'd1 : 32'd0,
 			       {27'd0, t_rob_head.ldst},
-			       t_rob_head.data,
+			       {{(64-`M_WIDTH){1'b0}},t_rob_head.data},
 			       t_rob_head.faulted ? 32'd1 : 32'd0,
 			       t_rob_head.faulted & !(t_rob_head.is_break | t_rob_head.is_ii | t_rob_head.is_bad_addr) ? 32'd1 : 32'd0			       
 			       );
@@ -654,7 +654,7 @@ module core(clk,
    			       r_cycle,
 			       t_rob_next_head.valid_dst ? 32'd1 : 32'd0,
 			       {27'd0, t_rob_next_head.ldst},
-			       t_rob_next_head.data,
+			       {{(64-`M_WIDTH){1'b0}},t_rob_next_head.data},			       
 			       t_rob_next_head.faulted ? 32'd1 : 32'd0,
 			       32'd0);	     
    	  end // if (t_retire_two)
