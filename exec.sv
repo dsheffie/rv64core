@@ -1717,42 +1717,42 @@ module exec(clk,
 	    end
 	  RDCYCLE:
 	    begin
-	       t_result = r_cycle[31:0];
+	       t_result = {{(64-`M_WIDTH){1'b0}},r_cycle[`M_WIDTH-1:0]};
 	       t_alu_valid = 1'b1;
 	       t_wr_int_prf = 1'b1;
 	       t_pc = w_pc4;	       
 	    end
 	  RDCYCLEH:
 	    begin
-	       t_result = r_cycle[63:32];
+	       t_result = {{(`M_WIDTH-32){1'b0}},r_cycle[63:32]};	       
 	       t_alu_valid = 1'b1;
 	       t_wr_int_prf = 1'b1;
 	       t_pc = w_pc4;
 	    end
 	  RDINSTRET:
 	    begin
-	       t_result = r_retired_insns[31:0];
+	       t_result = {{(64-`M_WIDTH){1'b0}},r_retired_insns[`M_WIDTH-1:0]};
 	       t_alu_valid = 1'b1;
 	       t_wr_int_prf = 1'b1;
 	       t_pc = w_pc4;
 	    end
 	  RDINSTRETH:
 	    begin
-	       t_result = r_retired_insns[63:32];
+	       t_result = {{(`M_WIDTH-32){1'b0}},r_retired_insns[63:32]};
 	       t_alu_valid = 1'b1;
 	       t_wr_int_prf = 1'b1;
 	       t_pc = w_pc4;
 	    end
 	  RDBRANCH:
 	    begin
-	       t_result = r_branches[31:0];
+	       t_result = {{(64-`M_WIDTH){1'b0}},r_branches[`M_WIDTH-1:0]};      
 	       t_alu_valid = 1'b1;
 	       t_wr_int_prf = 1'b1;
 	       t_pc = w_pc4;	       
 	    end
 	  RDFAULTEDBRANCH:
 	    begin
-	       t_result = r_branch_faults[31:0];
+	       t_result = {{(64-`M_WIDTH){1'b0}},r_branch_faults[`M_WIDTH-1:0]};
 	       t_alu_valid = 1'b1;
 	       t_wr_int_prf = 1'b1;
 	       t_pc = w_pc4;

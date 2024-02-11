@@ -632,8 +632,7 @@ module core(clk,
    	if(t_retire)
    	  begin
 	     record_retirement(
-			       //{ {(64-`M_WIDTH){1'b0}},t_rob_head.pc},
-			       t_rob_head.pc, 			       
+			       { {(64-`M_WIDTH){1'b0}},t_rob_head.pc},
    			       t_rob_head.fetch_cycle,
    			       t_rob_head.alloc_cycle,
    			       t_rob_head.complete_cycle,
@@ -648,8 +647,7 @@ module core(clk,
    	if(t_retire_two)
    	  begin
 	     record_retirement(
-			       //{ {(64-`M_WIDTH){1'b0}},t_rob_next_head.pc},
-			       t_rob_next_head.pc,			       
+			       { {(64-`M_WIDTH){1'b0}},t_rob_next_head.pc},
    			       t_rob_next_head.fetch_cycle,
    			       t_rob_next_head.alloc_cycle,
    			       t_rob_next_head.complete_cycle,
