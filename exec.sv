@@ -1628,17 +1628,17 @@ module exec(clk,
 	w_add32[31];   
    
 
-    always_ff@(negedge clk)
-      begin
-	 if(int_uop.op == SRLI && r_start_int && t_alu_valid)
-	   begin
-	      $display("SRLI srcA = %x", t_srcA);
-	   end
-	 if(int_uop.op == SLLI && r_start_int && t_alu_valid)
-	   begin
-	      $display("SLLI srcA = %x", t_srcA);
-	   end	 
-      end
+    // always_ff@(negedge clk)
+    //   begin
+    // 	 if(int_uop.op == SRLI && r_start_int && t_alu_valid)
+    // 	   begin
+    // 	      $display("SRLI srcA = %x", t_srcA);
+    // 	   end
+    // 	 if(int_uop.op == SLLI && r_start_int && t_alu_valid)
+    // 	   begin
+    // 	      $display("SLLI srcA = %x", t_srcA);
+    // 	   end	 
+    //   end
    
    always_comb
      begin

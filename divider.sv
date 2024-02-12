@@ -172,10 +172,6 @@ module divider(clk,
 	       n_state = WAIT_FOR_WB;	       
 	       n_Y[W-1:0] = t_ss;
 	       n_Y[W2-1:W] = n_R[W2-1:W];
-	       if(r_is_signed)
-		 begin
-		    $stop();
-		 end
 	       if(r_is_signed && r_sign)
 		 begin
 		    n_Y[W-1:0] = (~t_ss) +'d1;

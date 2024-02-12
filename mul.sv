@@ -68,7 +68,7 @@ module mul(clk,
    wire [(`M_WIDTH*2)-1:0] 			   w_sext32_A = {{(`M_WIDTH+32){src_A[31]}}, src_A[31:0]};
    wire [(`M_WIDTH*2)-1:0] 			   w_sext32_B = {{(`M_WIDTH+32){src_B[31]}}, src_B[31:0]};
 
-    wire [(`M_WIDTH*2)-1:0]			   w_sext64_A = {{`M_WIDTH{src_A[`M_WIDTH-1]}}, src_A};
+   wire [(`M_WIDTH*2)-1:0]			   w_sext64_A = {{`M_WIDTH{src_A[`M_WIDTH-1]}}, src_A};
    wire [(`M_WIDTH*2)-1:0] 			   w_sext64_B = {{`M_WIDTH{src_B[`M_WIDTH-1]}}, src_B};
 
    wire [(`M_WIDTH*2)-1:0]			   w_sext_A = is_64b_mul ? w_sext64_A : w_sext32_A;
@@ -77,15 +77,6 @@ module mul(clk,
    wire [`M_WIDTH-1:0]				   w_zext_A = is_64b_mul ? src_A : {32'd0, src_A[31:0]};
    wire [`M_WIDTH-1:0]				   w_zext_B = is_64b_mul ? src_B : {32'd0, src_B[31:0]};
 
-   wire [63:0]					   w_mul = src_A[31:0] * src_B[31:0];
-   
-   always_ff@(negedge clk)
-     begin
-	if(go)
-	  begin
-	     $display("srcA = %x, srcB = %x, t_mul = %x, w_mul = %x", src_A, src_B, t_mul, w_mul);
-	  end
-     end
 				   
    always_comb
      begin
