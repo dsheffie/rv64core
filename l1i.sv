@@ -186,6 +186,8 @@ module l1i(clk,
    input logic [L1I_CL_LEN_BITS-1:0] 	  mem_rsp_load_data;
    output logic [63:0] 			  cache_accesses;
    output logic [63:0] 			  cache_hits;
+
+   wire 				  in_32b_mode = 1'b1;
       
    logic [N_TAG_BITS-1:0] 		  t_cache_tag, r_cache_tag, r_tag_out;
 
@@ -340,6 +342,8 @@ endfunction
    assign mem_req_opcode = MEM_LW;
    assign cache_hits = r_cache_hits;
    assign cache_accesses = r_cache_accesses;
+
+   wire [`M_WIDTH-1:0] w_restart_pc = in_32b_mode ? { {(`M_WIDTH-32){1'b0}}, restart_pc[31:0]} : restart_pc;
    
    always_comb
      begin
@@ -463,7 +467,7 @@ endfunction
      begin
 	if(restart_valid && restart_src_is_indirect)
 	  begin
-	     r_btb[restart_src_pc[(`LG_BTB_SZ+1):2]] <= restart_pc;
+	     r_btb[restart_src_pc[(`LG_BTB_SZ+1):2]] <= w_restart_pc;
 	  end	
      end // always_ff@ (posedge clk)
 
@@ -581,7 +585,7 @@ endfunction
 		 begin
 		    n_restart_ack = 1'b1;
 		    n_restart_req = 1'b0;
-		    n_pc = restart_pc;
+		    n_pc = w_restart_pc;
 		    n_state = ACTIVE;
 		    t_clear_fq = 1'b1;
 		 end
@@ -609,7 +613,7 @@ endfunction
 		 begin
 		    n_restart_ack = 1'b1;
 		    n_restart_req = 1'b0;
-		    n_pc = restart_pc;
+		    n_pc = w_restart_pc;
 		    n_req = 1'b0;
 		    n_state = ACTIVE;
 		    t_clear_fq = 1'b1;
@@ -739,7 +743,7 @@ endfunction
 		 begin
 		    n_restart_ack = 1'b1;
 		    n_restart_req = 1'b0;
-		    n_pc = restart_pc;
+		    n_pc = w_restart_pc;
 		    n_req = 1'b0;
 		    n_state = ACTIVE;
 		    t_clear_fq = 1'b1;
@@ -784,7 +788,7 @@ endfunction
 		 begin
 		    n_restart_ack = 1'b1;
 		    n_restart_req = 1'b0;
-		    n_pc = restart_pc;
+		    n_pc = w_restart_pc;
 		    n_req = 1'b0;
 		    n_state = ACTIVE;
 		    t_clear_fq = 1'b1;
