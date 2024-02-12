@@ -999,20 +999,22 @@ module exec(clk,
 	t_alu_sched_full2 = (&r_alu_sched_valid2);
 	
 	t_pop_uq = !(t_flash_clear | t_uq_empty | t_alu_sched_full);
-	t_pop_uq2 = 1'b0; //t_uq_next_empty ? 1'b0 : (t_pop_uq & uq2.is_cheap_int & (!t_alu_sched_full2));
+	t_pop_uq2 = t_uq_next_empty ? 1'b0 : (t_pop_uq & uq2.is_cheap_int & (!t_alu_sched_full2));
      end // always_comb
 
 
    logic t_left_shift2, t_signed_shift2;
    wire [`M_WIDTH-1:0] w_shifter_out2;
    logic [5:0] t_shift_amt2;   
-   
-   shift_right #(.LG_W(`LG_M_WIDTH))
+
+   wire [31:0] w_shift32_2;
+   shift_right #(.LG_W(`LG_M_WIDTH-1))
    s1(.is_left(t_left_shift2), 
       .is_signed(t_signed_shift2), 
-      .data(t_srcA_2), 
-      .distance(t_shift_amt2[`LG_M_WIDTH-1:0]), 
-      .y(w_shifter_out2));
+      .data(t_srcA_2[31:0]), 
+      .distance(t_shift_amt2[`LG_M_WIDTH-2:0]), 
+      .y(w_shift32_2));
+   assign w_shifter_out2 = {{(`M_WIDTH-32){w_shift32_2[31]}},w_shift32_2};   
    
    
   
@@ -1038,9 +1040,9 @@ module exec(clk,
 
    wire [`M_WIDTH-1:0] w_indirect_target2;
    mwidth_add itgt (.A(t_srcA_2), .B(int_uop2.rvimm), .Y(w_indirect_target2));
-   
-   wire        w_mispredicted_indirect2 = w_indirect_target2 != 
-	       {int_uop2.jmp_imm,int_uop2.imm};   
+
+   wire [63:0] w_fe_indirect_target2 = {int_uop2.jmp_imm,int_uop2.imm};   
+   wire        w_mispredicted_indirect2 = w_indirect_target2[31:0] != w_fe_indirect_target2[31:0];   
 
    
    always_comb
@@ -1614,8 +1616,10 @@ module exec(clk,
    
    wire [`M_WIDTH-1:0] w_indirect_target;
    mwidth_add add2 (.A(t_srcA), .B(int_uop.rvimm), .Y(w_indirect_target));
+
+   wire [63:0]	       w_fe_indirect_target = {int_uop.jmp_imm,int_uop.imm};
+   wire		       w_mispredicted_indirect = w_indirect_target[31:0] != w_fe_indirect_target[31:0];
    
-   wire        w_mispredicted_indirect = w_indirect_target != {int_uop.jmp_imm,int_uop.imm};
    
    mwidth_add add3 (.A(int_uop.pc), .B('d4), .Y(w_pc4));
 
