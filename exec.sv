@@ -999,7 +999,7 @@ module exec(clk,
 	t_alu_sched_full2 = (&r_alu_sched_valid2);
 	
 	t_pop_uq = !(t_flash_clear | t_uq_empty | t_alu_sched_full);
-	t_pop_uq2 = t_uq_next_empty ? 1'b0 : (t_pop_uq & uq2.is_cheap_int & (!t_alu_sched_full2));
+	t_pop_uq2 = 1'b0; //t_uq_next_empty ? 1'b0 : (t_pop_uq & uq2.is_cheap_int & (!t_alu_sched_full2));
      end // always_comb
 
 
@@ -1320,13 +1320,15 @@ module exec(clk,
    
    
    
+   wire [31:0] w_shift32;
    
-   shift_right #(.LG_W(`LG_M_WIDTH)) 
+   shift_right #(.LG_W(`LG_M_WIDTH-1)) 
    s0(.is_left(t_left_shift), 
       .is_signed(t_signed_shift), 
-      .data(t_srcA), 
-      .distance(t_shift_amt[`LG_M_WIDTH-1:0]), 
-      .y(w_shifter_out));
+      .data(t_srcA[31:0]), 
+      .distance(t_shift_amt[`LG_M_WIDTH-2:0]), 
+      .y(w_shift32));
+   assign w_shifter_out = {{(`M_WIDTH-32){w_shift32[31]}},w_shift32};
    
 
    
@@ -1626,19 +1628,17 @@ module exec(clk,
 	w_add32[31];   
    
 
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if(int_uop.op == BGEU && r_start_int && t_alu_valid)
-   // 	  begin
-   // 	     $display("w_add64[32] = %b", 
-   // 		      !w_add64[32]);
-   // 	     $display("should be %b", 
-   // 		      (t_srcA  > t_srcB) | (t_srcA == t_srcB));
-   // 	     $display("t_srcA = %x, t_srcB = %x", t_srcA, t_srcB);
-   // 	     $display("w_add64 = %x", w_add64);
-   // 	     //$stop();
-   // 	  end
-   //   end
+    always_ff@(negedge clk)
+      begin
+	 if(int_uop.op == SRLI && r_start_int && t_alu_valid)
+	   begin
+	      $display("SRLI srcA = %x", t_srcA);
+	   end
+	 if(int_uop.op == SLLI && r_start_int && t_alu_valid)
+	   begin
+	      $display("SLLI srcA = %x", t_srcA);
+	   end	 
+      end
    
    always_comb
      begin
