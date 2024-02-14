@@ -1612,26 +1612,8 @@ module exec(clk,
      end
 `endif //  `ifdef VERILATOR
 
-
-   wire [63:0] w_add64;
-   
-   wire [63:0] w_s_sub64, w_c_sub64;
-
-
-   csa #(.N(64)) csa1 (.a({32'd0, t_srcA[31:0]}), 
-		       .b(~{32'd0,t_srcB[31:0]}), 
-		       .cin(64'd1), 
-		       .s(w_s_sub64), 
-		       .cout(w_c_sub64) 
-		       );
-
-   wire [63:0] w_add64_srcA = {w_c_sub64[62:0], 1'b0};
-   wire [63:0] w_add64_srcB = w_s_sub64;
-   ppa64 add1 (.A(w_add64_srcA), .B(w_add64_srcB), .Y(w_add64));
-
    
    wire [`M_WIDTH-1:0] w_pc4;
-   
    wire [`M_WIDTH-1:0] w_indirect_target;
    mwidth_add add2 (.A(t_srcA), .B(int_uop.rvimm), .Y(w_indirect_target));
 
@@ -1641,15 +1623,6 @@ module exec(clk,
    wire		       w_mispredicted_indirect = (mode64 & w_mispredicted_indirect_hi) | w_mispredicted_indirect_lo;
       
    mwidth_add add3 (.A(int_uop.pc), .B('d4), .Y(w_pc4));
-
-   wire        w_AeqB = t_srcA == t_srcB;
-   wire w_AltB = (t_srcA[31] & (~t_srcB[31])) ? 1'b1 :
-	((~t_srcA[31]) & t_srcB[31]) ? 1'b0 :
-	w_add32[31];
-   wire w_AltB_slti = (t_srcA[31] & (~int_uop.rvimm[31])) ? 1'b1 :
-	((~t_srcA[31]) & int_uop.rvimm[31]) ? 1'b0 :
-	w_add32[31];   
-   
 
    
    always_comb
@@ -1792,39 +1765,35 @@ module exec(clk,
 	    end
 	  BEQ:
 	    begin
-	       t_take_br = w_AeqB;
+	       t_take_br = (t_srcA == t_srcB);
 	       t_mispred_br = int_uop.br_pred != t_take_br;
 	       t_pc = t_take_br ? int_uop.rvimm : w_pc4;	       
 	       t_alu_valid = 1'b1;
 	    end
 	  BGE:
 	    begin
-	       t_sub = 1'b1;
-	       t_take_br = ((~t_srcA[31]) & t_srcB[31]) ? 1'b1 :
-			   (t_srcA[31] & (~t_srcB[31])) ? 1'b0 :
-			   (w_add32[31] == 1'b0);
+	       t_take_br = $signed(t_srcA) >= $signed(t_srcB);
 	       t_mispred_br = int_uop.br_pred != t_take_br;
 	       t_pc = t_take_br ? int_uop.rvimm : w_pc4;	       
 	       t_alu_valid = 1'b1;
 	    end
 	  BGEU:
 	    begin
-	       t_take_br = !w_add64[32];
+	       t_take_br = t_srcA >= t_srcB;
 	       t_mispred_br = int_uop.br_pred != t_take_br;
 	       t_pc = t_take_br ? int_uop.rvimm : w_pc4;
 	       t_alu_valid = 1'b1;
 	    end
 	  BLT:
 	    begin
-	       t_sub = 1'b1;
-	       t_take_br = w_AltB;
+	       t_take_br = $signed(t_srcA) < $signed(t_srcB);
 	       t_mispred_br = int_uop.br_pred != t_take_br;
 	       t_pc = t_take_br ? int_uop.rvimm : w_pc4;
 	       t_alu_valid = 1'b1;
 	    end
 	  BLTU:
 	    begin
-	       t_take_br = w_add64[32];
+	       t_take_br = t_srcA < t_srcB;
 	       t_mispred_br = int_uop.br_pred != t_take_br;
 	       t_pc = t_take_br ? int_uop.rvimm : w_pc4;
 	       t_alu_valid = 1'b1;
@@ -1832,7 +1801,7 @@ module exec(clk,
 	  
 	  BNE:
 	    begin
-	       t_take_br = !w_AeqB;
+	       t_take_br = (t_srcA != t_srcB);
 	       t_mispred_br = int_uop.br_pred != t_take_br;
 	       t_pc = t_take_br ? int_uop.rvimm : w_pc4;
 	       t_alu_valid = 1'b1;
@@ -1905,14 +1874,13 @@ module exec(clk,
 	    end
 	  SLT:
 	    begin
-	       t_sub = 1'b1;
-	       t_result = {w_zf, w_AltB};
+	       t_result = {w_zf, $signed(t_srcA) < $signed(t_srcB)};	       
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
 	  SLTU:
 	    begin
-	       t_result = {w_zf, w_add64[32]};
+	       t_result = {w_zf, t_srcA < t_srcB};
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
