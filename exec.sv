@@ -1024,14 +1024,11 @@ module exec(clk,
    mwidth_add npc_2 (.A(int_uop2.pc), .B('d4), .Y(w_pc2_4));
  
    logic  t_sub2, t_addi_2;
-   wire [31:0] w_s_sub32_2, w_c_sub32_2;
    wire [31:0] w_s_sub32, w_c_sub32;
-   
-   wire [31:0] w_add32_2;
    wire [31:0] w_add32;
 
    logic       t_sub, t_addi;
-   
+
 
    csa #(.N(32)) csa0 (.a(t_srcA[31:0]), 
 		       .b( (t_addi ? int_uop.rvimm[31:0] : (t_sub ? ~t_srcB[31:0] : t_srcB[31:0]))), 
@@ -1054,26 +1051,28 @@ module exec(clk,
       );
    wire [63:0] w_as64 = mode64 ? w_as64_ : {{32{w_as64_[31]}}, w_as64_[31:0]};
    
-   csa #(.N(32)) csa2 (
-		       .a(t_srcA_2[31:0]), 
-		       .b(t_addi_2 ? int_uop2.rvimm[31:0] : (t_sub2 ? ~t_srcB_2[31:0] : t_srcB_2[31:0])), 
-		       .cin(t_sub2 ? 32'd1 : 32'd0), 
-		       .s(w_s_sub32_2), 
-		       .cout(w_c_sub32_2) );
-   
-   
-   ppa32 add32 (.A({w_c_sub32_2[30:0], 1'b0}), 
-		.B(w_s_sub32_2), 
-		.Y(w_add32_2));
-   
+
+   wire [63:0] w_as64_2_;
+   addsub #(.W(64)) as1
+     (
+      .A(t_srcA_2), 
+      .B(t_addi_2 ? int_uop2.rvimm : t_srcB_2), 
+      .is_sub(t_sub2), 
+      .Y(w_as64_2_)
+      );
+   wire [63:0] w_as64_2 = mode64 ? w_as64_2_ : {{32{w_as64_2_[31]}}, w_as64_2_[31:0]};
    
    
    wire [`M_WIDTH-1:0] w_indirect_target2;
    mwidth_add itgt (.A(t_srcA_2), .B(int_uop2.rvimm), .Y(w_indirect_target2));
 
-   wire [63:0] w_fe_indirect_target2 = {int_uop2.jmp_imm,int_uop2.imm};   
-   wire        w_mispredicted_indirect2 = w_indirect_target2[31:0] != w_fe_indirect_target2[31:0];   
-
+   wire [63:0] w_fe_indirect_target2 = {int_uop2.jmp_imm,int_uop2.imm};
+   
+   wire	       w_mispredicted_indirect2_lo = w_indirect_target2[31:0] != w_fe_indirect_target2[31:0];
+   wire	       w_mispredicted_indirect2_hi = w_indirect_target2[63:32] != w_fe_indirect_target2[63:32];
+   
+   wire	       w_mispredicted_indirect2 = w_mispredicted_indirect2_lo | (mode64 &w_mispredicted_indirect2_hi);
+   
    
    always_comb
      begin
@@ -1166,13 +1165,13 @@ module exec(clk,
 	  ADDI:
 	    begin
 	       t_addi_2 = 1'b1;
-	       t_result2 = { {(`M_WIDTH-32){w_add32_2[31]}}, w_add32_2};
+	       t_result2 = w_as64_2;
 	       t_alu_valid2 = 1'b1;
 	       t_wr_int_prf2 = 1'b1;
 	    end
 	  ADDU:
 	    begin
-	       t_result2 = { {(`M_WIDTH-32){w_add32_2[31]}}, w_add32_2};
+	       t_result2 = w_as64_2;
 	       t_alu_valid2 = 1'b1;
 	       t_wr_int_prf2 = 1'b1;
 	    end
@@ -1203,7 +1202,7 @@ module exec(clk,
 	  SUBU:
 	    begin
 	       t_sub2 = 1'b1;
-	       t_result2 = { {(`M_WIDTH-32){w_add32_2[31]}}, w_add32_2};
+	       t_result2 = w_as64_2;
 	       t_alu_valid2 = 1'b1;
 	       t_wr_int_prf2 = 1'b1;
 	    end
@@ -1637,9 +1636,10 @@ module exec(clk,
    mwidth_add add2 (.A(t_srcA), .B(int_uop.rvimm), .Y(w_indirect_target));
 
    wire [63:0]	       w_fe_indirect_target = {int_uop.jmp_imm,int_uop.imm};
-   wire		       w_mispredicted_indirect = w_indirect_target[31:0] != w_fe_indirect_target[31:0];
-   
-   
+   wire		       w_mispredicted_indirect_lo = w_indirect_target[31:0] != w_fe_indirect_target[31:0];
+   wire		       w_mispredicted_indirect_hi = w_indirect_target[63:32] != w_fe_indirect_target[63:32];
+   wire		       w_mispredicted_indirect = (mode64 & w_mispredicted_indirect_hi) | w_mispredicted_indirect_lo;
+      
    mwidth_add add3 (.A(int_uop.pc), .B('d4), .Y(w_pc4));
 
    wire        w_AeqB = t_srcA == t_srcB;
@@ -1651,27 +1651,6 @@ module exec(clk,
 	w_add32[31];   
    
 
-    always_ff@(negedge clk)
-      begin
-      if(int_uop.op == ADDU && r_start_int && t_alu_valid)
-	begin
-	   if(t_result != w_as64)
-	     begin
-     		$display("ADDU = %x, %x", 
-			 t_result, w_as64);
-		$stop();
-
-
-
-
-
-	     end
-    	end
-    // 	 if(int_uop.op == SLLI && r_start_int && t_alu_valid)
-    // 	   begin
-    // 	      $display("SLLI srcA = %x", t_srcA);
-    // 	   end	 
-      end
    
    always_comb
      begin
