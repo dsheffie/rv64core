@@ -37,6 +37,7 @@ import "DPI-C" function int check_insn_bytes(input longint pc, input int data);
 
 module core(clk, 
 	    reset,
+	    mode64,
 	    extern_irq,
 	    head_of_rob_ptr_valid,
 	    head_of_rob_ptr,
@@ -110,6 +111,7 @@ module core(clk,
 	    epc);
    input logic clk;
    input logic reset;
+   output logic	mode64;
    input logic extern_irq;
    output logic head_of_rob_ptr_valid;
    output logic [`LG_ROB_ENTRIES-1:0] head_of_rob_ptr;
@@ -446,6 +448,9 @@ module core(clk,
    assign branch_pht_idx = r_branch_pht_idx;
    
    assign took_branch = r_took_branch;
+
+   logic r_mode64, n_mode64;
+   assign mode64 = r_mode64;
    
    
    logic [63:0] r_cycle;
@@ -543,6 +548,7 @@ module core(clk,
      begin
 	if(reset)
 	  begin
+	     r_mode64 <= 1'b0;	     
 	     r_state <= FLUSH_FOR_HALT;
 	     r_restart_cycles <= 'd0;
 	     r_machine_clr <= 1'b0;
@@ -552,6 +558,7 @@ module core(clk,
 	  end
 	else
 	  begin
+	     r_mode64 <= n_mode64;
 	     r_state <= n_state;
 	     r_restart_cycles <= n_restart_cycles;
 	     r_machine_clr <= n_machine_clr;
@@ -756,6 +763,7 @@ module core(clk,
    
    always_comb
      begin
+	n_mode64 = r_mode64;
 	t_clr_extern_irq = 1'b0;
 	t_restart_complete = 1'b0;
 	
@@ -1860,26 +1868,34 @@ module core(clk,
      end // always_comb
 
    
-   decode_riscv dec0 (.insn(insn.insn_bytes), 
-		      .pc(insn.pc), 
-		      .insn_pred(insn.pred), 
-		      .pht_idx(insn.pht_idx),
-		      .insn_pred_target(insn.pred_target),
+   decode_riscv dec0 
+     (
+      .mode64(r_mode64),
+      .insn(insn.insn_bytes), 
+      .pc(insn.pc), 
+      .insn_pred(insn.pred), 
+      .pht_idx(insn.pht_idx),
+      .insn_pred_target(insn.pred_target),
 `ifdef ENABLE_CYCLE_ACCOUNTING
-		      .fetch_cycle(insn.fetch_cycle),
+      .fetch_cycle(insn.fetch_cycle),
 `endif		      
-		      .uop(t_dec_uop));
-
-   decode_riscv dec1 (.insn(insn_two.insn_bytes), 
-		      .pc(insn_two.pc), 
-		      .insn_pred(insn_two.pred), 
-		      .pht_idx(insn_two.pht_idx),
-		      .insn_pred_target(insn_two.pred_target),
+      .uop(t_dec_uop)
+      );
+   
+   decode_riscv dec1 
+     (	
+	.mode64(r_mode64),
+	.insn(insn_two.insn_bytes), 
+	.pc(insn_two.pc), 
+	.insn_pred(insn_two.pred), 
+	.pht_idx(insn_two.pht_idx),
+	.insn_pred_target(insn_two.pred_target),
 `ifdef ENABLE_CYCLE_ACCOUNTING
-		      .fetch_cycle(insn_two.fetch_cycle),
+	.fetch_cycle(insn_two.fetch_cycle),
 `endif		      
-		      .uop(t_dec_uop2));
-
+	.uop(t_dec_uop2)
+	);
+   
 
    
    logic t_push_1, t_push_2;
@@ -1896,6 +1912,7 @@ module core(clk,
    exec e (
 	   .clk(clk), 
 	   .reset(reset),
+	   .mode64(r_mode64),
 	   .retire(t_retire),
 	   .retire_two(t_retire_two),
 	   .divide_ready(t_divide_ready),

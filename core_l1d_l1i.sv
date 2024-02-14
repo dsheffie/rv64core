@@ -293,7 +293,7 @@ module core_l1d_l1i(clk,
    wire w_l1_mem_req_ack;
    
    wire [127:0] w_l1_mem_load_data;
-
+   wire		w_mode64;
    
    l2 l2cache (
 	       .clk(clk),
@@ -334,7 +334,7 @@ module core_l1d_l1i(clk,
    
    
 
-   logic 			  drain_ds_complete;
+   logic	drain_ds_complete;
    logic [(1<<`LG_ROB_ENTRIES)-1:0] dead_rob_mask;
 
 `ifdef PERFECT_L1D
@@ -385,6 +385,7 @@ module core_l1d_l1i(clk,
    l1i icache(
 	      .clk(clk),
 	      .reset(reset),
+	      .mode64(w_mode64),	      
 	      .flush_req(flush_req_l1i),
 	      .flush_complete(l1i_flush_complete),
 	      .restart_pc(restart_pc),
@@ -421,6 +422,7 @@ module core_l1d_l1i(clk,
    core cpu (
 	     .clk(clk),
 	     .reset(reset),
+	     .mode64(w_mode64),
 	     .extern_irq(extern_irq),
 	     .resume(resume),
 	     .memq_empty(memq_empty),

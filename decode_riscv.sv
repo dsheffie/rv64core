@@ -2,7 +2,9 @@
 `include "rob.vh"
 `include "uop.vh"
 
-module decode_riscv(insn, 
+module decode_riscv(
+		    mode64,
+		    insn, 
 		    pc, 
 		    insn_pred, 
 		    pht_idx, 
@@ -11,7 +13,8 @@ module decode_riscv(insn,
 		    fetch_cycle,
 `endif
 		    uop);
-   
+
+   input logic mode64;
    input logic [31:0] insn;
    input logic [`M_WIDTH-1:0] pc;
    input logic 	      insn_pred;
@@ -37,7 +40,7 @@ module decode_riscv(insn,
    logic [`M_WIDTH-1:0] 		t_imm;
    localparam PP = (`M_WIDTH-32);
    
-   wire [`M_WIDTH-1:0] 		w_pc_imm;
+   wire [`M_WIDTH-1:0] 		w_pc_imm, w_pc_imm_;
    always_comb
      begin
 	t_imm = 'd0;
@@ -52,17 +55,17 @@ module decode_riscv(insn,
 	    end
 	  7'h6f: /* jal and j */
 	    begin
-	       t_imm = {{(11+PP){insn[31]}}, insn[31], insn[19:12], insn[20], insn[30:21], 1'b0}; 
-	    end
+	       t_imm = {{(11+PP){insn[31]}}, insn[31], insn[19:12], insn[20], insn[30:21], 1'b0}; 	    end
 	  default:
 	    begin
 	    end
 	  endcase
      end
 
-   
-   mwidth_add imm_add (.A(pc), .B(t_imm), .Y(w_pc_imm));
-   
+
+   mwidth_add imm_add (.A(pc), .B(t_imm), .Y(w_pc_imm_));
+   assign w_pc_imm = mode64 ? w_pc_imm_ : {{32{w_pc_imm_[31]}}, w_pc_imm_[31:0]};
+		    
    always_comb
      begin
 	rd_is_link = (rd == 'd1) || (rd == 'd5);

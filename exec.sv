@@ -21,6 +21,7 @@ import "DPI-C" function void report_exec(input int int_valid,
 
 module exec(clk, 
 	    reset,
+	    mode64,
 	    retire,
 	    retire_two,
 `ifdef VERILATOR
@@ -61,6 +62,7 @@ module exec(clk,
 	    branch_fault);
    input logic clk;
    input logic reset;
+   input logic mode64;
    input logic retire;
    input logic retire_two;
    
@@ -1023,7 +1025,34 @@ module exec(clk,
  
    logic  t_sub2, t_addi_2;
    wire [31:0] w_s_sub32_2, w_c_sub32_2;
+   wire [31:0] w_s_sub32, w_c_sub32;
+   
    wire [31:0] w_add32_2;
+   wire [31:0] w_add32;
+
+   logic       t_sub, t_addi;
+   
+
+   csa #(.N(32)) csa0 (.a(t_srcA[31:0]), 
+		       .b( (t_addi ? int_uop.rvimm[31:0] : (t_sub ? ~t_srcB[31:0] : t_srcB[31:0]))), 
+		       .cin(t_sub ? 32'd1 : 32'd0), 
+		       .s(w_s_sub32), 
+		       .cout(w_c_sub32) );
+   
+   wire [31:0] w_add32_srcA = {w_c_sub32[30:0], 1'b0};
+   wire [31:0] w_add32_srcB = w_s_sub32;
+   
+   ppa32 add0 (.A(w_add32_srcA), .B(w_add32_srcB), .Y(w_add32));
+
+   wire [63:0] w_as64_;
+   addsub #(.W(64)) as0 
+     (
+      .A(t_srcA), 
+      .B(t_addi ? int_uop.rvimm : t_srcB), 
+      .is_sub(t_sub), 
+      .Y(w_as64_)
+      );
+   wire [63:0] w_as64 = mode64 ? w_as64_ : {{32{w_as64_[31]}}, w_as64_[31:0]};
    
    csa #(.N(32)) csa2 (
 		       .a(t_srcA_2[31:0]), 
@@ -1037,7 +1066,8 @@ module exec(clk,
 		.B(w_s_sub32_2), 
 		.Y(w_add32_2));
    
-
+   
+   
    wire [`M_WIDTH-1:0] w_indirect_target2;
    mwidth_add itgt (.A(t_srcA_2), .B(int_uop2.rvimm), .Y(w_indirect_target2));
 
@@ -1583,25 +1613,14 @@ module exec(clk,
      end
 `endif //  `ifdef VERILATOR
 
-   wire [31:0] w_add32;
+
    wire [63:0] w_add64;
    
-   wire [31:0] w_s_sub32, w_c_sub32;
    wire [63:0] w_s_sub64, w_c_sub64;
-   logic       t_sub, t_addi, t_slti, t_sltiu;
-
-   csa #(.N(32)) csa0 (.a(t_srcA[31:0]), 
-		       .b(t_slti ? ~int_uop.rvimm[31:0]  : (t_addi ? int_uop.rvimm[31:0] : (t_sub ? ~t_srcB[31:0] : t_srcB[31:0]))), 
-		       .cin(t_sub|t_slti ? 32'd1 : 32'd0), .s(w_s_sub32), .cout(w_c_sub32) );
-   
-   wire [31:0] w_add32_srcA = {w_c_sub32[30:0], 1'b0};
-   wire [31:0] w_add32_srcB = w_s_sub32;
-   
-   ppa32 add0 (.A(w_add32_srcA), .B(w_add32_srcB), .Y(w_add32));
 
 
    csa #(.N(64)) csa1 (.a({32'd0, t_srcA[31:0]}), 
-		       .b(~{32'd0, t_sltiu ? int_uop.rvimm[31:0] : t_srcB[31:0]}), 
+		       .b(~{32'd0,t_srcB[31:0]}), 
 		       .cin(64'd1), 
 		       .s(w_s_sub64), 
 		       .cout(w_c_sub64) 
@@ -1632,24 +1651,32 @@ module exec(clk,
 	w_add32[31];   
    
 
-    // always_ff@(negedge clk)
-    //   begin
-    // 	 if(int_uop.op == SRLI && r_start_int && t_alu_valid)
-    // 	   begin
-    // 	      $display("SRLI srcA = %x", t_srcA);
-    // 	   end
+    always_ff@(negedge clk)
+      begin
+      if(int_uop.op == ADDU && r_start_int && t_alu_valid)
+	begin
+	   if(t_result != w_as64)
+	     begin
+     		$display("ADDU = %x, %x", 
+			 t_result, w_as64);
+		$stop();
+
+
+
+
+
+	     end
+    	end
     // 	 if(int_uop.op == SLLI && r_start_int && t_alu_valid)
     // 	   begin
     // 	      $display("SLLI srcA = %x", t_srcA);
     // 	   end	 
-    //   end
+      end
    
    always_comb
      begin
 	t_sub = 1'b0;
 	t_addi = 1'b0;
-	t_sltiu = 1'b0;
-	t_slti = 1'b0;
 	t_pc = int_uop.pc;
 	t_result ='d0;
 	t_unimp_op = 1'b0;
@@ -1707,13 +1734,13 @@ module exec(clk,
 	  ADDI:
 	    begin
 	       t_addi = 1'b1;
-	       t_result = { {(`M_WIDTH-32){w_add32[31]}}, w_add32};	       
+	       t_result = w_as64;
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
 	  ADDU:
 	    begin
-	       t_result = { {(`M_WIDTH-32){w_add32[31]}}, w_add32};
+	       t_result = w_as64;	       
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
@@ -1768,7 +1795,7 @@ module exec(clk,
 	  SUBU:
 	    begin
 	       t_sub = 1'b1;
-	       t_result = { {(`M_WIDTH-32){w_add32[31]}}, w_add32};
+	       t_result = w_as64;
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
@@ -1912,15 +1939,13 @@ module exec(clk,
 	    end
 	  SLTI:
 	    begin
-	       t_slti = 1'b1;
-	       t_result = {w_zf, w_AltB_slti};
+	       t_result = {w_zf, $signed(t_srcA) < $signed(int_uop.rvimm)};	       
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
 	  SLTIU:
 	    begin
-	       t_sltiu = 1'b1;
-	       t_result = {w_zf, w_add64[32]};
+	       t_result = {w_zf, t_srcA < int_uop.rvimm};	       
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end

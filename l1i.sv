@@ -89,6 +89,7 @@ endmodule
 
 module l1i(clk,
 	   reset,
+	   mode64,
 	   flush_req,
 	   flush_complete,
 	   restart_pc,
@@ -129,6 +130,8 @@ module l1i(clk,
 
    input logic clk;
    input logic reset;
+   input logic mode64;
+   
    input logic 	      flush_req;
    output logic       flush_complete;
    //restart signals
@@ -187,7 +190,7 @@ module l1i(clk,
    output logic [63:0] 			  cache_accesses;
    output logic [63:0] 			  cache_hits;
 
-   wire 				  in_32b_mode = 1'b1;
+   wire 				  in_32b_mode = mode64==1'b0;
       
    logic [N_TAG_BITS-1:0] 		  t_cache_tag, r_cache_tag, r_tag_out;
 
