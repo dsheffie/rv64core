@@ -59,25 +59,9 @@ module core_l1d_l1i(clk,
    output logic 		in_flush_mode;
    output logic 		ready_for_resume;
    
-
-   logic [(`M_WIDTH-1):0] 	restart_pc;
-   logic [(`M_WIDTH-1):0] 	restart_src_pc;
-   logic 			restart_src_is_indirect;
-   logic 			restart_valid;
-   logic 			restart_ack;
-   logic [`LG_PHT_SZ-1:0] 	branch_pht_idx;
-   logic 			took_branch;
-
-   logic [(`M_WIDTH-1):0] 	t_branch_pc;
-   logic 			t_branch_pc_valid;
-   logic 			t_branch_fault;
-
    output logic [(`M_WIDTH-1):0] branch_pc;
    output logic 		 branch_pc_valid;
    output logic 		 branch_fault;
-   assign branch_pc = t_branch_pc;
-   assign branch_pc_valid = t_branch_pc_valid;   
-   assign branch_fault = t_branch_fault;
 
    output logic [63:0] 			l1i_cache_accesses;
    output logic [63:0] 			l1i_cache_hits;
@@ -96,25 +80,46 @@ module core_l1d_l1i(clk,
    input logic 					 mem_rsp_valid;
    input logic [(1 << (`LG_L2_CL_LEN+3)) - 1:0]  mem_rsp_load_data;
    
-   output logic 				alloc_valid;
-   output logic 			  alloc_two_valid;
-   output logic 			  iq_one_valid;
-   output logic 			  iq_none_valid;
-   
-   output logic 			  in_branch_recovery;
-   
+   output logic					 alloc_valid;
+   output logic					 alloc_two_valid;
+   output logic					 iq_one_valid;
+   output logic					 iq_none_valid;
+   output logic					 in_branch_recovery;
    output logic [4:0] 			  retire_reg_ptr;
    output logic [`M_WIDTH-1:0] 		  retire_reg_data;
    output logic 			  retire_reg_valid;
-
-   output logic [4:0] 			  retire_reg_two_ptr;
+   output logic [4:0]			  retire_reg_two_ptr;
    output logic [`M_WIDTH-1:0] 		  retire_reg_two_data;
    output logic 			  retire_reg_two_valid;
-   
    output logic 			  retire_valid;
    output logic 			  retire_two_valid;
    output logic [(`M_WIDTH-1):0] 	  retire_pc;
    output logic [(`M_WIDTH-1):0] 	  retire_two_pc;
+   input logic 				  monitor_ack;
+   output logic 			  got_break;
+   output logic 			  got_ud;
+   output logic 			  got_bad_addr;
+   output logic 			  got_monitor;
+   
+   output logic [`LG_ROB_ENTRIES:0] 	  inflight;
+   output logic [`M_WIDTH-1:0] 		  epc;
+
+
+   logic [(`M_WIDTH-1):0] 	restart_pc;
+   logic [(`M_WIDTH-1):0] 	restart_src_pc;
+   logic 			restart_src_is_indirect;
+   logic 			restart_valid;
+   logic 			restart_ack;
+   logic [`LG_PHT_SZ-1:0] 	branch_pht_idx;
+   logic 			took_branch;
+
+   logic [(`M_WIDTH-1):0] 	t_branch_pc;
+   logic 			t_branch_pc_valid;
+   logic 			t_branch_fault;
+   
+   assign branch_pc = t_branch_pc;
+   assign branch_pc_valid = t_branch_pc_valid;   
+   assign branch_fault = t_branch_fault;
 
    logic 				  retired_call;
    logic 				  retired_ret;
@@ -123,19 +128,7 @@ module core_l1d_l1i(clk,
    logic 				  retired_rob_ptr_two_valid;
    logic [`LG_ROB_ENTRIES-1:0] 		  retired_rob_ptr;
    logic [`LG_ROB_ENTRIES-1:0] 		  retired_rob_ptr_two;
-
-   input logic 				  monitor_ack;
    
-   output logic 			  got_break;
-   output logic 			  got_ud;
-   output logic 			  got_bad_addr;
-   output logic 			  got_monitor;
-   
-   
-   output logic [`LG_ROB_ENTRIES:0] 	  inflight;
-   output logic [`M_WIDTH-1:0] 		  epc;
-      
-
 
    logic 				  head_of_rob_ptr_valid;   
    logic [`LG_ROB_ENTRIES-1:0] 		  head_of_rob_ptr;

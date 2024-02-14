@@ -521,12 +521,12 @@ module decode_riscv(
 				uop.dst_valid = (rd != 'd0);
 				uop.serializing_op = 1'b1;				
 			     end
-			   else if(insn[31:20] == 12'hc80)
+			   else if((insn[31:20] == 12'hc80) & (mode64==1'b0))
 			     begin
 				uop.op = (rd == 'd0) ? NOP : RDCYCLEH;
 				uop.dst = rd;
 				uop.dst_valid = (rd != 'd0);
-				uop.serializing_op = 1'b1;				
+				uop.serializing_op = 1'b1;
 			     end
 			   else if(insn[31:20] == 12'hc02)
 			     begin
@@ -535,7 +535,7 @@ module decode_riscv(
 				uop.dst_valid = (rd != 'd0);
 				uop.serializing_op = 1'b1;
 			     end
-			   else if(insn[31:20] == 12'hc82)
+			   else if((insn[31:20] == 12'hc82) & (mode64==1'b0))
 			     begin
 				uop.op = (rd == 'd0) ? NOP : RDINSTRETH;
 				uop.dst = rd;
@@ -549,7 +549,7 @@ module decode_riscv(
 				uop.dst_valid = (rd != 'd0);
 				uop.serializing_op = 1'b1;
 			     end
-			   else if(insn[31:20] == 12'hc04)
+			   else if((insn[31:20] == 12'hc04) & (mode64==1'b0))
 			     begin
 				uop.op = (rd == 'd0) ? NOP : RDFAULTEDBRANCH;
 				uop.dst = rd;
