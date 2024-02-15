@@ -2,51 +2,51 @@
 `include "rob.vh"
 `include "uop.vh"
 
-module core_l1d_l1i(clk, 
-		    reset,
-		    extern_irq,
-		    in_flush_mode,
-		    resume,
-		    resume_pc,
-		    ready_for_resume,
-		    
-		    mem_req_valid, 
-		    mem_req_addr, 
-		    mem_req_store_data,
-		    mem_req_opcode,
-		    mem_rsp_valid,
-		    mem_rsp_load_data,
-		    alloc_valid,
-		    alloc_two_valid,
-		    iq_one_valid,
-		    iq_none_valid,
-		    in_branch_recovery,
-		    retire_reg_ptr,
-		    retire_reg_data,
-		    retire_reg_valid,
-		    retire_reg_two_ptr,
-		    retire_reg_two_data,
-		    retire_reg_two_valid,
-		    retire_valid,
-		    retire_two_valid,
-		    retire_pc,
-		    retire_two_pc,
-		    branch_pc,
-		    branch_pc_valid,		    
-		    branch_fault,
-		    l1i_cache_accesses,
-		    l1i_cache_hits,
-		    l1d_cache_accesses,
-		    l1d_cache_hits,
-		    l2_cache_accesses,
-		    l2_cache_hits,
-		    monitor_ack,
-		    got_break,
-		    got_ud,
-		    got_bad_addr,
-		    got_monitor,
-		    inflight,
-		    epc);
+module core_l1d_l1i_64(clk, 
+		       reset,
+		       extern_irq,
+		       in_flush_mode,
+		       resume,
+		       resume_pc,
+		       ready_for_resume,
+		       
+		       mem_req_valid, 
+		       mem_req_addr, 
+		       mem_req_store_data,
+		       mem_req_opcode,
+		       mem_rsp_valid,
+		       mem_rsp_load_data,
+		       alloc_valid,
+		       alloc_two_valid,
+		       iq_one_valid,
+		       iq_none_valid,
+		       in_branch_recovery,
+		       retire_reg_ptr,
+		       retire_reg_data,
+		       retire_reg_valid,
+		       retire_reg_two_ptr,
+		       retire_reg_two_data,
+		       retire_reg_two_valid,
+		       retire_valid,
+		       retire_two_valid,
+		       retire_pc,
+		       retire_two_pc,
+		       branch_pc,
+		       branch_pc_valid,		    
+		       branch_fault,
+		       l1i_cache_accesses,
+		       l1i_cache_hits,
+		       l1d_cache_accesses,
+		       l1d_cache_hits,
+		       l2_cache_accesses,
+		       l2_cache_hits,
+		       monitor_ack,
+		       got_break,
+		       got_ud,
+		       got_bad_addr,
+		       got_monitor,
+		       inflight,
+		       epc);
 
    localparam L1D_CL_LEN = 1 << `LG_L1D_CL_LEN;
    localparam L1D_CL_LEN_BITS = 1 << (`LG_L1D_CL_LEN + 3);
@@ -494,3 +494,175 @@ endmodule // core_l1d_l1i
 
 
 
+module core_l1d_l1i(clk, 
+		    reset,
+		    extern_irq,
+		    in_flush_mode,
+		    resume,
+		    resume_pc,
+		    ready_for_resume,
+		    
+		    mem_req_valid, 
+		    mem_req_addr, 
+		    mem_req_store_data,
+		    mem_req_opcode,
+		    mem_rsp_valid,
+		    mem_rsp_load_data,
+		    alloc_valid,
+		    alloc_two_valid,
+		    iq_one_valid,
+		    iq_none_valid,
+		    in_branch_recovery,
+		    retire_reg_ptr,
+		    retire_reg_data,
+		    retire_reg_valid,
+		    retire_reg_two_ptr,
+		    retire_reg_two_data,
+		    retire_reg_two_valid,
+		    retire_valid,
+		    retire_two_valid,
+		    retire_pc,
+		    retire_two_pc,
+		    branch_pc,
+		    branch_pc_valid,		    
+		    branch_fault,
+		    l1i_cache_accesses,
+		    l1i_cache_hits,
+		    l1d_cache_accesses,
+		    l1d_cache_hits,
+		    l2_cache_accesses,
+		    l2_cache_hits,
+		    monitor_ack,
+		    got_break,
+		    got_ud,
+		    got_bad_addr,
+		    got_monitor,
+		    inflight,
+		    epc);
+
+   localparam L1D_CL_LEN = 1 << `LG_L1D_CL_LEN;
+   localparam L1D_CL_LEN_BITS = 1 << (`LG_L1D_CL_LEN + 3);
+   
+   input logic clk;
+   input logic reset;
+   input logic extern_irq;
+   input logic resume;
+   input logic [31:0] resume_pc;
+   output logic 		in_flush_mode;
+   output logic 		ready_for_resume;
+   
+   output logic [31:0] branch_pc;
+   output logic 		 branch_pc_valid;
+   output logic 		 branch_fault;
+
+   output logic [63:0] 			l1i_cache_accesses;
+   output logic [63:0] 			l1i_cache_hits;
+   output logic [63:0] 			l1d_cache_accesses;
+   output logic [63:0] 			l1d_cache_hits;
+   output logic [63:0] 			l2_cache_accesses;
+   output logic [63:0] 			l2_cache_hits;   
+
+   
+   /* mem port */
+   output logic 			mem_req_valid;
+   output logic [31:0] 		mem_req_addr;
+   output logic [(1 << (`LG_L2_CL_LEN+3)) - 1:0] mem_req_store_data;
+   output logic [3:0] 				 mem_req_opcode;
+   
+   input logic 					 mem_rsp_valid;
+   input logic [(1 << (`LG_L2_CL_LEN+3)) - 1:0]  mem_rsp_load_data;
+   
+   output logic					 alloc_valid;
+   output logic					 alloc_two_valid;
+   output logic					 iq_one_valid;
+   output logic					 iq_none_valid;
+   output logic					 in_branch_recovery;
+   output logic [4:0]				 retire_reg_ptr;
+   output logic [31:0]				 retire_reg_data;
+   output logic					 retire_reg_valid;
+   output logic [4:0]				 retire_reg_two_ptr;
+   output logic [31:0]				 retire_reg_two_data;
+   output logic					 retire_reg_two_valid;
+   output logic					 retire_valid;
+   output logic					 retire_two_valid;
+   output logic [31:0]				 retire_pc;
+   output logic [31:0]				 retire_two_pc;
+   input logic					 monitor_ack;
+   output logic					 got_break;
+   output logic					 got_ud;
+   output logic					 got_bad_addr;
+   output logic					 got_monitor;
+   
+   output logic [`LG_ROB_ENTRIES:0]		 inflight;
+   output logic [31:0]				 epc;
+
+   wire [63:0]					 w_resume_pc64 = {32'd0, resume_pc};
+   
+   wire [63:0]					 w_mem_req_addr64;
+   assign mem_req_addr = w_mem_req_addr64[31:0];
+   
+   wire [63:0]					 w_retire_reg_data64, w_retire_reg_two_data64;
+   assign retire_reg_data = w_retire_reg_data64[31:0];
+   assign retire_reg_two_data = w_retire_reg_two_data64[31:0];
+   
+   wire [63:0]					 w_retire_pc64, w_retire_two_pc64;
+   assign retire_pc = w_retire_pc64[31:0];
+   assign retire_two_pc = w_retire_two_pc64[31:0];
+   
+   
+   wire [63:0]					 w_branch_pc64;
+   assign branch_pc = w_branch_pc64[31:0];
+   
+   wire [63:0]					 w_epc64;
+   assign epc = w_epc64[31:0];
+   
+   
+   core_l1d_l1i_64 c(
+		     .clk(clk),
+                     .reset(reset),
+                     .extern_irq(extern_irq),
+                     .in_flush_mode(in_flush_mode),
+                     .resume(resume),
+                     .resume_pc(w_resume_pc64),
+                     .ready_for_resume(ready_for_resume),
+                     .mem_req_valid(mem_req_valid),
+                     .mem_req_addr(w_mem_req_addr64),
+                     .mem_req_store_data(mem_req_store_data),
+                     .mem_req_opcode(mem_req_opcode),
+                     .mem_rsp_valid(mem_rsp_valid),
+                     .mem_rsp_load_data(mem_rsp_load_data),
+                     .alloc_valid(alloc_valid),
+                     .alloc_two_valid(alloc_two_valid),
+                     .iq_one_valid(iq_one_valid),
+                     .iq_none_valid(iq_none_valid),
+                     .in_branch_recovery(in_branch_recovery),
+                     .retire_reg_ptr(retire_reg_ptr),
+                     .retire_reg_data(w_retire_reg_data64),
+                     .retire_reg_valid(retire_reg_valid),
+                     .retire_reg_two_ptr(retire_reg_two_ptr),
+                     .retire_reg_two_data(w_retire_reg_two_data64),
+                     .retire_reg_two_valid(retire_reg_two_valid),
+                     .retire_valid(retire_valid),
+                     .retire_two_valid(retire_two_valid),
+                     .retire_pc(w_retire_pc64),
+                     .retire_two_pc(w_retire_two_pc64),
+                     .branch_pc(w_branch_pc64),
+                     .branch_pc_valid(branch_pc_valid),
+                     .branch_fault(branch_fault),
+                     .l1i_cache_accesses(l1i_cache_accesses),
+                     .l1i_cache_hits(l1i_cache_hits),
+                     .l1d_cache_accesses(l1d_cache_accesses),
+                     .l1d_cache_hits(l1d_cache_hits),
+                     .l2_cache_accesses(l2_cache_accesses),
+                     .l2_cache_hits(l2_cache_hits),
+                     .monitor_ack(monitor_ack),
+                     .got_break(got_break),
+                     .got_ud(got_ud),
+                     .got_bad_addr(got_bad_addr),
+                     .got_monitor(got_monitor),
+                     .inflight(inflight),
+                     .epc(w_epc64)
+		     );
+
+   
+endmodule

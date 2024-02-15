@@ -36,8 +36,9 @@ std::ostream &operator<<(std::ostream &out, const state_t & s) {
   return out;
 }
 
-void initState(state_t *s) {
+void initState(state_t *s, int xlen) {
   memset(s, 0, sizeof(state_t));
+  s->xlen = xlen;
 }
 
 
@@ -144,7 +145,7 @@ void execRiscv(state_t *s) {
 	switch(m.i.sel)
 	  {
 	  case 0: /* addi */
-	    s->gpr[rd] = s->gpr[m.i.rs1] + simm32;
+	    s->gpr[rd] = sext_xlen(s->gpr[m.i.rs1] + simm32, s->xlen);
 	    break;
 	  case 1: /* slli */
 	    s->gpr[rd] = (*reinterpret_cast<uint32_t*>(&s->gpr[m.i.rs1])) << shamt;

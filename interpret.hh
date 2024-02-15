@@ -20,7 +20,13 @@ struct state_t{
   uint32_t epc;
   uint64_t maxicnt;
   uint64_t icnt;
+  int xlen;
 };
+
+
+inline int64_t sext_xlen(int64_t x, int xlen) {
+  return (x << (64-xlen)) >> (64-xlen);
+}
 
 void handle_syscall(state_t *s, uint64_t tohost);
 
@@ -114,7 +120,7 @@ union riscv_t {
   riscv_t(uint32_t x) : raw(x) {}
 };
 
-void initState(state_t *s);
+void initState(state_t *s, int xlen = 32);
 void execRiscv(state_t *s);
 
 /* stolen from libgloss-htif : syscall.h */
