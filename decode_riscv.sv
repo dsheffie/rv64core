@@ -123,6 +123,10 @@ module decode_riscv(
 		   begin
 		      uop.op = LW;
 		   end
+		 3'd3:
+		   begin
+		      uop.op = LD;
+		   end
 		 3'd4:
 		   begin
 		      uop.op = LBU;
@@ -234,6 +238,10 @@ module decode_riscv(
 		 3'd2:
 		   begin
 		      uop.op = SW;
+		   end
+		 3'd3:
+		   begin
+		      uop.op = SD;
 		   end
 		 default:
 		   begin

@@ -59,7 +59,7 @@ static const std::map<cs_err, std::string> cs_error_map =
 static csh handle;
 
 void initCapstone() {
-  cs_err C = cs_open(CS_ARCH_RISCV, CS_MODE_RISCV32, &handle);
+  cs_err C = cs_open(CS_ARCH_RISCV, CS_MODE_RISCV64, &handle);
   if(C != CS_ERR_OK) {
     std::cerr << "capstone error : " << cs_error_map.at(C) << "\n";
     exit(-1);

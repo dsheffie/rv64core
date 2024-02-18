@@ -822,17 +822,23 @@ module l1d(clk,
 	       t_rsp_data2 = {{32{t_shift_2[31]}}, t_shift_2[31:0]};
 	       t_rsp_dst_valid2 = r_req2.dst_valid & t_hit_cache2;
 	    end
+	  MEM_LD:
+	    begin
+	       t_rsp_data2 = t_shift_2[63:0];
+	       t_rsp_dst_valid2 = r_req2.dst_valid & t_hit_cache2;
+	    end	  
 	  default:
 	    begin
 	    end
 	endcase
      end
 
-   wire [31:0] w_store_mask = 
-	       r_req.op == MEM_SB ? 32'hff :
-	       r_req.op == MEM_SH ? 32'hffff :
-	       r_req.op == MEM_SW ? 32'hffffffff :
-	       32'd0;
+   wire [63:0] w_store_mask = 
+	       r_req.op == MEM_SB ? 64'hff :
+	       r_req.op == MEM_SH ? 64'hffff :
+	       r_req.op == MEM_SW ? 64'hffffffff :
+	       r_req.op == MEM_SD ? 64'hffffffffffffffff :
+	       'd0;
 
    always_comb
      begin
@@ -848,8 +854,8 @@ module l1d(clk,
 	t_rsp_data = 'd0;
 
 	t_shift = t_data >> {r_req.addr[`LG_L1D_CL_LEN-1:0], 3'd0};
-	t_store_shift = {96'd0, r_req.data[31:0]} << {r_req.addr[`LG_L1D_CL_LEN-1:0], 3'd0};
-	t_store_mask = {96'd0, w_store_mask} << {r_req.addr[`LG_L1D_CL_LEN-1:0], 3'd0};
+	t_store_shift = {64'd0, r_req.data} << {r_req.addr[`LG_L1D_CL_LEN-1:0], 3'd0};
+	t_store_mask = {64'd0, w_store_mask} << {r_req.addr[`LG_L1D_CL_LEN-1:0], 3'd0};
 	
 	case(r_req.op)
 	  MEM_LB:
@@ -877,6 +883,11 @@ module l1d(clk,
 	       t_rsp_data = {{32{t_shift[31]}}, t_shift[31:0]};	       
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
 	    end
+	  MEM_LD:
+	    begin
+	       t_rsp_data = t_shift[63:0];	       
+	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
+	    end	  
 	  MEM_SB:
 	    begin
 	       t_array_data = (t_store_shift & t_store_mask) | ((~t_store_mask) & t_data);	       
@@ -893,6 +904,11 @@ module l1d(clk,
 	       //t_array_data = t_store_shift;
 	       t_wr_array = t_hit_cache && (r_is_retry || r_did_reload);
 	    end
+	  MEM_SD:
+	    begin
+	       t_array_data = (t_store_shift & t_store_mask) | ((~t_store_mask) & t_data);
+	       t_wr_array = t_hit_cache && (r_is_retry || r_did_reload);
+	    end	  
 	  MEM_SC:
 	    begin
 	       t_array_data = (t_store_shift & t_store_mask) | ((~t_store_mask) & t_data);	       

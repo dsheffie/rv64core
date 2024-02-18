@@ -2024,9 +2024,8 @@ module exec(clk,
    
    wire w_bad_16b_addr = &w_agu_addr[3:0];
    wire w_bad_32b_addr = (&w_agu_addr[3:2]) & (|w_agu_addr[1:0]);
-
-   //wire w_bad_16b_addr = w_agu_addr[0];
-   //wire w_bad_32b_addr = w_agu_addr[1:0] != 2'd0;   
+   
+   wire	w_bad_64b_addr = 1'b0; //fix me
    
    always_comb
      begin
@@ -2064,6 +2063,14 @@ module exec(clk,
 	       t_mem_tail.spans_cacheline = w_bad_32b_addr;
 	       t_mem_tail.unaligned = |w_agu_addr[1:0];
 	    end // case: SW
+	  SD:
+	    begin
+	       t_mem_tail.op = w_bad_64b_addr ? MEM_NOP : MEM_SD;
+	       t_mem_tail.is_store = ~w_bad_64b_addr;
+	       t_mem_tail.dst_valid = 1'b0;
+	       t_mem_tail.spans_cacheline = w_bad_64b_addr;
+	       t_mem_tail.unaligned = |w_agu_addr[2:0];
+	    end // case: SW
 	  SC:
 	    begin
 	       t_mem_tail.op = MEM_SC;
@@ -2080,6 +2087,14 @@ module exec(clk,
 	       t_mem_tail.dst_valid = mem_uq.dst_valid;
 	       t_mem_tail.spans_cacheline = w_bad_32b_addr;
 	       t_mem_tail.unaligned = |w_agu_addr[1:0];
+	    end // case: LW
+	  LD:
+	    begin
+	       t_mem_tail.is_load = 1'b1;
+	       t_mem_tail.op = w_bad_64b_addr ? MEM_NOP : MEM_LD;
+	       t_mem_tail.dst_valid = mem_uq.dst_valid;
+	       t_mem_tail.spans_cacheline = w_bad_64b_addr;
+	       t_mem_tail.unaligned = |w_agu_addr[2:0];
 	    end // case: LW
 	  LB:
 	    begin
