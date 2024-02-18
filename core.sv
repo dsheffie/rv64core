@@ -548,7 +548,7 @@ module core(clk,
      begin
 	if(reset)
 	  begin
-	     r_mode64 <= 1'b0;	     
+	     r_mode64 <= 1'b1;	     
 	     r_state <= FLUSH_FOR_HALT;
 	     r_restart_cycles <= 'd0;
 	     r_machine_clr <= 1'b0;

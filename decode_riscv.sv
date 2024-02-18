@@ -47,7 +47,7 @@ module decode_riscv(
 	case(opcode)
 	  7'h17: /* auipc */
 	    begin
-	       t_imm = {{PP{1'b0}}, insn[31:12], 12'd0};
+	       t_imm = {{PP{insn[31]}}, insn[31:12], 12'd0};
 	    end
 	  7'h63: /* branches */
 	    begin
