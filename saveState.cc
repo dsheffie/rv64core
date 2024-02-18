@@ -16,8 +16,8 @@ static const uint64_t MAGICNUM = 0xbeefd00d12345670UL;
 
 struct header {
   uint64_t magic;
-  uint32_t pc;
-  int32_t gpr[32];
+  uint64_t pc;
+  int64_t gpr[32];
   uint64_t icnt;
   uint32_t num_nz_pages;
   header() {}
@@ -83,7 +83,7 @@ void loadState(state_t &s, const std::string &filename) {
   close(fd);
 }
 
-void emitCodeForInitialRegisterValues(state_t &s, uint32_t pc) {
+void emitCodeForInitialRegisterValues(state_t &s, uint64_t pc) {
   for(int i = 1; i < 32; i++) {
     if((s.gpr[i] >> 11) & 0x1) {
       int32_t simm32 = (s.gpr[i] >> 20);

@@ -28,28 +28,28 @@
 
 static const uint8_t magicArr[4] = {0x7f, 'E', 'L', 'F'};
 
-bool checkElf(const Elf32_Ehdr *eh32) {
-  uint8_t *identArr = (uint8_t*)eh32->e_ident;
+bool checkElf(const Elf64_Ehdr *eh) {
+  const uint8_t *identArr = reinterpret_cast<const uint8_t*>(eh->e_ident);
   return memcmp((void*)magicArr, identArr, 4)==0;
 }
 
-bool check32Bit(const Elf32_Ehdr *eh32) {
-  return (eh32->e_ident[EI_CLASS] == ELFCLASS32);
+bool check32Bit(const Elf64_Ehdr *eh) {
+  return (eh->e_ident[EI_CLASS] == ELFCLASS64);
 }
 
-bool checkBigEndian(const Elf32_Ehdr *eh32) {
-  return (eh32->e_ident[EI_DATA] == ELFDATA2MSB);
+bool checkBigEndian(const Elf64_Ehdr *eh) {
+  return (eh->e_ident[EI_DATA] == ELFDATA2MSB);
 }
 
-bool checkLittleEndian(const Elf32_Ehdr *eh32) {
-  return (eh32->e_ident[EI_DATA] == ELFDATA2LSB);
+bool checkLittleEndian(const Elf64_Ehdr *eh) {
+  return (eh->e_ident[EI_DATA] == ELFDATA2LSB);
 }
 
 void load_elf(const char* fn, state_t *ms) {
   struct stat s;
-  Elf32_Ehdr *eh32 = nullptr;
-  Elf32_Phdr* ph32 = nullptr;
-  Elf32_Shdr* sh32 = nullptr;
+  Elf64_Ehdr *eh = nullptr;
+  Elf64_Phdr* ph32 = nullptr;
+  Elf64_Shdr* sh32 = nullptr;
   int32_t e_phnum=-1,e_shnum=-1;
   size_t pgSize = getpagesize();
   int fd,rc;
@@ -71,32 +71,32 @@ void load_elf(const char* fn, state_t *ms) {
     exit(-1);
   }
   buf = (char*)mmap(nullptr, s.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
-  eh32 = (Elf32_Ehdr *)buf;
+  eh = (Elf64_Ehdr *)buf;
   close(fd);
     
-  if(!checkElf(eh32)) {
+  if(!checkElf(eh)) {
     printf("INTERP: Bogus binary - not ELF\n");
     exit(-1);
   }
 
-  if(!check32Bit(eh32)) {
+  if(!check32Bit(eh)) {
     printf("INTERP: Bogus binary - not ELF32\n");
     exit(-1);
   }
-  assert(checkLittleEndian(eh32));
+  assert(checkLittleEndian(eh));
 
-  if((eh32->e_machine) != 243) {
-    printf("INTERP : non-mips binary..goodbye got type %d\n", (eh32->e_machine));
+  if((eh->e_machine) != 243) {
+    printf("INTERP : non-rv32 binary..goodbye got type %d\n", (eh->e_machine));
     exit(-1);
   }
 
 
-  e_phnum = (eh32->e_phnum);
-  ph32 = reinterpret_cast<Elf32_Phdr*>(buf + eh32->e_phoff);
-  e_shnum = eh32->e_shnum;
-  sh32 = reinterpret_cast<Elf32_Shdr*>(buf + eh32->e_shoff);
-  char* shstrtab = buf + sh32[eh32->e_shstrndx].sh_offset;
-  ms->pc = eh32->e_entry;
+  e_phnum = (eh->e_phnum);
+  ph32 = reinterpret_cast<Elf64_Phdr*>(buf + eh->e_phoff);
+  e_shnum = eh->e_shnum;
+  sh32 = reinterpret_cast<Elf64_Shdr*>(buf + eh->e_shoff);
+  char* shstrtab = buf + sh32[eh->e_shstrndx].sh_offset;
+  ms->pc = eh->e_entry;
 
   
   /* Find instruction segments and copy to
@@ -130,8 +130,24 @@ void load_elf(const char* fn, state_t *ms) {
 	     sizeof(uint8_t)*p_filesz);
     }
   }
+
   
   for(int32_t i = 0; i < e_shnum; i++, sh32++) {
+    int32_t f = (sh32->sh_flags);
+    if(f & SHF_EXECINSTR) {
+      uint32_t addr = (sh32->sh_addr);
+      int32_t size = (sh32->sh_size);
+      bool pgAligned = ((addr & 4095) == 0);
+      if(pgAligned) {
+	size = (size / pgSize) * pgSize;
+	void *mpaddr = (void*)(mem+addr);
+	rc = mprotect(mpaddr, size, PROT_READ);
+	if(rc != 0) {
+	  printf("mprotect rc = %d, error(%d) = %s\n", rc, 
+		 errno, strerror(errno));
+	}
+      }
+    }
     if (sh32->sh_type & SHT_NOBITS) {
       continue;
     }
@@ -142,24 +158,19 @@ void load_elf(const char* fn, state_t *ms) {
       symtabidx = i;
     }
   }
-  
   /* this code is all basically from elfloader.cc */
   if(strtabidx && symtabidx) {
-    sh32 = reinterpret_cast<Elf32_Shdr*>(buf + eh32->e_shoff);    
+    sh32 = reinterpret_cast<Elf64_Shdr*>(buf + eh->e_shoff);    
     char* strtab = buf + sh32[strtabidx].sh_offset;
-    Elf32_Sym* sym = reinterpret_cast<Elf32_Sym*>(buf + sh32[symtabidx].sh_offset);
-    for(int32_t i = 0; i < (sh32[symtabidx].sh_size / sizeof(Elf32_Sym)); i++) {
+    Elf64_Sym* sym = reinterpret_cast<Elf64_Sym*>(buf + sh32[symtabidx].sh_offset);
+    for(int32_t i = 0; i < (sh32[symtabidx].sh_size / sizeof(Elf64_Sym)); i++) {
       globals::symtab[strtab + sym[i].st_name] = static_cast<uint32_t>(sym[i].st_value);
     }
   }
   munmap(buf, s.st_size);
 
-  if(globals::symtab.find("tohost") != globals::symtab.end() ){
-    globals::tohost_addr = globals::symtab.at("tohost");
-  }
-  if(globals::symtab.find("fromhost") != globals::symtab.end() ){
-    globals::fromhost_addr = globals::symtab.at("fromhost");
-  }
+  globals::tohost_addr = globals::symtab.at("tohost");
+  globals::fromhost_addr = globals::symtab.at("fromhost");
 
 #define WRITE_WORD(EA,WORD) { *reinterpret_cast<uint32_t*>(mem + EA) = WORD; }
 
