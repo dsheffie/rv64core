@@ -2,7 +2,7 @@
 `include "rob.vh"
 `include "uop.vh"
 
-module core_l1d_l1i_64(clk, 
+module core_l1d_l1i(clk, 
 		       reset,
 		       extern_irq,
 		       in_flush_mode,
@@ -493,7 +493,7 @@ module core_l1d_l1i_64(clk,
 endmodule // core_l1d_l1i
 
 
-
+`ifdef FPGA64_32
 module core_l1d_l1i(clk, 
 		    reset,
 		    extern_irq,
@@ -666,3 +666,4 @@ module core_l1d_l1i(clk,
 
    
 endmodule
+`endif

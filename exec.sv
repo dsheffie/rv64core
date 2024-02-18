@@ -2233,7 +2233,13 @@ module exec(clk,
 	   
 	   );
    
-   
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if(mem_rsp_dst_valid)
+   // 	  begin
+   // 	     $display("mem writeback value %x", mem_rsp_load_data);
+   // 	  end
+   //   end
 
    
    always_ff@(posedge clk)
