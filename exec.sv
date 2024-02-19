@@ -1516,13 +1516,17 @@ module exec(clk,
 	//$display("cycle %d : %b", r_cycle, r_wb_bitvec);
      end
    
-
+	       
+   //t_zero_shift_upper
+   wire [63:0] w_divA = t_zero_shift_upper ? {{32{(t_signed_div ? t_srcA[31] : 1'b0)}}, t_srcA[31:0]} : t_srcA;
+   wire [63:0] w_divB = t_zero_shift_upper ? {{32{(t_signed_div ? t_srcB[31] : 1'b0)}}, t_srcB[31:0]} : t_srcB;
+	       
    divider #(.LG_W(6))
    d64 (
 	.clk(clk), 
 	.reset(reset),
-	.inA(t_srcA),
-	.inB(t_srcB),
+	.inA(w_divA),
+	.inB(w_divB),
 	.rob_ptr_in(int_uop.rob_ptr),
 	.prf_ptr_in(int_uop.dst),
 	.is_signed_div(t_signed_div),
@@ -1779,12 +1783,14 @@ module exec(clk,
 	    end
 	  REMW:
 	    begin
+	       t_zero_shift_upper = 1'b1;	       
 	       t_signed_div = 1'b1;
 	       t_is_rem = 1'b1;
 	       t_start_div64 = r_start_int&!ds_done;	       
 	    end
 	  REMUW:
 	    begin
+	       t_zero_shift_upper = 1'b1;
 	       t_is_rem = 1'b1;
 	       t_start_div64 = r_start_int&!ds_done;
 	    end
