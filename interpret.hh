@@ -30,7 +30,16 @@ struct state_t{
   }
   void sext_xlen(int64_t x, int i) {
     gpr[i] = (x << (64-xlen())) >> (64-xlen());
-  }    
+  }
+  uint32_t get_reg_u32(int id) const {
+    return *reinterpret_cast<const uint32_t*>(&gpr[id]);
+  }
+  int32_t get_reg_i32(int id) const {
+    return *reinterpret_cast<const int32_t*>(&gpr[id]);
+  }
+  uint64_t get_reg_u64(int id) const {
+    return *reinterpret_cast<const uint64_t*>(&gpr[id]);
+  }  
 };
 
 void handle_syscall(state_t *s, uint64_t tohost);

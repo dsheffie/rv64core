@@ -83,6 +83,9 @@ typedef enum logic [6:0]
    SRAW,
    MULW,
    DIVW,
+   DIVUW,
+   REMW,
+   REMUW,
    SLLW,
    II //illegal instruction
    } opcode_t;
@@ -116,6 +119,12 @@ function logic uses_div(opcode_t op);
      REMU:
        x = 1'b1;
      DIVW:
+       x = 1'b1;
+     DIVUW:
+       x = 1'b1;
+     REMW:
+       x = 1'b1;
+     REMUW:
        x = 1'b1;
      default:
        x = 1'b0;

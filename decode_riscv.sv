@@ -482,10 +482,22 @@ module decode_riscv(
 		      begin
 			 uop.op = (rd != 'd0) ? SLLW : NOP;
 			 uop.is_cheap_int = 1'b1;
-		      end		    
+		      end
 		    else if(insn[14:12] == 'd4 && insn[31:25] == 'd1)
 		      begin
 			 uop.op = (rd != 'd0) ? DIVW : NOP;
+		      end
+		    else if(insn[14:12] == 'd5 && insn[31:25] == 'd1)
+		      begin
+			 uop.op = (rd != 'd0) ? DIVUW : NOP;
+		      end
+		    else if(insn[14:12] == 'd6 && insn[31:25] == 'd1)
+		      begin
+			 uop.op = (rd != 'd0) ? REMW : NOP;
+		      end
+		    else if(insn[14:12] == 'd7 && insn[31:25] == 'd1)
+		      begin
+			 uop.op = (rd != 'd0) ? REMUW : NOP;
 		      end
 		    else if(insn[14:12] == 'd5 && insn[31:25] == 'd32)
 		      begin

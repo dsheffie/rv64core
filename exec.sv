@@ -1757,8 +1757,12 @@ module exec(clk,
 	    begin
 	       t_signed_div = 1'b1;
 	       t_start_div64 = r_start_int&!ds_done;	       
-	    end	  
+	    end
 	  DIVU:
+	    begin
+	       t_start_div64 = r_start_int&!ds_done;
+	    end
+	  DIVUW:
 	    begin
 	       t_start_div64 = r_start_int&!ds_done;
 	    end
@@ -1773,7 +1777,17 @@ module exec(clk,
 	       t_is_rem = 1'b1;
 	       t_start_div64 = r_start_int&!ds_done;
 	    end
-	  
+	  REMW:
+	    begin
+	       t_signed_div = 1'b1;
+	       t_is_rem = 1'b1;
+	       t_start_div64 = r_start_int&!ds_done;	       
+	    end
+	  REMUW:
+	    begin
+	       t_is_rem = 1'b1;
+	       t_start_div64 = r_start_int&!ds_done;
+	    end
 	  MUL:
 	    begin
 	       t_start_mul = r_start_int&!ds_done;
