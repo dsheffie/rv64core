@@ -203,7 +203,8 @@ module exec(clk,
    
    logic 	t_signed_shift;
    logic 	t_left_shift;
-   
+
+   logic	t_zero_shift_upper;
    logic [5:0] 	t_shift_amt;
    wire [`M_WIDTH-1:0] w_shifter_out;
 
@@ -1009,12 +1010,13 @@ module exec(clk,
 
    logic t_left_shift2, t_signed_shift2;
    wire [`M_WIDTH-1:0] w_shifter_out2;
+   logic	       t_zero_shift_upper2;
    logic [5:0] t_shift_amt2;   
-
+   
    shift_right #(.LG_W(`LG_M_WIDTH))
    s1(.is_left(t_left_shift2), 
       .is_signed(t_signed_shift2), 
-      .data(t_srcA_2), 
+      .data(t_zero_shift_upper2 ? {{32{t_srcA_2[31]}}, t_srcA_2[31:0]} : t_srcA_2), 
       .distance(t_shift_amt2), 
       .y(w_shifter_out2));
 
@@ -1090,6 +1092,8 @@ module exec(clk,
 	t_alu_valid2 = 1'b0;
 	t_result2 = 'd0;
 	t_wr_int_prf2 = 1'b0;
+	t_zero_shift_upper2 = 1'b0;
+	
 	case(int_uop2.op)
 	  BNE:
 	    begin
@@ -1301,14 +1305,16 @@ module exec(clk,
 	       t_shift_amt2 = {1'b0, int_uop2.rvimm[4:0]};
 	       t_result2 = {{32{w_shifter_out2[31]}}, w_shifter_out2[31:0]};
 	       t_wr_int_prf2 = 1'b1;
-	       t_alu_valid2 = 1'b1;		
+	       t_alu_valid2 = 1'b1;	
+	       t_zero_shift_upper2 = 1'b1;	
 	    end
 	  SRLIW:
 	    begin
 	       t_shift_amt2 = {1'b0, int_uop2.rvimm[4:0]};
 	       t_result2 = {{32{w_shifter_out2[31]}}, w_shifter_out2[31:0]};
 	       t_wr_int_prf2 = 1'b1;
-	       t_alu_valid2 = 1'b1;		
+	       t_alu_valid2 = 1'b1;
+	       t_zero_shift_upper2 = 1'b1;
 	    end
 	  
 	  SRAI:
@@ -1418,7 +1424,7 @@ module exec(clk,
    shift_right #(.LG_W(`LG_M_WIDTH)) 
    s0(.is_left(t_left_shift), 
       .is_signed(t_signed_shift), 
-      .data(t_srcA), 
+      .data(t_zero_shift_upper ? {{32{t_srcA[31]}}, t_srcA[31:0]} : t_srcA),
       .distance(t_shift_amt), 
       .y(w_shifter_out));
 
@@ -1738,6 +1744,7 @@ module exec(clk,
 	t_is_rem = 1'b0;
 	t_start_div32 = 1'b0;
 	t_start_div64 = 1'b0;	
+	t_zero_shift_upper = 1'b0;
 	
 	case(int_uop.op)
 	  //riscv
@@ -2034,6 +2041,7 @@ module exec(clk,
 	    end
 	  SRAIW:
 	    begin
+	       t_zero_shift_upper = 1'b1;	       
 	       t_signed_shift = 1'b1;
 	       t_shift_amt = {1'b0, int_uop.rvimm[4:0]};	       
 	       t_result = {{32{w_shifter_out[31]}}, w_shifter_out[31:0]};
@@ -2042,6 +2050,7 @@ module exec(clk,
 	    end	  	  
 	  SRLIW:
 	    begin
+	       t_zero_shift_upper = 1'b1;
 	       t_shift_amt = {1'b0, int_uop.rvimm[4:0]};	       
 	       t_result = {{32{w_shifter_out[31]}}, w_shifter_out[31:0]};
 	       t_wr_int_prf = 1'b1;
