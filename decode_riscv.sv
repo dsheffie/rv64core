@@ -244,7 +244,9 @@ module decode_riscv(
 			end
 		      3'd5: /* sraiw */
 			begin
-			   uop.op = (rd == 'd0) ? NOP : SRAIW;
+			   uop.op = (rd == 'd0) ? NOP : 
+				    (insn[31:26] == 'd0) ? SRLIW : 
+				    SRAIW;
 			   uop.is_cheap_int = 1'b1;		      
 			end
 		      default:

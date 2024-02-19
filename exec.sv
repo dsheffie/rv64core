@@ -1303,6 +1303,14 @@ module exec(clk,
 	       t_wr_int_prf2 = 1'b1;
 	       t_alu_valid2 = 1'b1;		
 	    end
+	  SRLIW:
+	    begin
+	       t_shift_amt2 = {1'b0, int_uop2.rvimm[4:0]};
+	       t_result2 = {{32{w_shifter_out2[31]}}, w_shifter_out2[31:0]};
+	       t_wr_int_prf2 = 1'b1;
+	       t_alu_valid2 = 1'b1;		
+	    end
+	  
 	  SRAI:
 	    begin
 	       t_signed_shift2 = 1'b1;
@@ -1446,11 +1454,17 @@ module exec(clk,
    always_ff@(negedge clk)
      begin
 
-	//if(int_uop.op == REMU & r_start_int)
+	//if((int_uop.op == SRLIW) & r_start_int)
 	//begin
 	//$display("portA pc %x src A = %x, imm = %x, result %x", 
-	//int_uop.pc, t_srcA, t_srcB, t_result);
-	//end
+	//int_uop.pc, t_srcA, t_shift_amt, t_result);
+	// end
+
+	//if((int_uop2.op == SRLIW) & r_start_int2)
+	//begin
+	//$display("portA pc %x src A = %x, imm = %x, result %x", 
+	//int_uop2.pc, t_srcA_2, t_shift_amt2, t_result2);
+	 // end
 
 
 	// if(t_start_mul&r_start_int)
@@ -2026,6 +2040,14 @@ module exec(clk,
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end	  	  
+	  SRLIW:
+	    begin
+	       t_shift_amt = {1'b0, int_uop.rvimm[4:0]};	       
+	       t_result = {{32{w_shifter_out[31]}}, w_shifter_out[31:0]};
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;
+	    end	  	  
+
 	  SRAI:
 	    begin
 	       t_signed_shift = 1'b1;

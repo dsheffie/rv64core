@@ -215,9 +215,23 @@ void execRiscv(state_t *s) {
 	    s->sext_xlen(r, rd);
 	    break;
 	  }
-	  case 5: { /* SRAIW */
-	    int32_t r = *reinterpret_cast<int32_t*>(&s->gpr[m.i.rs1]) >> shamt;
-	    s->sext_xlen(r, rd);
+	  case 5: { 
+	    uint32_t sel =  (inst >> 25) & 127;
+	    if(sel == 0) { /* SRLIW */
+	      uint32_t r = *reinterpret_cast<uint32_t*>(&s->gpr[m.i.rs1]) >> shamt;
+	      int32_t rr =  *reinterpret_cast<int32_t*>(&r);
+	      //std::cout << std::hex << *reinterpret_cast<uint32_t*>(&s->gpr[m.i.rs1])
+	      //<< std::dec << "\n";
+	      //std::cout << "rr = " << std::hex << rr << std::dec << "\n";
+	      s->sext_xlen(rr, rd);
+	    }
+	    else if(sel == 32){ /* SRAIW */
+	      int32_t r = *reinterpret_cast<int32_t*>(&s->gpr[m.i.rs1]) >> shamt;
+	      s->sext_xlen(r, rd);	      
+	    }
+	    else {
+	      assert(0);
+	    }
 	    break;	    
 	  }
 	  default:

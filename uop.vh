@@ -78,6 +78,7 @@ typedef enum logic [6:0]
    SUBW,
    ADDIW,
    SLLIW,
+   SRLIW,
    SRAIW,
    SRAW,
    MULW,
