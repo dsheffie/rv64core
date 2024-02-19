@@ -223,20 +223,24 @@ static inline double to_double(uint64_t u) {
   return *reinterpret_cast<double*>(&u);
 }
 
-static inline uint32_t mem_r32(const state_t*s, uint32_t a) {
-  return *reinterpret_cast<uint32_t*>(&s->mem[a]);
+static inline uint32_t mem_r32(const state_t*s, uint64_t ea) {
+  assert(ea < (1UL<<32));
+  return *reinterpret_cast<uint32_t*>(&s->mem[ea]);
 }
 
-static inline uint64_t mem_r64(const state_t*s, uint32_t a) {
-  return *reinterpret_cast<uint64_t*>(&s->mem[a]);
+static inline uint64_t mem_r64(const state_t*s, uint64_t ea) {
+  assert(ea < (1UL<<32));
+  return *reinterpret_cast<uint64_t*>(&s->mem[ea]);
 }
 
-static inline void mem_w32(state_t*s, uint32_t a, uint32_t x) {
-  *reinterpret_cast<uint32_t*>(&s->mem[a]) = x;
+static inline void mem_w32(state_t*s, uint64_t ea, uint32_t x) {
+  assert(ea < (1UL<<32));  
+  *reinterpret_cast<uint32_t*>(&s->mem[ea]) = x;
 }
 
-static inline void mem_w64(state_t*s, uint32_t a, uint64_t x) {
-  *reinterpret_cast<uint64_t*>(&s->mem[a]) = x;
+static inline void mem_w64(state_t*s, uint64_t ea, uint64_t x) {
+  assert(ea < (1UL<<32));
+  *reinterpret_cast<uint64_t*>(&s->mem[ea]) = x;
 }
 
 static inline uint8_t *mmap4G() {

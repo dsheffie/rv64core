@@ -48,8 +48,8 @@ bool checkLittleEndian(const Elf64_Ehdr *eh) {
 void load_elf(const char* fn, state_t *ms) {
   struct stat s;
   Elf64_Ehdr *eh = nullptr;
-  Elf64_Phdr* ph32 = nullptr;
-  Elf64_Shdr* sh32 = nullptr;
+  Elf64_Phdr* ph = nullptr;
+  Elf64_Shdr* sh = nullptr;
   int32_t e_phnum=-1,e_shnum=-1;
   size_t pgSize = getpagesize();
   int fd,rc;
@@ -92,21 +92,21 @@ void load_elf(const char* fn, state_t *ms) {
 
 
   e_phnum = (eh->e_phnum);
-  ph32 = reinterpret_cast<Elf64_Phdr*>(buf + eh->e_phoff);
+  ph = reinterpret_cast<Elf64_Phdr*>(buf + eh->e_phoff);
   e_shnum = eh->e_shnum;
-  sh32 = reinterpret_cast<Elf64_Shdr*>(buf + eh->e_shoff);
-  char* shstrtab = buf + sh32[eh->e_shstrndx].sh_offset;
+  sh = reinterpret_cast<Elf64_Shdr*>(buf + eh->e_shoff);
+  char* shstrtab = buf + sh[eh->e_shstrndx].sh_offset;
   ms->pc = eh->e_entry;
 
   
   /* Find instruction segments and copy to
    * the memory buffer */
-  for(int32_t i = 0; i < e_phnum; i++, ph32++) {
-    int32_t p_memsz = (ph32->p_memsz);
-    int32_t p_offset = (ph32->p_offset);
-    int32_t p_filesz = (ph32->p_filesz);
-    int32_t p_type = ph32->p_type;
-    uint32_t p_vaddr = ph32->p_vaddr;
+  for(int32_t i = 0; i < e_phnum; i++, ph++) {
+    auto p_memsz = (ph->p_memsz);
+    auto p_offset = (ph->p_offset);
+    auto p_filesz = (ph->p_filesz);
+    auto p_type = ph->p_type;
+    auto p_vaddr = ph->p_vaddr;
 
 #if 0
     std::cout << "p_type = "
@@ -132,38 +132,39 @@ void load_elf(const char* fn, state_t *ms) {
   }
 
   
-  for(int32_t i = 0; i < e_shnum; i++, sh32++) {
-    int32_t f = (sh32->sh_flags);
-    if(f & SHF_EXECINSTR) {
-      uint32_t addr = (sh32->sh_addr);
-      int32_t size = (sh32->sh_size);
-      bool pgAligned = ((addr & 4095) == 0);
-      if(pgAligned) {
-	size = (size / pgSize) * pgSize;
-	void *mpaddr = (void*)(mem+addr);
-	rc = mprotect(mpaddr, size, PROT_READ);
-	if(rc != 0) {
-	  printf("mprotect rc = %d, error(%d) = %s\n", rc, 
-		 errno, strerror(errno));
-	}
-      }
-    }
-    if (sh32->sh_type & SHT_NOBITS) {
+  for(int32_t i = 0; i < e_shnum; i++, sh++) {
+    //int32_t f = (sh->sh_flags);
+    // if(f & SHF_EXECINSTR) {
+    //   uint32_t addr = (sh->sh_addr);
+    //   int32_t size = (sh->sh_size);
+
+    //   bool pgAligned = ((addr & 4095) == 0);
+    //   if(pgAligned) {
+    // 	size = (size / pgSize) * pgSize;
+    // 	void *mpaddr = (void*)(mem+addr);
+    // 	rc = mprotect(mpaddr, size, PROT_READ);
+    // 	if(rc != 0) {
+    // 	  printf("mprotect rc = %d, error(%d) = %s\n", rc, 
+    // 		 errno, strerror(errno));
+    // 	}
+    //   }
+    // }
+    if (sh->sh_type & SHT_NOBITS) {
       continue;
     }
-    if (strcmp(shstrtab + sh32->sh_name, ".strtab") == 0) {
+    if (strcmp(shstrtab + sh->sh_name, ".strtab") == 0) {
       strtabidx = i;
     }
-    if (strcmp(shstrtab + sh32->sh_name, ".symtab") == 0) {
+    if (strcmp(shstrtab + sh->sh_name, ".symtab") == 0) {
       symtabidx = i;
     }
   }
   /* this code is all basically from elfloader.cc */
   if(strtabidx && symtabidx) {
-    sh32 = reinterpret_cast<Elf64_Shdr*>(buf + eh->e_shoff);    
-    char* strtab = buf + sh32[strtabidx].sh_offset;
-    Elf64_Sym* sym = reinterpret_cast<Elf64_Sym*>(buf + sh32[symtabidx].sh_offset);
-    for(int32_t i = 0; i < (sh32[symtabidx].sh_size / sizeof(Elf64_Sym)); i++) {
+    sh = reinterpret_cast<Elf64_Shdr*>(buf + eh->e_shoff);    
+    char* strtab = buf + sh[strtabidx].sh_offset;
+    Elf64_Sym* sym = reinterpret_cast<Elf64_Sym*>(buf + sh[symtabidx].sh_offset);
+    for(int32_t i = 0; i < (sh[symtabidx].sh_size / sizeof(Elf64_Sym)); i++) {
       globals::symtab[strtab + sym[i].st_name] = static_cast<uint32_t>(sym[i].st_value);
     }
   }

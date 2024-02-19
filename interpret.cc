@@ -84,6 +84,7 @@ void execRiscv(state_t *s) {
 	  disp |= 0xfffff000;
 	}
 	int64_t ea = static_cast<int64_t>(disp) + s->gpr[m.l.rs1];
+      
 	switch(m.s.sel)
 	  {
 	  case 0x0: /* lb */

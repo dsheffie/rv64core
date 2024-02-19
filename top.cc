@@ -996,6 +996,15 @@ int main(int argc, char **argv) {
   tb->final();
   t0 = timestamp() - t0;
 
+  if(enable_checker) {
+    int mem_eq = memcmp(ss->mem, s->mem, 1UL<<32);
+    if(mem_eq == 0) {
+      std::cout << "checker mem equal rtl mem\n";
+    }
+    else {
+      std::cout << "checker mem does not equal rtl mem\n";
+    }       
+  }
   
   if(!incorrect) {
     std::ofstream out(log_name);
