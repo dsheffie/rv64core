@@ -485,6 +485,10 @@ module decode_riscv(
 		      begin
 			 uop.op = (rd != 'd0) ? DIVW : NOP;
 		      end
+		    else if(insn[14:12] == 'd5 && insn[31:25] == 'd32)
+		      begin
+			 uop.op = (rd != 'd0) ? SRAW : NOP;
+		      end		    
 		 end // if (mode64)
 	       end
 	  7'h63: /* branches */

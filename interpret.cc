@@ -253,7 +253,11 @@ void execRiscv(state_t *s) {
 	else if((m.r.sel == 4) & (m.r.special == 1)) { /* divw */
 	  int32_t c = a/b;
 	  s->sext_xlen(c, m.r.rd);
-	}	
+	}
+	else if((m.r.sel == 5) & (m.r.special == 32)) { /* sraw */
+	  int32_t c = a >> (s->gpr[m.r.rs2]&31);
+	  s->sext_xlen(c, m.r.rd);	  
+	}
 	else {
 	  std::cout << "special = " << m.r.special << "\n";
 	  std::cout << "sel = " << m.r.sel << "\n";

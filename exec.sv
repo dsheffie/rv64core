@@ -1287,6 +1287,14 @@ module exec(clk,
 	       t_wr_int_prf2 = 1'b1;
 	       t_alu_valid2 = 1'b1;
 	    end
+	  SRAW:
+	    begin
+	       t_signed_shift2 = 1'b1;
+	       t_shift_amt2 = {1'b0,t_srcB_2[4:0]};	       
+	       t_result2 = {{32{w_shifter_out2[31]}}, w_shifter_out2[31:0]};
+	       t_wr_int_prf2 = 1'b1;
+	       t_alu_valid2 = 1'b1;
+	    end
 	  SRAIW:
 	    begin
 	       t_signed_shift2 = 1'b1;
@@ -1294,7 +1302,7 @@ module exec(clk,
 	       t_result2 = {{32{w_shifter_out2[31]}}, w_shifter_out2[31:0]};
 	       t_wr_int_prf2 = 1'b1;
 	       t_alu_valid2 = 1'b1;		
-	    end	  
+	    end
 	  SRAI:
 	    begin
 	       t_signed_shift2 = 1'b1;
@@ -2013,7 +2021,7 @@ module exec(clk,
 	  SRAIW:
 	    begin
 	       t_signed_shift = 1'b1;
-	       t_shift_amt = int_uop.rvimm[5:0];	       
+	       t_shift_amt = {1'b0, int_uop.rvimm[4:0]};	       
 	       t_result = {{32{w_shifter_out[31]}}, w_shifter_out[31:0]};
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
@@ -2026,6 +2034,14 @@ module exec(clk,
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
+	  SRAW:
+	    begin
+	       t_signed_shift = 1'b1;
+	       t_shift_amt = {1'b0,t_srcB[4:0]};
+	       t_result = {{32{w_shifter_out[31]}}, w_shifter_out[31:0]};
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;
+	    end	  
 	  SRA:
 	    begin
 	       t_signed_shift = 1'b1;
