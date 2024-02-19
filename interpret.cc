@@ -100,12 +100,12 @@ void execRiscv(state_t *s) {
 	    break;
 	  case 0x4: {/* lbu */
 	    uint32_t b = s->mem[ea];
-	    *reinterpret_cast<uint32_t*>(&s->gpr[m.l.rd]) = b;
+	    *reinterpret_cast<uint64_t*>(&s->gpr[m.l.rd]) = b;
 	    break;
 	  }
 	  case 0x5: { /* lhu */
 	    uint16_t b = *reinterpret_cast<uint16_t*>(s->mem + ea);
-	    *reinterpret_cast<uint32_t*>(&s->gpr[m.l.rd]) = b;
+	    *reinterpret_cast<uint64_t*>(&s->gpr[m.l.rd]) = b;
 	    break;
 	  }
 	  default:
@@ -176,6 +176,9 @@ void execRiscv(state_t *s) {
 	    s->sext_xlen((s->gpr[m.i.rs1] | simm64), rd);	    
 	    break;
 	  case 7: /* andi */
+	    //std::cout << std::hex << "pc     = " << s->pc << std::dec << "\n";
+	    //std::cout << std::hex << "simm64 = " << simm64 << std::dec << "\n";
+	    //std::cout << std::hex << "srcA   = " << s->gpr[m.i.rs1] << std::dec << "\n";
 	    s->sext_xlen((s->gpr[m.i.rs1] & simm64), rd);
 	    break;
 	    

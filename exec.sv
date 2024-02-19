@@ -1420,6 +1420,18 @@ module exec(clk,
 
    always_ff@(negedge clk)
      begin
+
+	if(int_uop.op == ANDI & r_start_int)
+	  begin
+	     $display("portA pc %x src A = %x, imm = %x, result %x", 
+		      int_uop.pc, t_srcA, int_uop.rvimm, t_result);
+	  end
+	if(int_uop2.op == ANDI & r_start_int2)
+	  begin
+	     $display("portB pc %x src A = %x, imm = %x, result %x", int_uop2.pc,
+		      t_srcA_2, int_uop2.rvimm, t_result2);
+	  end
+
 	// if(t_start_mul&r_start_int)
 	//   begin
 	//      $display("multiplier dest ptr entry %d", int_uop.dst);
