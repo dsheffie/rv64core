@@ -1220,6 +1220,13 @@ module exec(clk,
 	       t_alu_valid2 = 1'b1;
 	       t_wr_int_prf2 = 1'b1;
 	    end
+	  SUBW:
+	    begin
+	       t_sub2 = 1'b1;
+	       t_result2 = w_as64_2_sext;
+	       t_alu_valid2 = 1'b1;
+	       t_wr_int_prf2 = 1'b1;
+	    end
 	  ANDI:
 	    begin
 	       t_result2 = int_uop2.rvimm & t_srcA_2;
@@ -1749,7 +1756,14 @@ module exec(clk,
 	       t_result = w_as64_sext;	       
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
-	    end	  
+	    end
+	  SUBW:
+	    begin
+	       t_sub = 1'b1;
+	       t_result = w_as64_sext;	       
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;
+	    end	  	  
 	  RDCYCLE:
 	    begin
 	       t_result = r_cycle[`M_WIDTH-1:0];

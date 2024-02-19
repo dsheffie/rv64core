@@ -458,6 +458,11 @@ module decode_riscv(
 		    uop.op = (rd != 'd0) ? ADDW : NOP;
 		    uop.is_cheap_int = 1'b1;		    
 		 end
+	       else if(insn[14:12] == 'd0 && insn[31:25] == 'd32)
+		 begin
+		    uop.op = (rd != 'd0) ? SUBW : NOP;
+		    uop.is_cheap_int = 1'b1;		    
+		 end
 	    end
 
 	  
