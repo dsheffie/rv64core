@@ -74,6 +74,8 @@ typedef enum logic [6:0]
    OR,
    XOR,
    ADDIW,
+   SLLIW,
+   SRAIW,
    II //illegal instruction
    } opcode_t;
 

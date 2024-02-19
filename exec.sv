@@ -1253,22 +1253,22 @@ module exec(clk,
 	    end
 	  SRL:
 	    begin
-	       t_shift_amt2 = {1'b0, t_srcB_2[4:0]};
+	       t_shift_amt2 = {(mode64 ? t_srcB_2[5] : 1'b0), t_srcB_2[4:0]};	
 	       t_result2 = w_shifter_out2;
 	       t_wr_int_prf2 = 1'b1;
 	       t_alu_valid2 = 1'b1;
 	    end
 	  SRLI:
 	    begin
-		t_shift_amt2 = {1'b0, int_uop2.rvimm[4:0]};
-		t_result2 = w_shifter_out2;
-		t_wr_int_prf2 = 1'b1;
-		t_alu_valid2 = 1'b1;	       
+	       t_shift_amt2 = {(mode64 ? int_uop2.rvimm[5] : 1'b0), int_uop2.rvimm[4:0]};
+	       t_result2 = w_shifter_out2;
+	       t_wr_int_prf2 = 1'b1;
+	       t_alu_valid2 = 1'b1;	       
 	    end
 	  SRA:
 	    begin
 	       t_signed_shift2 = 1'b1;
-	       t_shift_amt2 = {1'b0, t_srcB_2[4:0]};
+	       t_shift_amt2 = {(mode64 ? t_srcB_2[5] : 1'b0), t_srcB_2[4:0]};	       
 	       t_result2 = w_shifter_out2;
 	       t_wr_int_prf2 = 1'b1;
 	       t_alu_valid2 = 1'b1;
@@ -1276,7 +1276,7 @@ module exec(clk,
 	  SRAI:
 	    begin
 	       t_signed_shift2 = 1'b1;
-	       t_shift_amt2 = {1'b0, int_uop2.rvimm[4:0]};
+	       t_shift_amt2 = {(mode64 ? int_uop2.rvimm[5] : 1'b0), int_uop2.rvimm[4:0]};
 	       t_result2 = w_shifter_out2;
 	       t_wr_int_prf2 = 1'b1;
 	       t_alu_valid2 = 1'b1;		
@@ -1284,7 +1284,7 @@ module exec(clk,
 	  SLL:
 	    begin
 	       t_left_shift2 = 1'b1;
-	       t_shift_amt2 = {1'b0, t_srcB_2[4:0]};
+	       t_shift_amt2 = {(mode64 ? t_srcB_2[5] : 1'b0), t_srcB_2[4:0]};
 	       t_result2 = w_shifter_out2;
 	       t_wr_int_prf2 = 1'b1;
 	       t_alu_valid2 = 1'b1;
@@ -1292,7 +1292,7 @@ module exec(clk,
 	  SLLI:
 	    begin
 	       t_left_shift2 = 1'b1;	       
-	       t_shift_amt2 = {1'b0, int_uop2.rvimm[4:0]};
+	       t_shift_amt2 = {(mode64 ? int_uop2.rvimm[5] : 1'b0), int_uop2.rvimm[4:0]};
 	       t_result2 = w_shifter_out2;
 	       t_wr_int_prf2 = 1'b1;
 	       t_alu_valid2 = 1'b1;		

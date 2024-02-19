@@ -231,6 +231,16 @@ module decode_riscv(
 		      uop.op = (rd == 'd0) ? NOP : ADDIW;
 		      uop.is_cheap_int = 1'b1;
 		   end
+		 3'd1: /* slliw */
+		   begin
+		      uop.op = (rd == 'd0) ? NOP : SLLIW;
+		      uop.is_cheap_int = 1'b1;		      
+		   end
+		 3'd5: /* sraiw */
+		   begin
+		      uop.op = (rd == 'd0) ? NOP : SRAIW;
+		      uop.is_cheap_int = 1'b1;		      
+		   end
 		 default:
 		   begin
 		   end
