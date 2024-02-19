@@ -217,6 +217,25 @@ module decode_riscv(
 	       uop.is_cheap_int = 1'b1;
 	       uop.rvimm = w_pc_imm;
 	    end
+	  7'h1b:
+	    begin
+	       uop.dst = rd;
+	       uop.srcA = rs1;
+	       uop.dst_valid = (rd != 'd0);
+	       uop.srcA_valid = (rd != 'd0);	       	       
+	       uop.is_int = 1'b1;
+	       uop.rvimm = {{(20+PP){insn[31]}}, insn[31:20]};
+	       case(insn[14:12])
+		 3'd0: /* addiw */
+		   begin
+		      uop.op = (rd == 'd0) ? NOP : ADDIW;
+		      uop.is_cheap_int = 1'b1;
+		   end
+		 default:
+		   begin
+		   end
+	       endcase
+	    end
 	  7'h23:
 	    begin
 	       uop.srcA = rs1;
@@ -413,7 +432,7 @@ module decode_riscv(
 	       uop.dst_valid = (rd != 'd0);
 	       uop.is_int = 1'b1;
 	       uop.is_cheap_int = 1'b1;
-	       uop.rvimm = { {PP{1'b0}}, insn[31:12], 12'd0};
+	       uop.rvimm = { {PP{insn[31]}}, insn[31:12], 12'd0};
 	    end
 	  7'h63: /* branches */
 	    begin

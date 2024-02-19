@@ -1041,7 +1041,7 @@ module exec(clk,
    
    ppa32 add0 (.A(w_add32_srcA), .B(w_add32_srcB), .Y(w_add32));
 
-   wire [63:0] w_as64_;
+   wire [63:0] w_as64_, w_as64_2_;
    addsub #(.W(64)) as0 
      (
       .A(t_srcA), 
@@ -1049,10 +1049,7 @@ module exec(clk,
       .is_sub(t_sub), 
       .Y(w_as64_)
       );
-   wire [63:0] w_as64 = mode64 ? w_as64_ : {{32{w_as64_[31]}}, w_as64_[31:0]};
    
-
-   wire [63:0] w_as64_2_;
    addsub #(.W(64)) as1
      (
       .A(t_srcA_2), 
@@ -1060,7 +1057,12 @@ module exec(clk,
       .is_sub(t_sub2), 
       .Y(w_as64_2_)
       );
-   wire [63:0] w_as64_2 = mode64 ? w_as64_2_ : {{32{w_as64_2_[31]}}, w_as64_2_[31:0]};
+
+   wire [63:0] w_as64_sext = {{32{w_as64_[31]}}, w_as64_[31:0]};
+   wire [63:0] w_as64 = mode64 ? w_as64_ : w_as64_sext;
+   
+   wire [63:0] w_as64_2_sext = {{32{w_as64_2_[31]}}, w_as64_2_[31:0]};
+   wire [63:0] w_as64_2 = mode64 ? w_as64_2_ : w_as64_2_sext;
    
    
    wire [`M_WIDTH-1:0] w_indirect_target2;
@@ -1169,6 +1171,13 @@ module exec(clk,
 	       t_alu_valid2 = 1'b1;
 	       t_wr_int_prf2 = 1'b1;
 	    end
+	  ADDIW:
+	    begin
+	       t_addi_2 = 1'b1;
+	       t_result2 = w_as64_2_sext;
+	       t_alu_valid2 = 1'b1;
+	       t_wr_int_prf2 = 1'b1;
+	    end	  
 	  ADDU:
 	    begin
 	       t_result2 = w_as64_2;
@@ -1690,6 +1699,13 @@ module exec(clk,
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
+	  ADDIW:
+	    begin
+	       t_addi = 1'b1;
+	       t_result = w_as64_sext;
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;
+	    end	  
 	  ADDU:
 	    begin
 	       t_result = w_as64;	       
