@@ -2218,8 +2218,7 @@ module exec(clk,
    
    wire w_bad_16b_addr = &w_agu_addr[3:0];
    wire w_bad_32b_addr = (&w_agu_addr[3:2]) & (|w_agu_addr[1:0]);
-   
-   wire	w_bad_64b_addr = 1'b0; //fix me
+   wire	w_bad_64b_addr = w_agu_addr[3] & (|w_agu_addr[2:0]);
    
    always_comb
      begin
