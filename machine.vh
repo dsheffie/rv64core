@@ -50,10 +50,7 @@
 
 `define MUL_LAT 3
 
-`define DIV32_LAT 33
-
 `define DIV64_LAT 65
-
 `define MAX_LAT (`DIV64_LAT)
 
 
@@ -85,8 +82,9 @@ typedef enum logic [3:0] {
    MEM_SW  = 4'd7,
    MEM_SC  = 4'd8,
    MEM_NOP = 4'd9,
-   MEM_LD = 4'd10,
-   MEM_SD = 4'd11			  
+   MEM_LWU = 4'd10,
+   MEM_LD  = 4'd11,
+   MEM_SD  = 4'd12			  			  
 } mem_op_t;
 
 /* MIPS R10000 exception ordering 

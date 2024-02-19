@@ -134,7 +134,11 @@ module decode_riscv(
 		 3'd5:
 		   begin
 		      uop.op = LHU;
-		   end		 
+		   end
+		 3'd6:
+		   begin
+		      uop.op = LWU;
+		   end		 		 
 		 default:
 		   begin
 		   end

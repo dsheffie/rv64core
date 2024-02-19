@@ -108,6 +108,11 @@ void execRiscv(state_t *s) {
 	    *reinterpret_cast<uint64_t*>(&s->gpr[m.l.rd]) = b;
 	    break;
 	  }
+	  case 0x6: { /* lwu */
+	    uint32_t b = *reinterpret_cast<uint32_t*>(s->mem + ea);
+	    *reinterpret_cast<uint64_t*>(&s->gpr[m.l.rd]) = b;
+	    break;
+	  }	    
 	  default:
 	    assert(0);
 	  }

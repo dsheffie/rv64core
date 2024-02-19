@@ -51,6 +51,7 @@ typedef enum logic [6:0]
    LB,
    LH,
    LW,
+   LWU,
    LD,
    LBU,
    LHU,
@@ -93,6 +94,8 @@ function logic uses_mul(opcode_t op);
        x = 1'b1;
      MULH:
        x = 1'b1;
+     MULW:
+       x = 1'b1;
      default:
        x = 1'b0;
    endcase
@@ -109,6 +112,8 @@ function logic uses_div(opcode_t op);
      REM:
        x = 1'b1;
      REMU:
+       x = 1'b1;
+     DIVW:
        x = 1'b1;
      default:
        x = 1'b0;

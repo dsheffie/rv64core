@@ -5,7 +5,7 @@ import glob
 import re
 
 if __name__ == '__main__':
-    tests = glob.glob('*.rv32')
+    tests = glob.glob('*.rv64')
     passed = 0
 
     dsheffie = {}

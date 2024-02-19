@@ -608,6 +608,7 @@ module exec(clk,
 	  end
      end // always_ff@ (posedge clk)
 
+
    always_comb
      begin
 	for(integer i = (`MAX_LAT-1); i > -1; i = i-1)
@@ -615,7 +616,6 @@ module exec(clk,
 	     n_wb_bitvec[i] = r_wb_bitvec[i+1];	     
 	  end
 	
-	n_wb_bitvec[`DIV32_LAT] = t_start_div32&r_start_int;
 	n_wb_bitvec[`DIV64_LAT] = t_start_div64&r_start_int;
 	
 	if(t_start_mul&r_start_int)
@@ -1471,7 +1471,21 @@ module exec(clk,
 	  $stop();
 
 	if(t_div_complete & r_start_int & t_wr_int_prf)
-	  $stop();	
+	  begin
+	     $display("divide completes but pc %x started at cycle %d", 
+		      int_uop.pc, r_cycle);
+	     $stop();
+	  end
+	//if(t_start_div64)
+	//begin
+	//$display("divider starts at cycle %d, will complete at %d",
+	//r_cycle, r_cycle+`DIV64_LAT);
+	//end
+	//if(t_div_complete)
+	//begin
+	//$display("divide finished at cycle %d", r_cycle);
+	//end
+	//$display("cycle %d : %b", r_cycle, r_wb_bitvec);
      end
    
 
@@ -2196,6 +2210,14 @@ module exec(clk,
 	       t_mem_tail.spans_cacheline = w_bad_32b_addr;
 	       t_mem_tail.unaligned = |w_agu_addr[1:0];
 	    end // case: LW
+	  LWU:
+	    begin
+	       t_mem_tail.is_load = 1'b1;
+	       t_mem_tail.op = w_bad_32b_addr ? MEM_NOP : MEM_LWU;
+	       t_mem_tail.dst_valid = mem_uq.dst_valid;
+	       t_mem_tail.spans_cacheline = w_bad_32b_addr;
+	       t_mem_tail.unaligned = |w_agu_addr[1:0];
+	    end // case: LW	  
 	  LD:
 	    begin
 	       t_mem_tail.is_load = 1'b1;

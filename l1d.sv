@@ -822,6 +822,11 @@ module l1d(clk,
 	       t_rsp_data2 = {{32{t_shift_2[31]}}, t_shift_2[31:0]};
 	       t_rsp_dst_valid2 = r_req2.dst_valid & t_hit_cache2;
 	    end
+	  MEM_LWU:
+	    begin
+	       t_rsp_data2 = {32'd0, t_shift_2[31:0]};
+	       t_rsp_dst_valid2 = r_req2.dst_valid & t_hit_cache2;
+	    end	  
 	  MEM_LD:
 	    begin
 	       t_rsp_data2 = t_shift_2[63:0];
@@ -883,6 +888,11 @@ module l1d(clk,
 	       t_rsp_data = {{32{t_shift[31]}}, t_shift[31:0]};	       
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
 	    end
+	  MEM_LWU:
+	    begin
+	       t_rsp_data = {32'd0, t_shift[31:0]};	       
+	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
+	    end	  
 	  MEM_LD:
 	    begin
 	       t_rsp_data = t_shift[63:0];	       
