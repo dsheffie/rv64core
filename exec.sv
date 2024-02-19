@@ -1009,14 +1009,13 @@ module exec(clk,
    wire [`M_WIDTH-1:0] w_shifter_out2;
    logic [5:0] t_shift_amt2;   
 
-   wire [31:0] w_shift32_2;
-   shift_right #(.LG_W(`LG_M_WIDTH-1))
+   shift_right #(.LG_W(`LG_M_WIDTH))
    s1(.is_left(t_left_shift2), 
       .is_signed(t_signed_shift2), 
-      .data(t_srcA_2[31:0]), 
-      .distance(t_shift_amt2[`LG_M_WIDTH-2:0]), 
-      .y(w_shift32_2));
-   assign w_shifter_out2 = {{(`M_WIDTH-32){w_shift32_2[31]}},w_shift32_2};   
+      .data(t_srcA_2), 
+      .distance(t_shift_amt2), 
+      .y(w_shifter_out2));
+
    
    
   
@@ -1382,15 +1381,14 @@ module exec(clk,
    
    
    
-   wire [31:0] w_shift32;
    
-   shift_right #(.LG_W(`LG_M_WIDTH-1)) 
+   shift_right #(.LG_W(`LG_M_WIDTH)) 
    s0(.is_left(t_left_shift), 
       .is_signed(t_signed_shift), 
-      .data(t_srcA[31:0]), 
-      .distance(t_shift_amt[`LG_M_WIDTH-2:0]), 
-      .y(w_shift32));
-   assign w_shifter_out = {{(`M_WIDTH-32){w_shift32[31]}},w_shift32};
+      .data(t_srcA), 
+      .distance(t_shift_amt), 
+      .y(w_shifter_out));
+
    
 
    
@@ -1903,7 +1901,7 @@ module exec(clk,
 	  SLL:
 	    begin
 	       t_left_shift = 1'b1;
-	       t_shift_amt = {1'b0,t_srcB[4:0]};
+	       t_shift_amt = {(mode64 ? t_srcB[5] : 1'b0), t_srcB[4:0]};
 	       t_result = w_shifter_out;
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
@@ -1968,14 +1966,14 @@ module exec(clk,
 	  SRA:
 	    begin
 	       t_signed_shift = 1'b1;
-	       t_shift_amt = {1'b0,t_srcB[4:0]};
+	       t_shift_amt = {(mode64 ? t_srcB[5] : 1'b0), t_srcB[4:0]};
 	       t_result = w_shifter_out;
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
 	  SRL:
 	    begin
-	       t_shift_amt = {1'b0, t_srcB[4:0]};
+	       t_shift_amt = {(mode64 ? t_srcB[5] : 1'b0), t_srcB[4:0]};	       
 	       t_result = w_shifter_out;
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;

@@ -180,13 +180,13 @@ module decode_riscv(
 		   end
 		 3'd5:
 		   begin
-		      case(insn[31:25])
-			7'h0:
+		      case(insn[31:26])
+			6'h0:
 			  begin
 			     uop.op = (rd == 'd0) ? NOP : SRLI;
 			     uop.is_cheap_int = 1'b1;
 			  end
-			7'h20:
+			6'h10:
 			  begin
 			     uop.op = (rd == 'd0) ? NOP : SRAI;
 			     uop.is_cheap_int = 1'b1;
