@@ -130,7 +130,7 @@ module divider(clk,
 	ready = (r_state == IDLE) & !start_div;
 	rob_ptr_out = r_rob_ptr;
 	prf_ptr_out = r_gpr_prf_ptr;
-	y = r_Y;
+	y = r_Y[W-1:0];
 	complete = 1'b0;
 	
 	unique case (r_state)
@@ -198,7 +198,8 @@ module divider(clk,
 
    
 
-endmodule // div32
+endmodule // divider
+
 
    
    

@@ -52,7 +52,9 @@
 
 `define DIV32_LAT 33
 
-`define MAX_LAT (`DIV32_LAT)
+`define DIV64_LAT 65
+
+`define MAX_LAT (`DIV64_LAT)
 
 
 // l1 cacheline length (in bytes)

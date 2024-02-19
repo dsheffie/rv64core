@@ -219,33 +219,36 @@ module decode_riscv(
 	    end
 	  7'h1b:
 	    begin
-	       uop.dst = rd;
-	       uop.srcA = rs1;
-	       uop.dst_valid = (rd != 'd0);
-	       uop.srcA_valid = (rd != 'd0);	       	       
-	       uop.is_int = 1'b1;
-	       uop.rvimm = {{(20+PP){insn[31]}}, insn[31:20]};
-	       case(insn[14:12])
-		 3'd0: /* addiw */
-		   begin
-		      uop.op = (rd == 'd0) ? NOP : ADDIW;
-		      uop.is_cheap_int = 1'b1;
-		   end
-		 3'd1: /* slliw */
-		   begin
-		      uop.op = (rd == 'd0) ? NOP : SLLIW;
-		      uop.is_cheap_int = 1'b1;
-		   end
-		 3'd5: /* sraiw */
-		   begin
-		      uop.op = (rd == 'd0) ? NOP : SRAIW;
-		      uop.is_cheap_int = 1'b1;		      
-		   end
-		 default:
-		   begin
-		   end
-	       endcase
-	    end
+	       if(mode64)
+		 begin
+		    uop.dst = rd;
+		    uop.srcA = rs1;
+		    uop.dst_valid = (rd != 'd0);
+		    uop.srcA_valid = (rd != 'd0);	       	       
+		    uop.is_int = 1'b1;
+		    uop.rvimm = {{(20+PP){insn[31]}}, insn[31:20]};
+		    case(insn[14:12])
+		      3'd0: /* addiw */
+			begin
+			   uop.op = (rd == 'd0) ? NOP : ADDIW;
+			   uop.is_cheap_int = 1'b1;
+			end
+		      3'd1: /* slliw */
+			begin
+			   uop.op = (rd == 'd0) ? NOP : SLLIW;
+			   uop.is_cheap_int = 1'b1;
+			end
+		      3'd5: /* sraiw */
+			begin
+			   uop.op = (rd == 'd0) ? NOP : SRAIW;
+			   uop.is_cheap_int = 1'b1;		      
+			end
+		      default:
+			begin
+			end
+		    endcase
+		 end // if (mode64)
+	    end // case: 7'h1b
 	  7'h23:
 	    begin
 	       uop.srcA = rs1;
@@ -446,26 +449,40 @@ module decode_riscv(
 	    end
 	  7'h3b:
 	    begin
-	       uop.dst = rd;
-	       uop.dst_valid = (rd != 'd0);
-	       uop.srcA_valid = 1'b1;
-	       uop.srcA = rs1;
-	       uop.srcB_valid = 1'b1;
-	       uop.srcB = rs2;
-	       uop.is_int = 1'b1;	       
-	       if(insn[14:12] == 'd0 && insn[31:25] == 'd0)
+	       if(mode64)
 		 begin
-		    uop.op = (rd != 'd0) ? ADDW : NOP;
-		    uop.is_cheap_int = 1'b1;		    
-		 end
-	       else if(insn[14:12] == 'd0 && insn[31:25] == 'd32)
-		 begin
-		    uop.op = (rd != 'd0) ? SUBW : NOP;
-		    uop.is_cheap_int = 1'b1;		    
-		 end
-	    end
-
-	  
+		    uop.dst = rd;
+		    uop.dst_valid = (rd != 'd0);
+		    uop.srcA_valid = 1'b1;
+		    uop.srcA = rs1;
+		    uop.srcB_valid = 1'b1;
+		    uop.srcB = rs2;
+		    uop.is_int = 1'b1;	       
+		    if(insn[14:12] == 'd0 && insn[31:25] == 'd0)
+		      begin
+			 uop.op = (rd != 'd0) ? ADDW : NOP;
+			 uop.is_cheap_int = 1'b1;		    
+		      end
+		    else if(insn[14:12] == 'd0 && insn[31:25] == 'd32)
+		      begin
+			 uop.op = (rd != 'd0) ? SUBW : NOP;
+			 uop.is_cheap_int = 1'b1;		    
+		      end
+		    else if(insn[14:12] == 'd0 && insn[31:25] == 'd1)
+		      begin
+			 uop.op = (rd != 'd0) ? MULW : NOP;
+		      end
+		    else if(insn[14:12] == 'd1 && insn[31:25] == 'd0)
+		      begin
+			 uop.op = (rd != 'd0) ? SLLW : NOP;
+			 uop.is_cheap_int = 1'b1;
+		      end		    
+		    else if(insn[14:12] == 'd4 && insn[31:25] == 'd1)
+		      begin
+			 uop.op = (rd != 'd0) ? DIVW : NOP;
+		      end
+		 end // if (mode64)
+	       end
 	  7'h63: /* branches */
 	    begin
 	       uop.srcA = rs1;

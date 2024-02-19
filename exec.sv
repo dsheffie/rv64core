@@ -218,7 +218,7 @@ module exec(clk,
    logic [`MAX_LAT:0] r_wb_bitvec, n_wb_bitvec;
 
    /* divider */
-   logic 	t_div_ready, t_signed_div, t_is_rem, t_start_div32;
+   logic 	t_div_ready, t_signed_div, t_is_rem, t_start_div32, t_start_div64;
    logic [`LG_ROB_ENTRIES-1:0] t_div_rob_ptr;
    logic [`M_WIDTH-1:0]        t_div_result;
    logic 			    t_div_complete;
@@ -614,7 +614,9 @@ module exec(clk,
 	  begin
 	     n_wb_bitvec[i] = r_wb_bitvec[i+1];	     
 	  end
+	
 	n_wb_bitvec[`DIV32_LAT] = t_start_div32&r_start_int;
+	n_wb_bitvec[`DIV64_LAT] = t_start_div64&r_start_int;
 	
 	if(t_start_mul&r_start_int)
 	  begin
@@ -1309,6 +1311,14 @@ module exec(clk,
 	       t_wr_int_prf2 = 1'b1;
 	       t_alu_valid2 = 1'b1;
 	    end
+	  SLLW:
+	    begin
+	       t_left_shift2 = 1'b1;
+	       t_shift_amt2 = t_srcB_2[5:0];
+	       t_result2 = {{32{w_shifter_out2[31]}}, w_shifter_out2[31:0]};
+	       t_wr_int_prf2 = 1'b1;
+	       t_alu_valid2 = 1'b1;
+	    end	  
 	  SLLI:
 	    begin
 	       t_left_shift2 = 1'b1;	       
@@ -1428,16 +1438,12 @@ module exec(clk,
    always_ff@(negedge clk)
      begin
 
-	if(int_uop.op == ANDI & r_start_int)
-	  begin
-	     $display("portA pc %x src A = %x, imm = %x, result %x", 
-		      int_uop.pc, t_srcA, int_uop.rvimm, t_result);
-	  end
-	if(int_uop2.op == ANDI & r_start_int2)
-	  begin
-	     $display("portB pc %x src A = %x, imm = %x, result %x", int_uop2.pc,
-		      t_srcA_2, int_uop2.rvimm, t_result2);
-	  end
+	//if(int_uop.op == REMU & r_start_int)
+	//begin
+	//$display("portA pc %x src A = %x, imm = %x, result %x", 
+	//int_uop.pc, t_srcA, t_srcB, t_result);
+	//end
+
 
 	// if(t_start_mul&r_start_int)
 	//   begin
@@ -1469,8 +1475,8 @@ module exec(clk,
      end
    
 
-   divider #(.LG_W(5))
-   d32 (
+   divider #(.LG_W(6))
+   d64 (
 	.clk(clk), 
 	.reset(reset),
 	.inA(t_srcA),
@@ -1479,7 +1485,7 @@ module exec(clk,
 	.prf_ptr_in(int_uop.dst),
 	.is_signed_div(t_signed_div),
         .is_rem(t_is_rem),
-	.start_div(t_start_div32),
+	.start_div(t_start_div64),
 	.y(t_div_result),
 	.rob_ptr_out(t_div_rob_ptr),
 	.prf_ptr_out(w_div_prf_ptr),
@@ -1694,34 +1700,44 @@ module exec(clk,
 	
 	t_signed_div = 1'b0;
 	t_is_rem = 1'b0;
-	t_start_div32 = 1'b0;	
+	t_start_div32 = 1'b0;
+	t_start_div64 = 1'b0;	
 	
 	case(int_uop.op)
 	  //riscv
 	  DIV:
 	    begin
 	       t_signed_div = 1'b1;
-	       t_start_div32 = r_start_int&!ds_done;	       
+	       t_start_div64 = r_start_int&!ds_done;	       
 	    end
+	  DIVW:
+	    begin
+	       t_signed_div = 1'b1;
+	       t_start_div64 = r_start_int&!ds_done;	       
+	    end	  
 	  DIVU:
 	    begin
-	       t_start_div32 = r_start_int&!ds_done;
+	       t_start_div64 = r_start_int&!ds_done;
 	    end
 	  REM:
 	    begin
 	       t_signed_div = 1'b1;
 	       t_is_rem = 1'b1;
-	       t_start_div32 = r_start_int&!ds_done;	       
+	       t_start_div64 = r_start_int&!ds_done;	       
 	    end
 	  REMU:
 	    begin
 	       t_is_rem = 1'b1;
-	       t_start_div32 = r_start_int&!ds_done;
+	       t_start_div64 = r_start_int&!ds_done;
 	    end
 	  
 	  MUL:
 	    begin
 	       t_start_mul = r_start_int&!ds_done;
+	    end
+	  MULW:
+	    begin
+	       t_start_mul = r_start_int&!ds_done;	       
 	    end
 	  MULH:
 	    begin
@@ -1932,6 +1948,14 @@ module exec(clk,
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
+	  SLLW:
+	    begin
+	       t_left_shift = 1'b1;
+	       t_shift_amt = t_srcB[5:0];
+	       t_result = {{32{w_shifter_out[31]}}, w_shifter_out[31:0]};
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;
+	    end	  
 	  SLLI:
 	    begin
 	       t_left_shift = 1'b1;
@@ -1948,7 +1972,6 @@ module exec(clk,
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
-
 	  SLT:
 	    begin
 	       t_result = {w_zf, $signed(t_srcA) < $signed(t_srcB)};	       
