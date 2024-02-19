@@ -73,6 +73,7 @@ typedef enum logic [6:0]
    AND,
    OR,
    XOR,
+   ADDW,
    ADDIW,
    SLLIW,
    SRAIW,

@@ -1184,6 +1184,12 @@ module exec(clk,
 	       t_alu_valid2 = 1'b1;
 	       t_wr_int_prf2 = 1'b1;
 	    end
+	  ADDW:
+	    begin
+	       t_result2 = w_as64_2_sext;
+	       t_alu_valid2 = 1'b1;
+	       t_wr_int_prf2 = 1'b1;
+	    end
 	  SLT:
 	    begin
 	       t_result2 = {w_zf, $signed(t_srcA_2) < $signed(t_srcB_2)};
@@ -1273,6 +1279,14 @@ module exec(clk,
 	       t_wr_int_prf2 = 1'b1;
 	       t_alu_valid2 = 1'b1;
 	    end
+	  SRAIW:
+	    begin
+	       t_signed_shift2 = 1'b1;
+	       t_shift_amt2 = int_uop2.rvimm[5:0];
+	       t_result2 = {{32{w_shifter_out2[31]}}, w_shifter_out2[31:0]};
+	       t_wr_int_prf2 = 1'b1;
+	       t_alu_valid2 = 1'b1;		
+	    end	  
 	  SRAI:
 	    begin
 	       t_signed_shift2 = 1'b1;
@@ -1296,6 +1310,14 @@ module exec(clk,
 	       t_result2 = w_shifter_out2;
 	       t_wr_int_prf2 = 1'b1;
 	       t_alu_valid2 = 1'b1;		
+	    end
+	  SLLIW:
+	    begin
+	       t_left_shift2 = 1'b1;
+	       t_shift_amt2 = int_uop2.rvimm[5:0];	       
+	       t_result2 = {{32{w_shifter_out2[31]}}, w_shifter_out2[31:0]};
+	       t_wr_int_prf2 = 1'b1;
+	       t_alu_valid2 = 1'b1;
 	    end	  
 	  AUIPC:
 	    begin
@@ -1712,6 +1734,12 @@ module exec(clk,
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
+	  ADDW:
+	    begin
+	       t_result = w_as64_sext;	       
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;
+	    end	  
 	  RDCYCLE:
 	    begin
 	       t_result = r_cycle[`M_WIDTH-1:0];
@@ -1883,11 +1911,20 @@ module exec(clk,
 	  SLLI:
 	    begin
 	       t_left_shift = 1'b1;
-	       t_shift_amt = {1'b0,int_uop.rvimm[4:0]};
+	       t_shift_amt = {(mode64 ? int_uop.rvimm[5] : 1'b0), int_uop.rvimm[4:0]};	       
 	       t_result = w_shifter_out;
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
+	  SLLIW:
+	    begin
+	       t_left_shift = 1'b1;
+	       t_shift_amt = int_uop.rvimm[5:0];	       
+	       t_result = {{32{w_shifter_out[31]}}, w_shifter_out[31:0]};
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;
+	    end
+
 	  SLT:
 	    begin
 	       t_result = {w_zf, $signed(t_srcA) < $signed(t_srcB)};	       
@@ -1912,10 +1949,18 @@ module exec(clk,
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
+	  SRAIW:
+	    begin
+	       t_signed_shift = 1'b1;
+	       t_shift_amt = int_uop.rvimm[5:0];	       
+	       t_result = {{32{w_shifter_out[31]}}, w_shifter_out[31:0]};
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;
+	    end	  	  
 	  SRAI:
 	    begin
 	       t_signed_shift = 1'b1;
-	       t_shift_amt = {1'b0,int_uop.rvimm[4:0]};
+	       t_shift_amt = {(mode64 ? int_uop.rvimm[5] : 1'b0), int_uop.rvimm[4:0]};	       	       
 	       t_result = w_shifter_out;
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
@@ -1937,7 +1982,7 @@ module exec(clk,
 	    end
 	  SRLI:
 	     begin
-		t_shift_amt = {1'b0, int_uop.rvimm[4:0]};
+		t_shift_amt = {(mode64 ? int_uop.rvimm[5] : 1'b0), int_uop.rvimm[4:0]};		
 		t_result = w_shifter_out;
 		t_wr_int_prf = 1'b1;
 		t_alu_valid = 1'b1;

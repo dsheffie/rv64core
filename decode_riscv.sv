@@ -234,7 +234,7 @@ module decode_riscv(
 		 3'd1: /* slliw */
 		   begin
 		      uop.op = (rd == 'd0) ? NOP : SLLIW;
-		      uop.is_cheap_int = 1'b1;		      
+		      uop.is_cheap_int = 1'b1;
 		   end
 		 3'd5: /* sraiw */
 		   begin
@@ -444,6 +444,23 @@ module decode_riscv(
 	       uop.is_cheap_int = 1'b1;
 	       uop.rvimm = { {PP{insn[31]}}, insn[31:12], 12'd0};
 	    end
+	  7'h3b:
+	    begin
+	       uop.dst = rd;
+	       uop.dst_valid = (rd != 'd0);
+	       uop.srcA_valid = 1'b1;
+	       uop.srcA = rs1;
+	       uop.srcB_valid = 1'b1;
+	       uop.srcB = rs2;
+	       uop.is_int = 1'b1;	       
+	       if(insn[14:12] == 'd0 && insn[31:25] == 'd0)
+		 begin
+		    uop.op = (rd != 'd0) ? ADDW : NOP;
+		    uop.is_cheap_int = 1'b1;		    
+		 end
+	    end
+
+	  
 	  7'h63: /* branches */
 	    begin
 	       uop.srcA = rs1;
