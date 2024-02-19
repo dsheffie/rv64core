@@ -1016,7 +1016,7 @@ module exec(clk,
    shift_right #(.LG_W(`LG_M_WIDTH))
    s1(.is_left(t_left_shift2), 
       .is_signed(t_signed_shift2), 
-      .data(t_zero_shift_upper2 ? {{32{t_srcA_2[31]}}, t_srcA_2[31:0]} : t_srcA_2), 
+      .data(t_zero_shift_upper2 ? {{32{(t_signed_shift2 ? t_srcA_2[31] : 1'b0)}}, t_srcA_2[31:0]} : t_srcA_2), 
       .distance(t_shift_amt2), 
       .y(w_shifter_out2));
 
@@ -1424,7 +1424,7 @@ module exec(clk,
    shift_right #(.LG_W(`LG_M_WIDTH)) 
    s0(.is_left(t_left_shift), 
       .is_signed(t_signed_shift), 
-      .data(t_zero_shift_upper ? {{32{t_srcA[31]}}, t_srcA[31:0]} : t_srcA),
+      .data(t_zero_shift_upper ? {{32{(t_signed_shift ? t_srcA[31] : 1'b0)}}, t_srcA[31:0]} : t_srcA),
       .distance(t_shift_amt), 
       .y(w_shifter_out));
 
