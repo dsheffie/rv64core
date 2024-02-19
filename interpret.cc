@@ -242,7 +242,7 @@ void execRiscv(state_t *s) {
 	  s->sext_xlen(c, m.r.rd);
 	} 
 	else if((m.r.sel == 1) & (m.r.special == 0)) { /* sllw */
-	  int32_t c = a << m.r.rs2;
+	  int32_t c = a << (s->gpr[m.r.rs2]&31);
 	  s->sext_xlen(c, m.r.rd);
 	}
 	else if((m.r.sel == 4) & (m.r.special == 1)) { /* divw */
@@ -612,7 +612,10 @@ void handle_syscall(state_t *s, uint64_t tohost) {
       break;
     }
     case SYS_close: {
-      buf[0] = close(buf[1]);
+      buf[0] = 0;
+      if(buf[1] > 2) {
+	buf[0] = close(buf[1]);
+      }
       break;
     }
     case SYS_read: {
