@@ -208,7 +208,8 @@ module exec(clk,
    logic [5:0] 	t_shift_amt;
    wire [`M_WIDTH-1:0] w_shifter_out;
 
-   logic 	t_start_mul,t_is_64b_mul;
+   logic	       t_start_mul,t_is_64b_mul,t_signed_mul;
+
    logic 	t_mul_complete;
    logic [`M_WIDTH-1:0] t_mul_result;
    
@@ -1442,7 +1443,7 @@ module exec(clk,
       
    mul m(.clk(clk), 
 	 .reset(reset), 
-	 .is_signed(int_uop.op == MUL || int_uop.op == MULH),
+	 .is_signed(t_signed_mul),
 	 .is_high(int_uop.op == MULHU || int_uop.op == MULH),
 	 .go(t_start_mul&r_start_int),
 	 .is_64b_mul(t_is_64b_mul),
@@ -1742,6 +1743,7 @@ module exec(clk,
 	t_left_shift = 1'b0;
 	t_shift_amt = 'd0;
 	t_start_mul = 1'b0;
+	t_signed_mul = 1'b0;
 	t_is_64b_mul = 1'b0;
 	
 	t_signed_div = 1'b0;
@@ -1796,14 +1798,17 @@ module exec(clk,
 	    end
 	  MUL:
 	    begin
+	       t_signed_mul = 1'b1;	       	       
 	       t_start_mul = r_start_int&!ds_done;
 	    end
 	  MULW:
 	    begin
+	       t_signed_mul = 1'b1;	       
 	       t_start_mul = r_start_int&!ds_done;	       
 	    end
 	  MULH:
 	    begin
+	       t_signed_mul = 1'b1;
 	       t_start_mul = r_start_int&!ds_done;
 	    end
 	  MULHU:
