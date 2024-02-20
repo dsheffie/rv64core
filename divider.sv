@@ -9,6 +9,7 @@ module divider(clk,
 	       prf_ptr_in,	     
 	       is_signed_div,
 	       is_rem,
+	       is_w,
 	       start_div,
 	       y,
 	       rob_ptr_out,
@@ -30,6 +31,7 @@ module divider(clk,
    
    input logic 	      is_signed_div;
    input logic 	      is_rem;
+   input logic	      is_w;
    input logic 	      start_div;
    
    output logic [`M_WIDTH-1:0] y;
@@ -60,6 +62,7 @@ module divider(clk,
    logic [W2-1:0] 		    r_Y, n_Y;
    logic [W2-1:0] 		    r_D, n_D, r_R, n_R;
    logic [W-1:0] 		    t_ss;
+   logic			    r_is_w, n_is_w;
    
    logic [LG_W-1:0] 		    r_idx, n_idx;
    logic 			    t_bit,t_valid;
@@ -85,6 +88,7 @@ module divider(clk,
 	     r_D <= 'd0;
 	     r_R <= 'd0;
 	     r_idx <= 'd0;
+	     r_is_w <= 1'b0;
 	  end
 	else
 	  begin
@@ -101,11 +105,18 @@ module divider(clk,
 	     r_D <= n_D;
 	     r_R <= n_R;
 	     r_idx <= n_idx;
+	     r_is_w <= n_is_w;
 	  end
      end
 
-   shiftregbit #(.W(W)) ss
-     (.clk(clk), .reset(reset), .b(t_bit), .valid(t_valid), .out(t_ss));
+   shiftregbit #(.W(W)) 
+   ss(
+      .clk(clk), 
+      .reset(reset),
+      .b(t_bit),
+      .valid(t_valid), 
+      .out(t_ss)
+      );
   
 			     
    always_comb
@@ -125,6 +136,7 @@ module divider(clk,
 	n_idx = r_idx;
 	t_bit = 1'b0;
 	t_valid = 1'b0;
+	n_is_w = r_is_w;
 	
 	//output signals
 	ready = (r_state == IDLE) & !start_div;
@@ -136,6 +148,7 @@ module divider(clk,
 	unique case (r_state)
 	  IDLE:
 	    begin
+	       n_is_w = is_w;
 	       n_rob_ptr = rob_ptr_in;
 	       n_gpr_prf_ptr = prf_ptr_in;
 	       n_is_rem_op = is_rem;
@@ -183,6 +196,10 @@ module divider(clk,
 	       if(r_is_rem_op)
 		 begin
 		    n_Y[W-1:0] = n_Y[W2-1:W];
+		 end
+	       if(r_is_w)
+		 begin
+		    n_Y = { {96{n_Y[31]}}, n_Y[31:0]};
 		 end
 	    end
 	  WAIT_FOR_WB:

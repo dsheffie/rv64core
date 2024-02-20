@@ -246,9 +246,8 @@ void execRiscv(state_t *s) {
     }
     case 0x3b: {
       if(m.r.rd != 0) {
-	int32_t a = *reinterpret_cast<int32_t*>(&s->gpr[m.r.rs1]);
-	int32_t b = *reinterpret_cast<int32_t*>(&s->gpr[m.r.rs2]);
-
+	int32_t a = s->get_reg_i32(m.r.rs1), b = s->get_reg_i32(m.r.rs2);
+	
 	if((m.r.sel == 0) & (m.r.special == 0)) { /* addw */
 	  int32_t c = a+b;
 	  s->sext_xlen(c, m.r.rd);	 

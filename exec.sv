@@ -208,7 +208,7 @@ module exec(clk,
    logic [5:0] 	t_shift_amt;
    wire [`M_WIDTH-1:0] w_shifter_out;
 
-   logic	       t_start_mul,t_is_64b_mul,t_signed_mul;
+   logic	       t_start_mul,t_is_mulw,t_signed_mul;
 
    logic 	t_mul_complete;
    logic [`M_WIDTH-1:0] t_mul_result;
@@ -1440,24 +1440,26 @@ module exec(clk,
 	r_div_complete <= reset ? 1'b0 : t_div_complete;
      end
 
-      
-   mul m(.clk(clk), 
-	 .reset(reset), 
-	 .is_signed(t_signed_mul),
-	 .is_high(int_uop.op == MULHU || int_uop.op == MULH),
-	 .go(t_start_mul&r_start_int),
-	 .is_64b_mul(t_is_64b_mul),
-	 .src_A(t_srcA),
-	 .src_B(t_srcB),
-	 .rob_ptr_in(int_uop.rob_ptr),
-	 .prf_ptr_in(int_uop.dst),
-	 .y(t_mul_result),
-	 .complete(t_mul_complete),
-	 .rob_ptr_out(t_rob_ptr_out),
-	 .prf_ptr_val_out(),
-	 .prf_ptr_out(w_mul_prf_ptr)
-	 );
-
+   
+   mul m
+     (
+      .clk(clk), 
+      .reset(reset), 
+      .is_signed(t_signed_mul),
+      .is_high(int_uop.op == MULHU || int_uop.op == MULH),
+      .go(t_start_mul&r_start_int),
+      .is_mulw(t_is_mulw),
+      .src_A(t_srcA),
+      .src_B(t_srcB),
+      .rob_ptr_in(int_uop.rob_ptr),
+      .prf_ptr_in(int_uop.dst),
+      .y(t_mul_result),
+      .complete(t_mul_complete),
+      .rob_ptr_out(t_rob_ptr_out),
+      .prf_ptr_val_out(),
+      .prf_ptr_out(w_mul_prf_ptr)
+      );
+   
    always_ff@(negedge clk)
      begin
 
@@ -1519,8 +1521,13 @@ module exec(clk,
    
 	       
    //t_zero_shift_upper
-   wire [63:0] w_divA = t_zero_shift_upper ? {{32{(t_signed_div ? t_srcA[31] : 1'b0)}}, t_srcA[31:0]} : t_srcA;
-   wire [63:0] w_divB = t_zero_shift_upper ? {{32{(t_signed_div ? t_srcB[31] : 1'b0)}}, t_srcB[31:0]} : t_srcB;
+   wire [63:0] w_divA = t_zero_shift_upper ? 
+	       {{32{(t_signed_div ? t_srcA[31] : 1'b0)}}, t_srcA[31:0]} : 
+	       t_srcA;
+
+   wire [63:0] w_divB = t_zero_shift_upper ? 
+	       {{32{(t_signed_div ? t_srcB[31] : 1'b0)}}, t_srcB[31:0]} : 
+	       t_srcB;
 	       
    divider #(.LG_W(6))
    d64 (
@@ -1531,6 +1538,7 @@ module exec(clk,
 	.rob_ptr_in(int_uop.rob_ptr),
 	.prf_ptr_in(int_uop.dst),
 	.is_signed_div(t_signed_div),
+	.is_w(t_zero_shift_upper),
         .is_rem(t_is_rem),
 	.start_div(t_start_div64),
 	.y(t_div_result),
@@ -1744,7 +1752,7 @@ module exec(clk,
 	t_shift_amt = 'd0;
 	t_start_mul = 1'b0;
 	t_signed_mul = 1'b0;
-	t_is_64b_mul = 1'b0;
+	t_is_mulw = 1'b0;
 	
 	t_signed_div = 1'b0;
 	t_is_rem = 1'b0;
@@ -1762,6 +1770,7 @@ module exec(clk,
 	  DIVW:
 	    begin
 	       t_signed_div = 1'b1;
+	       t_zero_shift_upper = 1'b1;	       
 	       t_start_div64 = r_start_int&!ds_done;	       
 	    end
 	  DIVU:
@@ -1770,6 +1779,7 @@ module exec(clk,
 	    end
 	  DIVUW:
 	    begin
+	       t_zero_shift_upper = 1'b1;
 	       t_start_div64 = r_start_int&!ds_done;
 	    end
 	  REM:
@@ -1803,6 +1813,7 @@ module exec(clk,
 	    end
 	  MULW:
 	    begin
+	       t_is_mulw = 1'b1;	       
 	       t_signed_mul = 1'b1;	       
 	       t_start_mul = r_start_int&!ds_done;	       
 	    end

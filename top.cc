@@ -766,7 +766,7 @@ int main(int argc, char **argv) {
 	  if(ss->pc == (tb->retire_pc + 4)) {
 	    for(int i = 0; i < 32; i++) {
 	      if((ss->gpr[i] != s->gpr[i])) {
-		int wrong_bits = __builtin_popcount(ss->gpr[i] ^ s->gpr[i]);
+		int wrong_bits = __builtin_popcountll(ss->gpr[i] ^ s->gpr[i]);
 		++mismatches;
 		std::cout << "register " << getGPRName(i)
 			  << " does not match : rtl "
