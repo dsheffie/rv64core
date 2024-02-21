@@ -1083,7 +1083,7 @@ module l1d(clk,
 			 n_core_mem_rsp_valid = 1'b1;
 			 n_core_mem_rsp.bad_addr = r_req2.spans_cacheline;
 		      end // if (r_req2.is_store)
-		    else if(t_port2_hit_cache && (!r_hit_busy_addr2 || (r_req2.op == MEM_LW && !r_hit_busy_word_addr2 && !r_any_unaligned )) )
+		    else if(t_port2_hit_cache && (!r_hit_busy_addr2 || (1'b0 & r_req2.op == MEM_LW && !r_hit_busy_word_addr2 && !r_any_unaligned )) )
 		      begin
 `ifdef VERBOSE_L1D
 			 $display("cycle %d port2 hit for addr %x, data %x", r_cycle, r_req2.addr, t_rsp_data2);
