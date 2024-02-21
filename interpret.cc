@@ -268,12 +268,21 @@ void execRiscv(state_t *s) {
 	  int32_t c = a/b;
 	  s->sext_xlen(c, m.r.rd);
 	}
+	else if((m.r.sel == 5) & (m.r.special == 0)) { /* srlw */
+	  uint32_t c = s->get_reg_u32(m.r.rs1) >> (s->gpr[m.r.rs2]&31);
+	  int32_t rr =  *reinterpret_cast<int32_t*>(&c);	  
+	  s->sext_xlen(rr, m.r.rd);	  
+	}
 	else if((m.r.sel == 5) & (m.r.special == 1)) { /* divuw */
 	  uint32_t aa = s->get_reg_u32(m.r.rs1);
 	  uint32_t bb = s->get_reg_u32(m.r.rs2);
 	  uint32_t c = aa/bb;
 	  int32_t rr =  *reinterpret_cast<int32_t*>(&c);
 	  s->sext_xlen(rr, m.r.rd);
+	}
+	else if((m.r.sel == 5) & (m.r.special == 32)) { /* sraw */
+	  int32_t c = a >> (s->gpr[m.r.rs2]&31);
+	  s->sext_xlen(c, m.r.rd);	  
 	}
 	else if((m.r.sel == 6) & (m.r.special == 1)) { /* remw */
 	  int32_t c = a % b;
@@ -285,10 +294,6 @@ void execRiscv(state_t *s) {
 	  uint32_t c = aa%bb;
 	  int32_t rr =  *reinterpret_cast<int32_t*>(&c);
 	  s->sext_xlen(rr, m.r.rd);
-	}
-	else if((m.r.sel == 5) & (m.r.special == 32)) { /* sraw */
-	  int32_t c = a >> (s->gpr[m.r.rs2]&31);
-	  s->sext_xlen(c, m.r.rd);	  
 	}
 	else {
 	  std::cout << "special = " << m.r.special << "\n";
