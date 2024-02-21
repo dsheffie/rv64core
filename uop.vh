@@ -87,6 +87,7 @@ typedef enum logic [6:0]
    REMW,
    REMUW,
    SLLW,
+   SRLW,
    II //illegal instruction
    } opcode_t;
 
