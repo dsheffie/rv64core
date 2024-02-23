@@ -40,7 +40,7 @@ LIBS =  $(EXTRA_LD) -lpthread
 
 DEP = $(OBJ:.o=.d)
 
-EXE = rv32_core
+EXE = rv64_core
 
 .PHONY : all clean
 

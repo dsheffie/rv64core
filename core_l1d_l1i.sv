@@ -329,7 +329,7 @@ module core_l1d_l1i(clk,
 
    logic	drain_ds_complete;
    logic [(1<<`LG_ROB_ENTRIES)-1:0] dead_rob_mask;
-
+`define PERFECT_L1D
 `ifdef PERFECT_L1D
    perfect_l1d 
 `else

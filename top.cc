@@ -130,9 +130,12 @@ void record_l1d(int req, int ack, int ack_st, int blocked, int stall_reason) {
   l1d_stall_reasons[stall_reason&15]++;
 }
 
-int read_word(int addr) {
-  uint32_t a = *reinterpret_cast<uint32_t*>(&addr);
-  return *reinterpret_cast<int*>(s->mem + a);
+long long read_dword(long long addr) {
+  return *reinterpret_cast<long long*>(s->mem + addr);
+}
+
+int read_word(long long addr) {
+  return *reinterpret_cast<int*>(s->mem + addr);
 }
 
 void write_byte(int addr, char data) {
@@ -152,6 +155,11 @@ void write_word(int addr, int data) {
   uint32_t a = *reinterpret_cast<uint32_t*>(&addr);
   uint32_t d = *reinterpret_cast<uint32_t*>(&data);
   *reinterpret_cast<uint32_t*>(s->mem + a) = d;
+}
+
+void write_dword(long long addr, long long data) {
+  uint64_t d = *reinterpret_cast<uint64_t*>(&data);
+  *reinterpret_cast<uint64_t*>(s->mem + addr) = d;
 }
 
 static std::map<int, uint64_t> int_sched_rdy_map;

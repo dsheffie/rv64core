@@ -11,10 +11,15 @@ import "DPI-C" function void record_l1d(input int req,
 					input int block,
 					input int stall_reason);
 
-import "DPI-C" function int read_word(input int addr);
+
+import "DPI-C" function int read_word(input longint addr);
+import "DPI-C" function longint read_dword(input longint addr);
+
+
 import "DPI-C" function void write_byte(input int addr, input byte data);
 import "DPI-C" function void write_half(input int addr, input shortint  data);
 import "DPI-C" function void write_word(input int addr, input int data);
+import "DPI-C" function void write_dword(input longint addr, input longint data);
 
 `endif
 
@@ -117,38 +122,6 @@ module perfect_l1d(clk,
   
    localparam N_MQ_ENTRIES = (1<<`LG_MRQ_ENTRIES);
 
-         
-function logic [L1D_CL_LEN_BITS-1:0] merge_cl32(logic [L1D_CL_LEN_BITS-1:0] cl, logic [31:0] w32, logic[LG_WORDS_PER_CL-1:0] pos);
-   logic [L1D_CL_LEN_BITS-1:0] 		 cl_out;
-   case(pos)
-     2'd0:
-       cl_out = {cl[127:32], w32};
-     2'd1:
-       cl_out = {cl[127:64], w32, cl[31:0]};
-     2'd2:
-       cl_out = {cl[127:96], w32, cl[63:0]};
-     2'd3:
-       cl_out = {w32, cl[95:0]};
-   endcase // case (pos)
-   return cl_out;
-endfunction
-
-function logic [31:0] select_cl32(logic [L1D_CL_LEN_BITS-1:0] cl, logic[LG_WORDS_PER_CL-1:0] pos);
-   logic [31:0] 			 w32;
-   case(pos)
-     2'd0:
-       w32 = cl[31:0];
-     2'd1:
-       w32 = cl[63:32];
-     2'd2:
-       w32 = cl[95:64];
-     2'd3:
-       w32 = cl[127:96];
-   endcase // case (pos)
-   return w32;
-endfunction
-      
-
    
    logic 				  r_got_req, r_last_wr, n_last_wr;
    logic 				  r_last_rd, n_last_rd;
@@ -187,6 +160,7 @@ endfunction
    logic 				  r_flush_complete, n_flush_complete;
    
 
+   logic [63:0]				  t_w64;
    logic [31:0] 			  t_w32, t_bswap_w32;
    logic [31:0] 			  t_w32_2, t_bswap_w32_2;
 
@@ -652,6 +626,7 @@ endfunction
 
 
    logic [31:0] tt_w32_2, tt_bswap_w32_2;
+   logic [63:0]	tt_w64;
    
    always_comb
      begin
@@ -659,10 +634,11 @@ endfunction
 	
 	t_rsp_dst_valid2 = 1'b0;
 	t_rsp_data2 = 'd0;
-
-	tt_w32_2 = read_word({r_req2.addr[31:2], 2'd0});
-	tt_bswap_w32_2 = bswap32(tt_w32_2);
 	
+	tt_w64 = read_dword({r_req2.addr[63:3], 3'd0});
+	tt_w32_2 = read_word({r_req2.addr[63:2], 2'd0});
+ 
+	tt_bswap_w32_2 = bswap32(tt_w32_2);
 	
 	case(r_req2.op)
 	  MEM_LB:
@@ -725,26 +701,45 @@ endfunction
 	    end
 	  MEM_LHU:
 	    begin
-	       t_rsp_data2 = {48'd0, bswap16(r_req2.addr[1] ? tt_w32_2[31:16] : tt_w32_2[15:0])};
+	       t_rsp_data2 = {48'd0, (r_req2.addr[1] ? tt_w32_2[31:16] : tt_w32_2[15:0])};
 	       t_rsp_dst_valid2 = r_req2.dst_valid & t_hit_cache2;	       
 	    end
 	  MEM_LW:
 	    begin
 	       t_rsp_data2 = {{32{tt_bswap_w32_2[31]}}, tt_bswap_w32_2};
 	       t_rsp_dst_valid2 = r_req2.dst_valid & t_hit_cache2;
+	    end	 
+	  MEM_LWU:
+	    begin
+	       t_rsp_data2 = {32'd0, tt_bswap_w32_2};
+	       t_rsp_dst_valid2 = r_req2.dst_valid & t_hit_cache2;
+	    end	 
+	  MEM_LD:
+	    begin
+	       t_rsp_data2 = tt_w64;
+	       t_rsp_dst_valid2 = r_req2.dst_valid & t_hit_cache2;
 	    end
 	  default:
 	    begin
+	       //$stop();
 	    end
 	endcase
-     end
+     end // always_comb
+
+   //always_ff@(negedge clk)
+     //begin
+   //if(t_rsp_dst_valid2)
+   //$display("load port2 address %x, op %d", r_req2.addr, r_req2.op);
+   //end
+   
    
    always_comb
      begin
 	t_data = 'd0;
 
-	t_w32 = read_word({r_req.addr[31:2], 2'd0});
-        t_bswap_w32 = bswap32(t_w32);
+	t_w64 = read_dword({r_req.addr[63:3], 3'd0});
+	t_w32 = read_word({r_req.addr[63:2], 2'd0});
+        t_bswap_w32 = t_w32;
 	
 	t_hit_cache = r_got_req && 
 		      (r_state == ACTIVE);
@@ -813,7 +808,7 @@ endfunction
 	    end
 	  MEM_LHU:
 	    begin
-	       t_rsp_data = {48'd0, bswap16(r_req.addr[1] ? t_w32[31:16] : t_w32[15:0])};
+	       t_rsp_data = {48'd0, (r_req.addr[1] ? t_w32[31:16] : t_w32[15:0])};
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;	       
 	    end
 	  MEM_LW:
@@ -821,26 +816,43 @@ endfunction
 	       t_rsp_data = {{32{t_bswap_w32[31]}}, t_bswap_w32};
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
 	    end
+	  MEM_LWU:
+	    begin
+	       t_rsp_data = {32'd0, t_bswap_w32};
+	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
+	    end
+	  MEM_LD:
+	    begin
+	       t_rsp_data = t_w64;
+	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
+	    end	  
+	  
 	  MEM_SB:
 	    begin
 	       t_wr_array = r_got_req;
 	       if(t_wr_array)
-		 write_byte(r_req.addr, r_req.data[7:0]);
+		 write_byte(r_req.addr[31:0], r_req.data[7:0]);
 
 	    end
 	  MEM_SH:
 	    begin
 	       t_wr_array = r_got_req;	       
 	       if(t_wr_array)
-		 write_half(r_req.addr, bswap16(r_req.data[15:0]));	       
+		 write_half(r_req.addr[31:0], bswap16(r_req.data[15:0]));	       
 	    end
 	  MEM_SW:
 	    begin
 	       t_wr_array = r_got_req;	       
 	       if(t_wr_array)
-		 write_word(r_req.addr, bswap32(r_req.data[31:0]));	       
-	       
+		 write_word(r_req.addr[31:0], bswap32(r_req.data[31:0]));	       	       
 	    end
+	  MEM_SD:
+	    begin
+	       t_wr_array = r_got_req;	       
+	       if(t_wr_array)
+		 write_dword(r_req.addr, r_req.data);	       	       
+	    end
+	  
 	  default:
 	    begin
 	       $stop();
@@ -966,7 +978,7 @@ endfunction
 `ifdef VERBOSE_L1D
 			 $display("cycle %d port2 hit for uuid %d, addr %x, data %x", r_cycle, r_req2.uuid, r_req2.addr, t_rsp_data2);
 `endif
-			 n_core_mem_rsp.data = t_rsp_data2[31:0];
+			 n_core_mem_rsp.data = t_rsp_data2[63:0];
                          n_core_mem_rsp.dst_valid = t_rsp_dst_valid2;
                          n_cache_hits = r_cache_hits + 'd1;
                          n_core_mem_rsp_valid = 1'b1;
@@ -991,7 +1003,7 @@ endfunction
 			   end
 			 else
 			   begin
-			      n_core_mem_rsp.data = t_rsp_data[31:0];
+			      n_core_mem_rsp.data = t_rsp_data[63:0];
 			      n_core_mem_rsp.dst_valid = t_rsp_dst_valid;
 			      n_core_mem_rsp_valid = 1'b1;
 			   end // else: !if(r_req.is_store)
