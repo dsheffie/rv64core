@@ -62,12 +62,12 @@ void load_elf(const char* fn, state_t *ms) {
 
   fd = open(fn, O_RDONLY);
   if(fd<0) {
-    printf("INTERP: open() returned %d\n", fd);
+    printf("open() returned %d\n", fd);
     exit(-1);
   }
   rc = fstat(fd,&s);
   if(rc<0) {
-    printf("INTERP: fstat() returned %d\n", rc);
+    printf("fstat() returned %d\n", rc);
     exit(-1);
   }
   buf = (char*)mmap(nullptr, s.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
@@ -75,18 +75,18 @@ void load_elf(const char* fn, state_t *ms) {
   close(fd);
     
   if(!checkElf(eh)) {
-    printf("INTERP: Bogus binary - not ELF\n");
+    printf("Bogus binary - not ELF\n");
     exit(-1);
   }
 
   if(!check32Bit(eh)) {
-    printf("INTERP: Bogus binary - not ELF32\n");
+    printf("Bogus binary - not ELF64\n");
     exit(-1);
   }
   assert(checkLittleEndian(eh));
 
   if((eh->e_machine) != 243) {
-    printf("INTERP : non-rv32 binary..goodbye got type %d\n", (eh->e_machine));
+    printf("Not a RISCV binary..goodbye got type %d\n", (eh->e_machine));
     exit(-1);
   }
 
