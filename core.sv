@@ -276,9 +276,7 @@ module core(clk,
       
          
    logic [`LG_PRF_ENTRIES-1:0] r_alloc_rat[31:0];
-   logic [`LG_PRF_ENTRIES-1:0] n_alloc_rat[31:0];
    logic [`LG_PRF_ENTRIES-1:0] r_retire_rat[31:0];
-   logic [`LG_PRF_ENTRIES-1:0] n_retire_rat[31:0];
 
    logic [N_ROB_ENTRIES-1:0] 	    uq_wait, mq_wait;
    
@@ -1178,6 +1176,17 @@ module core(clk,
      end // always_ff@ (posedge clk)
 
 
+   wire [`LG_PRF_ENTRIES-1:0] w_rn_srcA_1 = r_alloc_rat[t_uop.srcA[4:0]];
+   wire [`LG_PRF_ENTRIES-1:0] w_rn_srcB_1 = r_alloc_rat[t_uop.srcB[4:0]];
+   wire [`LG_PRF_ENTRIES-1:0] w_rn_srcA_2_ = r_alloc_rat[t_uop2.srcA[4:0]];
+   wire [`LG_PRF_ENTRIES-1:0] w_rn_srcB_2_ = r_alloc_rat[t_uop2.srcB[4:0]];
+   wire 		      w_srcA_match = t_uop.dst_valid & (t_uop2.srcA[4:0] == t_uop.dst[4:0]);
+   wire 		      w_srcB_match = t_uop.dst_valid & (t_uop2.srcB[4:0] == t_uop.dst[4:0]);
+   wire [`LG_PRF_ENTRIES-1:0] w_rn_srcA_2 = w_srcA_match ? n_prf_entry : w_rn_srcA_2_;
+   wire [`LG_PRF_ENTRIES-1:0] w_rn_srcB_2 = w_srcB_match ? n_prf_entry : w_rn_srcB_2_;
+   
+   
+
    always_ff@(posedge clk)
      begin
 	if(reset)
@@ -1185,115 +1194,84 @@ module core(clk,
 	     for(logic [`LG_PRF_ENTRIES-1:0] i_rat = 'd0; i_rat < 'd32; i_rat = i_rat + 'd1)
 	       begin
 		  r_alloc_rat[i_rat[4:0]] <= i_rat;
-		  r_retire_rat[i_rat[4:0]] <= i_rat;
 	       end
+	  end
+	else if(t_rat_copy)
+	  begin
+	     r_alloc_rat <= r_retire_rat;
 	  end
 	else
 	  begin
-	     r_alloc_rat <= t_rat_copy ? r_retire_rat : n_alloc_rat;
-	     r_retire_rat <= n_retire_rat;
+	     if(t_alloc && t_uop.dst_valid)
+	       begin
+		  r_alloc_rat[t_uop.dst[4:0]] <= n_prf_entry;
+	       end
+	     if(t_alloc_two &&t_uop2.dst_valid)
+	       begin
+		  r_alloc_rat[t_uop2.dst[4:0]] <= n_prf_entry2;
+	       end	     
 	  end
      end // always_ff@ (posedge clk)
-
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if(t_alloc) $display("alloc1 %x at cycle %d of type %d, monitor=%b", t_uop.pc, r_cycle, t_uop.op, t_uop.op == MONITOR);
-   // 	if(t_alloc_two) $display("alloc2 %x at cycle %d of type %d, monitor=%b", t_uop2.pc, r_cycle, t_uop2.op, t_uop2.op == MONITOR);
-   //   end
-   // 	if(n_state == ACTIVE && r_state == RAT)
-   // 	  begin
-   // 	     $display("RESTART COMPLETE at cycle %d", r_cycle);
-   // 	  end
-   // 	if(t_uop.pc == 'h20d2c && t_uop.srcA_valid)
-   // 	  begin
-   // 	     $display("at %d, pc %x SLL with lsrcA = %d, psrcA = %d, uuid = %d", 
-   // 		      r_cycle, t_alloc_uop.pc, t_uop.srcA, t_alloc_uop.srcA, t_alloc_uop.fetch_cycle);
-   // 	  end
-   // 	if(t_uop2.pc == 'h20d2c && t_uop2.srcA_valid)
-   // 	  begin
-   // 	     $display("at %d, pc %x SLL with lsrcA = %d, psrcA = %d, uuid = %d", 
-   // 		      r_cycle, t_alloc_uop2.pc, t_uop2.srcA, t_alloc_uop2.srcA, t_alloc_uop.fetch_cycle);
-   // 	  end
-   // 	if(t_uop.pc == 'h20d28 && t_uop.srcA_valid)
-   // 	  begin
-   // 	     $display("at %d, pc %x dst %d with lsrcA = %d, psrcA = %d, uuid = %d", 
-   // 		      r_cycle, t_alloc_uop.pc, t_alloc_uop.dst, t_uop.srcA, t_alloc_uop.srcA, t_alloc_uop.fetch_cycle);
-   // 	  end
-   // 	if(t_uop2.pc == 'h20d28 && t_uop2.srcA_valid)
-   // 	  begin
-   // 	     $display("at %d, pc %x dst %d with lsrcA = %d, psrcA = %d, uuid = %d", 
-   // 		      r_cycle, t_alloc_uop2.pc, t_alloc_uop2.dst, t_uop2.srcA, t_alloc_uop2.srcA, t_alloc_uop.fetch_cycle);
-   // 	  end
-	
-   //   end
-
    
+   
+   always_ff@(posedge clk)
+     begin
+	if(reset)
+	  begin
+	     for(logic [`LG_PRF_ENTRIES-1:0] i_rat = 'd0; i_rat < 'd32; i_rat = i_rat + 'd1)
+	       begin
+		  r_retire_rat[i_rat[4:0]] <= i_rat;
+	       end
+	  end
+	else 
+	  begin
+	     if(t_free_reg)
+	       begin
+		  r_retire_rat[t_rob_head.ldst] <= t_rob_head.pdst;
+	       end
+	     if(t_free_reg_two)
+	       begin
+		  r_retire_rat[t_rob_next_head.ldst] <= t_rob_next_head.pdst;		  
+	       end
+	  end // always_ff@ (posedge clk)
+     end // always_ff@ (posedge clk)
+
+      
    always_comb
      begin
-	n_alloc_rat = r_alloc_rat;
-	
 	t_alloc_uop = t_uop;
 	t_alloc_uop2 = t_uop2;
 `ifdef VERILATOR
 	t_alloc_uop.clear_id = r_clear_cnt;
 	t_alloc_uop2.clear_id = r_clear_cnt;
 `endif
-	
-	if(t_uop.srcA_valid)
-	  begin
-	     t_alloc_uop.srcA = r_alloc_rat[t_uop.srcA[4:0]];	     
-	  end
-	if(t_uop.srcB_valid)
-	  begin
-	     t_alloc_uop.srcB = r_alloc_rat[t_uop.srcB[4:0]];
-	  end
-	     
-	
-	//2nd uop begins here
-	if(t_uop2.srcA_valid)
-	  begin
-	     t_alloc_uop2.srcA =  (t_uop.dst_valid && (t_uop2.srcA[4:0] == t_uop.dst[4:0]) ?
-				  n_prf_entry :  r_alloc_rat[t_uop2.srcA[4:0]]);	     
-	  end
-	if(t_uop2.srcB_valid )
-	  begin
-	     t_alloc_uop2.srcB = (t_uop.dst_valid && (t_uop2.srcB[4:0] == t_uop.dst[4:0]) ?
-				  n_prf_entry :  r_alloc_rat[t_uop2.srcB[4:0]]);	     	     
-	  end
+	t_alloc_uop.srcA = w_rn_srcA_1;
+	t_alloc_uop.srcB = w_rn_srcB_1;
+	t_alloc_uop2.srcA = w_rn_srcA_2;
+	t_alloc_uop2.srcB = w_rn_srcB_2;
 
 	if(t_alloc)
 	  begin
 	     if(t_uop.dst_valid)
 	       begin
-		  n_alloc_rat[t_uop.dst[4:0]] = n_prf_entry;
 		  t_alloc_uop.dst = n_prf_entry;
 	       end
 	     
 	     t_alloc_uop.rob_ptr = r_rob_tail_ptr[`LG_ROB_ENTRIES-1:0];
 	  end // if (t_alloc)
-
+	
 	if(t_alloc_two)
 	  begin
 	     if(t_uop2.dst_valid)
 	       begin
-		  n_alloc_rat[t_uop2.dst[4:0]] = n_prf_entry2;
 		  t_alloc_uop2.dst = n_prf_entry2;
 	       end
 	     t_alloc_uop2.rob_ptr = r_rob_next_tail_ptr[`LG_ROB_ENTRIES-1:0];
 	  end
-	
      end // always_comb
-
-
-   //always_ff@(negedge clk)
-   //begin
-   //$display("r_cycle %d : $v1 -> %d", r_cycle, n_alloc_rat['d3]);
-   //end
   
    always_comb
      begin
-	n_retire_rat = r_retire_rat;
-	
 	t_free_reg = 1'b0;
 	t_free_reg_ptr = 'd0;
 	t_free_reg_two = 1'b0;
@@ -1313,7 +1291,6 @@ module core(clk,
 	       begin
 		  t_free_reg = 1'b1;
 		  t_free_reg_ptr = t_rob_head.old_pdst;
-		  n_retire_rat[t_rob_head.ldst] = t_rob_head.pdst;
 		  n_retire_prf_free[t_rob_head.pdst] = 1'b0;
 		  n_retire_prf_free[t_rob_head.old_pdst] = 1'b1;
 	       end
@@ -1322,7 +1299,6 @@ module core(clk,
 	       begin
 		  t_free_reg_two = 1'b1;
 		  t_free_reg_two_ptr = t_rob_next_head.old_pdst;
-		  n_retire_rat[t_rob_next_head.ldst] = t_rob_next_head.pdst;
 		  n_retire_prf_free[t_rob_next_head.pdst] = 1'b0;
 		  n_retire_prf_free[t_rob_next_head.old_pdst] = 1'b1;
 	       end
