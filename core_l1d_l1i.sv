@@ -2,10 +2,17 @@
 `include "rob.vh"
 `include "uop.vh"
 
-module core_l1d_l1i(clk, 
-		       reset,
-		       extern_irq,
-		       in_flush_mode,
+module
+`ifndef FPGA64_32
+   core_l1d_l1i
+`else
+  core_l1d_l1i_64
+`endif
+(		   
+		    clk, 
+		    reset,
+		    extern_irq,
+		    in_flush_mode,
 		       resume,
 		       resume_pc,
 		       ready_for_resume,
