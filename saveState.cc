@@ -12,7 +12,7 @@ struct page {
   uint8_t data[4096];
 } __attribute__((packed));
 
-static const uint64_t MAGICNUM = 0xbeefd00d12345670UL;
+static const uint64_t MAGICNUM = 0x64646464beefd00dUL;
 
 struct header {
   uint64_t magic;
@@ -83,40 +83,29 @@ void loadState(state_t &s, const std::string &filename) {
   close(fd);
 }
 
+
+
 void emitCodeForInitialRegisterValues(state_t &s, uint64_t pc) {
+
+  int addi = 0, slli = 0;
   for(int i = 1; i < 32; i++) {
-    if((s.gpr[i] >> 11) & 0x1) {
-      int32_t simm32 = (s.gpr[i] >> 20);
-      int32_t k = (s.gpr[i] / 4096)*4096;
-      int32_t d = s.gpr[i] - k;
-      if(d >= 0) {
-	/* round up */	
-	k = ((s.gpr[i] + 4095) / 4096)*4096;
-	d = s.gpr[i] - k;
+    //std::cout << std::hex << s.gpr[i] << std::dec << "\n";
+    slli = ((8) << 20) | (i<<15) | 1 << 12 | (i<<7) | 0x13;
+    
+    uint64_t u = *reinterpret_cast<uint64_t*>(&s.gpr[i]);
+    
+    for(int j = 56; j >= 0; j-=8) {
+      uint8_t v = (u>>j) & 0x0ff;
+      if(v) {
+	addi = ((v) << 20) | (i<<15) | 0 << 12 | (i<<7) | 0x13;
+	*reinterpret_cast<int*>(&s.mem[pc]) = addi;
+	pc += 4;	
       }
-      //std::cout << s.gpr[i] << "\n";
-      //std::cout << (k+d) << "\n";
-      //std::cout << std::hex << "g " << s.gpr[i] << std::dec << "\n";      
-      //std::cout << std::hex << "k " << (k) << std::dec <<"\n";
-      //std::cout << std::hex << "d " << (d) << std::dec <<"\n";
-      assert((d >> 12) == -1);
-      assert((k+d) == s.gpr[i]);
-      
-      int lui = (k & 0xfffff000) | (i<<7) | 0x37;
-      *reinterpret_cast<int*>(&s.mem[pc]) = lui;
-      pc += 4;
-      
-      int addi = ((d & 0xfff) << 20) | (i<<15) | 0 << 12 | (i<<7) | 0x13;
-      *reinterpret_cast<int*>(&s.mem[pc]) = addi;
-      pc += 4;
-    }
-    else {
-      int lui = (s.gpr[i] & 0xfffff000) | (i<<7) | 0x37;
-      *reinterpret_cast<int*>(&s.mem[pc]) = lui;
-      pc += 4;
-      int ori = ((s.gpr[i] & 0xfff) << 20) | (i<<15) | 6 << 12 | (i<<7) | 0x13;
-      *reinterpret_cast<int*>(&s.mem[pc]) = ori;
-      pc += 4;
+
+      if(j != 0) {
+	*reinterpret_cast<int*>(&s.mem[pc]) = slli;
+	pc += 4;
+      }
     }
   }
   *reinterpret_cast<int*>(&s.mem[pc]) = 0x73;

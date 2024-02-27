@@ -492,8 +492,8 @@ int main(int argc, char **argv) {
     loadState(*s, rv32_binary.c_str());
     emitCodeForInitialRegisterValues(*s, s->pc);
     reset_core(tb, cycle, s->pc);
-    int gpr[32] = {0};
-    memcpy(gpr, s->gpr, sizeof(int)*32);
+    int64_t gpr[32] = {0};
+    memcpy(gpr, s->gpr, sizeof(int64_t)*32);
 
     
     while(true) {
@@ -561,7 +561,12 @@ int main(int argc, char **argv) {
       
       if(tb->retire_reg_valid) {
 	//std::cout << "retired something..port1, reg "
-	//<< (int)tb->retire_reg_ptr << "\n";
+	//<< (int)tb->retire_reg_ptr
+	//<< std::hex
+	//<< " "
+	//<< tb->retire_reg_data
+	//<< std::dec
+	//<< "\n";
 	s->gpr[tb->retire_reg_ptr] = tb->retire_reg_data;
       }
       if(tb->retire_reg_two_valid) {

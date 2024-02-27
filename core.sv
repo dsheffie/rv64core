@@ -1133,7 +1133,6 @@ module core(clk,
 	       t_exception_wr_cpr0_ptr = 5'd14;
 	       t_exception_wr_cpr0_data = t_rob_head.pc;
 	       n_state = WRITE_CAUSE;
-	       $display("write epc, pc = %x", t_rob_head.pc);
 	       n_epc = t_rob_head.pc;
 	    end
 	  WRITE_CAUSE:
