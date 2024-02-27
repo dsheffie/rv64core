@@ -929,6 +929,10 @@ module core(clk,
 		 end // if (t_can_retire_rob_head)
 	       else if(!t_dq_empty)
 		 begin
+		    //$display("t_uop.serializing_op = %b, rob empty %b, monitor %b", 
+		    //t_uop.serializing_op, t_rob_empty,
+		    //t_uop.op == MONITOR);
+
 		    if(t_uop.serializing_op && t_rob_empty)
 		      begin
 			 if(t_uop.op == MONITOR)
@@ -1018,6 +1022,7 @@ module core(clk,
 	    end
 	  MONITOR_FLUSH_CACHE:
 	    begin
+	       //$display("monitor flush %b %b", n_l1d_flush_complete, n_l2_flush_complete);
 	       if(/*n_l1i_flush_complete &&*/ n_l1d_flush_complete && n_l2_flush_complete)
 		 begin
 		    n_got_monitor = 1'b1;
@@ -1150,7 +1155,16 @@ module core(clk,
 	    end
 	endcase // unique case (r_state)
      end // always_comb
-   
+
+`ifdef VERILATOR
+   always_ff@(negedge clk)
+     begin
+	if(r_state == WRITE_EPC)
+	  begin
+	     $display("write %x to epc", t_rob_head.pc);
+	  end
+     end
+`endif
       
    always_ff@(posedge clk)
      begin

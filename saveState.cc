@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include "interpret.hh"
+#include "globals.hh"
 
 struct page {
   uint32_t va;
@@ -20,6 +21,8 @@ struct header {
   int64_t gpr[32];
   uint64_t icnt;
   uint32_t num_nz_pages;
+  uint64_t tohost_addr;
+  uint64_t fromhost_addr;  
   header() {}
 } __attribute__((packed));
 
@@ -72,7 +75,8 @@ void loadState(state_t &s, const std::string &filename) {
   s.pc = h.pc;
   memcpy(&s.gpr,&h.gpr,sizeof(s.gpr));
   s.icnt = h.icnt;
-  
+  globals::tohost_addr = h.tohost_addr;
+  globals::fromhost_addr = h.fromhost_addr;
   for(uint32_t i = 0; i < h.num_nz_pages; i++) {
     page p;
     sz = read(fd, &p, sizeof(p));
