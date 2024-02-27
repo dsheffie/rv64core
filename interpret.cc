@@ -20,6 +20,7 @@
 #include "globals.hh"
 
 
+
 std::ostream &operator<<(std::ostream &out, const state_t & s) {
   using namespace std;
   out << "PC : " << hex << s.last_pc << dec << "\n";
@@ -408,8 +409,8 @@ void execRiscv(state_t *s) {
 		s->gpr[m.r.rd] = s->gpr[m.r.rs1] << (s->gpr[m.r.rs2] & (s->xlen()-1));
 		break;
 	      case 0x1: { /* MULH */
-		int64_t t = static_cast<int64_t>(s->gpr[m.r.rs1]) * static_cast<int64_t>(s->gpr[m.r.rs2]);
-		s->gpr[m.r.rd] = (t>>32);
+		__int128 t = static_cast<__int128>(s->gpr[m.r.rs1]) * static_cast<__int128>(s->gpr[m.r.rs2]);
+		s->gpr[m.r.rd] = (t>>64);
 		break;
 	      }
 	      default:
