@@ -143,15 +143,18 @@ void execRiscv(state_t *s) {
 
       simm32 |= ((inst>>31)&1) ? 0xfffff000 : 0x0;
       int64_t simm64 = simm32;
+      //sign extend!
+      simm64 = (simm64 <<32) >> 32;
       uint32_t subop =(inst>>12)&7;
       uint32_t shamt = (inst>>20) & (s->xlen()-1);
 
       if(rd != 0) {
 	switch(m.i.sel)
 	  {
-	  case 0: /* addi */
-	    s->sext_xlen((s->gpr[m.i.rs1] + simm64), rd);
+	  case 0: {/* addi */
+	    s->sext_xlen(s->gpr[m.i.rs1] + simm64, rd);
 	    break;
+	  }
 	  case 1: /* slli */
 	    s->sext_xlen((*reinterpret_cast<uint64_t*>(&s->gpr[m.i.rs1])) << shamt, rd);
 	    break;
@@ -345,7 +348,9 @@ void execRiscv(state_t *s) {
     case 0x17: /* is this sign extended */
       if(rd != 0) {
 	int64_t imm = inst & (~4095);
-	s->sext_xlen(s->pc + imm, rd);
+	imm = (imm << 32) >> 32;
+	int64_t y = s->pc + imm;
+	s->sext_xlen(y, rd);
       }
       s->pc += 4;
       break;
