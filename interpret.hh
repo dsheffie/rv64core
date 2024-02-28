@@ -25,6 +25,7 @@ struct state_t{
   uint64_t epc;
   uint64_t maxicnt;
   uint64_t icnt;
+  int fdcnt;
   int xlen() const {
     return 64;
   }

@@ -35,6 +35,7 @@ std::ostream &operator<<(std::ostream &out, const state_t & s) {
 
 void initState(state_t *s) {
   memset(s, 0, sizeof(state_t));
+  s->fdcnt = 3;
 }
 
 
@@ -631,6 +632,8 @@ void runRiscv(state_t *s, uint64_t dumpIcnt) {
   }
 }
 
+static std::map<state_t*, std::map<int, int>> fdmap;
+
 void handle_syscall(state_t *s, uint64_t tohost) {
   uint8_t *mem = s->mem;  
   if(tohost & 1) {
@@ -639,44 +642,50 @@ void handle_syscall(state_t *s, uint64_t tohost) {
     return;
   }
   uint64_t *buf = reinterpret_cast<uint64_t*>(mem + tohost);
+  std::map<int, int> &m = fdmap[s];
+  
   switch(buf[0])
     {
-    case SYS_write: /* int write(int file, char *ptr, int len) */
-      //std::cout << "got write syscall, fd = " << buf[1] << ", ptr = "
-      //<< std::hex << buf[2] << std::dec
-      //<< ", len = " << buf[3] << "\n";
-
-      
-      buf[0] = write(buf[1], (void*)(s->mem + buf[2]), buf[3]);
-      if(buf[1]==1)
+    case SYS_write: {/* int write(int file, char *ptr, int len) */
+      int fd = (buf[1] > 2) ? m.at(buf[1]) : buf[1];
+      buf[0] = write(fd, (void*)(s->mem + buf[2]), buf[3]);
+      if(fd==1)
 	fflush(stdout);
-      else if(buf[1]==2)
+      else if(fd==2)
 	fflush(stderr);
       break;
+    }
     case SYS_open: {
       const char *path = reinterpret_cast<const char*>(s->mem + buf[1]);
-      buf[0] = open(path, remapIOFlags(buf[2]), S_IRUSR|S_IWUSR);
+      int fd = open(path, remapIOFlags(buf[2]), S_IRUSR|S_IWUSR);
+      m[s->fdcnt] = fd;
+      buf[0] = s->fdcnt;
+      s->fdcnt++;
       break;
     }
     case SYS_close: {
       buf[0] = 0;
       if(buf[1] > 2) {
-	buf[0] = close(buf[1]);
+	buf[0] = close(m.at(buf[1]));
+	m.erase(buf[1]);
       }
       break;
     }
     case SYS_read: {
-      buf[0] = read(buf[1], reinterpret_cast<char*>(s->mem + buf[2]), buf[3]); 
+      int fd = (buf[1] > 2) ? m.at(buf[1]) : buf[1];      
+      buf[0] = read(fd, reinterpret_cast<char*>(s->mem + buf[2]), buf[3]); 
       break;
     }
     case SYS_lseek: {
-      buf[0] = lseek(buf[1], buf[2], buf[3]);
+      int fd = (buf[1] > 2) ? m.at(buf[1]) : buf[1];            
+      buf[0] = lseek(fd, buf[2], buf[3]);
       break;
     }
     case SYS_fstat : {
       struct stat native_stat;
+      int fd = (buf[1] > 2) ? m.at(buf[1]) : buf[1];            
       stat32_t *host_stat = reinterpret_cast<stat32_t*>(s->mem + buf[2]);
-      int rc = fstat(buf[1], &native_stat);
+      int rc = fstat(fd, &native_stat);
       host_stat->st_dev = native_stat.st_dev;
       host_stat->st_ino = native_stat.st_ino;
       host_stat->st_mode = native_stat.st_mode;
