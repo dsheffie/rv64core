@@ -1302,6 +1302,7 @@ module exec(clk,
 	    end
 	  SRLW:
 	    begin
+	       t_zero_shift_upper2 = 1'b1;	       
 	       t_shift_amt2 = {1'b0,t_srcB_2[4:0]};	       
 	       t_result2 = {{32{w_shifter_out2[31]}}, w_shifter_out2[31:0]};
 	       t_wr_int_prf2 = 1'b1;
@@ -2118,6 +2119,7 @@ module exec(clk,
 	    end
 	  SRLW:
 	    begin
+	       t_zero_shift_upper = 1'b1;	       
 	       t_shift_amt = {1'b0,t_srcB[4:0]};
 	       t_result = {{32{w_shifter_out[31]}}, w_shifter_out[31:0]};
 	       t_wr_int_prf = 1'b1;

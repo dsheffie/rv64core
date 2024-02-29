@@ -1,8 +1,6 @@
 # rv32core
 
-Pedagogical SystemVerilog model for a decoupled RV32m CPU. Now that the design supports RV instead of MIPSII, it's gotta be approximately 3x times better (riscV - mipsII = 3x)
-
-Relatively simple uarch - two-wide renamed, decoupled microarchitecture. 1 mem FU, 2 int FU.  Each int FU backed by matrix-style scheduler.
+Pedagogical SystemVerilog model for an RV64m CPU. Relatively simple uarch - two-wide renamed, OOO microarchitecture. 1 mem FU, 2 int FU.  Each int FU backed by matrix-style scheduler.
 
 Caches - direct mapped. Keep things simple and actually implementable on FPGA. Make'em really big because you can do that these days. Never spent time on any elaborate forwarding schemes because it killed cycle time on my FPGA. 
 
