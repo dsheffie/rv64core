@@ -126,7 +126,7 @@ module exec(clk,
    localparam N_MEM_UQ_ENTRIES = (1<<`LG_MEM_UQ_ENTRIES);
    localparam N_MEM_DQ_ENTRIES = (1<<`LG_MEM_DQ_ENTRIES);
    
-   logic [N_INT_PRF_ENTRIES-1:0]  r_prf_inflight, n_prf_inflight;
+   logic [N_INT_PRF_ENTRIES-1:0]  r_prf_inflight;
    
    logic 			  t_wr_int_prf, t_wr_int_prf2;
    
@@ -1650,55 +1650,45 @@ module exec(clk,
 
    always_ff@(posedge clk)
      begin
-	if(reset)
+	if(reset || ds_done)
 	  begin
 	     r_prf_inflight <= 'd0;
 	  end
 	else
 	  begin
-	     r_prf_inflight <= ds_done ? 'd0 : n_prf_inflight;
+	     if(uq_push && uq_uop.dst_valid)
+	       begin
+		  r_prf_inflight[uq_uop.dst] <= 1'b1;
+	       end
+	     if(uq_push_two && uq_uop_two.dst_valid)
+	       begin
+		  r_prf_inflight[uq_uop_two.dst] <= 1'b1;
+	       end
+	     if(mem_rsp_dst_valid)
+	       begin
+		  r_prf_inflight[mem_rsp_dst_ptr] <= 1'b0;
+	       end
+	     
+	     if(r_start_int && t_wr_int_prf)
+	       begin
+		  r_prf_inflight[int_uop.dst] <= 1'b0;
+	       end
+	     else if(t_mul_complete)
+	       begin
+		  r_prf_inflight[w_mul_prf_ptr] <= 1'b0;
+	       end
+	     else if(t_div_complete)
+	       begin
+		  r_prf_inflight[w_div_prf_ptr] <= 1'b0;
+	       end
+	     if(r_start_int2 && t_wr_int_prf2)
+	       begin
+		  r_prf_inflight[int_uop2.dst] <= 1'b0;
+	       end	     
 	  end
      end // always_ff@ (posedge clk)
-
    
-   always_comb
-     begin
-	n_prf_inflight = r_prf_inflight;
-
-	
-	if(uq_push && uq_uop.dst_valid)
-	  begin
-	     n_prf_inflight[uq_uop.dst] = 1'b1;
-	  end
-	if(uq_push_two && uq_uop_two.dst_valid)
-	  begin
-	     n_prf_inflight[uq_uop_two.dst] = 1'b1;
-	  end
-	
-	
-	if(mem_rsp_dst_valid)
-	  begin
-	     n_prf_inflight[mem_rsp_dst_ptr] = 1'b0;
-	  end
-	
-	if(r_start_int && t_wr_int_prf)
-	  begin
-	     n_prf_inflight[int_uop.dst] = 1'b0;
-	  end
-	else if(t_mul_complete)
-	  begin
-	     n_prf_inflight[w_mul_prf_ptr] = 1'b0;
-	  end
-	else if(t_div_complete)
-	  begin
-	     n_prf_inflight[w_div_prf_ptr] = 1'b0;
-	  end
-	if(r_start_int2 && t_wr_int_prf2)
-	  begin
-	     n_prf_inflight[int_uop2.dst] = 1'b0;
-	  end
-	
-     end // always_comb
+   
 
    
 `ifdef VERILATOR
