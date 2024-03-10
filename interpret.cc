@@ -69,8 +69,8 @@ void execRiscv(state_t *s) {
 	if((inst>>31)&1) {
 	  disp |= 0xfffff000;
 	}
-	int64_t ea = static_cast<int64_t>(disp) + s->gpr[m.l.rs1];
-      
+	int64_t disp64 = disp;
+	int64_t ea = ((disp64 << 32) >> 32) + s->gpr[m.l.rs1];      
 	switch(m.s.sel)
 	  {
 	  case 0x0: /* lb */
@@ -297,7 +297,8 @@ void execRiscv(state_t *s) {
     case 0x23: {
       int32_t disp = m.s.imm4_0 | (m.s.imm11_5 << 5);
       disp |= ((inst>>31)&1) ? 0xfffff000 : 0x0;
-      int64_t ea = static_cast<int64_t>(disp) + s->gpr[m.s.rs1];
+      int64_t disp64 = disp;
+      int64_t ea = ((disp64 << 32) >> 32) + s->gpr[m.s.rs1];
       switch(m.s.sel)
 	{
 	case 0x0: /* sb */
