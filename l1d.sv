@@ -172,6 +172,8 @@ module l1d(clk,
       
    logic 				  t_mark_invalid;
    logic 				  t_wr_array;
+   logic				  t_wr_store;
+   logic				  t_silent_store;   
    logic 				  t_hit_cache;
    logic 				  t_rsp_dst_valid;
    logic [63:0] 			  t_rsp_data;
@@ -845,6 +847,8 @@ module l1d(clk,
 	       r_req.op == MEM_SD ? 64'hffffffffffffffff :
 	       'd0;
 
+
+   
    always_comb
      begin
 	t_data = mem_rsp_valid ? mem_rsp_load_data : 
@@ -855,12 +859,15 @@ module l1d(clk,
 		      (r_state == ACTIVE || r_state == INJECT_RELOAD);
 	t_array_data = 'd0;
 	t_wr_array = 1'b0;
+	t_wr_store = 1'b0;
+	
 	t_rsp_dst_valid = 1'b0;
 	t_rsp_data = 'd0;
 
 	t_shift = t_data >> {r_req.addr[`LG_L1D_CL_LEN-1:0], 3'd0};
 	t_store_shift = {64'd0, r_req.data} << {r_req.addr[`LG_L1D_CL_LEN-1:0], 3'd0};
 	t_store_mask = {64'd0, w_store_mask} << {r_req.addr[`LG_L1D_CL_LEN-1:0], 3'd0};
+
 	
 	case(r_req.op)
 	  MEM_LB:
@@ -901,35 +908,37 @@ module l1d(clk,
 	  MEM_SB:
 	    begin
 	       t_array_data = (t_store_shift & t_store_mask) | ((~t_store_mask) & t_data);	       
-	       t_wr_array = t_hit_cache && (r_is_retry || r_did_reload);
+	       t_wr_store = t_hit_cache && (r_is_retry || r_did_reload);
 	    end
 	  MEM_SH:
 	    begin
 	       t_array_data = (t_store_shift & t_store_mask) | ((~t_store_mask) & t_data);	       
-	       t_wr_array = t_hit_cache && (r_is_retry || r_did_reload);
+	       t_wr_store = t_hit_cache && (r_is_retry || r_did_reload);
 	    end
 	  MEM_SW:
 	    begin
 	       t_array_data = (t_store_shift & t_store_mask) | ((~t_store_mask) & t_data);
 	       //t_array_data = t_store_shift;
-	       t_wr_array = t_hit_cache && (r_is_retry || r_did_reload);
+	       t_wr_store = t_hit_cache && (r_is_retry || r_did_reload);
 	    end
 	  MEM_SD:
 	    begin
 	       t_array_data = (t_store_shift & t_store_mask) | ((~t_store_mask) & t_data);
-	       t_wr_array = t_hit_cache && (r_is_retry || r_did_reload);
+	       t_wr_store = t_hit_cache && (r_is_retry || r_did_reload);
 	    end	  
 	  MEM_SC:
 	    begin
 	       t_array_data = (t_store_shift & t_store_mask) | ((~t_store_mask) & t_data);	       
 	       t_rsp_data = 64'd1;
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
-	       t_wr_array = t_hit_cache && (r_is_retry || r_did_reload);
+	       t_wr_store = t_hit_cache && (r_is_retry || r_did_reload);
 	    end
 	  default:
 	    begin
 	    end
 	endcase // case r_req.op
+	t_silent_store = (t_array_data == t_data);
+	t_wr_array = t_wr_store & !t_silent_store;
      end
 
 

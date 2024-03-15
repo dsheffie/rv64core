@@ -61,7 +61,7 @@ static uint64_t rob_full = 0;
 static uint64_t l1d_reqs = 0;
 static uint64_t l1d_acks = 0;
 static uint64_t l1d_stores = 0;
-static std::map<uint32_t, uint64_t> busy_loads, missed_loads;
+
 static std::map<int,uint64_t> block_distribution;
 static std::map<int,uint64_t> restart_distribution;
 static std::map<int,uint64_t> restart_ds_distribution;
@@ -112,15 +112,7 @@ void record_ds_restart(int cycles) {
   restart_ds_distribution[cycles]++;
 }
 
-void record_miss(int pc_, int hit, int busy) {
-  uint32_t pc = *reinterpret_cast<uint32_t*>(&pc_);
-  if(hit and busy) {
-    busy_loads[pc]++;
-  }
-  else if(not(hit)) {
-    missed_loads[pc]++;
-  }
-}
+
 
 void record_l1d(int req, int ack, int ack_st, int blocked, int stall_reason) {
   l1d_reqs += req;
@@ -270,6 +262,7 @@ void record_fetch(int p1, int p2, int p3, int p4,
 }
 
 static std::map<int, uint64_t> mem_lat_map, fp_lat_map, non_mem_lat_map, mispred_lat_map;
+static std::map<int64_t, double> tip_map;
 
 int check_insn_bytes(long long pc, int data) {
   uint32_t insn = get_insn(pc, s);
@@ -700,6 +693,31 @@ int main(int argc, char **argv) {
       cycles_in_faulted++;
     }
 
+    if(tb->rob_empty) {
+      tip_map[last_retired_pc]+= 1.0;
+      //std::cout << "rob empty at cycle " <<  cycle
+      //<< ", last retired instruction "
+      ///	<< std::hex <<last_retired_pc << std::dec << " "
+      //	<< getAsmString(mem_r32(s,last_retired_pc), last_retired_pc)
+      //	<< "\n"; 
+    }
+    else if(!(tb->retire_valid or tb->retire_two_valid)) {
+      tip_map[tb->retire_pc]+= 1.0;
+      //std::cout << "no retirement at cycle " << cycle
+      //	<< std::hex << tb->retire_pc << std::dec << " "
+      //<< getAsmString(mem_r32(s,tb->retire_pc), tb->retire_pc)	
+      //	<< "\n";
+    }
+    else {
+      assert(tb->retire_valid or tb->retire_two_valid);      
+      double total = static_cast<double>(tb->retire_valid) +
+	static_cast<double>(tb->retire_two_valid);
+      tip_map[tb->retire_pc]+= 1.0 / total;
+      if(tb->retire_two_valid) {
+	tip_map[tb->retire_two_pc]+= 1.0 / total;
+      }
+    }
+    
     if(tb->retire_valid) {
       ++insns_retired;
       if(last_retire > 1) {
@@ -712,7 +730,8 @@ int main(int argc, char **argv) {
       if(insns_retired >= start_trace_at)
 	trace_retirement = true;
 
-
+      
+      
       
       if(((insns_retired % heartbeat) == 0) or trace_retirement ) {
 	std::cout << "port a "
@@ -722,7 +741,7 @@ int main(int argc, char **argv) {
 		  << tb->retire_pc
 		  << std::dec
 		  << " "
-		  << getAsmString(mem_r32(s,tb->retire_pc), tb->retire_pc)
+		  << getAsmString(mem_r32(s,tb->retire_pc), tb->retire_pc)		  
 		  << std::fixed
 		  << ", " << static_cast<double>(insns_retired) / cycle << " IPC "
 		  << ", insns_retired "
@@ -736,6 +755,7 @@ int main(int argc, char **argv) {
       }
       if(tb->retire_two_valid) {
 	++insns_retired;
+	last_retired_pc = tb->retire_pc;	
 	if(((insns_retired % heartbeat) == 0) or trace_retirement ) {
 	  std::cout << "port b "
 		    << " cycle " << cycle
@@ -1187,8 +1207,6 @@ int main(int argc, char **argv) {
     }
     out << total_pushout << " cycles of pushout\n";
     dump_histo(pushout_name, pushout_histo, s);
-
-    dump_histo("busy_loads.txt", busy_loads, s);
     
     //std::ofstream branch_info("retire_info.csv");
     uint64_t total_retire = 0, total_cycle = 0;
@@ -1234,7 +1252,12 @@ int main(int argc, char **argv) {
     std::cout << "total_retire = " << total_retire << "\n";
     std::cout << "total_cycle  = " << total_cycle << "\n";
     std::cout << "total ipc    = " << static_cast<double>(total_retire) / total_cycle << "\n";
-
+    double tip_cycles = 0.0;
+    for(auto &p : tip_map) {
+      tip_cycles += p.second;
+    }
+    std::cout << "tip cycles  = " << tip_cycles << "\n";
+    dump_histo("tip.txt", tip_map, s);    
     out.close();
   }
   else {

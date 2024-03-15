@@ -59,6 +59,7 @@ module core(clk,
 	    insn_ack,
 	    insn_two, 
 	    insn_valid_two,
+	    
 	    insn_ack_two,	    
 	    branch_pc,
 	    branch_pc_valid,
@@ -96,6 +97,7 @@ module core(clk,
 	    retire_two_valid,
 	    retire_pc,
 	    retire_two_pc,
+	    rob_empty,
 	    retired_call,
 	    retired_ret,
 	    retired_rob_ptr_valid,
@@ -198,6 +200,7 @@ module core(clk,
    
    
    input logic 			      monitor_ack;
+   output logic			      rob_empty;
    
    output logic 			  got_break;
    output logic 			  got_ud;
@@ -579,6 +582,7 @@ module core(clk,
    	     retire_valid <= 1'b0;
 	     retire_two_valid <= 1'b0;
 	     alloc_valid <= 1'b0;
+	     rob_empty <= 1'b0;
 	     alloc_two_valid <= 1'b0;
 	     iq_one_valid <= 1'b0;
 	     iq_none_valid <= 1'b0;
@@ -603,6 +607,7 @@ module core(clk,
 	     
    	     retire_valid <= t_retire;
 	     retire_two_valid <= t_retire_two;
+	     rob_empty <= t_rob_empty;
 	     alloc_valid <= t_alloc;
 	     alloc_two_valid <= t_alloc_two;
 	     iq_one_valid <= !t_dq_empty && t_dq_next_empty;
@@ -1759,11 +1764,8 @@ module core(clk,
 
 	t_bob_empty = (r_bob_head_ptr == r_bob_tail_ptr);
 	t_bob_full = (r_bob_head_ptr[`LG_BOB_ENTRIES-1:0] == r_bob_tail_ptr[`LG_BOB_ENTRIES-1:0]) && (r_bob_head_ptr != r_bob_tail_ptr);
-
-
-	
      end // always_comb
-
+   
 
    always_comb
      begin

@@ -36,6 +36,7 @@ module
 		       retire_reg_two_valid,
 		       retire_valid,
 		       retire_two_valid,
+		   rob_empty,
 		       retire_pc,
 		       retire_two_pc,
 		       branch_pc,
@@ -89,6 +90,7 @@ module
    
    output logic					 alloc_valid;
    output logic					 alloc_two_valid;
+   
    output logic					 iq_one_valid;
    output logic					 iq_none_valid;
    output logic					 in_branch_recovery;
@@ -100,6 +102,7 @@ module
    output logic 			  retire_reg_two_valid;
    output logic 			  retire_valid;
    output logic 			  retire_two_valid;
+   output logic				  rob_empty;   
    output logic [(`M_WIDTH-1):0] 	  retire_pc;
    output logic [(`M_WIDTH-1):0] 	  retire_two_pc;
    input logic 				  monitor_ack;
@@ -480,6 +483,7 @@ module
 	     .retire_two_valid(retire_two_valid),
 	     .retire_pc(retire_pc),
 	     .retire_two_pc(retire_two_pc),
+	     .rob_empty(rob_empty),
 	     .retired_call(retired_call),
 	     .retired_ret(retired_ret),
 	     .retired_rob_ptr_valid(retired_rob_ptr_valid),
@@ -527,6 +531,7 @@ module core_l1d_l1i(clk,
 		    retire_reg_two_valid,
 		    retire_valid,
 		    retire_two_valid,
+		    rob_empty,
 		    retire_pc,
 		    retire_two_pc,
 		    branch_pc,
@@ -591,6 +596,7 @@ module core_l1d_l1i(clk,
    output logic					 retire_reg_two_valid;
    output logic					 retire_valid;
    output logic					 retire_two_valid;
+   output logic					 rob_empty;   
    output logic [31:0]				 retire_pc;
    output logic [31:0]				 retire_two_pc;
    input logic					 monitor_ack;
@@ -650,10 +656,11 @@ module core_l1d_l1i(clk,
                      .retire_reg_two_valid(retire_reg_two_valid),
                      .retire_valid(retire_valid),
                      .retire_two_valid(retire_two_valid),
+		     .rob_empty(rob_empty),
                      .retire_pc(w_retire_pc64),
                      .retire_two_pc(w_retire_two_pc64),
                      .branch_pc(w_branch_pc64),
-                     .branch_pc_valid(branch_pc_valid),
+                     .branch_pc_valid(branch_pc_valid),		     
                      .branch_fault(branch_fault),
                      .l1i_cache_accesses(l1i_cache_accesses),
                      .l1i_cache_hits(l1i_cache_hits),

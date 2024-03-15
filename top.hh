@@ -191,7 +191,7 @@ template<typename X, typename Y>
 static inline void dump_histo(const std::string &fname,
 			      const std::map<X,Y> &histo,
 			      const state_t *s) {
-  std::vector<std::pair<X,Y>> sorted_by_cnt;
+  std::vector<std::pair<Y,X>> sorted_by_cnt;
   for(auto &p : histo) {
     sorted_by_cnt.emplace_back(p.second, p.first);
   }
