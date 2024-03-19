@@ -25,6 +25,12 @@ typedef enum logic [6:0]
    RDFAULTEDBRANCH,
 
    MRET,
+   CSRRW,
+   CSRRS,
+   CSRRC,
+   CSRRWI,
+   CSRRSI,
+   CSRRCI,   
    
    //known used in riscv design
    MUL,

@@ -632,10 +632,21 @@ module decode_riscv(
 		 end
 	       else		 
 		 begin
+		    uop.imm = {4'd0, insn[31:20]};
 		    case(insn[14:12])
+		      3'd1: /* CRRRW */
+			begin
+			   uop.op = CSRRW;
+			   uop.dst = rd;
+			   uop.dst_valid = (rd != 'd0);
+			   uop.serializing_op = 1'b1;
+			   uop.must_restart = 1'b1;
+			   uop.srcA = rs1;
+			   uop.srcA_valid = 1'b1;
+			end
 		      3'd2: /*CSRRS */
 			begin
-			   if(insn[19:15] == 5'd0)
+			   if(rs1 == 'd0) /* fastpath */
 			     begin
 				if(insn[31:20] == 12'hf14)
 				  begin /* mhartid - always 0 */
@@ -647,7 +658,6 @@ module decode_riscv(
 				     uop.srcB = 'd0;
 				     uop.srcB_valid = 1'b1;				     
 				     uop.is_cheap_int = 1'b1;
-				     
 				  end
 				else if(insn[31:20] == 12'hc00)
 				  begin
@@ -677,19 +687,60 @@ module decode_riscv(
 				     uop.dst_valid = (rd != 'd0);
 				     uop.serializing_op = 1'b1;
 				  end
-			     end // if (insn[20:15] == 'd0)
-			   
-			   // else
-			   //   begin
-			   // 	$display("wtf is at pc %x, sel %x", 
-			   // 		 pc, insn[31:20]);
-			   //   end
+			     end // if (insn[19:15] == 5'd0)
+			   else
+			     begin
+				uop.op = CSRRS;
+				uop.dst = rd;
+				uop.dst_valid = (rd != 'd0);
+				uop.serializing_op = 1'b1;
+				uop.must_restart = 1'b1;
+				uop.srcA = rs1;
+				uop.srcA_valid = 1'b1;
+			     end			   
+			end // case: 3'd2
+		      3'd3: /* CRRRC */
+			begin
+			   uop.op = CSRRC;
+			   uop.dst = rd;
+			   uop.dst_valid = (rd != 'd0);
+			   uop.serializing_op = 1'b1;
+			   uop.must_restart = 1'b1;
+			   uop.srcA = rs1;
+			   uop.srcA_valid = 1'b1;
 			end
+		      3'd5: /* CRRRWI */
+			begin
+			   uop.op = CSRRWI;
+			   uop.dst = rd;
+			   uop.dst_valid = (rd != 'd0);
+			   uop.serializing_op = 1'b1;
+			   uop.must_restart = 1'b1;
+			   uop.srcA = rs1;
+			end
+		      3'd6: /* CRRRWI */
+			begin
+			   uop.op = CSRRWI;
+			   uop.dst = rd;
+			   uop.dst_valid = (rd != 'd0);
+			   uop.serializing_op = 1'b1;
+			   uop.must_restart = 1'b1;
+			   uop.srcA = rs1;
+			end		      
+		      3'd7: /* CRRRSI */
+			begin
+			   uop.op = CSRRCI;
+			   uop.dst = rd;
+			   uop.dst_valid = (rd != 'd0);
+			   uop.serializing_op = 1'b1;
+			   uop.must_restart = 1'b1;
+			   uop.srcA = rs1;
+			end		      
 		      default:
 			begin
 			end
 		    endcase
-		 end
+		 end // else: !if((insn[31:20] == 12'h302) && insn[19:7] == 'd0)
 	    end
 	  default:
 	    begin
