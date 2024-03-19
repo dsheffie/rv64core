@@ -18,12 +18,13 @@ typedef enum logic [6:0]
    MONITOR,
    
    RDCYCLE,
-   RDCYCLEH,
    RDINSTRET,
-   RDINSTRETH,
+
 
    RDBRANCH,
    RDFAULTEDBRANCH,
+
+   MRET,
    
    //known used in riscv design
    MUL,

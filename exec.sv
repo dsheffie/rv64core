@@ -1864,23 +1864,9 @@ module exec(clk,
 	       t_wr_int_prf = 1'b1;
 	       t_pc = w_pc4;	       
 	    end
-	  RDCYCLEH:
-	    begin
-	       t_result = {{(`M_WIDTH-32){1'b0}},r_cycle[63:32]};	       
-	       t_alu_valid = 1'b1;
-	       t_wr_int_prf = 1'b1;
-	       t_pc = w_pc4;
-	    end
 	  RDINSTRET:
 	    begin
 	       t_result = r_retired_insns[`M_WIDTH-1:0];
-	       t_alu_valid = 1'b1;
-	       t_wr_int_prf = 1'b1;
-	       t_pc = w_pc4;
-	    end
-	  RDINSTRETH:
-	    begin
-	       t_result = {{(`M_WIDTH-32){1'b0}},r_retired_insns[63:32]};
 	       t_alu_valid = 1'b1;
 	       t_wr_int_prf = 1'b1;
 	       t_pc = w_pc4;

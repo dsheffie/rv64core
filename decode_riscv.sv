@@ -612,53 +612,73 @@ module decode_riscv(
 		    uop.serializing_op = 1'b1;
 		    uop.must_restart = 1'b1;		    
 		 end
-	       else
+	       else if((insn[31:20] == 12'h002) && insn[19:7] == 'd0)
+		 begin
+		    uop.op = II; //URET
+		 end
+	       else if((insn[31:20] == 12'h102) && insn[19:7] == 'd0)
+		 begin
+		    uop.op = II; //SRET
+		 end
+	       else if((insn[31:20] == 12'h202) && insn[19:7] == 'd0)
+		 begin
+		    uop.op = II; //HRET
+		 end	       
+	       else if((insn[31:20] == 12'h302) && insn[19:7] == 'd0)
+		 begin
+		    uop.op = MRET;
+		    uop.serializing_op = 1'b1;
+		    uop.must_restart = 1'b1;		    
+		 end
+	       else		 
 		 begin
 		    case(insn[14:12])
 		      3'd2: /*CSRRS */
 			begin
-			   if(insn[31:20] == 12'hc00)
+			   if(insn[19:15] == 5'd0)
 			     begin
-				uop.op = (rd == 'd0) ? NOP : RDCYCLE;
-				uop.dst = rd;
-				uop.dst_valid = (rd != 'd0);
-				uop.serializing_op = 1'b1;				
-			     end
-			   else if((insn[31:20] == 12'hc80) & (mode64==1'b0))
-			     begin
-				uop.op = (rd == 'd0) ? NOP : RDCYCLEH;
-				uop.dst = rd;
-				uop.dst_valid = (rd != 'd0);
-				uop.serializing_op = 1'b1;
-			     end
-			   else if(insn[31:20] == 12'hc02)
-			     begin
-				uop.op = (rd == 'd0) ? NOP : RDINSTRET;
-				uop.dst = rd;
-				uop.dst_valid = (rd != 'd0);
-				uop.serializing_op = 1'b1;
-			     end
-			   else if((insn[31:20] == 12'hc82) & (mode64==1'b0))
-			     begin
-				uop.op = (rd == 'd0) ? NOP : RDINSTRETH;
-				uop.dst = rd;
-				uop.dst_valid = (rd != 'd0);
-				uop.serializing_op = 1'b1;
-			     end
-			   else if(insn[31:20] == 12'hc03)
-			     begin
-				uop.op = (rd == 'd0) ? NOP : RDBRANCH;
-				uop.dst = rd;
-				uop.dst_valid = (rd != 'd0);
-				uop.serializing_op = 1'b1;
-			     end
-			   else if((insn[31:20] == 12'hc04) & (mode64==1'b0))
-			     begin
-				uop.op = (rd == 'd0) ? NOP : RDFAULTEDBRANCH;
-				uop.dst = rd;
-				uop.dst_valid = (rd != 'd0);
-				uop.serializing_op = 1'b1;
-			     end
+				if(insn[31:20] == 12'hf14)
+				  begin /* mhartid - always 0 */
+				     uop.op = (rd == 'd0) ? NOP : ADDU;
+				     uop.dst = rd;
+				     uop.dst_valid = (rd != 'd0);
+				     uop.srcA = 'd0;
+				     uop.srcA_valid = 1'b1;
+				     uop.srcB = 'd0;
+				     uop.srcB_valid = 1'b1;				     
+				     uop.is_cheap_int = 1'b1;
+				     
+				  end
+				else if(insn[31:20] == 12'hc00)
+				  begin
+				     uop.op = (rd == 'd0) ? NOP : RDCYCLE;
+				     uop.dst = rd;
+				     uop.dst_valid = (rd != 'd0);
+				     uop.serializing_op = 1'b1;				
+				  end
+				else if(insn[31:20] == 12'hc02)
+				  begin
+				     uop.op = (rd == 'd0) ? NOP : RDINSTRET;
+				     uop.dst = rd;
+				     uop.dst_valid = (rd != 'd0);
+				     uop.serializing_op = 1'b1;
+				  end
+				else if(insn[31:20] == 12'hc03)
+				  begin
+				     uop.op = (rd == 'd0) ? NOP : RDBRANCH;
+				     uop.dst = rd;
+				     uop.dst_valid = (rd != 'd0);
+				     uop.serializing_op = 1'b1;
+				  end
+				else if((insn[31:20] == 12'hc04) )
+				  begin
+				     uop.op = (rd == 'd0) ? NOP : RDFAULTEDBRANCH;
+				     uop.dst = rd;
+				     uop.dst_valid = (rd != 'd0);
+				     uop.serializing_op = 1'b1;
+				  end
+			     end // if (insn[20:15] == 'd0)
+			   
 			   // else
 			   //   begin
 			   // 	$display("wtf is at pc %x, sel %x", 
