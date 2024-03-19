@@ -494,6 +494,17 @@ int main(int argc, char **argv) {
       if(tb->got_break) {
 	should_break = true;
       }
+      if(tb->got_ud) {
+	std::cout << "fatal - got ud in preamble\n";
+	std::cout << std::hex
+		  << tb->epc
+		  << std::dec
+		  << " "
+		  << getAsmString(mem_r32(s,tb->epc), tb->epc)
+		  << "\n";
+
+	exit(-1);
+      }
       
       tb->mem_rsp_valid = 0;
       if(tb->mem_req_valid) {

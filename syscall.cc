@@ -35,7 +35,7 @@ void handle_syscall(state_t *s, uint64_t tohost) {
   }
   uint64_t *buf = reinterpret_cast<uint64_t*>(mem + tohost);
   std::map<int, int> &m = fdmap[s];
-  
+   
   switch(buf[0])
     {
     case SYS_write: {/* int write(int file, char *ptr, int len) */
@@ -76,20 +76,7 @@ void handle_syscall(state_t *s, uint64_t tohost) {
     case SYS_fstat : {
       struct stat native_stat;
       int fd = (buf[1] > 2) ? m.at(buf[1]) : buf[1];            
-      stat32_t *host_stat = reinterpret_cast<stat32_t*>(s->mem + buf[2]);
       int rc = fstat(fd, &native_stat);
-      host_stat->st_dev = native_stat.st_dev;
-      host_stat->st_ino = native_stat.st_ino;
-      host_stat->st_mode = native_stat.st_mode;
-      host_stat->st_nlink = native_stat.st_nlink;
-      host_stat->st_uid = native_stat.st_uid;
-      host_stat->st_gid = native_stat.st_gid;
-      host_stat->st_size = native_stat.st_size;
-      host_stat->_st_atime = native_stat.st_atime;
-      host_stat->_st_mtime = 0;
-      host_stat->_st_ctime = 0;
-      host_stat->st_blksize = native_stat.st_blksize;
-      host_stat->st_blocks = native_stat.st_blocks;
       buf[0] = rc;
       break;
     }

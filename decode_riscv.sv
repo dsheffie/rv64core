@@ -601,7 +601,6 @@ module decode_riscv(
 	  7'h73: /* this is a bunch of system stuff I dont care about currently */
 	    begin
 	       uop.is_int = 1'b1;
-	       uop.op = NOP;	       	       
 	       if(insn[31:7] == 'd0) /* treat as brk */
 		 begin
 		    uop.op = BREAK;
