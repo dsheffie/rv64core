@@ -7,7 +7,48 @@ function csr_t decode_csr(logic [11:0] csr);
    case(csr)
      12'h100:
        x= SSTATUS;
-
+     12'h104:
+       x = SIE;
+     12'h105:
+       x = STVEC;
+     12'h140:
+       x = SSCRATCH;
+     12'h141:
+       x = SEPC;
+     12'h142:
+       x = SCAUSE;
+     12'h143:
+       x = STVAL;
+     12'h144:
+       x = SIP;
+     12'h180:
+       x = SATP;
+     12'h300:
+       x = SSTATUS;
+     12'h301: /* misa */
+       x = MISA;
+     12'h302:
+       x = MEDELEG;
+     12'h303:
+       x = MIDELEG;       
+     12'h305:
+       x = MTVEC;
+     12'h340:
+       x = MSCRATCH;
+     12'h341:
+       x = MEPC;
+     12'h342:
+       x = MCAUSE;
+     12'h343:
+       x = MTVEC;
+     12'h3b0:
+       x = PMPADDR0;
+     12'h3b1:
+       x = PMPADDR1;
+     12'h3b2:
+       x = PMPADDR2;      
+     12'h3b3:
+       x = PMPADDR3;      
      12'hc00:
        x = RDCYCLE_CSR;
      12'hc02:
@@ -16,7 +57,7 @@ function csr_t decode_csr(logic [11:0] csr);
        x = RDBRANCH_CSR;
      12'hc04:
        x = RDFAULTEDBRANCH_CSR;
-     12'hF14:
+     12'hf14:
        x = MHARTID;
      default:
        x = BADCSR;
