@@ -3,6 +3,35 @@
 
 `include "machine.vh"
 
+typedef enum logic [4:0]
+{
+ SSTATUS,
+ SIE,
+ STVEC,
+ SSCRATCH,
+ SEPC,
+ SCAUSE,
+ STVAL,
+ SIP,
+ SATP,
+ MSTATUS,
+ MISA,
+ MEDELEG,
+ MIDELEG,
+ MTVEC,
+ PMPADDR0,
+ PMPADDR1,
+ PMPADDR2,
+ PMPADDR3,
+ RDCYCLE_CSR,
+ RDINSTRET_CSR,
+ RDBRANCH_CSR,
+ RDFAULTEDBRANCH_CSR,
+ MHARTID,
+ BADCSR
+} csr_t;
+
+
 typedef enum logic [6:0] 
   {
    SRL,

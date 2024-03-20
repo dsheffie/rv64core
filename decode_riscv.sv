@@ -2,6 +2,30 @@
 `include "rob.vh"
 `include "uop.vh"
 
+function csr_t decode_csr(logic [11:0] csr);
+   csr_t   x;
+   case(csr)
+     12'h100:
+       x= SSTATUS;
+
+     12'hc00:
+       x = RDCYCLE_CSR;
+     12'hc02:
+       x = RDINSTRET_CSR;
+     12'hc03:
+       x = RDBRANCH_CSR;
+     12'hc04:
+       x = RDFAULTEDBRANCH_CSR;
+     12'hF14:
+       x = MHARTID;
+     default:
+       x = BADCSR;
+   endcase // case (op)
+   return x;
+endfunction // is_store
+
+
+
 module decode_riscv(
 		    mode64,
 		    insn, 
@@ -39,10 +63,11 @@ module decode_riscv(
 
    logic [`M_WIDTH-1:0] 		t_imm;
    localparam PP = (`M_WIDTH-32);
-   
+   csr_t csr_id;   
    wire [`M_WIDTH-1:0] 		w_pc_imm, w_pc_imm_;
    always_comb
      begin
+
 	t_imm = 'd0;
 	case(opcode)
 	  7'h17: /* auipc */
@@ -68,6 +93,7 @@ module decode_riscv(
 		    
    always_comb
      begin
+	csr_id = decode_csr(insn[31:20]);
 	rd_is_link = (rd == 'd1) || (rd == 'd5);
 	rs1_is_link = (rs1 == 'd1) || (rs1 == 'd5);
 	uop.op = II;
@@ -632,114 +658,117 @@ module decode_riscv(
 		 end
 	       else		 
 		 begin
-		    uop.imm = {4'd0, insn[31:20]};
-		    case(insn[14:12])
-		      3'd1: /* CRRRW */
-			begin
-			   uop.op = CSRRW;
-			   uop.dst = rd;
-			   uop.dst_valid = (rd != 'd0);
-			   uop.serializing_op = 1'b1;
-			   uop.must_restart = 1'b1;
-			   uop.srcA = rs1;
-			   uop.srcA_valid = 1'b1;
-			end
-		      3'd2: /*CSRRS */
-			begin
-			   if(rs1 == 'd0) /* fastpath */
+		    uop.imm = {11'd0, csr_id};
+		    if(csr_id != BADCSR)
+		      begin
+			 case(insn[14:12])
+			   3'd1: /* CRRRW */
 			     begin
-				if(insn[31:20] == 12'hf14)
-				  begin /* mhartid - always 0 */
-				     uop.op = (rd == 'd0) ? NOP : ADDU;
-				     uop.dst = rd;
-				     uop.dst_valid = (rd != 'd0);
-				     uop.srcA = 'd0;
-				     uop.srcA_valid = 1'b1;
-				     uop.srcB = 'd0;
-				     uop.srcB_valid = 1'b1;				     
-				     uop.is_cheap_int = 1'b1;
-				  end
-				else if(insn[31:20] == 12'hc00)
-				  begin
-				     uop.op = (rd == 'd0) ? NOP : RDCYCLE;
-				     uop.dst = rd;
-				     uop.dst_valid = (rd != 'd0);
-				     uop.serializing_op = 1'b1;				
-				  end
-				else if(insn[31:20] == 12'hc02)
-				  begin
-				     uop.op = (rd == 'd0) ? NOP : RDINSTRET;
-				     uop.dst = rd;
-				     uop.dst_valid = (rd != 'd0);
-				     uop.serializing_op = 1'b1;
-				  end
-				else if(insn[31:20] == 12'hc03)
-				  begin
-				     uop.op = (rd == 'd0) ? NOP : RDBRANCH;
-				     uop.dst = rd;
-				     uop.dst_valid = (rd != 'd0);
-				     uop.serializing_op = 1'b1;
-				  end
-				else if((insn[31:20] == 12'hc04) )
-				  begin
-				     uop.op = (rd == 'd0) ? NOP : RDFAULTEDBRANCH;
-				     uop.dst = rd;
-				     uop.dst_valid = (rd != 'd0);
-				     uop.serializing_op = 1'b1;
-				  end
-			     end // if (insn[19:15] == 5'd0)
-			   else
-			     begin
-				uop.op = CSRRS;
+				uop.op = CSRRW;
 				uop.dst = rd;
 				uop.dst_valid = (rd != 'd0);
 				uop.serializing_op = 1'b1;
 				uop.must_restart = 1'b1;
 				uop.srcA = rs1;
 				uop.srcA_valid = 1'b1;
-			     end			   
-			end // case: 3'd2
-		      3'd3: /* CRRRC */
-			begin
-			   uop.op = CSRRC;
-			   uop.dst = rd;
-			   uop.dst_valid = (rd != 'd0);
-			   uop.serializing_op = 1'b1;
-			   uop.must_restart = 1'b1;
-			   uop.srcA = rs1;
-			   uop.srcA_valid = 1'b1;
-			end
-		      3'd5: /* CRRRWI */
-			begin
-			   uop.op = CSRRWI;
-			   uop.dst = rd;
-			   uop.dst_valid = (rd != 'd0);
-			   uop.serializing_op = 1'b1;
-			   uop.must_restart = 1'b1;
-			   uop.srcA = rs1;
-			end
-		      3'd6: /* CRRRWI */
-			begin
-			   uop.op = CSRRWI;
-			   uop.dst = rd;
-			   uop.dst_valid = (rd != 'd0);
-			   uop.serializing_op = 1'b1;
-			   uop.must_restart = 1'b1;
-			   uop.srcA = rs1;
-			end		      
-		      3'd7: /* CRRRSI */
-			begin
-			   uop.op = CSRRCI;
-			   uop.dst = rd;
-			   uop.dst_valid = (rd != 'd0);
-			   uop.serializing_op = 1'b1;
-			   uop.must_restart = 1'b1;
-			   uop.srcA = rs1;
-			end		      
-		      default:
-			begin
-			end
-		    endcase
+			     end
+			   3'd2: /*CSRRS */
+			     begin
+				if(rs1 == 'd0) /* fastpath */
+				  begin
+				     if(csr_id == MHARTID)
+				       begin /* mhartid - always 0 */
+					  uop.op = (rd == 'd0) ? NOP : ADDU;
+					  uop.dst = rd;
+					  uop.dst_valid = (rd != 'd0);
+					  uop.srcA = 'd0;
+					  uop.srcA_valid = 1'b1;
+					  uop.srcB = 'd0;
+					  uop.srcB_valid = 1'b1;				     
+					  uop.is_cheap_int = 1'b1;
+				       end
+				     else if(csr_id == RDCYCLE_CSR)
+				       begin
+					  uop.op = (rd == 'd0) ? NOP : RDCYCLE;
+					  uop.dst = rd;
+					  uop.dst_valid = (rd != 'd0);
+					  uop.serializing_op = 1'b1;				
+				       end
+				     else if(csr_id == RDINSTRET_CSR)
+				       begin
+					  uop.op = (rd == 'd0) ? NOP : RDINSTRET;
+					  uop.dst = rd;
+					  uop.dst_valid = (rd != 'd0);
+					  uop.serializing_op = 1'b1;
+				       end
+				     else if(csr_id == RDBRANCH_CSR)
+				       begin
+					  uop.op = (rd == 'd0) ? NOP : RDBRANCH;
+					  uop.dst = rd;
+					  uop.dst_valid = (rd != 'd0);
+					  uop.serializing_op = 1'b1;
+				       end
+				     else if(csr_id == RDFAULTEDBRANCH_CSR)
+				       begin
+					  uop.op = (rd == 'd0) ? NOP : RDFAULTEDBRANCH;
+					  uop.dst = rd;
+					  uop.dst_valid = (rd != 'd0);
+					  uop.serializing_op = 1'b1;
+				       end
+				  end // if (insn[19:15] == 5'd0)
+				else
+				  begin
+				     uop.op = CSRRS;
+				     uop.dst = rd;
+				     uop.dst_valid = (rd != 'd0);
+				     uop.serializing_op = 1'b1;
+				     uop.must_restart = 1'b1;
+				     uop.srcA = rs1;
+				     uop.srcA_valid = 1'b1;
+				  end			   
+			     end // case: 3'd2
+			   3'd3: /* CRRRC */
+			     begin
+				uop.op = CSRRC;
+				uop.dst = rd;
+				uop.dst_valid = (rd != 'd0);
+				uop.serializing_op = 1'b1;
+				uop.must_restart = 1'b1;
+				uop.srcA = rs1;
+				uop.srcA_valid = 1'b1;
+			     end
+			   3'd5: /* CRRRWI */
+			     begin
+				uop.op = CSRRWI;
+				uop.dst = rd;
+				uop.dst_valid = (rd != 'd0);
+				uop.serializing_op = 1'b1;
+				uop.must_restart = 1'b1;
+				uop.srcA = rs1;
+			     end
+			   3'd6: /* CRRRWI */
+			     begin
+				uop.op = CSRRWI;
+				uop.dst = rd;
+				uop.dst_valid = (rd != 'd0);
+				uop.serializing_op = 1'b1;
+				uop.must_restart = 1'b1;
+				uop.srcA = rs1;
+			     end		      
+			   3'd7: /* CRRRSI */
+			     begin
+				uop.op = CSRRCI;
+				uop.dst = rd;
+				uop.dst_valid = (rd != 'd0);
+				uop.serializing_op = 1'b1;
+				uop.must_restart = 1'b1;
+				uop.srcA = rs1;
+			     end		      
+			   default:
+			     begin
+			     end
+			 endcase // case (insn[14:12])
+		      end
 		 end // else: !if((insn[31:20] == 12'h302) && insn[19:7] == 'd0)
 	    end
 	  default:
