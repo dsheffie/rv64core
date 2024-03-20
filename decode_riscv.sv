@@ -699,7 +699,7 @@ module decode_riscv(
 		 end
 	       else		 
 		 begin
-		    uop.imm = {11'd0, csr_id};
+		    uop.imm = {6'd0, rs1[4:0], csr_id};
 		    if(csr_id != BADCSR)
 		      begin
 			 case(insn[14:12])
@@ -785,7 +785,6 @@ module decode_riscv(
 				uop.dst_valid = (rd != 'd0);
 				uop.serializing_op = 1'b1;
 				uop.must_restart = 1'b1;
-				uop.srcA = rs1;
 			     end
 			   3'd6: /* CRRRWI */
 			     begin
@@ -794,7 +793,6 @@ module decode_riscv(
 				uop.dst_valid = (rd != 'd0);
 				uop.serializing_op = 1'b1;
 				uop.must_restart = 1'b1;
-				uop.srcA = rs1;
 			     end		      
 			   3'd7: /* CRRRSI */
 			     begin
@@ -803,7 +801,6 @@ module decode_riscv(
 				uop.dst_valid = (rd != 'd0);
 				uop.serializing_op = 1'b1;
 				uop.must_restart = 1'b1;
-				uop.srcA = rs1;
 			     end		      
 			   default:
 			     begin

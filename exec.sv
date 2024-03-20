@@ -199,6 +199,7 @@ module exec(clk,
    
    
    logic 	t_unimp_op;
+   logic	t_wr_csr_en;
    logic 	t_fault;
    
    logic 	t_signed_shift;
@@ -1731,6 +1732,58 @@ module exec(clk,
       
    mwidth_add add3 (.A(int_uop.pc), .B('d4), .Y(w_pc4));
 
+   logic [63:0]	       t_rd_csr, t_wr_csr;
+   logic [63:0]	       r_rsstatus, r_sie, r_stvec, r_sscratch;
+   logic [63:0]	       r_epc, r_scause, r_stval, r_sip;
+   logic [63:0]	       r_satp, r_mstatus, r_mideleg, r_medeleg;
+
+
+   always_comb
+     begin
+	t_rd_csr = 'd0;
+	case(int_uop.imm[4:0])
+	  SSTATUS:
+	    begin
+	       t_rd_csr = r_rsstatus;
+	    end
+	  SIE:
+	    begin
+	       t_rd_csr = r_sie;
+	    end
+	  STVEC:
+	    begin
+	       t_rd_csr = r_stvec;
+	    end
+	  SSCRATCH:
+	    begin
+	       t_rd_csr = r_sscratch;
+	    end
+	  default:
+	    begin
+	    end
+	endcase
+     end // always_comb
+
+   always_ff@(posedge clk)
+     begin
+	if(reset)
+	  begin
+	     r_rsstatus <= 'd0;
+	  end
+	else if(t_wr_csr_en)
+	  begin
+	     if(int_uop.imm[4:0]  == SSTATUS)
+	       begin
+		  r_rsstatus <= t_wr_csr;
+	       end
+	     else if(int_uop.imm[4:0]  == SIE)	       
+	       begin
+		  r_sie <= t_wr_csr;
+	       end
+	  end
+     end
+
+   
    
    always_comb
      begin
@@ -1739,6 +1792,8 @@ module exec(clk,
 	t_pc = int_uop.pc;
 	t_result ='d0;
 	t_unimp_op = 1'b0;
+	t_wr_csr_en = 1'b0;
+	t_wr_csr = 64'd0;
 	t_fault = 1'b0;
 	t_wr_int_prf = 1'b0;
 	t_take_br = 1'b0;
@@ -2076,7 +2131,6 @@ module exec(clk,
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end	  	  
-
 	  SRAI:
 	    begin
 	       t_signed_shift = 1'b1;
@@ -2135,17 +2189,16 @@ module exec(clk,
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
-
+	  CSRRCI:
+	    begin
+	       t_wr_csr_en = int_uop.imm[9:5] != 'd0;
+	       t_wr_csr = t_rd_csr & {59'd0, ~int_uop.imm[9:5]};
+	       t_result = t_rd_csr;
+	       t_wr_int_prf = int_uop.dst_valid;
+	       t_alu_valid = int_uop.dst_valid;
+	       t_pc = w_pc4;
+	    end
 	  
-
-	  // //old mips instructions
-	  // BREAK:
-	  //   begin
-	  //      t_alu_valid = 1'b1;
-	  //      t_got_break = 1'b1;
-	  //      t_fault = 1'b1;
-	  //      //t_unimp_op = 1'b1;
-	  //   end
 	  II:
 	    begin
 	       t_unimp_op = 1'b1;
@@ -2157,12 +2210,7 @@ module exec(clk,
 	       t_alu_valid = 1'b1;
 	    end
 	endcase // case (int_uop.op)
-
-	
      end // always_comb
-
-
-
 
    wire [`M_WIDTH-1:0] w_agu_addr;
    mwidth_add agu (.A(t_mem_srcA), .B(mem_uq.rvimm), .Y(w_agu_addr));
