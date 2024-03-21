@@ -37,6 +37,7 @@ import "DPI-C" function int check_insn_bytes(input longint pc, input int data);
 
 module core(clk, 
 	    reset,
+	    syscall_emu,
 	    priv,
 	    clear_tlb,
 	    mode64,
@@ -115,6 +116,7 @@ module core(clk,
 	    epc);
    input logic clk;
    input logic reset;
+   input logic syscall_emu;
    output logic [1:0] priv;
    output	      clear_tlb;
    output logic	mode64;
@@ -334,7 +336,7 @@ module core(clk,
    logic 		     n_l2_flush_complete, r_l2_flush_complete;
    
    
-   logic [4:0] 		     n_cause, r_cause;
+   cause_t 		     n_cause, r_cause;
    
    
    complete_t t_complete_bundle_1, t_complete_bundle_2;
@@ -558,7 +560,7 @@ module core(clk,
 	     r_restart_cycles <= 'd0;
 	     r_machine_clr <= 1'b0;
 	     r_got_restart_ack <= 1'b0;
-	     r_cause <= 5'd0;
+	     r_cause <= 'd0;
 	     r_pending_fault <= 1'b0;
 	  end
 	else
@@ -655,7 +657,7 @@ module core(clk,
 			       {27'd0, t_rob_head.ldst},
 			       {{(64-`M_WIDTH){1'b0}},t_rob_head.data},
 			       t_rob_head.faulted ? 32'd1 : 32'd0,
-			       t_rob_head.faulted & !(t_rob_head.is_break | t_rob_head.is_ii | t_rob_head.is_bad_addr) ? 32'd1 : 32'd0			       
+			       t_rob_head.faulted ? 32'd1 : 32'd0			       
 			       );
    	  end
    	if(t_retire_two)
@@ -853,8 +855,7 @@ module core(clk,
 			       (t_complete_valid_2 ? t_complete_bundle_2.faulted : 1'b0);
 	  end
 	
-	t_arch_fault = t_rob_head.faulted & 
-		       (t_rob_head.is_break | t_rob_head.is_ii | t_rob_head.is_bad_addr);
+	t_arch_fault = t_rob_head.faulted & t_rob_head.has_cause;
 	
 	
 	unique case (r_state)
@@ -1124,21 +1125,38 @@ module core(clk,
 	    begin
 	       n_flush_req_l1i = 1'b1;
 	       n_flush_req_l1d = 1'b1;
-	       if(t_rob_head.is_break)
-		 begin
-		    n_pending_break = 1'b1;
-		    n_cause = 5'd9;
-		 end
-	       else if(t_rob_head.is_ii)
-		 begin
-		    n_pending_ii = 1'b1;
-		    n_cause = 5'd10;
-		 end
-	       else if(t_rob_head.is_bad_addr)
-		 begin
-		    n_pending_badva = 1'b1;
-		    n_cause = 5'd10;
-		 end
+	       n_cause = t_rob_head.cause;
+	       case(t_rob_head.cause)
+		 BREAKPOINT:
+		   begin
+		      n_pending_break = 1'b1;
+		   end
+		 ILLEGAL_INSTRUCTION:
+		   begin
+		      n_pending_ii = 1'b1;		      
+		   end
+		 default:
+		   begin
+		      $display("t_rob_head.cause = %d", t_rob_head.cause);
+		      $stop();
+		   end
+	       endcase // case (t_rob_head.cause)
+	       
+	       // if(t_rob_head.is_break)
+	       // 	 begin
+	       // 	    n_pending_break = 1'b1;
+	       // 	    n_cause = 5'd9;
+	       // 	 end
+	       // else if(t_rob_head.is_ii)
+	       // 	 begin
+	       // 	    n_pending_ii = 1'b1;
+	       // 	    n_cause = 5'd10;
+	       // 	 end
+	       // else if(t_rob_head.is_bad_addr)
+	       // 	 begin
+	       // 	    n_pending_badva = 1'b1;
+	       // 	    n_cause = 5'd10;
+	       // 	 end
 	       n_state = WRITE_EPC;
 	    end
 	  WRITE_EPC:
@@ -1334,7 +1352,7 @@ module core(clk,
 	     n_branch_pc = t_retire_two ? t_rob_next_head.pc : t_rob_head.pc;
 	     n_took_branch = t_retire_two ? t_rob_next_head.take_br : t_rob_head.take_br;
 	     n_branch_valid = t_retire_two ? t_rob_next_head.is_br :  t_rob_head.is_br;
-	     n_branch_fault = t_rob_head.faulted & !(t_rob_head.is_break | t_rob_head.is_ii | t_rob_head.is_bad_addr);
+	     n_branch_fault = t_rob_head.faulted & (t_rob_head.has_cause==1'b0);
 	     n_branch_pht_idx = t_retire_two ? t_rob_next_head.pht_idx : t_rob_head.pht_idx;
 	  end // if (t_retire)
 	
@@ -1353,11 +1371,10 @@ module core(clk,
 	
 	t_rob_tail.is_call = t_alloc_uop.op == JAL || t_alloc_uop.op == JALR;
 	t_rob_tail.is_ret = (t_alloc_uop.op == RET);
-	t_rob_tail.is_break  = (t_alloc_uop.op == BREAK);
 	t_rob_tail.is_indirect = t_alloc_uop.op == JALR || t_alloc_uop.op == JR;
-	
-	t_rob_tail.is_ii = 1'b0;
-	t_rob_tail.is_bad_addr = 1'b0;
+
+	t_rob_tail.has_cause = 1'b0;
+	t_rob_tail.cause = 4'd0;
 	t_rob_tail.take_br = 1'b0;
 	t_rob_tail.is_br = t_alloc_uop.is_br;	
 	t_rob_tail.data = 'd0;
@@ -1373,11 +1390,10 @@ module core(clk,
 
 	t_rob_next_tail.is_call = t_alloc_uop2.op == JAL || t_alloc_uop2.op == JALR;
 	t_rob_next_tail.is_ret = (t_alloc_uop2.op == RET);
-	t_rob_next_tail.is_break  = (t_alloc_uop2.op == BREAK);
 	t_rob_next_tail.is_indirect = t_alloc_uop2.op == JALR || t_alloc_uop2.op == JR;
 	
-	t_rob_next_tail.is_ii = 1'b0;
-	t_rob_next_tail.is_bad_addr = 1'b0;
+	t_rob_next_tail.cause = 4'd0;
+	t_rob_next_tail.has_cause = 1'b0;
 	t_rob_next_tail.take_br = 1'b0;
 	t_rob_next_tail.is_br = t_alloc_uop2.is_br;
 	t_rob_next_tail.data = 'd0;
@@ -1408,7 +1424,8 @@ module core(clk,
 		  if(t_uop.op == II)
 		    begin
 		       t_rob_tail.faulted = 1'b1;
-		       t_rob_tail.is_ii = 1'b1;
+		       t_rob_tail.has_cause = 1'b1;
+		       t_rob_tail.cause = ILLEGAL_INSTRUCTION;
 		    end
 		  else if(t_uop.op == J)
 		    begin
@@ -1449,7 +1466,8 @@ module core(clk,
 		  if(t_uop2.op == II)
 		    begin
 		       t_rob_next_tail.faulted = 1'b1;
-		       t_rob_next_tail.is_ii = 1'b1;
+		       t_rob_next_tail.has_cause = 1'b1;
+		       t_rob_next_tail.cause = ILLEGAL_INSTRUCTION;
 		    end
 		  else if(t_uop2.op == J)
 		    begin
@@ -1528,8 +1546,9 @@ module core(clk,
 	     if(t_complete_valid_1)
 	       begin
 		  r_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].faulted <= t_complete_bundle_1.faulted;
+		  r_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].has_cause <= t_complete_bundle_1.has_cause;
+		  r_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].cause <= t_complete_bundle_1.cause;		  
 		  r_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].target_pc <= t_complete_bundle_1.restart_pc;
-		  r_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].is_ii <= t_complete_bundle_1.is_ii;
 		  r_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].take_br <= t_complete_bundle_1.take_br;
 		  r_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].data <= t_complete_bundle_1.data;
 `ifdef ENABLE_CYCLE_ACCOUNTING
@@ -1539,8 +1558,9 @@ module core(clk,
 	     if(t_complete_valid_2)
 	       begin
 		  r_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].faulted <= t_complete_bundle_2.faulted;
+		  r_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].has_cause <= t_complete_bundle_2.has_cause;
+		  r_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].cause <= t_complete_bundle_2.cause;
 		  r_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].target_pc <= t_complete_bundle_2.restart_pc;
-		  r_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].is_ii <= t_complete_bundle_2.is_ii;
 		  r_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].take_br <= t_complete_bundle_2.take_br;
 		  r_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].data <= t_complete_bundle_2.data;
 `ifdef ENABLE_CYCLE_ACCOUNTING
@@ -1550,8 +1570,9 @@ module core(clk,
 	     if(core_mem_rsp_valid)
 	       begin
 		  r_rob[core_mem_rsp.rob_ptr].data <= core_mem_rsp.data;
-		  r_rob[core_mem_rsp.rob_ptr].faulted <= core_mem_rsp.bad_addr;
-		  r_rob[core_mem_rsp.rob_ptr].is_bad_addr <= core_mem_rsp.bad_addr;
+		  r_rob[core_mem_rsp.rob_ptr].faulted <= core_mem_rsp.has_cause;
+		  r_rob[core_mem_rsp.rob_ptr].cause <= core_mem_rsp.cause;
+		  r_rob[core_mem_rsp.rob_ptr].has_cause <= core_mem_rsp.has_cause;
 `ifdef ENABLE_CYCLE_ACCOUNTING
 		  r_rob[core_mem_rsp.rob_ptr].complete_cycle <= r_cycle;
 `endif	    	     	     
@@ -1879,7 +1900,8 @@ module core(clk,
       .insn_pred_target(insn.pred_target),
 `ifdef ENABLE_CYCLE_ACCOUNTING
       .fetch_cycle(insn.fetch_cycle),
-`endif		      
+`endif
+      .syscall_emu(syscall_emu),		      
       .uop(t_dec_uop)
       );
    
@@ -1893,7 +1915,8 @@ module core(clk,
 	.insn_pred_target(insn_two.pred_target),
 `ifdef ENABLE_CYCLE_ACCOUNTING
 	.fetch_cycle(insn_two.fetch_cycle),
-`endif		      
+`endif
+	.syscall_emu(syscall_emu),	
 	.uop(t_dec_uop2)
 	);
    

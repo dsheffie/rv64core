@@ -3,10 +3,30 @@
 
 `include "machine.vh"
 
+
+typedef enum logic [3:0] {
+   MISALIGNED_FETCH = 'd0,
+   FAULT_FETCH,
+   ILLEGAL_INSTRUCTION,			  
+   BREAKPOINT,
+   MISALIGNED_LOAD,
+   FAULT_LOAD,
+   MISALIGNED_STORE,
+   FAULT_STORE,
+   USER_ECALL,
+   SUPERVISOR_ECALL,
+   HYPERVISOR_ECALL,
+   MACHINE_ECALL,
+   FETCH_PAGE_FAULT,
+   LOAD_PAGE_FAULT,
+   STORE_PAGE_FAULT			  
+} cause_t;
+
+
 typedef struct packed {
    logic       faulted;
-   logic       is_ii;
-   logic       is_bad_addr;
+   logic       has_cause;
+   cause_t     cause;
    logic       is_ret;
    logic       is_call;
    logic       valid_dst;
@@ -19,7 +39,6 @@ typedef struct packed {
    logic 			 is_br;
    logic 			 is_indirect;
    logic 			 take_br;
-   logic 			 is_break;
    logic [`M_WIDTH-1:0] 	 data;
    logic [`LG_PHT_SZ-1:0] 	 pht_idx;
 
@@ -37,7 +56,8 @@ typedef struct packed {
    logic 		       faulted;
    logic [`M_WIDTH-1:0]        restart_pc;
    logic 		       take_br;
-   logic 		       is_ii;
+   logic [3:0]		       cause;
+   logic		       has_cause;
    logic [`M_WIDTH-1:0]        data;
 } complete_t;
 
@@ -81,7 +101,8 @@ typedef struct packed {
    logic [`LG_ROB_ENTRIES-1:0] rob_ptr;
    logic [`LG_PRF_ENTRIES-1:0] dst_ptr;
    logic 		       dst_valid;
-   logic 		       bad_addr;
+   logic [3:0]		       cause;
+   logic		       has_cause;   
    logic [`M_WIDTH-1:0]        pc;
 } mem_rsp_t;
 

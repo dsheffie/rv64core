@@ -480,6 +480,8 @@ int main(int argc, char **argv) {
     assert(globals::sdlscr);
   }
 #endif  
+
+  tb->syscall_emu = 1;
   
   if(use_checkpoint) {
     loadState(*s, rv32_binary.c_str());
@@ -488,6 +490,7 @@ int main(int argc, char **argv) {
     int64_t gpr[32] = {0};
     memcpy(gpr, s->gpr, sizeof(int64_t)*32);
 
+    
     
     while(true) {
       bool should_break = false;

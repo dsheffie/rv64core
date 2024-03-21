@@ -87,6 +87,7 @@ module decode_riscv(
 `ifdef ENABLE_CYCLE_ACCOUNTING   		     
 		    fetch_cycle,
 `endif
+		    syscall_emu,
 		    uop);
 
    input logic mode64;
@@ -98,6 +99,7 @@ module decode_riscv(
 `ifdef ENABLE_CYCLE_ACCOUNTING   
    input logic [63:0] 		fetch_cycle;
 `endif
+   input logic			syscall_emu;
    output 	uop_t uop;
 
    wire [6:0] 	opcode = insn[6:0];
@@ -679,13 +681,14 @@ module decode_riscv(
 	    begin
 	       uop.is_int = 1'b1;
 	       if(insn[31:7] == 'd0) /* treat as brk */
-		 begin
-		    uop.op = BREAK;
+		 begin /* ecall */
+		    uop.op = syscall_emu ? BREAK : ECALL;
 		    uop.serializing_op = 1'b1;
+		    uop.must_restart = (syscall_emu == 1'b0);
 		 end
 	       else if(insn[31:20] == 'd1 && insn[19:7] == 'd0)
-		 begin
-		    uop.op = MONITOR;
+		 begin /* ebreak */
+		    uop.op = syscall_emu ? MONITOR : EBREAK;
 		    uop.serializing_op = 1'b1;
 		    uop.must_restart = 1'b1;		    
 		 end

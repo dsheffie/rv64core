@@ -207,10 +207,11 @@ module exec(clk,
    
    
    
-   logic 	t_unimp_op;
+   logic 	t_has_cause;
+   cause_t      t_cause;
+   
    logic	t_wr_csr_en, t_rd_csr_en;
    logic	t_wr_priv;
-   logic 	t_fault;
    
    logic 	t_signed_shift;
    logic 	t_left_shift;
@@ -1752,13 +1753,13 @@ module exec(clk,
 	t_addi = 1'b0;
 	t_pc = int_uop.pc;
 	t_result ='d0;
-	t_unimp_op = 1'b0;
+	t_has_cause = 1'b0;
+	t_cause = 'd0;
 	t_clear_tlb = 1'b0;
 	t_wr_csr_en = 1'b0;
 	t_rd_csr_en = 1'b0;
 	t_wr_priv = 1'b0;
 	t_wr_csr = 64'd0;
-	t_fault = 1'b0;
 	t_wr_int_prf = 1'b0;
 	t_take_br = 1'b0;
 	t_mispred_br = 1'b0;
@@ -2162,6 +2163,12 @@ module exec(clk,
 	       t_pc = r_mepc;
 	       t_alu_valid = 1'b1;
 	    end
+	  ECALL:
+	    begin
+	       t_has_cause = 1'b1;
+	       t_cause = USER_ECALL;
+	       t_alu_valid = 1'b1;
+	    end
 	  SFENCEVMA:
 	    begin
 	       t_pc = w_pc4;
@@ -2228,15 +2235,20 @@ module exec(clk,
 	       t_alu_valid = 1'b1;
 	       t_pc = w_pc4;
 	    end
-	  
+	  BREAK:
+	    begin
+	       t_cause = BREAKPOINT;
+	    end
 	  II:
 	    begin
-	       t_unimp_op = 1'b1;
+	       t_has_cause = 1'b1;
+	       t_cause = ILLEGAL_INSTRUCTION;
 	       t_alu_valid = 1'b1;
 	    end
 	  default:
 	    begin
-	       t_unimp_op = 1'b1;
+	       t_has_cause = 1'b1;
+	       t_cause = ILLEGAL_INSTRUCTION;
 	       t_alu_valid = 1'b1;
 	    end
 	endcase // case (int_uop.op)
@@ -2732,7 +2744,8 @@ module exec(clk,
 	complete_bundle_2.complete <= t_alu_valid2;
 	complete_bundle_2.faulted <= t_mispred_br2;
 	complete_bundle_2.restart_pc <= t_pc_2;
-	complete_bundle_2.is_ii <= 'd0;
+	complete_bundle_2.cause <= 'd0;
+	complete_bundle_2.has_cause <= 1'b0;
 	complete_bundle_2.take_br <= t_take_br2;
 	complete_bundle_2.data <= t_result2;
      end
@@ -2749,7 +2762,8 @@ module exec(clk,
 	     complete_bundle_1.complete <= 1'b1;
 	     complete_bundle_1.faulted <= 1'b0;
 	     complete_bundle_1.restart_pc <= 'd0;
-	     complete_bundle_1.is_ii <= 1'b0;
+	     complete_bundle_1.cause <= 'd0;
+	     complete_bundle_1.has_cause <= 1'b0;	     
 	     complete_bundle_1.take_br <= 1'b0;
 	     complete_bundle_1.data <= t_mul_complete ? t_mul_result : t_div_result;
 	  end
@@ -2757,9 +2771,10 @@ module exec(clk,
 	  begin
 	     complete_bundle_1.rob_ptr <= int_uop.rob_ptr;
 	     complete_bundle_1.complete <= t_alu_valid;
-	     complete_bundle_1.faulted <= t_mispred_br || t_unimp_op || t_fault;
+	     complete_bundle_1.faulted <= t_mispred_br || t_has_cause;
 	     complete_bundle_1.restart_pc <= t_pc;
-	     complete_bundle_1.is_ii <= t_unimp_op;
+	     complete_bundle_1.cause <= t_cause;
+	     complete_bundle_1.has_cause <= t_has_cause;
 	     complete_bundle_1.take_br <= t_take_br;
 	     complete_bundle_1.data <= t_result;
 	  end

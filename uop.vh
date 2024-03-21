@@ -53,14 +53,12 @@ typedef enum logic [6:0]
 
    SC,
    MONITOR,
-   
    RDCYCLE,
    RDINSTRET,
-
-
    RDBRANCH,
    RDFAULTEDBRANCH,
-
+   ECALL,
+   EBREAK,
    MRET,
    CSRRW,
    CSRRS,

@@ -8,9 +8,10 @@ module
 `else
   core_l1d_l1i_64
 `endif
-(		   
-		    clk, 
-		    reset,
+    (		   
+		   clk, 
+		   reset,
+		   syscall_emu,
 		    extern_irq,
 		    in_flush_mode,
 		       resume,
@@ -61,6 +62,7 @@ module
    
    input logic clk;
    input logic reset;
+   input logic syscall_emu;
    input logic extern_irq;
    input logic resume;
    input logic [(`M_WIDTH-1):0] resume_pc;
@@ -424,6 +426,7 @@ module
    core cpu (
 	     .clk(clk),
 	     .reset(reset),
+	     .syscall_emu(syscall_emu),
 	     .priv(),
 	     .clear_tlb(),
 	     .mode64(w_mode64),
@@ -508,6 +511,7 @@ endmodule // core_l1d_l1i
 `ifdef FPGA64_32
 module core_l1d_l1i(clk, 
 		    reset,
+		    syscall_emu,
 		    extern_irq,
 		    in_flush_mode,
 		    resume,
@@ -558,6 +562,7 @@ module core_l1d_l1i(clk,
    
    input logic clk;
    input logic reset;
+   input logic syscall_emu;
    input logic extern_irq;
    input logic resume;
    input logic [31:0] resume_pc;
@@ -634,6 +639,7 @@ module core_l1d_l1i(clk,
    core_l1d_l1i_64 c(
 		     .clk(clk),
                      .reset(reset),
+		     .syscall_emu(syscall_emu),
                      .extern_irq(extern_irq),
                      .in_flush_mode(in_flush_mode),
                      .resume(resume),

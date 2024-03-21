@@ -1000,7 +1000,8 @@ module l1d(clk,
 	n_core_mem_rsp.rob_ptr = r_req.rob_ptr;
 	n_core_mem_rsp.dst_ptr = r_req.dst_ptr;
 	n_core_mem_rsp.dst_valid = 1'b0;
-	n_core_mem_rsp.bad_addr = 1'b0;
+	n_core_mem_rsp.has_cause = 1'b0;
+	n_core_mem_rsp.cause = 4'd0;
 	n_core_mem_rsp.pc = r_req.pc;
 	
 	n_cache_accesses = r_cache_accesses;
@@ -1075,7 +1076,7 @@ module l1d(clk,
 		    if(drain_ds_complete || r_req2.op == MEM_NOP)
 		      begin
 			 n_core_mem_rsp.dst_valid = r_req2.dst_valid;
-			 n_core_mem_rsp.bad_addr = r_req2.spans_cacheline;
+			 n_core_mem_rsp.has_cause = r_req2.spans_cacheline;
 			 n_core_mem_rsp_valid = 1'b1;
 		      end
 		    else if(r_req2.is_store)
@@ -1090,7 +1091,7 @@ module l1d(clk,
 			      n_cache_hits = r_cache_hits + 'd1;
 			   end
 			 n_core_mem_rsp_valid = 1'b1;
-			 n_core_mem_rsp.bad_addr = r_req2.spans_cacheline;
+			 n_core_mem_rsp.has_cause = r_req2.spans_cacheline;
 		      end // if (r_req2.is_store)
 		    else if(t_port2_hit_cache && (!r_hit_busy_addr2 || (1'b0 & r_req2.op == MEM_LW && !r_hit_busy_word_addr2 && !r_any_unaligned )) )
 		      begin
@@ -1101,7 +1102,7 @@ module l1d(clk,
                          n_core_mem_rsp.dst_valid = t_rsp_dst_valid2;
                          n_cache_hits = r_cache_hits + 'd1;
                          n_core_mem_rsp_valid = 1'b1;
-			 n_core_mem_rsp.bad_addr = r_req2.spans_cacheline;
+			 n_core_mem_rsp.has_cause = r_req2.spans_cacheline;
 		      end
 		    else
 		      begin
@@ -1127,7 +1128,7 @@ module l1d(clk,
 			      n_core_mem_rsp.data = t_rsp_data[`M_WIDTH-1:0];
 			      n_core_mem_rsp.dst_valid = t_rsp_dst_valid;
 			      n_core_mem_rsp_valid = 1'b1;
-			      n_core_mem_rsp.bad_addr = r_req.spans_cacheline;
+			      n_core_mem_rsp.has_cause = r_req.spans_cacheline;
 
 			      if(r_did_reload)
 				begin
@@ -1335,7 +1336,7 @@ module l1d(clk,
 			 n_core_mem_rsp.dst_ptr = r_req.dst_ptr;			 
 			 n_core_mem_rsp.data = t_rsp_data[`M_WIDTH-1:0];
 			 n_core_mem_rsp.pc = r_req.pc;
-			 n_core_mem_rsp.bad_addr = r_req.spans_cacheline;
+			 n_core_mem_rsp.has_cause = r_req.spans_cacheline;
 			 n_core_mem_rsp_valid = 1'b1;
 			 n_core_mem_rsp.dst_valid = r_req.dst_valid & n_core_mem_rsp_valid;
 			 //
