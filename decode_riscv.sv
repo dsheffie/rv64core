@@ -11,6 +11,8 @@ function csr_t decode_csr(logic [11:0] csr);
        x = SIE;
      12'h105:
        x = STVEC;
+     12'h106:
+       x = SCOUNTEREN;
      12'h140:
        x = SSCRATCH;
      12'h141:
@@ -24,15 +26,19 @@ function csr_t decode_csr(logic [11:0] csr);
      12'h180:
        x = SATP;
      12'h300:
-       x = SSTATUS;
+       x = MSTATUS;
      12'h301: /* misa */
        x = MISA;
      12'h302:
        x = MEDELEG;
      12'h303:
-       x = MIDELEG;       
+       x = MIDELEG;
+     12'h304:
+       x = MIE;
      12'h305:
        x = MTVEC;
+     12'h306:
+       x = MCOUNTEREN;
      12'h340:
        x = MSCRATCH;
      12'h341:
@@ -41,6 +47,10 @@ function csr_t decode_csr(logic [11:0] csr);
        x = MCAUSE;
      12'h343:
        x = MTVEC;
+     12'h344:
+       x = MIP;
+     12'h3a0:
+       x = PMPCFG0;
      12'h3b0:
        x = PMPADDR0;
      12'h3b1:
@@ -679,6 +689,12 @@ module decode_riscv(
 		    uop.serializing_op = 1'b1;
 		    uop.must_restart = 1'b1;		    
 		 end
+	       else if ((insn[31:25] == 'd9) && (rd == 'd0))
+		 begin
+		    uop.op = SFENCEVMA;
+		    uop.serializing_op = 1'b1;
+		    uop.must_restart = 1'b1;
+		 end
 	       else if((insn[31:20] == 12'h002) && insn[19:7] == 'd0)
 		 begin
 		    uop.op = II; //URET
@@ -695,11 +711,13 @@ module decode_riscv(
 		 begin
 		    uop.op = MRET;
 		    uop.serializing_op = 1'b1;
-		    uop.must_restart = 1'b1;		    
+		    uop.must_restart = 1'b1;
+		    uop.imm = {11'd0, MSTATUS};
 		 end
 	       else		 
 		 begin
 		    uop.imm = {6'd0, rs1[4:0], csr_id};
+		    //$display("pc %x, sel %x, rs1 %x, csr_id %x", pc, insn[14:12], rs1, csr_id);
 		    if(csr_id != BADCSR)
 		      begin
 			 case(insn[14:12])
@@ -756,6 +774,14 @@ module decode_riscv(
 					  uop.dst_valid = (rd != 'd0);
 					  uop.serializing_op = 1'b1;
 				       end
+				     else
+				       begin
+					  uop.op = CSRRS;
+					  uop.dst = rd;
+					  uop.dst_valid = (rd != 'd0);
+					  uop.serializing_op = 1'b1;
+					  uop.must_restart = 1'b1;
+				       end
 				  end // if (insn[19:15] == 5'd0)
 				else
 				  begin
@@ -786,9 +812,9 @@ module decode_riscv(
 				uop.serializing_op = 1'b1;
 				uop.must_restart = 1'b1;
 			     end
-			   3'd6: /* CRRRWI */
+			   3'd6: /* CRRRSI */
 			     begin
-				uop.op = CSRRWI;
+				uop.op = CSRRSI;
 				uop.dst = rd;
 				uop.dst_valid = (rd != 'd0);
 				uop.serializing_op = 1'b1;

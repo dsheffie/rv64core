@@ -5,27 +5,32 @@
 
 typedef enum logic [4:0]
 {
- SSTATUS,
- SIE,
- STVEC,
- SSCRATCH,
- SEPC,
- SCAUSE,
- STVAL,
- SIP,
- SATP,
- MSTATUS,
- MISA,
- MEDELEG,
- MIDELEG,
- MTVEC,
- MEPC,
- MCAUSE,
- MSCRATCH,
+ SSTATUS, //0
+ SIE, //1
+ STVEC, //2
+ SSCRATCH, //3
+ SEPC, //4
+ SCAUSE, //5
+ SCOUNTEREN, //6
+ STVAL, //7
+ SIP, //8
+ SATP, //9
+ MSTATUS, //10
+ MIE, //11 
+ MCAUSE, //12
+ MCOUNTEREN, //13
+ MISA, //14
+ MEDELEG, //15
+ MIDELEG, //16
+ MTVEC, //17
+ MEPC, //18
+ MIP, //19
+ MSCRATCH, //20
  PMPADDR0,
  PMPADDR1,
  PMPADDR2,
  PMPADDR3,
+ PMPCFG0,
  RDCYCLE_CSR,
  RDINSTRET_CSR,
  RDBRANCH_CSR,
@@ -63,7 +68,7 @@ typedef enum logic [6:0]
    CSRRWI,
    CSRRSI,
    CSRRCI,   
-   
+   SFENCEVMA,
    //known used in riscv design
    MUL,
    MULH,

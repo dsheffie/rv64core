@@ -21,6 +21,8 @@ import "DPI-C" function void report_exec(input int int_valid,
 
 module exec(clk, 
 	    reset,
+	    priv,
+	    clear_tlb,
 	    mode64,
 	    retire,
 	    retire_two,
@@ -62,6 +64,9 @@ module exec(clk,
 	    branch_fault);
    input logic clk;
    input logic reset;
+   output logic [1:0] priv;
+   output logic	      clear_tlb;
+   
    input logic mode64;
    input logic retire;
    input logic retire_two;
@@ -129,13 +134,17 @@ module exec(clk,
    logic [N_INT_PRF_ENTRIES-1:0]  r_prf_inflight;
    
    logic 			  t_wr_int_prf, t_wr_int_prf2;
+   logic			  r_clear_tlb, t_clear_tlb;
+   logic [1:0]			  r_priv;
+   assign priv = r_priv;
+   assign clear_tlb = r_clear_tlb;
    
    logic 	t_take_br, t_take_br2;
    logic 	t_mispred_br, t_mispred_br2;
    logic 	t_alu_valid, t_alu_valid2;
    logic 	t_got_break;
    
-   mem_req_t r_mem_q[N_MQ_ENTRIES-1:0];
+   mem_req_t r_mem_q[N_MQ_ENTRIES-1:0] ;
    logic [`LG_MQ_ENTRIES:0] r_mq_head_ptr, n_mq_head_ptr;
    logic [`LG_MQ_ENTRIES:0] r_mq_tail_ptr, n_mq_tail_ptr;
    logic [`LG_MQ_ENTRIES:0] r_mq_next_tail_ptr, n_mq_next_tail_ptr;
@@ -199,7 +208,8 @@ module exec(clk,
    
    
    logic 	t_unimp_op;
-   logic	t_wr_csr_en;
+   logic	t_wr_csr_en, t_rd_csr_en;
+   logic	t_wr_priv;
    logic 	t_fault;
    
    logic 	t_signed_shift;
@@ -1731,59 +1741,10 @@ module exec(clk,
    wire		       w_mispredicted_indirect = (mode64 & w_mispredicted_indirect_hi) | w_mispredicted_indirect_lo;
       
    mwidth_add add3 (.A(int_uop.pc), .B('d4), .Y(w_pc4));
-
-   logic [63:0]	       t_rd_csr, t_wr_csr;
-   logic [63:0]	       r_rsstatus, r_sie, r_stvec, r_sscratch;
-   logic [63:0]	       r_epc, r_scause, r_stval, r_sip;
-   logic [63:0]	       r_satp, r_mstatus, r_mideleg, r_medeleg;
-
-
-   always_comb
-     begin
-	t_rd_csr = 'd0;
-	case(int_uop.imm[4:0])
-	  SSTATUS:
-	    begin
-	       t_rd_csr = r_rsstatus;
-	    end
-	  SIE:
-	    begin
-	       t_rd_csr = r_sie;
-	    end
-	  STVEC:
-	    begin
-	       t_rd_csr = r_stvec;
-	    end
-	  SSCRATCH:
-	    begin
-	       t_rd_csr = r_sscratch;
-	    end
-	  default:
-	    begin
-	    end
-	endcase
-     end // always_comb
-
-   always_ff@(posedge clk)
-     begin
-	if(reset)
-	  begin
-	     r_rsstatus <= 'd0;
-	  end
-	else if(t_wr_csr_en)
-	  begin
-	     if(int_uop.imm[4:0]  == SSTATUS)
-	       begin
-		  r_rsstatus <= t_wr_csr;
-	       end
-	     else if(int_uop.imm[4:0]  == SIE)	       
-	       begin
-		  r_sie <= t_wr_csr;
-	       end
-	  end
-     end
-
    
+
+
+
    
    always_comb
      begin
@@ -1792,7 +1753,10 @@ module exec(clk,
 	t_pc = int_uop.pc;
 	t_result ='d0;
 	t_unimp_op = 1'b0;
+	t_clear_tlb = 1'b0;
 	t_wr_csr_en = 1'b0;
+	t_rd_csr_en = 1'b0;
+	t_wr_priv = 1'b0;
 	t_wr_csr = 64'd0;
 	t_fault = 1'b0;
 	t_wr_int_prf = 1'b0;
@@ -2189,13 +2153,79 @@ module exec(clk,
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
+	  MRET:
+	    begin
+	       t_rd_csr_en = 1'b1;
+	       t_wr_csr_en = 1'b1;
+	       t_wr_csr = t_rd_csr;
+	       t_wr_priv = 1'b1;
+	       t_pc = r_mepc;
+	       t_alu_valid = 1'b1;
+	    end
+	  SFENCEVMA:
+	    begin
+	       t_pc = w_pc4;
+	       t_alu_valid = 1'b1;
+	       t_clear_tlb = 1'b1;
+	    end
+	  CSRRW:
+	    begin
+	       t_rd_csr_en = 1'b1;
+	       t_result = t_rd_csr;
+	       t_wr_csr_en = int_uop.imm[9:5] != 'd0;
+	       t_wr_csr = t_srcA;
+	       t_wr_int_prf = int_uop.dst_valid;
+	       t_alu_valid = 1'b1;
+	       t_pc = w_pc4;	       
+	    end
+	  CSRRS:
+	    begin
+	       t_rd_csr_en = 1'b1;
+	       t_result = t_rd_csr;
+	       t_wr_csr_en = int_uop.imm[9:5] != 'd0;
+	       t_wr_csr = t_rd_csr | t_srcA;
+	       t_wr_int_prf = int_uop.dst_valid;
+	       t_alu_valid = 1'b1;
+	       t_pc = w_pc4;	       
+	    end
+	  CSRRC:
+	    begin
+	       t_rd_csr_en = 1'b1;
+	       t_result = t_rd_csr;
+	       t_wr_csr_en = int_uop.imm[9:5] != 'd0;
+	       t_wr_csr = t_rd_csr & (~t_srcA);
+	       t_wr_int_prf = int_uop.dst_valid;
+	       t_alu_valid = 1'b1;
+	       t_pc = w_pc4;	       
+	    end
+	  CSRRWI:
+	    begin
+	       t_rd_csr_en = 1'b1;
+	       t_wr_csr_en = int_uop.imm[9:5] != 'd0;
+	       t_wr_csr = t_rd_csr;
+	       t_result = t_rd_csr;
+	       t_wr_int_prf = int_uop.dst_valid;
+	       t_alu_valid = 1'b1;
+	       t_pc = w_pc4;
+	    end
+	  CSRRSI:
+	    begin
+	       t_rd_csr_en = 1'b1;
+	       t_wr_csr_en = int_uop.imm[9:5] != 'd0;
+	       t_wr_csr = t_rd_csr | {59'd0, int_uop.imm[9:5]};
+	       t_result = t_rd_csr;
+	       t_wr_int_prf = int_uop.dst_valid;
+	       t_alu_valid = 1'b1;
+	       t_pc = w_pc4;
+	    end	  
 	  CSRRCI:
 	    begin
+	       t_rd_csr_en = 1'b1;
 	       t_wr_csr_en = int_uop.imm[9:5] != 'd0;
 	       t_wr_csr = t_rd_csr & {59'd0, ~int_uop.imm[9:5]};
 	       t_result = t_rd_csr;
 	       t_wr_int_prf = int_uop.dst_valid;
-	       t_alu_valid = int_uop.dst_valid;
+	       t_alu_valid = 1'b1;
 	       t_pc = w_pc4;
 	    end
 	  
@@ -2212,6 +2242,179 @@ module exec(clk,
 	endcase // case (int_uop.op)
      end // always_comb
 
+
+   logic [63:0]	       t_rd_csr, t_wr_csr;
+   logic [63:0]	       r_sstatus, r_sie, r_stvec, r_sscratch;
+   logic [63:0]	       r_epc, r_scause, r_stval, r_sip;
+   logic [63:0]	       r_satp, r_mstatus, r_mideleg, r_medeleg;
+   logic [63:0]	       r_mcounteren, r_mie, r_mscratch, r_mepc;
+   logic [63:0]	       r_mtvec, r_misa, r_mip,  r_scounteren;
+   
+   logic [63:0]	       r_pmpaddr0, r_pmpaddr1, r_pmpaddr2, r_pmpaddr3, r_pmpcfg0;
+
+   always_ff@(posedge clk)
+     begin
+	r_clear_tlb <= reset ? 1'b0 : t_clear_tlb;
+     end
+	      
+   always_ff@(posedge clk)
+     begin
+	if(reset)
+	  begin /* begin in machine priv mode */
+	     r_priv <= 2'd3;
+	  end
+	else if(t_wr_priv)
+	  begin
+	     r_priv <= r_mstatus[11:10];
+	  end
+     end
+
+   always_comb
+     begin
+	t_rd_csr = 'd0;
+	case(int_uop.imm[4:0])
+	  SSTATUS:
+	    t_rd_csr = r_sstatus;
+	  SCOUNTEREN:
+	    t_rd_csr = r_scounteren;
+	  SIE:
+	    t_rd_csr = r_sie;
+	  STVEC:
+	    t_rd_csr = r_stvec;
+	  SSCRATCH:
+	    t_rd_csr = r_sscratch;
+	  SATP:
+	    t_rd_csr = r_satp;
+	  SIP:
+	    t_rd_csr = r_sip;
+	  MSTATUS:
+	    t_rd_csr = r_mstatus;
+	  MCOUNTEREN:
+	    t_rd_csr = r_mcounteren;
+	  MISA:
+	    t_rd_csr = r_misa;
+	  MTVEC:
+	    t_rd_csr = r_mtvec;
+	  MIE:
+	    t_rd_csr = r_mie;
+	  MIDELEG:
+	    t_rd_csr = r_mideleg;
+	  MEDELEG:
+	    t_rd_csr = r_medeleg;
+	  MEPC:
+	    t_rd_csr = r_mepc;
+	  MSCRATCH:
+	    t_rd_csr = r_mscratch;
+	  MIP:
+	    t_rd_csr = r_mip;
+	  PMPADDR0:
+	    t_rd_csr = r_pmpaddr0;
+	  PMPADDR1:
+	    t_rd_csr = r_pmpaddr1;
+	  PMPADDR2:
+	    t_rd_csr = r_pmpaddr2;
+	  PMPADDR3:
+	    t_rd_csr = r_pmpaddr3;
+	  PMPCFG0:
+	    t_rd_csr = r_pmpcfg0;
+	  default:
+	    begin
+	       if(t_rd_csr_en)
+		 begin
+		    $display("read csr %d unimplemented", int_uop.imm[4:0]);
+		    $stop();
+		 end
+	    end
+	endcase
+     end // always_comb
+
+   always_ff@(posedge clk)
+     begin
+	if(reset)
+	  begin
+	     r_sstatus <= 'd0;
+	     r_scounteren <= 'd0;
+	     r_sie <= 'd0;
+	     r_satp <= 'd0;
+	     r_sip <= 'd0;
+	     
+	     r_mie <= 'd0;
+	     r_mip <= 'd0;
+	     r_mstatus <= 64'ha00000000;
+	     r_mtvec <= 'd0;
+	     r_mcounteren <= 'd0;
+	     r_mideleg <= 'd0;
+	     r_medeleg <= 'd0;
+
+	     r_pmpaddr0 <= 'd0;
+	     r_pmpaddr1 <= 'd0;
+	     r_pmpaddr2 <= 'd0;
+	     r_pmpaddr3 <= 'd0;
+	     r_pmpcfg0 <= 'd0;
+	     r_mscratch <= 'd0;
+	     r_mepc <= 'd0;
+	     r_misa <= 64'h8000000000141101;
+	  end
+	else if(t_wr_csr_en)
+	  begin
+	     case(int_uop.imm[4:0])
+	       SSTATUS:
+		 r_sstatus <= t_wr_csr;
+	       SCOUNTEREN:
+		 r_scounteren <= t_wr_csr;
+	       SIE:
+		 r_sie <= t_wr_csr;
+	       SIP:
+		 r_sip <= t_wr_csr;
+	       SATP:
+		 begin
+		    if(t_wr_csr[63:44] == 20'h80000)
+		      begin
+			 r_satp <= t_wr_csr;
+		      end
+		 end
+	       MSTATUS:
+		 begin
+		    r_mstatus <= (t_wr_csr & 64'he79bb) | (r_mstatus & 64'hfffffffffff18644);
+		 end
+	       MCOUNTEREN:
+		 r_mcounteren <= t_wr_csr;
+	       MISA:
+		 r_misa <= t_wr_csr;
+	       MTVEC:
+		 r_mtvec <= t_wr_csr;
+	       MIE:
+		 r_mie <= t_wr_csr;
+	       MEDELEG:
+		 r_medeleg <= t_wr_csr;
+	       MIDELEG:
+		 r_mideleg <= t_wr_csr;
+	       MSCRATCH:
+		 r_mscratch <= t_wr_csr;
+	       MEPC:
+		 r_mepc <= t_wr_csr;
+	       PMPADDR0:
+		 r_pmpaddr0 <= t_wr_csr;
+	       PMPADDR1:
+		 r_pmpaddr1 <= t_wr_csr;
+	       PMPADDR2:
+		 r_pmpaddr2 <= t_wr_csr;
+	       PMPADDR3:
+		 r_pmpaddr3 <= t_wr_csr;
+	       PMPCFG0:
+		 r_pmpcfg0 <= t_wr_csr;
+	       
+	       default:
+		 begin
+		    $display("implement %d", int_uop.imm[4:0]);
+		    $stop();
+		 end
+	     endcase // case (int_uop.imm[4:0])
+	  end // if (t_wr_csr_en)
+     end // always_ff@ (posedge clk)
+   
+
+   
    wire [`M_WIDTH-1:0] w_agu_addr;
    mwidth_add agu (.A(t_mem_srcA), .B(mem_uq.rvimm), .Y(w_agu_addr));
 

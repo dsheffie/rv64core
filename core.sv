@@ -37,6 +37,8 @@ import "DPI-C" function int check_insn_bytes(input longint pc, input int data);
 
 module core(clk, 
 	    reset,
+	    priv,
+	    clear_tlb,
 	    mode64,
 	    extern_irq,
 	    head_of_rob_ptr_valid,
@@ -113,6 +115,8 @@ module core(clk,
 	    epc);
    input logic clk;
    input logic reset;
+   output logic [1:0] priv;
+   output	      clear_tlb;
    output logic	mode64;
    input logic extern_irq;
    output logic head_of_rob_ptr_valid;
@@ -1904,11 +1908,11 @@ module core(clk,
 	t_push_2 = t_alloc_two && !t_fold_uop2;
      end
 
-
-   
    exec e (
 	   .clk(clk), 
 	   .reset(reset),
+	   .priv(priv),
+	   .clear_tlb(clear_tlb),
 	   .mode64(r_mode64),
 	   .retire(t_retire),
 	   .retire_two(t_retire_two),
@@ -1983,9 +1987,9 @@ module core(clk,
    always_ff@(negedge clk)
      begin
 	//if(t_push_dq_one)
-	//$display("decoded %x to uop %d", t_dec_uop.pc, t_dec_uop.op);
+	//$display("decoded %x to uop %d, is II=%b", t_dec_uop.pc, t_dec_uop.op, t_dec_uop.op==II);
 	//if(t_push_dq_two)
-	//$display("decoded %x to uop %d", t_dec_uop2.pc, t_dec_uop2.op);	
+	//$display("decoded %x to uop %d, is II=%b", t_dec_uop2.pc, t_dec_uop2.op, t_dec_uop2.op==II);	
 
     	if(insn_ack && insn_ack_two && 1'b0)
     	  begin

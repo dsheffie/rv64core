@@ -424,6 +424,8 @@ module
    core cpu (
 	     .clk(clk),
 	     .reset(reset),
+	     .priv(),
+	     .clear_tlb(),
 	     .mode64(w_mode64),
 	     .extern_irq(extern_irq),
 	     .resume(resume),
