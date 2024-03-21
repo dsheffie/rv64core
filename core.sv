@@ -1135,28 +1135,16 @@ module core(clk,
 		   begin
 		      n_pending_ii = 1'b1;		      
 		   end
+		 SUPERVISOR_ECALL:
+		   begin
+
+		   end
 		 default:
 		   begin
 		      $display("t_rob_head.cause = %d", t_rob_head.cause);
 		      $stop();
 		   end
 	       endcase // case (t_rob_head.cause)
-	       
-	       // if(t_rob_head.is_break)
-	       // 	 begin
-	       // 	    n_pending_break = 1'b1;
-	       // 	    n_cause = 5'd9;
-	       // 	 end
-	       // else if(t_rob_head.is_ii)
-	       // 	 begin
-	       // 	    n_pending_ii = 1'b1;
-	       // 	    n_cause = 5'd10;
-	       // 	 end
-	       // else if(t_rob_head.is_bad_addr)
-	       // 	 begin
-	       // 	    n_pending_badva = 1'b1;
-	       // 	    n_cause = 5'd10;
-	       // 	 end
 	       n_state = WRITE_EPC;
 	    end
 	  WRITE_EPC:

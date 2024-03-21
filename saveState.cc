@@ -87,31 +87,32 @@ void loadState(state_t &s, const std::string &filename) {
   close(fd);
 }
 
+static void emitGprValue(state_t &s, uint64_t &pc, int i, uint64_t u) {
+  int addi = 0, slli = 0;
+  slli = ((8) << 20) | (i<<15) | 1 << 12 | (i<<7) | 0x13;
+  for(int j = 56; j >= 0; j-=8) {
+    uint8_t v = (u>>j) & 0x0ff;
+    if(v) {
+      addi = ((v) << 20) | (i<<15) | 0 << 12 | (i<<7) | 0x13;
+      *reinterpret_cast<int*>(&s.mem[pc]) = addi;
+      pc += 4;	
+    }
+    
+    if(j != 0) {
+      *reinterpret_cast<int*>(&s.mem[pc]) = slli;
+      pc += 4;
+    }
+  }  
+}
 
 
 void emitCodeForInitialRegisterValues(state_t &s, uint64_t pc) {
 
-  int addi = 0, slli = 0;
   for(int i = 1; i < 32; i++) {
-    //std::cout << std::hex << s.gpr[i] << std::dec << "\n";
-    slli = ((8) << 20) | (i<<15) | 1 << 12 | (i<<7) | 0x13;
-    
     uint64_t u = *reinterpret_cast<uint64_t*>(&s.gpr[i]);
-    
-    for(int j = 56; j >= 0; j-=8) {
-      uint8_t v = (u>>j) & 0x0ff;
-      if(v) {
-	addi = ((v) << 20) | (i<<15) | 0 << 12 | (i<<7) | 0x13;
-	*reinterpret_cast<int*>(&s.mem[pc]) = addi;
-	pc += 4;	
-      }
-
-      if(j != 0) {
-	*reinterpret_cast<int*>(&s.mem[pc]) = slli;
-	pc += 4;
-      }
-    }
+    emitGprValue(s, pc, i, u);
   }
+  
   *reinterpret_cast<int*>(&s.mem[pc]) = 0x73;
   pc += 4;
   for(int i = 0; i < 128; i++) {

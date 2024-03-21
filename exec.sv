@@ -2166,7 +2166,10 @@ module exec(clk,
 	  ECALL:
 	    begin
 	       t_has_cause = 1'b1;
-	       t_cause = USER_ECALL;
+	       t_cause = r_priv=='d0 ? USER_ECALL :
+			 r_priv=='d1 ? SUPERVISOR_ECALL :
+			 r_priv=='d2 ? HYPERVISOR_ECALL :
+			 MACHINE_ECALL;
 	       t_alu_valid = 1'b1;
 	    end
 	  SFENCEVMA:
@@ -2277,9 +2280,9 @@ module exec(clk,
 	  end
 	else if(t_wr_priv)
 	  begin
-	     r_priv <= r_mstatus[11:10];
+	     r_priv <= r_mstatus[12:11];
 	  end
-     end
+     end // always_ff@ (posedge clk)
 
    always_comb
      begin

@@ -5,6 +5,7 @@ struct SDL_Window;
 struct SDL_Surface;
 
 namespace globals {
+  extern bool syscall_emu;
   extern uint32_t tohost_addr;
   extern uint32_t fromhost_addr;
   extern int sysArgc;

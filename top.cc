@@ -7,6 +7,7 @@
 #define BRANCH_DEBUG 1
 #define CACHE_STATS 1
 
+bool globals::syscall_emu = true;
 uint32_t globals::tohost_addr = 0;
 uint32_t globals::fromhost_addr = 0;
 bool globals::log = false;
@@ -479,147 +480,17 @@ int main(int argc, char **argv) {
     globals::sdlscr = SDL_GetWindowSurface(globals::sdlwin);
     assert(globals::sdlscr);
   }
-#endif  
-
-  tb->syscall_emu = 1;
+#endif
+  
+  globals::syscall_emu = not(use_checkpoint);
+  tb->syscall_emu = globals::syscall_emu;
   
   if(use_checkpoint) {
     loadState(*s, rv32_binary.c_str());
-    emitCodeForInitialRegisterValues(*s, s->pc);
-    reset_core(tb, cycle, s->pc);
-    int64_t gpr[32] = {0};
-    memcpy(gpr, s->gpr, sizeof(int64_t)*32);
-
-    
-    
-    while(true) {
-      bool should_break = false;
-      if(tb->got_break) {
-	should_break = true;
-      }
-      if(tb->got_ud) {
-	std::cout << "fatal - got ud in preamble\n";
-	std::cout << std::hex
-		  << tb->epc
-		  << std::dec
-		  << " "
-		  << getAsmString(mem_r32(s,tb->epc), tb->epc)
-		  << "\n";
-
-	exit(-1);
-      }
-      
-      tb->mem_rsp_valid = 0;
-      if(tb->mem_req_valid) {
-	for(int i = 0; i < 4; i++) {
-	  uint64_t ea = (tb->mem_req_addr + 4*i) & ((1UL<<32)-1);
-	  tb->mem_rsp_load_data[i] = mem_r32(s, ea);	  
-	}
-	tb->mem_rsp_valid = 1;
-      }
-      tb->clk = 0;
-      tb->eval();
-      tb->clk = 1;
-      tb->eval();
-      if(should_break)
-	break;
-
-      if(tb->retire_valid and trace_retirement) {
-	std::cout << "port a "
-		  << " cycle " << cycle
-		  << " "
-		  << std::hex
-		  << tb->retire_pc
-		  << std::dec
-		  << " "
-		  << getAsmString(mem_r32(s,tb->retire_pc), tb->retire_pc)
-		  << std::fixed
-		  << ", " << static_cast<double>(insns_retired) / cycle << " IPC "
-		  << ", insns_retired "
-		  << insns_retired
-		  << ", mem pki "
-		  << ((static_cast<double>(mem_reqs)/insns_retired)*100.0)
-		  << ", mispredict pki "
-		  << (static_cast<double>(n_mispredicts) / insns_retired) * 1000.0
-		  << std::defaultfloat	  
-		  <<" \n";
-      }
-      if(tb->retire_two_valid and  trace_retirement ) {
-	  std::cout << "port b "
-		    << " cycle " << cycle
-		    << " "
-		    << std::hex
-		    << tb->retire_two_pc
-		    << std::dec
-		    << " "
-		    << getAsmString(mem_r32(s,tb->retire_two_pc), tb->retire_two_pc)
-		    << std::fixed
-		    << ", " << static_cast<double>(insns_retired) / cycle << " IPC "	    
-		    << ", insns_retired "
-		    << insns_retired
-		    << ", mem pki "
-		    << ((static_cast<double>(mem_reqs)/insns_retired)*100.0)
-		    << ", mispredict pki "
-		    << (static_cast<double>(n_mispredicts) / insns_retired) * 1000.0
-		    << std::defaultfloat
-		    <<" \n";
-      }
-      
-      
-      if(tb->retire_reg_valid) {
-	//std::cout << "retired something..port1, reg "
-	//<< (int)tb->retire_reg_ptr
-	//<< std::hex
-	//<< " "
-	//<< tb->retire_reg_data
-	//<< std::dec
-	//<< "\n";
-	s->gpr[tb->retire_reg_ptr] = tb->retire_reg_data;
-      }
-      if(tb->retire_reg_two_valid) {
-	//std::cout << "retired something..port2, reg "
-	//<< (int)tb->retire_reg_two_ptr << "\n";
-	s->gpr[tb->retire_reg_two_ptr] = tb->retire_reg_two_data;
-      }      
-      
-      if(tb->retire_valid) {
-	last_retire = 0;
-	last_retired_pc = tb->retire_pc;
-      }
-      last_retire++;
+    for(int i = 0; i < 32; i++) {
+      assert(s->gpr[i] == 0);
     }
-
-    //wait an additional 128 cycles
-    for(int c = 0; c < 128; c++) {
-      tb->mem_rsp_valid = 0;
-      if(tb->mem_req_valid) {
-	for(int i = 0; i < 4; i++) {
-	  uint64_t ea = (tb->mem_req_addr + 4*i) & ((1UL<<32)-1);
-	  tb->mem_rsp_load_data[i] = mem_r32(s, ea);
-	}
-	tb->mem_rsp_valid = 1;
-      }
-      tb->clk = 0;
-      tb->eval();
-      tb->clk = 1;
-      tb->eval();
-    }
-
-    for(int i = 1; i < 32; i++) {
-      if(s->gpr[i] != gpr[i]) {
-	std::cout << "register " << i << " does match initial value : "
-		  << std::hex
-		  << s->gpr[i] << " vs "
-		  << gpr[i]
-		  << std::dec
-		  << "\n";
-      }
-      assert(s->gpr[i] == gpr[i]);
-    }
-    
-    loadState(*s, rv32_binary.c_str());
     loadState(*ss, rv32_binary.c_str());
-
   }
   else {
     load_elf(rv32_binary.c_str(), s);
