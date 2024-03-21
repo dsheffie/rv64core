@@ -21,6 +21,9 @@ import "DPI-C" function void report_exec(input int int_valid,
 
 module exec(clk, 
 	    reset,
+	    cause,
+	    epc,
+	    tval,
 	    priv,
 	    clear_tlb,
 	    mode64,
@@ -45,9 +48,6 @@ module exec(clk,
 	    complete_valid_1,
 	    complete_bundle_2,
 	    complete_valid_2,
-	    exception_wr_cpr0_val,
-	    exception_wr_cpr0_ptr,
-	    exception_wr_cpr0_data,
 	    mem_req, 
 	    mem_req_valid, 
 	    mem_req_ack,
@@ -65,11 +65,13 @@ module exec(clk,
    input logic clk;
    input logic reset;
    output logic [1:0] priv;
+   input	      cause_t cause;
+   input logic [63:0] epc;
+   input logic [63:0] tval;
    output logic	      clear_tlb;
-   
-   input logic mode64;
-   input logic retire;
-   input logic retire_two;
+   input logic	      mode64;
+   input logic	      retire;
+   input logic	      retire_two;
    
 `ifdef VERILATOR
    input logic [31:0] clear_cnt;
@@ -98,10 +100,6 @@ module exec(clk,
    output logic complete_valid_2;   
 
 
-   input logic 	exception_wr_cpr0_val;
-   input logic [4:0] exception_wr_cpr0_ptr;
-   input logic [`M_WIDTH-1:0] exception_wr_cpr0_data;
-   
    output 	mem_req_t mem_req;
    output 	logic mem_req_valid;
    input logic 	      mem_req_ack;
@@ -2267,6 +2265,17 @@ module exec(clk,
    
    logic [63:0]	       r_pmpaddr0, r_pmpaddr1, r_pmpaddr2, r_pmpaddr3, r_pmpcfg0;
 
+   wire [15:0]	       w_delegate_shift = (r_medeleg[15:0] >> cause);
+   logic	       t_delegate;
+   always_comb
+     begin
+	t_delegate = 1'b0;
+	if(r_priv[1]   == 1'b0)
+	  begin
+	     t_delegate = w_delegate_shift[0];
+	  end
+     end
+   
    always_ff@(posedge clk)
      begin
 	r_clear_tlb <= reset ? 1'b0 : t_clear_tlb;

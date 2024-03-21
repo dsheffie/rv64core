@@ -216,7 +216,6 @@ module core(clk,
    output logic [`LG_ROB_ENTRIES:0] 	  inflight;
    output logic [`M_WIDTH-1:0] 		  epc;
    
-   logic [`M_WIDTH-1:0] 		  r_epc, n_epc;
    
    localparam N_PRF_ENTRIES = (1<<`LG_PRF_ENTRIES);
    localparam N_ROB_ENTRIES = (1<<`LG_ROB_ENTRIES);
@@ -337,6 +336,9 @@ module core(clk,
    
    
    cause_t 		     n_cause, r_cause;
+   logic [63:0]		     r_tval, n_tval;
+   logic [63:0]		     r_epc, n_epc;
+   
    
    
    complete_t t_complete_bundle_1, t_complete_bundle_2;
@@ -361,9 +363,6 @@ module core(clk,
    
    logic 		     n_ready_for_resume, r_ready_for_resume;
    
-   logic 		     t_exception_wr_cpr0_val;
-   logic [4:0] 		     t_exception_wr_cpr0_ptr;
-   logic [`M_WIDTH-1:0]      t_exception_wr_cpr0_data;
    
    mem_req_t t_mem_req;
    logic 		     t_mem_req_valid;
@@ -561,6 +560,7 @@ module core(clk,
 	     r_machine_clr <= 1'b0;
 	     r_got_restart_ack <= 1'b0;
 	     r_cause <= 'd0;
+	     r_tval <= 'd0;
 	     r_pending_fault <= 1'b0;
 	  end
 	else
@@ -571,6 +571,7 @@ module core(clk,
 	     r_machine_clr <= n_machine_clr;
 	     r_got_restart_ack <= n_got_restart_ack;
 	     r_cause <= n_cause;
+	     r_tval <= n_tval;
 	     r_pending_fault <= n_pending_fault;
 	  end
      end
@@ -775,17 +776,14 @@ module core(clk,
 	n_mode64 = r_mode64;
 	t_clr_extern_irq = 1'b0;
 	t_restart_complete = 1'b0;
-	
-	t_exception_wr_cpr0_val = 1'b0;
-	t_exception_wr_cpr0_ptr = 5'd0;
-	t_exception_wr_cpr0_data = 'd0;
 	n_cause = r_cause;
+	n_epc = r_epc;
+	n_tval = r_tval;
 
 	n_machine_clr = r_machine_clr;
 	t_alloc = 1'b0;
 	t_alloc_two = 1'b0;
 	t_possible_to_alloc = 1'b0;
-
 	
 	t_retire = 1'b0;
 	t_retire_two = 1'b0;
@@ -803,7 +801,6 @@ module core(clk,
 	n_pending_fault = r_pending_fault;
 	n_pending_badva = r_pending_badva;
 	n_pending_ii = r_pending_ii;
-	n_epc = r_epc;
 	
 	t_enough_iprfs = !((t_uop.dst_valid) && t_gpr_ffs_full);
 
@@ -877,6 +874,9 @@ module core(clk,
 			 if(t_arch_fault)
 			   begin
 			      n_state = ARCH_FAULT;
+			      n_cause = t_rob_head.cause;
+			      n_epc = t_rob_head.pc;
+			      n_tval = 'd0;
 			   end
 			 else
 			   begin
@@ -1125,7 +1125,6 @@ module core(clk,
 	    begin
 	       n_flush_req_l1i = 1'b1;
 	       n_flush_req_l1d = 1'b1;
-	       n_cause = t_rob_head.cause;
 	       case(t_rob_head.cause)
 		 BREAKPOINT:
 		   begin
@@ -1149,17 +1148,10 @@ module core(clk,
 	    end
 	  WRITE_EPC:
 	    begin
-	       t_exception_wr_cpr0_val = 1'b1;
-	       t_exception_wr_cpr0_ptr = 5'd14;
-	       t_exception_wr_cpr0_data = t_rob_head.pc;
 	       n_state = WRITE_CAUSE;
-	       n_epc = t_rob_head.pc;
 	    end
 	  WRITE_CAUSE:
 	    begin
-	       t_exception_wr_cpr0_val = 1'b1;
-	       t_exception_wr_cpr0_ptr = 5'd13;
-	       t_exception_wr_cpr0_data = t_rob_head.pc;	       
 	       n_state = FLUSH_FOR_HALT;
 	       t_bump_rob_head = 1'b1;
 	       n_ds_done = 1'b1;
@@ -1923,6 +1915,9 @@ module core(clk,
 	   .clk(clk), 
 	   .reset(reset),
 	   .priv(priv),
+	   .cause(r_cause),
+	   .epc(r_epc),
+	   .tval(r_tval),
 	   .clear_tlb(clear_tlb),
 	   .mode64(r_mode64),
 	   .retire(t_retire),
@@ -1948,9 +1943,6 @@ module core(clk,
 	   .complete_bundle_2(t_complete_bundle_2),
 	   .complete_valid_2(t_complete_valid_2),
 	   
-	   .exception_wr_cpr0_val(t_exception_wr_cpr0_val),
-	   .exception_wr_cpr0_ptr(t_exception_wr_cpr0_ptr),
-	   .exception_wr_cpr0_data(t_exception_wr_cpr0_data),
 	   .mem_req(t_mem_req),
 	   .mem_req_valid(t_mem_req_valid),
 	   .mem_req_ack(core_mem_req_ack),
