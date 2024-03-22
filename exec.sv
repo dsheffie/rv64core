@@ -27,7 +27,7 @@ module exec(clk,
 	    exc_pc,
 	    update_csr_exc,
 	    priv,
-	    
+	    paging_active,
 	    clear_tlb,
 	    mode64,
 	    retire,
@@ -74,6 +74,7 @@ module exec(clk,
 
    output logic [63:0] exc_pc;
    input logic	       update_csr_exc;
+   output logic	       paging_active;
    
    output logic	      clear_tlb;
    input logic	      mode64;
@@ -175,7 +176,7 @@ module exec(clk,
    logic 	t_pop_uq,t_pop_mem_uq,t_pop_mem_dq,t_pop_uq2;
    
    logic 	r_mem_ready, r_dq_ready;
-   
+   logic	r_paging_active;
    
    localparam E_BITS = `M_WIDTH-16;
    localparam HI_EBITS = `M_WIDTH-32;
@@ -1652,6 +1653,7 @@ module exec(clk,
    assign uq_wait = r_uq_wait;
    assign mq_wait = r_mq_wait;
    assign core_store_data_valid = !mem_mdq_empty;
+   assign paging_active = r_paging_active;
    
    
    always_ff@(posedge clk)
@@ -2399,6 +2401,7 @@ module exec(clk,
 	     r_mscratch <= 'd0;
 	     r_mepc <= 'd0;
 	     r_mtval <= 'd0;
+	     r_paging_active <= 1'b0;
 	     r_misa <= 64'h8000000000141101;
 	  end // if (reset)
 	else if(update_csr_exc)
@@ -2431,8 +2434,14 @@ module exec(clk,
 		 r_sip <= t_wr_csr;
 	       SATP:
 		 begin
-		    if(t_wr_csr[63:44] == 20'h80000)
+		    if((t_wr_csr[63:60] == 4'h8) && (t_wr_csr[59:44] == 'd0))
 		      begin
+			 r_paging_active <= 1'b1;
+			 r_satp <= t_wr_csr;
+		      end
+		    else if(t_wr_csr[63:60] == 4'h0)
+		      begin
+			 r_paging_active <= 1'b0;			 
 			 r_satp <= t_wr_csr;
 		      end
 		 end

@@ -40,6 +40,7 @@ module core(clk,
 	    syscall_emu,
 	    priv,
 	    clear_tlb,
+	    paging_active,
 	    mode64,
 	    extern_irq,
 	    head_of_rob_ptr_valid,
@@ -119,6 +120,7 @@ module core(clk,
    input logic syscall_emu;
    output logic [1:0] priv;
    output	      clear_tlb;
+   output logic	      paging_active;
    output logic	mode64;
    input logic extern_irq;
    output logic head_of_rob_ptr_valid;
@@ -1933,6 +1935,7 @@ module core(clk,
 	   .clk(clk), 
 	   .reset(reset),
 	   .priv(priv),
+	   .paging_active(paging_active),
 	   .update_csr_exc(r_update_csr_exc),
 	   .cause(r_cause),
 	   .epc(r_epc),

@@ -19,12 +19,9 @@
 #include "helper.hh"
 #include "globals.hh"
 
+static int fdcnt = 3;
 static std::map<state_t*, std::map<int, int>> fdmap;
 
-void initState(state_t *s) {
-  memset(s, 0, sizeof(state_t));
-  s->fdcnt = 3;
-}
 
 void handle_syscall(state_t *s, uint64_t tohost) {
   uint8_t *mem = s->mem;  
@@ -50,9 +47,9 @@ void handle_syscall(state_t *s, uint64_t tohost) {
     case SYS_open: {
       const char *path = reinterpret_cast<const char*>(s->mem + buf[1]);
       int fd = open(path, remapIOFlags(buf[2]), S_IRUSR|S_IWUSR);
-      m[s->fdcnt] = fd;
-      buf[0] = s->fdcnt;
-      s->fdcnt++;
+      m[fdcnt] = fd;
+      buf[0] = fdcnt;
+      fdcnt++;
       break;
     }
     case SYS_close: {

@@ -298,7 +298,15 @@ module
    wire w_l1_mem_req_ack;
    
    wire [127:0] w_l1_mem_load_data;
-   wire		w_mode64;
+   wire		w_mode64, w_paging_active;
+   wire		w_clear_tlb;
+
+   always_ff@(negedge clk)
+     begin
+	if(w_paging_active)
+	  $stop();
+	
+     end
    
    l2 l2cache (
 	       .clk(clk),
@@ -428,7 +436,8 @@ module
 	     .reset(reset),
 	     .syscall_emu(syscall_emu),
 	     .priv(),
-	     .clear_tlb(),
+	     .clear_tlb(w_clear_tlb),
+	     .paging_active(w_paging_active),
 	     .mode64(w_mode64),
 	     .extern_irq(extern_irq),
 	     .resume(resume),
