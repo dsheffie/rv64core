@@ -27,6 +27,7 @@ module exec(clk,
 	    exc_pc,
 	    update_csr_exc,
 	    priv,
+	    page_table_root,
 	    paging_active,
 	    clear_tlb,
 	    mode64,
@@ -74,6 +75,8 @@ module exec(clk,
 
    output logic [63:0] exc_pc;
    input logic	       update_csr_exc;
+   output logic [63:0] page_table_root;
+   
    output logic	       paging_active;
    
    output logic	      clear_tlb;
@@ -2278,6 +2281,10 @@ module exec(clk,
 
    wire [15:0]	       w_delegate_shift = (r_medeleg[15:0] >> cause);
    logic	       t_delegate;
+
+   assign page_table_root = {8'd0, r_satp[43:0], 12'd0};
+   
+   
    always_comb
      begin
 	t_delegate = 1'b0;

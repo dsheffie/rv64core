@@ -2,6 +2,8 @@
 `include "rob.vh"
 `include "uop.vh"
 
+//`define FPGA64_32
+
 module
 `ifndef FPGA64_32
    core_l1d_l1i
@@ -299,12 +301,22 @@ module
    
    wire [127:0] w_l1_mem_load_data;
    wire		w_mode64, w_paging_active;
+   wire [63:0]	w_page_table_root;
+   
    wire		w_clear_tlb;
 
    always_ff@(negedge clk)
      begin
-	if(w_paging_active)
-	  $stop();
+	if(w_paging_active & (l1i_mem_req_valid | l1d_mem_req_valid))
+	  begin
+	     $display("w_page_table_root = %x", w_page_table_root);
+	     if(l1i_mem_req_valid)
+	       begin
+		  $display("ifetch addr %x", l1i_mem_req_addr);
+	       end
+	     
+	     $stop();
+	  end
 	
      end
    
@@ -438,6 +450,7 @@ module
 	     .priv(),
 	     .clear_tlb(w_clear_tlb),
 	     .paging_active(w_paging_active),
+	     .page_table_root(w_page_table_root),
 	     .mode64(w_mode64),
 	     .extern_irq(extern_irq),
 	     .resume(resume),

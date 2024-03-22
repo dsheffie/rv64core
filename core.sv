@@ -41,6 +41,7 @@ module core(clk,
 	    priv,
 	    clear_tlb,
 	    paging_active,
+	    page_table_root,
 	    mode64,
 	    extern_irq,
 	    head_of_rob_ptr_valid,
@@ -121,6 +122,8 @@ module core(clk,
    output logic [1:0] priv;
    output	      clear_tlb;
    output logic	      paging_active;
+   output logic [63:0] page_table_root;
+   
    output logic	mode64;
    input logic extern_irq;
    output logic head_of_rob_ptr_valid;
@@ -1921,6 +1924,7 @@ module core(clk,
 	   .reset(reset),
 	   .priv(priv),
 	   .paging_active(paging_active),
+	   .page_table_root(page_table_root),
 	   .update_csr_exc(r_update_csr_exc),
 	   .cause(r_cause),
 	   .epc(r_epc),

@@ -275,6 +275,10 @@ static uint64_t record_insns_retired = 0;
 
 static int pl_regs[32] = {0};
 
+//long long translate(long long va) {
+//  return 0;
+//}
+
 void record_retirement(long long pc,
 		       long long fetch_cycle,
 		       long long alloc_cycle,

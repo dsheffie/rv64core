@@ -7,6 +7,7 @@ import "DPI-C" function void record_fetch(int push1, int push2, int push3, int p
 					  longint pc0, longint pc1, longint pc2, longint pc3,
 					  int bubble, int fq_full);
 
+//import "DPI-C" function longint translate(longint pa);
 `endif
 
 

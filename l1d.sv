@@ -15,6 +15,7 @@ import "DPI-C" function void record_miss(input int pc,
 					 input int hit_cache,
 					 input int busy);
 
+//import "DPI-C" function longint translate(longint pa);
 `endif
 
 module l1d(clk, 
