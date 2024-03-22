@@ -25,7 +25,7 @@ module exec(clk,
 	    epc,
 	    tval,
 	    exc_pc,
-	    
+	    update_csr_exc,
 	    priv,
 	    
 	    clear_tlb,
@@ -73,7 +73,7 @@ module exec(clk,
    input logic [63:0] tval;
 
    output logic [63:0] exc_pc;
-   
+   input logic	       update_csr_exc;
    
    output logic	      clear_tlb;
    input logic	      mode64;
@@ -2265,11 +2265,13 @@ module exec(clk,
 
    logic [63:0]	       t_rd_csr, t_wr_csr;
    logic [63:0]	       r_sstatus, r_sie, r_stvec, r_sscratch;
-   logic [63:0]	       r_epc, r_scause, r_stval, r_sip;
+   logic [63:0]	       r_sepc, r_stval, r_sip;
    logic [63:0]	       r_satp, r_mstatus, r_mideleg, r_medeleg;
    logic [63:0]	       r_mcounteren, r_mie, r_mscratch, r_mepc;
-   logic [63:0]	       r_mtvec, r_misa, r_mip,  r_scounteren;
+   logic [63:0]	       r_mtvec, r_mtval, r_misa, r_mip,  r_scounteren;
    
+   logic [3:0]	       r_mcause, r_scause;
+	       
    logic [63:0]	       r_pmpaddr0, r_pmpaddr1, r_pmpaddr2, r_pmpaddr3, r_pmpcfg0;
 
    wire [15:0]	       w_delegate_shift = (r_medeleg[15:0] >> cause);
@@ -2294,6 +2296,10 @@ module exec(clk,
 	if(reset)
 	  begin /* begin in machine priv mode */
 	     r_priv <= 2'd3;
+	  end
+	else if(update_csr_exc)
+	  begin
+	     r_priv <= t_delegate ? 'd1 : 'd3;
 	  end
 	else if(t_wr_priv)
 	  begin
@@ -2321,6 +2327,8 @@ module exec(clk,
 	    t_rd_csr = r_sip;
 	  MSTATUS:
 	    t_rd_csr = r_mstatus;
+	  MCAUSE:
+	    t_rd_csr = {60'd0, r_mcause};
 	  MCOUNTEREN:
 	    t_rd_csr = r_mcounteren;
 	  MISA:
@@ -2369,6 +2377,11 @@ module exec(clk,
 	     r_sie <= 'd0;
 	     r_satp <= 'd0;
 	     r_sip <= 'd0;
+	     r_stval <= 'd0;
+	     r_scause <= 'd0;
+	     r_sepc <= 'd0;
+	     
+	     r_mcause <= 'd0;
 	     
 	     r_mie <= 'd0;
 	     r_mip <= 'd0;
@@ -2385,13 +2398,31 @@ module exec(clk,
 	     r_pmpcfg0 <= 'd0;
 	     r_mscratch <= 'd0;
 	     r_mepc <= 'd0;
+	     r_mtval <= 'd0;
 	     r_misa <= 64'h8000000000141101;
+	  end // if (reset)
+	else if(update_csr_exc)
+	  begin
+	     if(t_delegate)
+	       begin
+		  r_scause <= cause;
+		  r_stval <= tval;
+		  r_sepc <= epc;
+	       end
+	     else
+	       begin
+		  r_mcause <= cause;
+		  r_mtval <= tval;
+		  r_mepc <= epc;
+	       end
 	  end
 	else if(t_wr_csr_en)
 	  begin
 	     case(int_uop.imm[4:0])
 	       SSTATUS:
 		 r_sstatus <= t_wr_csr;
+	       STVEC:
+		 r_stvec <= t_wr_csr;
 	       SCOUNTEREN:
 		 r_scounteren <= t_wr_csr;
 	       SIE:

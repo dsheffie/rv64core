@@ -454,11 +454,12 @@ module core(clk,
    assign branch_fault = r_branch_fault;
    assign branch_pht_idx = r_branch_pht_idx;
    
-   assign took_branch = r_took_branch;
 
+   assign took_branch = r_took_branch;
+   
+   logic r_update_csr_exc, n_update_csr_exc;
    logic r_mode64, n_mode64;
    assign mode64 = r_mode64;
-   
    
    logic [63:0] r_cycle;
    always_ff@(posedge clk)
@@ -488,6 +489,7 @@ module core(clk,
      begin
 	if(reset)
 	  begin
+	     r_update_csr_exc <= 1'b0;
 	     r_flush_req_l1i <= 1'b0;
 	     r_flush_req_l1d <= 1'b0;
 	     r_flush_cl_req <= 1'b0;
@@ -519,6 +521,7 @@ module core(clk,
 	  end
 	else
 	  begin
+	     r_update_csr_exc <= n_update_csr_exc;
 	     r_flush_req_l1d <= n_flush_req_l1d;
 	     r_flush_req_l1i <= n_flush_req_l1i;
 	     r_flush_cl_req <= n_flush_cl_req;
@@ -830,6 +833,8 @@ module core(clk,
 	n_got_restart_ack = r_got_restart_ack;
 	n_got_monitor = r_got_monitor;
 	n_ready_for_resume = 1'b0;
+	n_update_csr_exc = 1'b0;
+	
 	n_l1i_flush_complete = r_l1i_flush_complete || l1i_flush_complete;
 	n_l1d_flush_complete = r_l1d_flush_complete || l1d_flush_complete;
 	n_l2_flush_complete = r_l2_flush_complete || l2_flush_complete;
@@ -1154,6 +1159,7 @@ module core(clk,
 	       else
 		 begin
 		    n_state = WRITE_EPC;
+		    n_update_csr_exc = 1'b1;
 		 end
 	    end
 	  WRITE_EPC:
@@ -1927,6 +1933,7 @@ module core(clk,
 	   .clk(clk), 
 	   .reset(reset),
 	   .priv(priv),
+	   .update_csr_exc(r_update_csr_exc),
 	   .cause(r_cause),
 	   .epc(r_epc),
 	   .tval(r_tval),
