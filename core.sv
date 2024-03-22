@@ -1183,21 +1183,6 @@ module core(clk,
 	endcase // unique case (r_state)
      end // always_comb
 
-`ifdef VERILATOR
-   logic r_got_epc;
-   always_ff@(negedge clk)
-     begin
-	r_got_epc <= reset ? 1'b0 : (r_got_epc | (r_state==WRITE_EPC));
-	
-	if(r_state == WRITE_EPC)
-	  begin
-	     $display("write %x to epc", t_rob_head.pc);
-	  end
-
-	//if(r_got_epc)
-	//$display("state = %x", r_state);
-   end
-`endif
       
    always_ff@(posedge clk)
      begin

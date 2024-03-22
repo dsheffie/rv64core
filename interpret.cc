@@ -1389,6 +1389,7 @@ void execRiscv(state_t *s) {
       set_priv(s, priv_machine);
       s->pc = s->mtvec;      
     }
+    printf("after exception, new pc will be %lx\n", s->pc);
   }
   return;
   
