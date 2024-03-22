@@ -24,7 +24,10 @@ module exec(clk,
 	    cause,
 	    epc,
 	    tval,
+	    exc_pc,
+	    
 	    priv,
+	    
 	    clear_tlb,
 	    mode64,
 	    retire,
@@ -68,6 +71,10 @@ module exec(clk,
    input	      cause_t cause;
    input logic [63:0] epc;
    input logic [63:0] tval;
+
+   output logic [63:0] exc_pc;
+   
+   
    output logic	      clear_tlb;
    input logic	      mode64;
    input logic	      retire;
@@ -2155,9 +2162,9 @@ module exec(clk,
 	  MRET:
 	    begin
 	       t_rd_csr_en = 1'b1;
-	       t_wr_csr_en = 1'b1;
+	       t_wr_csr_en = r_start_int;
 	       t_wr_csr = t_rd_csr;
-	       t_wr_priv = 1'b1;
+	       t_wr_priv = r_start_int;
 	       t_pc = r_mepc;
 	       t_alu_valid = 1'b1;
 	    end
@@ -2174,13 +2181,13 @@ module exec(clk,
 	    begin
 	       t_pc = w_pc4;
 	       t_alu_valid = 1'b1;
-	       t_clear_tlb = 1'b1;
+	       t_clear_tlb = r_start_int;
 	    end
 	  CSRRW:
 	    begin
 	       t_rd_csr_en = 1'b1;
 	       t_result = t_rd_csr;
-	       t_wr_csr_en = int_uop.imm[9:5] != 'd0;
+	       t_wr_csr_en = (int_uop.imm[9:5] != 'd0)&r_start_int;
 	       t_wr_csr = t_srcA;
 	       t_wr_int_prf = int_uop.dst_valid;
 	       t_alu_valid = 1'b1;
@@ -2190,7 +2197,7 @@ module exec(clk,
 	    begin
 	       t_rd_csr_en = 1'b1;
 	       t_result = t_rd_csr;
-	       t_wr_csr_en = int_uop.imm[9:5] != 'd0;
+	       t_wr_csr_en = (int_uop.imm[9:5] != 'd0)&r_start_int;
 	       t_wr_csr = t_rd_csr | t_srcA;
 	       t_wr_int_prf = int_uop.dst_valid;
 	       t_alu_valid = 1'b1;
@@ -2200,7 +2207,7 @@ module exec(clk,
 	    begin
 	       t_rd_csr_en = 1'b1;
 	       t_result = t_rd_csr;
-	       t_wr_csr_en = int_uop.imm[9:5] != 'd0;
+	       t_wr_csr_en = (int_uop.imm[9:5] != 'd0)&r_start_int;
 	       t_wr_csr = t_rd_csr & (~t_srcA);
 	       t_wr_int_prf = int_uop.dst_valid;
 	       t_alu_valid = 1'b1;
@@ -2209,7 +2216,7 @@ module exec(clk,
 	  CSRRWI:
 	    begin
 	       t_rd_csr_en = 1'b1;
-	       t_wr_csr_en = int_uop.imm[9:5] != 'd0;
+	       t_wr_csr_en = (int_uop.imm[9:5] != 'd0)&r_start_int;
 	       t_wr_csr = t_rd_csr;
 	       t_result = t_rd_csr;
 	       t_wr_int_prf = int_uop.dst_valid;
@@ -2219,7 +2226,7 @@ module exec(clk,
 	  CSRRSI:
 	    begin
 	       t_rd_csr_en = 1'b1;
-	       t_wr_csr_en = int_uop.imm[9:5] != 'd0;
+	       t_wr_csr_en = (int_uop.imm[9:5] != 'd0)&r_start_int;
 	       t_wr_csr = t_rd_csr | {59'd0, int_uop.imm[9:5]};
 	       t_result = t_rd_csr;
 	       t_wr_int_prf = int_uop.dst_valid;
@@ -2229,7 +2236,7 @@ module exec(clk,
 	  CSRRCI:
 	    begin
 	       t_rd_csr_en = 1'b1;
-	       t_wr_csr_en = int_uop.imm[9:5] != 'd0;
+	       t_wr_csr_en = (int_uop.imm[9:5] != 'd0)&r_start_int;
 	       t_wr_csr = t_rd_csr & {59'd0, ~int_uop.imm[9:5]};
 	       t_result = t_rd_csr;
 	       t_wr_int_prf = int_uop.dst_valid;
@@ -2270,10 +2277,11 @@ module exec(clk,
    always_comb
      begin
 	t_delegate = 1'b0;
-	if(r_priv[1]   == 1'b0)
+	if(r_priv[1]  == 1'b0)
 	  begin
 	     t_delegate = w_delegate_shift[0];
 	  end
+	exc_pc = t_delegate ? r_stvec : r_mtvec;
      end
    
    always_ff@(posedge clk)

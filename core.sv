@@ -240,9 +240,10 @@ module core(clk,
    logic 				  t_dq_empty, t_dq_full, t_dq_next_empty, t_dq_next_full;
    
    logic 				  r_got_restart_ack, n_got_restart_ack;
-   
-   rob_entry_t r_rob[N_ROB_ENTRIES-1:0];
-   
+
+   wire [63:0]				  w_exc_pc;
+      
+   rob_entry_t r_rob[N_ROB_ENTRIES-1:0];   
    bob_entry_t r_bob[N_BOB_ENTRIES-1:0];
    
    logic [N_ROB_ENTRIES-1:0] 		  r_rob_complete;
@@ -1144,11 +1145,22 @@ module core(clk,
 		      $stop();
 		   end
 	       endcase // case (t_rob_head.cause)
-	       n_state = WRITE_EPC;
+	       t_bump_rob_head = 1'b1;
+	       n_ds_done = 1'b1;	       
+	       if(syscall_emu)
+		 begin
+		    n_state = FLUSH_FOR_HALT;
+		 end
+	       else
+		 begin
+		    n_state = WRITE_EPC;
+		 end
 	    end
 	  WRITE_EPC:
 	    begin
-	       n_state = WRITE_CAUSE;
+	       n_restart_pc = w_exc_pc;
+	       n_restart_valid = 1'b1;	       
+	       n_state = DRAIN;
 	    end
 	  WRITE_CAUSE:
 	    begin
@@ -1918,6 +1930,7 @@ module core(clk,
 	   .cause(r_cause),
 	   .epc(r_epc),
 	   .tval(r_tval),
+	   .exc_pc(w_exc_pc),
 	   .clear_tlb(clear_tlb),
 	   .mode64(r_mode64),
 	   .retire(t_retire),
