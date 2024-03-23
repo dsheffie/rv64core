@@ -125,6 +125,10 @@ void record_l1d(int req, int ack, int ack_st, int blocked, int stall_reason) {
 
 static bool verbose_ic_translate = false;
 
+void csr_putchar(long long x) {
+  printf("%c", x&0xff);
+}
+
 long long translate(long long va, long long root, bool iside, bool store) {
   uint64_t a = 0, u = 0;
   int mask_bits = -1;
@@ -212,7 +216,7 @@ void write_byte(long long addr, char data, long long root) {
   //printf("%s:%lx:%lx\n", __PRETTY_FUNCTION__, addr, root);  
   if(root) {
     pa = translate(addr, root, false, true);
-    printf("translate %lx to %lx\n", addr, pa);    
+    //printf("translate %lx to %lx\n", addr, pa);    
     assert(pa != -1);
   }  
   uint8_t d = *reinterpret_cast<uint8_t*>(&data);
@@ -224,7 +228,7 @@ void write_half(long long addr, short data, long long root) {
   //printf("%s:%lx:%lx\n", __PRETTY_FUNCTION__, addr, root);  
   if(root) {
     pa = translate(addr, root, false, true);
-    printf("translate %lx to %lx\n", addr, pa);    
+    ///printf("translate %lx to %lx\n", addr, pa);    
     assert(pa != -1);
   }  
   uint16_t d = *reinterpret_cast<uint16_t*>(&data);
@@ -237,7 +241,7 @@ void write_word(long long addr, int data, long long root) {
   //printf("%s:%lx:%lx\n", __PRETTY_FUNCTION__, addr, root);  
   if(root) {
     pa = translate(addr, root, false, true);
-    printf("translate %lx to %lx\n", addr, pa);    
+    //printf("translate %lx to %lx\n", addr, pa);    
     assert(pa != -1);
   }    
   uint32_t d = *reinterpret_cast<uint32_t*>(&data);
@@ -249,7 +253,7 @@ void write_dword(long long addr, long long data, long long root) {
   //printf("%s:%lx:%lx\n", __PRETTY_FUNCTION__, addr, root);
   if(root) {
     pa = translate(addr, root, false, true);
-    printf("translate %lx to %lx\n", addr, pa);    
+    //printf("translate %lx to %lx\n", addr, pa);    
     assert(pa != -1);
   }      
   uint64_t d = *reinterpret_cast<uint64_t*>(&data);

@@ -728,7 +728,7 @@ module core(clk,
 `ifdef DUMP_ROB
    always_ff@(negedge clk)
      begin
-	if(r_cycle >= 64'd483312)
+	if(r_cycle >= 64'd485022)
 	  begin
 	     $display("cycle %d : state = %d, alu complete %b, mem complete %b,head_ptr %d, complete %b,  can_retire_rob_head %b, head pc %x, empty %b, full %b, bob full %b", 
 		      r_cycle,
@@ -1128,8 +1128,8 @@ module core(clk,
 	    end
 	  ARCH_FAULT:
 	    begin
-	       $display("took fault for %x with cause %d", 
-			t_rob_head.pc, t_rob_head.cause);	       
+	       $display("took fault for %x with cause %d at cycle %d", 
+			t_rob_head.pc, t_rob_head.cause, r_cycle);	       
 	       case(t_rob_head.cause)
 		 BREAKPOINT:
 		   begin
@@ -1150,7 +1150,7 @@ module core(clk,
 		   end
 		 default:
 		   begin
-		      $display("t_rob_head.cause = %d", t_rob_head.cause);
+		      $display("t_rob_head.cause = %d, ", t_rob_head.cause);
 		      $stop();
 		   end
 	       endcase // case (t_rob_head.cause)

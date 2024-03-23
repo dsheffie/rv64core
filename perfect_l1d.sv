@@ -729,7 +729,9 @@ module perfect_l1d(clk,
    
    logic [63:0] t_req_addr_pa, t_pa;
    logic	t_pf;
-
+   
+   logic [31:0]	t_amo32_data;
+   logic [63:0]	t_amo64_data;
    
    
    always_comb
@@ -753,8 +755,20 @@ module perfect_l1d(clk,
 	case(r_req.amo_op)
 	  5'd0: /* amoadd */
 	    begin
+	       t_amo32_data = t_w32 + r_req.data[31:0];
+	       t_amo64_data = t_w64 + r_req.data[63:0];
 	       //$display("amo add data %x", r_req.data);
 	    end
+	  5'd8: /* amdor */
+	    begin
+	       t_amo32_data = t_w32 | r_req.data[31:0];
+	       t_amo64_data = t_w64 | r_req.data[63:0];
+	    end
+	  5'd12:
+	    begin
+	       t_amo32_data = t_w32 & r_req.data[31:0];
+	       t_amo64_data = t_w64 & r_req.data[63:0];
+	    end	    
 	  default:
 	    begin
 	    end
@@ -871,12 +885,31 @@ module perfect_l1d(clk,
 	       t_rsp_data = 'd0;
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
 	       if(t_wr_array)
-		 write_dword(r_req.addr, r_req.data, paging_active ? page_table_root : 64'd0);	       	       
+		 write_dword(r_req.addr, r_req.data, paging_active ? page_table_root : 64'd0);
+	       //if(t_wr_array) $display("execute sc.d at cycle %d", r_cycle);
 	    end
 	  MEM_AMOW:
 	    begin
-	       $display("amo operation %d for pc %x", r_req.amo_op, r_req.pc);
-	       $stop();
+	       //return old data
+	       t_rsp_data = {{32{t_w32[31]}}, t_w32};
+	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
+	       
+	       t_wr_array = r_got_req;
+	       if(t_wr_array)
+		 begin
+		    write_word(r_req.addr, t_amo32_data, paging_active ? page_table_root : 64'd0);
+		 end
+	    end // case: MEM_AMOW
+	  MEM_AMOD:
+	    begin
+	       t_rsp_data = t_w64;
+	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
+	       
+	       t_wr_array = r_got_req;
+	       if(t_wr_array)
+		 begin
+		    write_dword(r_req.addr, t_amo64_data, paging_active ? page_table_root : 64'd0);
+		 end
 	    end
 	  default:
 	    begin
@@ -985,8 +1018,18 @@ module perfect_l1d(clk,
 		      end
 		    else if(r_req2.is_atomic)
 		      begin
-			 t_push_miss = 1'b1;
-			 if(t_pf2) $stop();
+			 //$display("accept atomic for pc %x, rob pointer %d, cycle %d", r_req2.pc, r_req2.rob_ptr, r_cycle);
+			 if(t_pf2)
+			   begin
+			      n_core_mem_rsp.dst_valid = 1'b1;
+			      n_core_mem_rsp.has_cause = t_pf2;
+			      n_core_mem_rsp.cause = STORE_PAGE_FAULT;
+                              n_core_mem_rsp_valid = 1'b1;			      
+			   end
+			 else
+			   begin
+			      t_push_miss = 1'b1;
+			   end
 		      end
 		    else if(r_req2.is_store)
 		      begin
@@ -1005,9 +1048,9 @@ module perfect_l1d(clk,
 		      end // if (r_req2.is_store)
 		    else if(t_port2_hit_cache && !r_hit_busy_addr2)
 		      begin
-// `ifdef VERBOSE_L1D
-// 			 $display("cycle %d port2 hit for pc %d, addr %x, data %x", r_cycle, r_req2.pc, r_req2.addr, t_rsp_data2);
-// `endif
+`ifdef VERBOSE_L1D
+ 			 $display("cycle %d port2 hit for pc %d, addr %x, data %x", r_cycle, r_req2.pc, r_req2.addr, t_rsp_data2);
+`endif
 			 n_core_mem_rsp.data = t_rsp_data2[63:0];
                          n_core_mem_rsp.dst_valid = t_rsp_dst_valid2;
 			 n_core_mem_rsp.has_cause = t_pf2;
@@ -1052,11 +1095,12 @@ module perfect_l1d(clk,
 		    begin
 		       if(t_mem_head.is_store)
 			 begin
-			    //$display("t_mem_head.rob_ptr = %d, grad %b, dq ptr %d valid %b, atomic %b", 
-			    //t_mem_head.rob_ptr, r_graduated[t_mem_head.rob_ptr], 
-			    //core_store_data.rob_ptr, 
-			    //	     core_store_data_valid,
-			    //t_mem_head.is_atomic);
+			    // $display("t_mem_head.rob_ptr = %d, grad %b, dq ptr %d valid %b, atomic %b", 
+			    // 	     t_mem_head.rob_ptr,
+			    // 	     r_graduated[t_mem_head.rob_ptr], 
+			    // 	     core_store_data.rob_ptr, 
+			    // 	     core_store_data_valid,
+			    // 	     t_mem_head.is_atomic);
 			    
 			    if(r_graduated[t_mem_head.rob_ptr] == 2'b10 && (core_store_data_valid ? (t_mem_head.rob_ptr == core_store_data.rob_ptr) : 1'b0) )
 			      begin
@@ -1083,15 +1127,20 @@ module perfect_l1d(clk,
 			 begin
 			    if (t_mem_head.rob_ptr == head_of_rob_ptr && (core_store_data_valid ? (t_mem_head.rob_ptr == core_store_data.rob_ptr) : 1'b0))
 			      begin
+				 //$display("firing atomic for %x at cycle %d for rob ptr %d", 
+				 //t_mem_head.pc, r_cycle, t_mem_head.rob_ptr);	
+			 
 				 t_pop_mq = 1'b1;
+				 core_store_data_ack = 1'b1;
 				 n_req = t_mem_head;
+				 n_req.data = core_store_data.data;
 				 t_cache_idx = t_mem_head.addr[IDX_STOP-1:IDX_START];
 				 t_cache_tag = t_mem_head.addr[`M_WIDTH-1:IDX_STOP];
 				 t_addr = t_mem_head.addr;
+				 t_got_rd_retry = 1'b1;				 
 				 t_got_req = 1'b1;
 				 n_is_retry = 1'b1;
-				 n_last_rd = 1'b1;
-				 t_got_rd_retry = 1'b1;
+				 n_last_wr = 1'b1;
 			      end
 			 end
 		       else

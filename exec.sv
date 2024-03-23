@@ -2,6 +2,8 @@
 `include "rob.vh"
 
 `ifdef VERILATOR
+import "DPI-C" function void csr_putchar(input longint x);
+
 import "DPI-C" function void report_exec(input int int_valid, 
 					 input int int_blocked,
 					 input int int2_valid, 
@@ -2361,11 +2363,13 @@ module exec(clk,
 	    t_rd_csr = r_pmpaddr3;
 	  PMPCFG0:
 	    t_rd_csr = r_pmpcfg0;
+	  RDBRANCH_CSR:
+	    t_rd_csr = 'd0;
 	  default:
 	    begin
 	       if(t_rd_csr_en)
 		 begin
-		    $display("read csr %d unimplemented", int_uop.imm[4:0]);
+		    $display("read csr %d unimplemented for pc %x", int_uop.imm[4:0], int_uop.pc);
 		    $stop();
 		 end
 	    end
@@ -2477,7 +2481,8 @@ module exec(clk,
 		 r_pmpaddr3 <= t_wr_csr;
 	       PMPCFG0:
 		 r_pmpcfg0 <= t_wr_csr;
-	       
+	       RDBRANCH_CSR:
+		 csr_putchar(t_wr_csr);
 	       default:
 		 begin
 		    $display("implement %d", int_uop.imm[4:0]);
