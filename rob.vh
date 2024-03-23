@@ -77,6 +77,7 @@ typedef struct packed {
    logic [`M_WIDTH-1:0] addr;
    logic 	is_store;
    logic 	is_load;
+   logic	is_atomic;
    mem_op_t op;
    logic 	spans_cacheline;
    logic 	unaligned;

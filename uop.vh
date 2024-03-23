@@ -51,7 +51,10 @@ typedef enum logic [6:0]
    SLTU,
    ADDIU,
 
-   SC,
+   LRW,
+   LRD,
+   SCW,
+   SCD,
    MONITOR,
    RDCYCLE,
    RDINSTRET,
@@ -176,22 +179,6 @@ function logic uses_div(opcode_t op);
    return x;
 endfunction // is_div
 
-function logic is_store(opcode_t op);
-   logic     x;
-   case(op)
-     SB:
-       x = 1'b1;
-     SH:
-       x = 1'b1;
-     SW:
-       x = 1'b1;
-     SC:
-       x = 1'b1;
-     default:
-       x = 1'b0;
-   endcase // case (op)
-   return x;
-endfunction // is_store
 
 
 

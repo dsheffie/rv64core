@@ -366,7 +366,31 @@ module decode_riscv(
 		   begin
 		   end
 	       endcase
-	    end
+	    end // case: 7'h23
+	  7'h2f:
+	    begin
+	       if(insn[14:12] == 3'd2 || insn[14:12] == 3'd3)
+		 begin
+		    uop.srcA = rs1;
+		    uop.dst = rd;		    
+		    uop.dst_valid = (rd != 'd0);
+		    uop.srcA_valid = 1'b1;
+		    uop.is_mem = 1'b1;
+		    case(insn[31:27])
+		      5'd2: /* load linked - punt */
+			begin
+			   uop.op = insn[14:12]==3'd2 ? LW : LD;
+			end
+		      5'd3: /* store conditional */
+			begin
+			   uop.op = insn[14:12]==3'd2 ? SCW : SCD;
+			end
+		      default:
+			begin
+			end
+		    endcase // case (insn[31:27])
+		 end
+	    end // case: 7'h2f
 	  7'h33:
 	    begin
 	       uop.dst = rd;

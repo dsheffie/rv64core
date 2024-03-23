@@ -492,15 +492,10 @@ module perfect_l1d(clk,
 `ifdef VERBOSE_L1D
    always_ff@(negedge clk)
    begin
-      if(t_push_miss)
-   	begin
-	   $display("pushing uuid %d rob ptr %d at cycle %d", 
-		    r_req2.uuid, r_req2.rob_ptr, r_cycle);  
-	end
       if(t_pop_mq)
 	begin
-	   $display("popping uuid %d rob ptr %d at cycle %d", 
-		     t_mem_head.uuid, t_mem_head.rob_ptr, r_cycle);
+	   $display("popping pc %d rob ptr %d at cycle %d", 
+		     t_mem_head.pc, t_mem_head.rob_ptr, r_cycle);
 	end
    end
 `endif
@@ -862,7 +857,18 @@ module perfect_l1d(clk,
 	       if(t_wr_array)
 		 write_dword(r_req.addr, r_req.data, paging_active ? page_table_root : 64'd0);	       	       
 	    end
-	  
+	  MEM_SCD:
+	    begin
+	       t_wr_array = r_got_req;
+	       t_rsp_data = 'd0;
+	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
+	       if(t_wr_array)
+		 write_dword(r_req.addr, r_req.data, paging_active ? page_table_root : 64'd0);	       	       
+	    end
+	  MEM_SCW:
+	    begin
+	       $stop();
+	    end
 	  default:
 	    begin
 	       $stop();
@@ -970,6 +976,10 @@ module perfect_l1d(clk,
 			 n_core_mem_rsp.dst_valid = r_req2.dst_valid;
 			 n_core_mem_rsp_valid = 1'b1;
 		      end
+		    else if(r_req2.is_atomic)
+		      begin
+			 t_push_miss = 1'b1;			 
+		      end
 		    else if(r_req2.is_store)
 		      begin
 			 t_push_miss = 1'b1;
@@ -979,6 +989,7 @@ module perfect_l1d(clk,
 			 n_core_mem_rsp.dst_valid = 1'b0;
 			 n_core_mem_rsp.has_cause = t_pf2;
 			 n_core_mem_rsp.cause = STORE_PAGE_FAULT;
+			 
 			 if(t_port2_hit_cache)
 			   begin
 			      n_cache_hits = r_cache_hits + 'd1;
@@ -987,9 +998,9 @@ module perfect_l1d(clk,
 		      end // if (r_req2.is_store)
 		    else if(t_port2_hit_cache && !r_hit_busy_addr2)
 		      begin
-`ifdef VERBOSE_L1D
-			 $display("cycle %d port2 hit for uuid %d, addr %x, data %x", r_cycle, r_req2.uuid, r_req2.addr, t_rsp_data2);
-`endif
+// `ifdef VERBOSE_L1D
+// 			 $display("cycle %d port2 hit for pc %d, addr %x, data %x", r_cycle, r_req2.pc, r_req2.addr, t_rsp_data2);
+// `endif
 			 n_core_mem_rsp.data = t_rsp_data2[63:0];
                          n_core_mem_rsp.dst_valid = t_rsp_dst_valid2;
 			 n_core_mem_rsp.has_cause = t_pf2;
@@ -1091,9 +1102,9 @@ module perfect_l1d(clk,
 		  t_got_req2 = 1'b1;
 
 `ifdef VERBOSE_L1D		       
-		  $display("accepting new op %d, pc %x, addr %x for rob ptr %d at cycle %d, mem_q_empty %b, uuid %d", 
+		  $display("accepting new op %d, pc %x, addr %x for rob ptr %d at cycle %d, mem_q_empty %b", 
 			   core_mem_req.op, core_mem_req.pc, core_mem_req.addr,
-			   core_mem_req.rob_ptr, r_cycle, mem_q_empty, core_mem_req.uuid);
+			   core_mem_req.rob_ptr, r_cycle, mem_q_empty);
 `endif
 		  
 		  n_last_wr2 = core_mem_req.is_store;

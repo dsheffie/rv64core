@@ -687,7 +687,7 @@ int main(int argc, char **argv) {
       if(insns_retired >= start_trace_at) {
 	trace_retirement = true;
       }
-      trace_retirement |= tb->paging_active;
+      //trace_retirement |= tb->paging_active;
       
       
       

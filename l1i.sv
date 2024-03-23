@@ -840,15 +840,15 @@ endfunction
 	endcase // case (r_state)
      end // always_comb
 
-   always_ff@(negedge clk)
-     begin
-	if(t_page_fault)
-	  begin
-	     $display("took instruction page fault for va %x, got pa %x",
-		      r_cache_pc,
-		      r_cache_pc_pa);
-	  end
-     end
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if(t_page_fault)
+   // 	  begin
+   // 	     $display("took instruction page fault for va %x, got pa %x",
+   // 		      r_cache_pc,
+   // 		      r_cache_pc_pa);
+   // 	  end
+   //   end
 
    
    always_comb

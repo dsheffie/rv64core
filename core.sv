@@ -1137,7 +1137,8 @@ module core(clk,
 		   end
 		 ILLEGAL_INSTRUCTION:
 		   begin
-		      n_pending_ii = 1'b1;		      
+		      n_pending_ii = 1'b1;
+		      $stop();
 		   end
 		 SUPERVISOR_ECALL:
 		   begin

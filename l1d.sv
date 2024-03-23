@@ -837,6 +837,7 @@ module l1d(clk,
 	    end	  
 	  default:
 	    begin
+	       $stop();
 	    end
 	endcase
      end
@@ -1285,13 +1286,12 @@ module l1d(clk,
 		  n_req2 = core_mem_req;
 		  core_mem_req_ack = 1'b1;
 		  t_got_req2 = 1'b1;
-
 		  
-`ifdef VERBOSE_L1D		       
+//`ifdef VERBOSE_L1D		 		  //       
 		  $display("accepting new op %d, addr %x for rob ptr %d at cycle %d, mem_q_empty %b", 
 			   core_mem_req.op, core_mem_req.addr,
 			   core_mem_req.rob_ptr, r_cycle, mem_q_empty);
-`endif
+//`endif
 		  
 		  n_last_wr2 = core_mem_req.is_store;
 		  n_last_rd2 = !core_mem_req.is_store;

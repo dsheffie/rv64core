@@ -1714,13 +1714,6 @@ module exec(clk,
 
    
 `ifdef VERILATOR
-   logic t_blocked_by_store;
-   always_comb
-     begin
-	t_blocked_by_store = t_mem_uq_empty ? 1'b0 : !t_pop_mem_uq  & is_store(mem_uq.op) & 
-			     !r_prf_inflight[mem_uq.srcA] &
-			     !mem_q_full;
-     end
    always_ff@(negedge clk)
      begin
 	report_exec(t_uq_empty ? 32'd0 : 32'd1,
@@ -1734,7 +1727,7 @@ module exec(clk,
 		    t_uq_full ? 32'd1 : 32'd0,
 		    t_mem_uq_full ? 32'd1 : 32'd0,
 		    32'd0,
-		    t_blocked_by_store ? 32'd1 : 32'd0,
+		    32'd0,
 		    {{(32-N_INT_SCHED_ENTRIES){1'b0}}, t_alu_entry_rdy},
 		    {{(32-N_INT_SCHED_ENTRIES){1'b0}}, t_alu_entry_rdy2}
 		    );
@@ -2564,6 +2557,7 @@ module exec(clk,
 	t_mem_tail.dst_ptr = mem_uq.dst;
 	t_mem_tail.is_load = 1'b0;
 	t_mem_tail.is_store = 1'b0;
+	t_mem_tail.is_atomic = 1'b0;
 	t_mem_tail.data = 'd0;
 	t_mem_tail.spans_cacheline = 1'b0;
 	t_mem_tail.unaligned = 1'b0;
@@ -2594,20 +2588,29 @@ module exec(clk,
 	  SD:
 	    begin
 	       t_mem_tail.op = w_bad_64b_addr ? MEM_NOP : MEM_SD;
-	       t_mem_tail.is_store = ~w_bad_64b_addr;
+	       t_mem_tail.is_store = ~w_bad_64b_addr;	       
 	       t_mem_tail.dst_valid = 1'b0;
 	       t_mem_tail.spans_cacheline = w_bad_64b_addr;
 	       t_mem_tail.unaligned = |w_agu_addr[2:0];
 	    end // case: SW
-	  SC:
+	  SCW:
 	    begin
-	       t_mem_tail.op = MEM_SC;
-	       t_mem_tail.is_store = 1'b1;
+	       t_mem_tail.op = MEM_SCW;
+	       t_mem_tail.is_atomic = 1'b1;	       
 	       t_mem_tail.dst_valid = 1'b1;
 	       t_mem_tail.dst_ptr = mem_uq.dst;
 	       t_mem_tail.spans_cacheline = (w_agu_addr[1:0] != 2'd0);
 	       t_mem_tail.unaligned = |w_agu_addr[1:0];	       
 	    end // case: SW
+	  SCD:
+	    begin
+	       t_mem_tail.op = MEM_SCD;
+	       t_mem_tail.is_atomic = 1'b1;
+	       t_mem_tail.dst_valid = 1'b1;
+	       t_mem_tail.dst_ptr = mem_uq.dst;
+	       t_mem_tail.spans_cacheline = (w_agu_addr[2:0] != 3'd0);
+	       t_mem_tail.unaligned = |w_agu_addr[2:0];	       
+	    end // case: SW	  
 	  LW:
 	    begin
 	       t_mem_tail.is_load = 1'b1;
@@ -2660,8 +2663,10 @@ module exec(clk,
 	       t_mem_tail.spans_cacheline = w_bad_16b_addr;
 	       t_mem_tail.unaligned = w_agu_addr[0];
 	    end // case: LH
+	  
 	  default:
 	    begin
+	       
 	    end
 	endcase // case (mem_uq.op)
 
