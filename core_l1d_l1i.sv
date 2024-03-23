@@ -371,9 +371,12 @@ module
 `else
      l1d
 `endif
-     dcache (
+       dcache (
 	       .clk(clk),
 	       .reset(reset),
+	       .page_table_root(w_page_table_root),
+	       .paging_active(w_paging_active),
+	       .clear_tlb(w_clear_tlb),
 	       .head_of_rob_ptr_valid(head_of_rob_ptr_valid),
 	       .head_of_rob_ptr(head_of_rob_ptr),
 	       .retired_rob_ptr_valid(retired_rob_ptr_valid),

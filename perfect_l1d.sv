@@ -5,26 +5,21 @@
 //`define VERBOSE_L1D 1
 
 `ifdef VERILATOR
-import "DPI-C" function void record_l1d(input int req, 
-					input int ack,
-					input int ack_st,
-					input int block,
-					input int stall_reason);
-
-
 import "DPI-C" function int read_word(input longint addr);
 import "DPI-C" function longint read_dword(input longint addr);
-
-
-import "DPI-C" function void write_byte(input longint addr, input byte data);
-import "DPI-C" function void write_half(input longint addr, input shortint  data);
-import "DPI-C" function void write_word(input longint addr, input int data);
-import "DPI-C" function void write_dword(input longint addr, input longint data);
-
+import "DPI-C" function void write_byte(input longint addr, input byte data, input longint root);
+import "DPI-C" function void write_half(input longint addr, input shortint  data, input longint root);
+import "DPI-C" function void write_word(input longint addr, input int data, input longint root);
+import "DPI-C" function void write_dword(input longint addr, input longint data, input longint root);;
+import "DPI-C" function longint dc_ld_translate(longint va, longint root );
+import "DPI-C" function longint dc_st_translate(longint va, longint root );
 `endif
 
 module perfect_l1d(clk, 
 		   reset,
+		   page_table_root,
+		   paging_active,
+		   clear_tlb,
 		   head_of_rob_ptr,
 		   head_of_rob_ptr_valid,
 		   retired_rob_ptr_valid,
@@ -67,6 +62,10 @@ module perfect_l1d(clk,
    
    input logic clk;
    input logic reset;
+   input logic [63:0]  page_table_root;
+   input logic	       paging_active;
+   input logic	       clear_tlb;
+   
    input logic [`LG_ROB_ENTRIES-1:0] head_of_rob_ptr;
    input logic 			     head_of_rob_ptr_valid;
    input logic retired_rob_ptr_valid;
@@ -276,9 +275,6 @@ module perfect_l1d(clk,
    
    
    logic t_reset_graduated;
-
-   
-   
    
    always_ff@(posedge clk)
      begin
@@ -627,16 +623,24 @@ module perfect_l1d(clk,
 
    logic [31:0] tt_w32_2, tt_bswap_w32_2;
    logic [63:0]	tt_w64;
-   
+
+   logic [63:0]	t_req2_addr_pa, t_pa2;
+   logic	t_pf2;
+ 
    always_comb
      begin
 	t_hit_cache2 =  r_got_req2 && (r_state == ACTIVE);
 	
 	t_rsp_dst_valid2 = 1'b0;
 	t_rsp_data2 = 'd0;
+
+	t_pa2 = dc_ld_translate({r_req2.addr[63:12], 12'd0}, page_table_root);
+	t_req2_addr_pa = paging_active ? t_pa2 : {r_req2.addr[63:12], 12'd0};
+	t_pf2 = paging_active & (&t_req2_addr_pa);
 	
-	tt_w64 = read_dword({r_req2.addr[63:3], 3'd0});
-	tt_w32_2 = read_word({r_req2.addr[63:2], 2'd0});
+	tt_w64 = read_dword( {t_req2_addr_pa[63:12], r_req2.addr[11:3], 3'd0});
+	tt_w32_2 = read_word({t_req2_addr_pa[63:12], r_req2.addr[11:2], 2'd0});
+	
  
 	tt_bswap_w32_2 = bswap32(tt_w32_2);
 	
@@ -732,13 +736,19 @@ module perfect_l1d(clk,
    //$display("load port2 address %x, op %d", r_req2.addr, r_req2.op);
    //end
    
+   logic [63:0] t_req_addr_pa, t_pa;
+   logic	t_pf;
    
    always_comb
      begin
 	t_data = 'd0;
-
-	t_w64 = read_dword({r_req.addr[63:3], 3'd0});
-	t_w32 = read_word({r_req.addr[63:2], 2'd0});
+	t_pa = dc_ld_translate({r_req.addr[63:12], 12'd0}, page_table_root);
+	t_req_addr_pa = paging_active ? t_pa : {r_req.addr[63:12], 12'd0};
+	t_pf = paging_active & (&t_req_addr_pa);
+	
+	t_w64 = read_dword({t_req_addr_pa[63:12], r_req.addr[11:3], 3'd0});
+	t_w32 = read_word( {t_req_addr_pa[63:12], r_req.addr[11:2], 2'd0});
+	
         t_bswap_w32 = t_w32;
 	
 	t_hit_cache = r_got_req && 
@@ -831,26 +841,26 @@ module perfect_l1d(clk,
 	    begin
 	       t_wr_array = r_got_req;
 	       if(t_wr_array)
-		 write_byte(r_req.addr, r_req.data[7:0]);
+		 write_byte(r_req.addr, r_req.data[7:0],paging_active ? page_table_root : 64'd0);
 
 	    end
 	  MEM_SH:
 	    begin
 	       t_wr_array = r_got_req;	       
 	       if(t_wr_array)
-		 write_half(r_req.addr, bswap16(r_req.data[15:0]));	       
+		 write_half(r_req.addr, bswap16(r_req.data[15:0]),paging_active ? page_table_root : 64'd0);
 	    end
 	  MEM_SW:
 	    begin
 	       t_wr_array = r_got_req;	       
 	       if(t_wr_array)
-		 write_word(r_req.addr, bswap32(r_req.data[31:0]));	       	       
+		 write_word(r_req.addr, bswap32(r_req.data[31:0]),paging_active ? page_table_root : 64'd0);
 	    end
 	  MEM_SD:
 	    begin
 	       t_wr_array = r_got_req;	       
 	       if(t_wr_array)
-		 write_dword(r_req.addr, r_req.data);	       	       
+		 write_dword(r_req.addr, r_req.data, paging_active ? page_table_root : 64'd0);	       	       
 	    end
 	  
 	  default:
@@ -908,7 +918,8 @@ module perfect_l1d(clk,
 	n_core_mem_rsp.data = r_req.addr;
 	n_core_mem_rsp.rob_ptr = r_req.rob_ptr;
 	n_core_mem_rsp.dst_ptr = r_req.dst_ptr;
-	
+	n_core_mem_rsp.has_cause = 1'b0;
+	n_core_mem_rsp.cause = 'd0;
 	n_core_mem_rsp.dst_valid = 1'b0;
 
 	n_cache_accesses = r_cache_accesses;
@@ -966,7 +977,8 @@ module perfect_l1d(clk,
 			 n_stall_store = 1'b1;
 			 //ack early
 			 n_core_mem_rsp.dst_valid = 1'b0;
-			 
+			 n_core_mem_rsp.has_cause = t_pf2;
+			 n_core_mem_rsp.cause = STORE_PAGE_FAULT;
 			 if(t_port2_hit_cache)
 			   begin
 			      n_cache_hits = r_cache_hits + 'd1;
@@ -980,6 +992,8 @@ module perfect_l1d(clk,
 `endif
 			 n_core_mem_rsp.data = t_rsp_data2[63:0];
                          n_core_mem_rsp.dst_valid = t_rsp_dst_valid2;
+			 n_core_mem_rsp.has_cause = t_pf2;
+			 n_core_mem_rsp.cause = LOAD_PAGE_FAULT;
                          n_cache_hits = r_cache_hits + 'd1;
                          n_core_mem_rsp_valid = 1'b1;
 		      end
@@ -1004,6 +1018,8 @@ module perfect_l1d(clk,
 			 else
 			   begin
 			      n_core_mem_rsp.data = t_rsp_data[63:0];
+			      n_core_mem_rsp.has_cause = t_pf;
+			      n_core_mem_rsp.cause = LOAD_PAGE_FAULT;
 			      n_core_mem_rsp.dst_valid = t_rsp_dst_valid;
 			      n_core_mem_rsp_valid = 1'b1;
 			   end // else: !if(r_req.is_store)
@@ -1158,14 +1174,7 @@ module perfect_l1d(clk,
 	  end // if (core_mem_req_valid && !core_mem_req_ack)
      end // always_comb
    
-   always_ff@(negedge clk)
-     begin
-	record_l1d(core_mem_req_valid ? 32'd1 : 32'd0,
-		   core_mem_req_ack & core_mem_req_valid ? 32'd1 : 32'd0,
-		   core_mem_req_ack & core_mem_req_valid & core_mem_req.is_store ? 32'd1 : 32'd0,		   
-		   {{32-N_MQ_ENTRIES{1'b0}},r_hit_busy_addrs},
-		   t_stall_reason);
-     end
+
 `endif
     
 endmodule // l1d

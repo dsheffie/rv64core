@@ -125,7 +125,7 @@ void record_l1d(int req, int ack, int ack_st, int blocked, int stall_reason) {
 
 static bool verbose_ic_translate = false;
 
-long long ic_translate(long long va, long long root) {
+long long translate(long long va, long long root, bool iside, bool store) {
   uint64_t a = 0, u = 0;
   int mask_bits = -1;
   a = root + (((va >> 30) & 511)*8);
@@ -175,6 +175,14 @@ long long ic_translate(long long va, long long root) {
   return pa;
 }
 
+long long ic_translate(long long va, long long root) {
+  return translate(va,root,true, false);
+}
+
+long long dc_ld_translate(long long va, long long root) {
+  return translate(va,root, false, false);
+}
+
 std::string getAsmString(uint64_t addr, uint64_t root, bool paging_enabled) {
   int64_t pa = addr;
   if(paging_enabled) {
@@ -186,42 +194,66 @@ std::string getAsmString(uint64_t addr, uint64_t root, bool paging_enabled) {
   return getAsmString(mem_r32(s,pa), addr);
 }
 
+
 long long read_dword(long long addr) {
-  addr &= ((1L<<32)-1);  
-  return *reinterpret_cast<long long*>(s->mem + addr);
+  int64_t pa = addr;
+  pa &= ((1UL<<32)-1);
+  return *reinterpret_cast<long long*>(s->mem + pa);
 }
 
 int read_word(long long addr) {
-  addr &= ((1L<<32)-1);
-  return *reinterpret_cast<int*>(s->mem + addr);
+  int64_t pa = addr;
+  pa &= ((1UL<<32)-1);  
+  return *reinterpret_cast<int*>(s->mem + pa);
 }
 
-void write_byte(long long addr, char data) {
-  addr &= ((1L<<32)-1);
-  uint32_t a = *reinterpret_cast<uint32_t*>(&addr);
+void write_byte(long long addr, char data, long long root) {
+  int64_t pa = addr;
+  //printf("%s:%lx:%lx\n", __PRETTY_FUNCTION__, addr, root);  
+  if(root) {
+    pa = translate(addr, root, false, true);
+    printf("translate %lx to %lx\n", addr, pa);    
+    assert(pa != -1);
+  }  
   uint8_t d = *reinterpret_cast<uint8_t*>(&data);
-  *reinterpret_cast<uint8_t*>(s->mem + a) = d;  
+  *reinterpret_cast<uint8_t*>(s->mem + pa) = d;  
 }
 
-void write_half(long long addr, short data) {
-  addr &= ((1L<<32)-1);  
-  uint32_t a = *reinterpret_cast<uint32_t*>(&addr);
+void write_half(long long addr, short data, long long root) {
+  int64_t pa = addr;
+  //printf("%s:%lx:%lx\n", __PRETTY_FUNCTION__, addr, root);  
+  if(root) {
+    pa = translate(addr, root, false, true);
+    printf("translate %lx to %lx\n", addr, pa);    
+    assert(pa != -1);
+  }  
   uint16_t d = *reinterpret_cast<uint16_t*>(&data);
-  *reinterpret_cast<uint16_t*>(s->mem + a) = d;  
+  *reinterpret_cast<uint16_t*>(s->mem + pa) = d;  
 
 }
 
-void write_word(long long addr, int data) {
-  addr &= ((1L<<32)-1);  
-  uint32_t a = *reinterpret_cast<uint32_t*>(&addr);
+void write_word(long long addr, int data, long long root) {
+  int64_t pa = addr;
+  //printf("%s:%lx:%lx\n", __PRETTY_FUNCTION__, addr, root);  
+  if(root) {
+    pa = translate(addr, root, false, true);
+    printf("translate %lx to %lx\n", addr, pa);    
+    assert(pa != -1);
+  }    
   uint32_t d = *reinterpret_cast<uint32_t*>(&data);
-  *reinterpret_cast<uint32_t*>(s->mem + a) = d;
+  *reinterpret_cast<uint32_t*>(s->mem + pa) = d;
 }
 
-void write_dword(long long addr, long long data) {
-  addr &= ((1L<<32)-1);
+void write_dword(long long addr, long long data, long long root) {
+  int64_t pa = addr;
+  //printf("%s:%lx:%lx\n", __PRETTY_FUNCTION__, addr, root);
+  if(root) {
+    pa = translate(addr, root, false, true);
+    printf("translate %lx to %lx\n", addr, pa);    
+    assert(pa != -1);
+  }      
   uint64_t d = *reinterpret_cast<uint64_t*>(&data);
-  *reinterpret_cast<uint64_t*>(s->mem + addr) = d;
+  *reinterpret_cast<uint64_t*>(s->mem + pa) = d;
 }
 
 static std::map<int, uint64_t> int_sched_rdy_map;
