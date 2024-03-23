@@ -124,13 +124,11 @@ void record_l1d(int req, int ack, int ack_st, int blocked, int stall_reason) {
 }
 
 long long ic_translate(long long va, long long root) {
-  bool v = (va ==0xffffffff80000098L);
   uint64_t a = 0, u = 0;
   int mask_bits = -1;
   a = root + (((va >> 30) & 511)*8);
   u = *reinterpret_cast<int64_t*>(s->mem + a);
   if((u & 1) == 0) {
-    assert(!v);
     return (~0UL);
   }
   if((u>>1)&7) {
@@ -143,7 +141,6 @@ long long ic_translate(long long va, long long root) {
   a = root + (((va >> 21) & 511)*8);
   u = *reinterpret_cast<int64_t*>(s->mem + a);
   if((u & 1) == 0) {
-    assert(!v);
     return (~0UL);
   }
   if((u>>1)&7) {
@@ -156,7 +153,6 @@ long long ic_translate(long long va, long long root) {
   a = root + (((va >> 12) & 511)*8);
   u = *reinterpret_cast<int64_t*>(s->mem + a);
   if((u & 1) == 0) {
-    assert(!v);
     return (~0UL);
   }
   assert((u>>1)&7);
@@ -165,10 +161,18 @@ long long ic_translate(long long va, long long root) {
  translation_complete:
   int64_t m = ((1L << mask_bits) - 1);
   u = ((u >> 10) & ((1UL<<44)-1)) * 4096;
-  return (u&(~m)) | (va & m);
-  //printf("translation complete, pa %lx!\n", u);
+  uint64_t pa = (u&(~m)) | (va & m);
+  printf("translation complete, pa %lx!\n", pa);
   //exit(-1);
   //return 0;
+}
+
+std::string getAsmString(uint64_t addr, bool paging_enabled, uint64_t root) {
+  int64_t pa = addr;
+  if(paging_enabled) {
+    pa = ic_translate(addr, root);
+  }
+  return (pa == -1) ? "code page not present" : getAsmString(mem_r32(s,pa), addr);
 }
 
 long long read_dword(long long addr) {
@@ -282,27 +286,6 @@ void record_fetch(int p1, int p2, int p3, int p4,
 		  int bubble, int fq_full) {
   n_resteer_bubble += bubble;
   n_fq_full += fq_full;
-
-#if 0
-  if(p1 || p2 || p3 || p4)
-    std::cout << std::hex << pc1 << std::dec << " "
-	      << getAsmString(get_insn(pc1, s), pc1) << "\n";
-  if(p2 || p3 || p4)
-    std::cout << std::hex << pc2 << std::dec << " "
-	      << getAsmString(get_insn(pc2, s), pc2) << "\n";
-  if(p3 || p4)
-    std::cout << std::hex << pc3 << std::dec << " "
-	      << getAsmString(get_insn(pc3, s), pc3) << "\n";
-  if(p4)
-    std::cout << std::hex << pc4 << std::dec << " "
-	      << getAsmString(get_insn(pc4, s), pc4) << "\n";
-
-  if(!(p1||p2||p3||p4))
-    std::cout << "no fetch, fq_full = " << fq_full << ", resteer bubble = "
-	      << bubble << "\n";
-  
-  std::cout << "...\n";
-#endif
   
   if(p1)
     ++n_fetch[1];
@@ -635,18 +618,9 @@ int main(int argc, char **argv) {
 
     if(tb->rob_empty) {
       tip_map[last_retired_pc]+= 1.0;
-      //std::cout << "rob empty at cycle " <<  cycle
-      //<< ", last retired instruction "
-      ///	<< std::hex <<last_retired_pc << std::dec << " "
-      //	<< getAsmString(mem_r32(s,last_retired_pc), last_retired_pc)
-      //	<< "\n"; 
     }
     else if(!(tb->retire_valid or tb->retire_two_valid)) {
       tip_map[tb->retire_pc]+= 1.0;
-      //std::cout << "no retirement at cycle " << cycle
-      //	<< std::hex << tb->retire_pc << std::dec << " "
-      //<< getAsmString(mem_r32(s,tb->retire_pc), tb->retire_pc)	
-      //	<< "\n";
     }
     else {
       assert(tb->retire_valid or tb->retire_two_valid);      
@@ -681,7 +655,7 @@ int main(int argc, char **argv) {
 		  << tb->retire_pc
 		  << std::dec
 		  << " "
-		  << getAsmString(mem_r32(s,tb->retire_pc), tb->retire_pc)		  
+		  << getAsmString(tb->retire_pc, tb->page_table_root, tb->paging_active)	  
 		  << std::fixed
 		  << ", " << static_cast<double>(insns_retired) / cycle << " IPC "
 		  << ", insns_retired "
@@ -704,7 +678,7 @@ int main(int argc, char **argv) {
 		    << tb->retire_two_pc
 		    << std::dec
 		    << " "
-		    << getAsmString(mem_r32(s,tb->retire_two_pc), tb->retire_two_pc)
+		    << getAsmString(tb->retire_two_pc, tb->page_table_root, tb->paging_active)	  	    
 		    << std::fixed
 		    << ", " << static_cast<double>(insns_retired) / cycle << " IPC "	    
 		    << ", insns_retired "

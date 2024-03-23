@@ -14,12 +14,14 @@ module
 		   clk, 
 		   reset,
 		   syscall_emu,
-		    extern_irq,
-		    in_flush_mode,
-		       resume,
-		       resume_pc,
-		       ready_for_resume,
-		       
+		   paging_active,
+		   page_table_root,
+		   extern_irq,
+		   in_flush_mode,
+		   resume,
+		   resume_pc,
+		   ready_for_resume,
+		   
 		       mem_req_valid, 
 		       mem_req_addr, 
 		       mem_req_store_data,
@@ -65,6 +67,9 @@ module
    input logic clk;
    input logic reset;
    input logic syscall_emu;
+   output logic	paging_active;
+   output logic	[63:0] page_table_root;
+   
    input logic extern_irq;
    input logic resume;
    input logic [(`M_WIDTH-1):0] resume_pc;
@@ -302,6 +307,9 @@ module
    wire [127:0] w_l1_mem_load_data;
    wire		w_mode64, w_paging_active;
    wire [63:0]	w_page_table_root;
+   
+   assign page_table_root = w_page_table_root;
+   assign paging_active = w_paging_active;
    
    wire		w_clear_tlb;
 

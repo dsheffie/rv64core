@@ -308,7 +308,7 @@ endfunction
    logic 		  r_restart_ack, n_restart_ack;
    logic 		  r_req, n_req;
    logic 		  r_valid_out;
-   logic 		  t_miss, t_hit;
+   logic 		  t_miss, t_hit, t_tag_match;
    logic 		  t_push_insn, t_push_insn2,
 			  t_push_insn3, t_push_insn4;
    
@@ -513,8 +513,12 @@ endfunction
 	n_resteer_bubble = 1'b0;
 	t_next_spec_rs_tos = r_spec_rs_tos+'d1;
 	n_restart_req = restart_valid | r_restart_req;
-	t_miss = r_req && !(r_valid_out && (r_tag_out == r_cache_tag));
-	t_hit = r_req && (r_valid_out && (r_tag_out == r_cache_tag));
+	t_page_fault = r_req && paging_active && (&r_cache_pc_pa);
+	
+	t_tag_match = r_tag_out == (paging_active ? r_cache_pc_pa[`M_WIDTH-1:IDX_STOP] : r_cache_tag);
+	
+	t_miss = r_req && !(r_valid_out && t_tag_match);
+	t_hit = r_req && (r_valid_out && t_tag_match);
 
 	t_insn_idx = r_cache_pc[WORD_STOP-1:WORD_START];
 	
@@ -573,7 +577,6 @@ endfunction
 	t_push_insn2 = 1'b0;
 	t_push_insn3 = 1'b0;
 	t_push_insn4 = 1'b0;
-	t_page_fault = 1'b0;
 	t_unaligned_fetch = 1'b0;
 	
 	t_take_br = 1'b0;
@@ -638,11 +641,23 @@ endfunction
 		    n_state = ACTIVE;
 		    t_clear_fq = 1'b1;
 		 end // if (n_restart_req)
+	       else if(t_page_fault)
+		 begin
+		    if(!fq_full)
+		      begin
+			 t_push_insn = 1'b1;
+		      end
+		 end
 	       else if(t_miss)
 		 begin
-		    //$display("MISSED in the icache at cycle %d", r_cycle);
+		    if(paging_active)
+		      begin
+			 $display("MISSED in the icache at cycle %d with paging active for address %x, resolved to pa %x", 
+				  r_cycle, r_cache_pc, r_cache_pc_pa);
+		      end
 		    n_state = INJECT_RELOAD;
-		    n_mem_req_addr = {r_cache_pc[`M_WIDTH-1:`LG_L1D_CL_LEN], {`LG_L1D_CL_LEN{1'b0}}};
+		    n_mem_req_addr = paging_active ? {r_cache_pc_pa[`M_WIDTH-1:`LG_L1D_CL_LEN], {`LG_L1D_CL_LEN{1'b0}}} : 
+				     {r_cache_pc[`M_WIDTH-1:`LG_L1D_CL_LEN], {`LG_L1D_CL_LEN{1'b0}}};
 		    n_mem_req_valid = 1'b1;
 		    n_miss_pc = r_cache_pc;
 		    n_pc = r_pc;
@@ -652,15 +667,8 @@ endfunction
 		    t_update_spec_hist = (t_pd != 4'd0);
 		    if(paging_active)
 		      begin
-			 if((&r_cache_pc_pa))
-			   begin
-			      t_page_fault = 1'b1;
-			   end
-			 else
-			   begin
-			      $display("successful translation to tag %x, cache out %x", r_cache_pc_pa[`M_WIDTH-1:IDX_STOP], r_tag_out);
-			      $stop();
-			   end
+			 $display("successful translation to tag %x, cache out %x", r_cache_pc_pa[`M_WIDTH-1:IDX_STOP], r_tag_out);
+			 //$stop();
 		      end
 		    //if(t_pd == 4'd1)
 		    //begin
