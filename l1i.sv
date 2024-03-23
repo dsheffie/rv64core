@@ -495,7 +495,7 @@ endfunction
 	
      end
 
-      
+   
    always_comb
      begin
 	n_pc = r_pc;
@@ -650,11 +650,11 @@ endfunction
 		 end
 	       else if(t_miss)
 		 begin
-		    if(paging_active)
-		      begin
-			 $display("MISSED in the icache at cycle %d with paging active for address %x, resolved to pa %x", 
-				  r_cycle, r_cache_pc, r_cache_pc_pa);
-		      end
+		    // if(paging_active)
+		    //   begin
+		    // 	 $display("MISSED in the icache at cycle %d with paging active for address %x, resolved to pa %x", 
+		    // 		  r_cycle, r_cache_pc, r_cache_pc_pa);
+		    //   end
 		    n_state = INJECT_RELOAD;
 		    n_mem_req_addr = paging_active ? {r_cache_pc_pa[`M_WIDTH-1:`LG_L1D_CL_LEN], {`LG_L1D_CL_LEN{1'b0}}} : 
 				     {r_cache_pc[`M_WIDTH-1:`LG_L1D_CL_LEN], {`LG_L1D_CL_LEN{1'b0}}};
@@ -840,6 +840,17 @@ endfunction
 	endcase // case (r_state)
      end // always_comb
 
+   always_ff@(negedge clk)
+     begin
+	if(t_page_fault)
+	  begin
+	     $display("took instruction page fault for va %x, got pa %x",
+		      r_cache_pc,
+		      r_cache_pc_pa);
+	  end
+     end
+
+   
    always_comb
      begin
 	n_cache_accesses = r_cache_accesses;
@@ -988,6 +999,7 @@ endfunction
 `ifdef VERILATOR
    always_ff@(negedge clk)
      begin
+	//$display("fe in state %d at cycle %d", r_state, r_cycle);
 	//$display("%b %b %b %b", t_push_insn, t_push_insn2, t_push_insn3, t_push_insn4);
 	record_fetch(t_push_insn ? 32'd1 : 32'd0,
 		     t_push_insn2 ? 32'd1 : 32'd0,

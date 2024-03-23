@@ -728,15 +728,14 @@ module core(clk,
 `ifdef DUMP_ROB
    always_ff@(negedge clk)
      begin
-	if(1)
+	if(r_cycle >= 64'd483312)
 	  begin
-	     $display("cycle %d : state = %d, alu complete %b, mem complete %b,head_ptr %d, inflight %d, complete %b,  can_retire_rob_head %b, head pc %x, empty %b, full %b, bob full %b", 
+	     $display("cycle %d : state = %d, alu complete %b, mem complete %b,head_ptr %d, complete %b,  can_retire_rob_head %b, head pc %x, empty %b, full %b, bob full %b", 
 		      r_cycle,
 		      r_state,
 		      t_complete_valid_1,
 		      core_mem_rsp_valid,
 		      r_rob_head_ptr,
-		      r_rob_inflight,
 		      t_rob_head_complete && !t_rob_empty, 
 		      t_can_retire_rob_head,
 		      t_rob_head.pc,
@@ -746,12 +745,13 @@ module core(clk,
 	     
 	     for(logic [`LG_ROB_ENTRIES:0] i = r_rob_head_ptr; i != (r_rob_tail_ptr); i=i+1)
 	       begin
-		  $display("\trob entry %d, pc %x, complete %b, is br %b, faulted %b",
+		  $display("\trob entry %d, pc %x, complete %b, is br %b, faulted %b, cause %d",
 			   i[`LG_ROB_ENTRIES-1:0], 
 			   r_rob[i[`LG_ROB_ENTRIES-1:0]].pc, 
 			   r_rob_complete[i[`LG_ROB_ENTRIES-1:0]],
 			   r_rob[i[`LG_ROB_ENTRIES-1:0]].is_br,
 			   r_rob[i[`LG_ROB_ENTRIES-1:0]].faulted,
+			   r_rob[i[`LG_ROB_ENTRIES-1:0]].cause
 			   );
 	       end
 	  end
@@ -1128,8 +1128,8 @@ module core(clk,
 	    end
 	  ARCH_FAULT:
 	    begin
-	       n_flush_req_l1i = 1'b1;
-	       n_flush_req_l1d = 1'b1;
+	       $display("took fault for %x with cause %d", 
+			t_rob_head.pc, t_rob_head.cause);	       
 	       case(t_rob_head.cause)
 		 BREAKPOINT:
 		   begin
@@ -1145,7 +1145,7 @@ module core(clk,
 		 FETCH_PAGE_FAULT:
 		   begin
 		      n_tval = t_rob_head.pc;
-		      //$display("took fetch page fault for %x", t_rob_head.pc);
+		      //
 		   end
 		 default:
 		   begin
@@ -1157,6 +1157,8 @@ module core(clk,
 	       n_ds_done = 1'b1;	       
 	       if(syscall_emu)
 		 begin
+		    n_flush_req_l1i = 1'b1;
+		    n_flush_req_l1d = 1'b1;
 		    n_state = FLUSH_FOR_HALT;
 		 end
 	       else
@@ -1571,6 +1573,11 @@ module core(clk,
 		  r_rob[core_mem_rsp.rob_ptr].faulted <= core_mem_rsp.has_cause;
 		  r_rob[core_mem_rsp.rob_ptr].cause <= core_mem_rsp.cause;
 		  r_rob[core_mem_rsp.rob_ptr].has_cause <= core_mem_rsp.has_cause;
+		  if(core_mem_rsp.has_cause)
+		    begin
+		       $stop();
+		    end
+					    
 `ifdef ENABLE_CYCLE_ACCOUNTING
 		  r_rob[core_mem_rsp.rob_ptr].complete_cycle <= r_cycle;
 `endif	    	     	     
