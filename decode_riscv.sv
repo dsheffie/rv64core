@@ -79,7 +79,8 @@ endfunction // is_store
 
 module decode_riscv(
 		    mode64,
-		    insn, 
+		    insn,
+		    page_fault,
 		    pc, 
 		    insn_pred, 
 		    pht_idx, 
@@ -92,6 +93,7 @@ module decode_riscv(
 
    input logic mode64;
    input logic [31:0] insn;
+   input logic	      page_fault;
    input logic [`M_WIDTH-1:0] pc;
    input logic 	      insn_pred;
    input logic [`LG_PHT_SZ-1:0] pht_idx;
@@ -102,7 +104,8 @@ module decode_riscv(
    input logic			syscall_emu;
    output 	uop_t uop;
 
-   wire [6:0] 	opcode = insn[6:0];
+   wire [6:0] 	opcode = page_fault ? 'd0 : insn[6:0];
+   
    localparam ZP = (`LG_PRF_ENTRIES-5);
    wire [`LG_PRF_ENTRIES-1:0] rd = {{ZP{1'b0}},insn[11:7]};
    wire [`LG_PRF_ENTRIES-1:0] rs1 = {{ZP{1'b0}},insn[19:15]};
@@ -149,7 +152,7 @@ module decode_riscv(
 	csr_id = decode_csr(insn[31:20]);
 	rd_is_link = (rd == 'd1) || (rd == 'd5);
 	rs1_is_link = (rs1 == 'd1) || (rs1 == 'd5);
-	uop.op = II;
+	uop.op = page_fault ? FETCH_PF : II;
 	uop.srcA = 'd0;
 	uop.srcB = 'd0;
 	uop.dst = 'd0;
@@ -179,7 +182,6 @@ module decode_riscv(
 `ifdef ENABLE_CYCLE_ACCOUNTING
 	uop.fetch_cycle = fetch_cycle;
 `endif
-
 	case(opcode)
 	  7'h3:
 	    begin

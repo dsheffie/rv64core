@@ -123,34 +123,76 @@ void record_l1d(int req, int ack, int ack_st, int blocked, int stall_reason) {
   l1d_stall_reasons[stall_reason&15]++;
 }
 
+long long ic_translate(long long va, long long root) {
+  //printf("translate va %lx with root of %lx\n", va, root);
+  uint64_t a = 0, u = 0;
+  a = root + (((va >> 30) & 511)*8);
+  u = *reinterpret_cast<int64_t*>(s->mem + a);
+  if((u & 1) == 0) {
+    return (~0UL);
+  }
+  if((u&0xe)) {
+    assert(false);
+  }
+  a = root + (((va >> 21) & 511)*8);
+  u = *reinterpret_cast<int64_t*>(s->mem + a);
+  if((u & 1) == 0) {
+    printf("%s:%d\n", __PRETTY_FUNCTION__, __LINE__);
+    return (~0UL);
+  }
+  if((u&0xe)) {
+    assert(false);
+  }
+  a = root + (((va >> 12) & 511)*8);
+  u = *reinterpret_cast<int64_t*>(s->mem + a);
+  if((u & 1) == 0) {
+    printf("%s:%d\n", __PRETTY_FUNCTION__, __LINE__);
+    return (~0UL);
+  }
+  if((u&0xe)) {
+    assert(false);
+  }  
+ translation_complete:
+  printf("translation complete!\n");
+  exit(-1);
+  
+  return 0;
+}
+
 long long read_dword(long long addr) {
+  addr &= ((1L<<32)-1);  
   return *reinterpret_cast<long long*>(s->mem + addr);
 }
 
 int read_word(long long addr) {
+  addr &= ((1L<<32)-1);
   return *reinterpret_cast<int*>(s->mem + addr);
 }
 
-void write_byte(int addr, char data) {
+void write_byte(long long addr, char data) {
+  addr &= ((1L<<32)-1);
   uint32_t a = *reinterpret_cast<uint32_t*>(&addr);
   uint8_t d = *reinterpret_cast<uint8_t*>(&data);
   *reinterpret_cast<uint8_t*>(s->mem + a) = d;  
 }
 
-void write_half(int addr, short data) {
+void write_half(long long addr, short data) {
+  addr &= ((1L<<32)-1);  
   uint32_t a = *reinterpret_cast<uint32_t*>(&addr);
   uint16_t d = *reinterpret_cast<uint16_t*>(&data);
   *reinterpret_cast<uint16_t*>(s->mem + a) = d;  
 
 }
 
-void write_word(int addr, int data) {
+void write_word(long long addr, int data) {
+  addr &= ((1L<<32)-1);  
   uint32_t a = *reinterpret_cast<uint32_t*>(&addr);
   uint32_t d = *reinterpret_cast<uint32_t*>(&data);
   *reinterpret_cast<uint32_t*>(s->mem + a) = d;
 }
 
 void write_dword(long long addr, long long data) {
+  addr &= ((1L<<32)-1);
   uint64_t d = *reinterpret_cast<uint64_t*>(&data);
   *reinterpret_cast<uint64_t*>(s->mem + addr) = d;
 }
@@ -275,9 +317,6 @@ static uint64_t record_insns_retired = 0;
 
 static int pl_regs[32] = {0};
 
-//long long translate(long long va) {
-//  return 0;
-//}
 
 void record_retirement(long long pc,
 		       long long fetch_cycle,

@@ -310,12 +310,11 @@ module
 	if(w_paging_active & (l1i_mem_req_valid | l1d_mem_req_valid))
 	  begin
 	     $display("w_page_table_root = %x", w_page_table_root);
-	     if(l1i_mem_req_valid)
+	     if(l1d_mem_req_valid)
 	       begin
-		  $display("ifetch addr %x", l1i_mem_req_addr);
+		  $display("dfetch addr %x", l1d_mem_req_addr);
+		  $stop();		  
 	       end
-	     
-	     $stop();
 	  end
 	
      end
@@ -361,6 +360,7 @@ module
 
    logic	drain_ds_complete;
    logic [(1<<`LG_ROB_ENTRIES)-1:0] dead_rob_mask;
+`define PERFECT_L1D
 `ifdef PERFECT_L1D
    perfect_l1d 
 `else
@@ -409,7 +409,10 @@ module
    l1i icache(
 	      .clk(clk),
 	      .reset(reset),
-	      .mode64(w_mode64),	      
+	      .mode64(w_mode64),
+	      .page_table_root(w_page_table_root),
+	      .paging_active(w_paging_active),
+	      .clear_tlb(w_clear_tlb),
 	      .flush_req(flush_req_l1i),
 	      .flush_complete(l1i_flush_complete),
 	      .restart_pc(restart_pc),

@@ -1752,11 +1752,7 @@ module exec(clk,
    wire		       w_mispredicted_indirect = (mode64 & w_mispredicted_indirect_hi) | w_mispredicted_indirect_lo;
       
    mwidth_add add3 (.A(int_uop.pc), .B('d4), .Y(w_pc4));
-   
 
-
-
-   
    always_comb
      begin
 	t_sub = 1'b0;
@@ -2256,6 +2252,12 @@ module exec(clk,
 	    begin
 	       t_has_cause = 1'b1;
 	       t_cause = ILLEGAL_INSTRUCTION;
+	       t_alu_valid = 1'b1;
+	    end
+	  FETCH_PF:
+	    begin
+	       t_has_cause = 1'b1;
+	       t_cause = FETCH_PAGE_FAULT;
 	       t_alu_valid = 1'b1;
 	    end
 	  default:

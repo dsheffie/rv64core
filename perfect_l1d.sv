@@ -16,9 +16,9 @@ import "DPI-C" function int read_word(input longint addr);
 import "DPI-C" function longint read_dword(input longint addr);
 
 
-import "DPI-C" function void write_byte(input int addr, input byte data);
-import "DPI-C" function void write_half(input int addr, input shortint  data);
-import "DPI-C" function void write_word(input int addr, input int data);
+import "DPI-C" function void write_byte(input longint addr, input byte data);
+import "DPI-C" function void write_half(input longint addr, input shortint  data);
+import "DPI-C" function void write_word(input longint addr, input int data);
 import "DPI-C" function void write_dword(input longint addr, input longint data);
 
 `endif
@@ -831,20 +831,20 @@ module perfect_l1d(clk,
 	    begin
 	       t_wr_array = r_got_req;
 	       if(t_wr_array)
-		 write_byte(r_req.addr[31:0], r_req.data[7:0]);
+		 write_byte(r_req.addr, r_req.data[7:0]);
 
 	    end
 	  MEM_SH:
 	    begin
 	       t_wr_array = r_got_req;	       
 	       if(t_wr_array)
-		 write_half(r_req.addr[31:0], bswap16(r_req.data[15:0]));	       
+		 write_half(r_req.addr, bswap16(r_req.data[15:0]));	       
 	    end
 	  MEM_SW:
 	    begin
 	       t_wr_array = r_got_req;	       
 	       if(t_wr_array)
-		 write_word(r_req.addr[31:0], bswap32(r_req.data[31:0]));	       	       
+		 write_word(r_req.addr, bswap32(r_req.data[31:0]));	       	       
 	    end
 	  MEM_SD:
 	    begin

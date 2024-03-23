@@ -7,7 +7,7 @@ import "DPI-C" function void record_fetch(int push1, int push2, int push3, int p
 					  longint pc0, longint pc1, longint pc2, longint pc3,
 					  int bubble, int fq_full);
 
-//import "DPI-C" function longint translate(longint pa);
+import "DPI-C" function longint ic_translate(longint va, longint root);
 `endif
 
 
@@ -90,6 +90,9 @@ endmodule
 
 module l1i(clk,
 	   reset,
+	   page_table_root,
+	   paging_active,
+	   clear_tlb,
 	   mode64,
 	   flush_req,
 	   flush_complete,
@@ -131,6 +134,10 @@ module l1i(clk,
 
    input logic clk;
    input logic reset;
+   input logic [63:0]  page_table_root;
+   input logic	       paging_active;
+   input logic	       clear_tlb;
+   
    input logic mode64;
    
    input logic 	      flush_req;
@@ -305,6 +312,9 @@ endfunction
    logic 		  t_push_insn, t_push_insn2,
 			  t_push_insn3, t_push_insn4;
    
+   logic		  t_page_fault, t_unaligned_fetch;
+   
+   
    logic 		  t_clear_fq;
    logic 		  r_flush_req, n_flush_req;
    logic 		  r_flush_complete, n_flush_complete;
@@ -320,6 +330,9 @@ endfunction
 
    logic 		  t_init_pht;
    logic [`LG_PHT_SZ-1:0] r_init_pht_idx, n_init_pht_idx;
+
+   logic [63:0]		  r_cache_pc_pa;
+   
    
    localparam PP = (`M_WIDTH-32);
    localparam SEXT = `M_WIDTH-16;
@@ -560,6 +573,9 @@ endfunction
 	t_push_insn2 = 1'b0;
 	t_push_insn3 = 1'b0;
 	t_push_insn4 = 1'b0;
+	t_page_fault = 1'b0;
+	t_unaligned_fetch = 1'b0;
+	
 	t_take_br = 1'b0;
 	t_is_cflow = 1'b0;
 	t_update_spec_hist = 1'b0;
@@ -634,6 +650,10 @@ endfunction
 	       else if(t_hit && !fq_full)
 		 begin		    
 		    t_update_spec_hist = (t_pd != 4'd0);
+		    if(paging_active & (&r_cache_pc_pa))
+		      begin
+			 t_page_fault = 1'b1;
+		      end
 		    //if(t_pd == 4'd1)
 		    //begin
 		    //$display("cycle %d : r_cache_pc %x is a cond br, predict %b, hist %b, r_pht_idx %d", 
@@ -821,6 +841,7 @@ endfunction
    always_comb
      begin
 	t_insn.insn_bytes = t_insn_data;
+	t_insn.page_fault = t_page_fault;
 	t_insn.pc = r_cache_pc;
 	t_insn.pred_target = n_pc;
 	t_insn.pred = t_take_br;
@@ -829,6 +850,7 @@ endfunction
 	t_insn.fetch_cycle = r_cycle;
 `endif
 	t_insn2.insn_bytes = t_insn_data2;
+	t_insn2.page_fault = 1'b0;
 	t_insn2.pc = r_cache_pc + 'd4;
 	t_insn2.pred_target = 'd0;
 	t_insn2.pred = 1'b0;
@@ -837,6 +859,7 @@ endfunction
 	t_insn2.fetch_cycle = r_cycle;
 `endif
 	t_insn3.insn_bytes = t_insn_data3;
+	t_insn3.page_fault = 1'b0;	
 	t_insn3.pc = r_cache_pc + 'd8;
 	t_insn3.pred_target = 'd0;
 	t_insn3.pred = 1'b0;
@@ -845,6 +868,7 @@ endfunction
 	t_insn3.fetch_cycle = r_cycle;
 `endif
 	t_insn4.insn_bytes = t_insn_data4;
+	t_insn4.page_fault = 1'b0;	
 	t_insn4.pc = r_cache_pc + 'd12;
 	t_insn4.pred_target = 'd0;
 	t_insn4.pred = 1'b0;
@@ -937,6 +961,17 @@ endfunction
 	  end
      end // always_ff@
 
+
+   always_ff@(posedge clk)
+     begin
+	if(paging_active)
+	  begin
+	   r_cache_pc_pa <= paging_active ? 
+			    ic_translate(n_cache_pc, page_table_root) :
+			    n_cache_pc;
+	end
+   end
+   
 `ifdef VERILATOR
    always_ff@(negedge clk)
      begin

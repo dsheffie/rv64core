@@ -818,13 +818,8 @@ module core(clk,
 	t_enough_next_iprfs = !((t_uop2.dst_valid) && t_gpr_ffs2_full);
 
 	
-	t_fold_uop = (t_uop.op == NOP || 
-		      t_uop.op == J  ||
-		      t_uop.op == II);
-
-	t_fold_uop2 = (t_uop2.op == NOP || 
-		       t_uop2.op == J  ||
-		       t_uop2.op == II);
+	t_fold_uop = (t_uop.op == NOP || t_uop.op == II || t_uop.op == FETCH_PF || t_uop.op == J );
+	t_fold_uop2 = (t_uop2.op == NOP || t_uop2.op == II || t_uop2.op == FETCH_PF || t_uop2.op == J);
 
 	n_ds_done = r_ds_done;
 	n_flush_req_l1d = 1'b0;
@@ -864,7 +859,6 @@ module core(clk,
 	  end
 	
 	t_arch_fault = t_rob_head.faulted & t_rob_head.has_cause;
-	
 	
 	unique case (r_state)
 	  ACTIVE:
@@ -1147,7 +1141,11 @@ module core(clk,
 		   end
 		 SUPERVISOR_ECALL:
 		   begin
-
+		   end
+		 FETCH_PAGE_FAULT:
+		   begin
+		      n_tval = t_rob_head.pc;
+		      $display("took fetch page fault for %x", t_rob_head.pc);
 		   end
 		 default:
 		   begin
@@ -1164,11 +1162,11 @@ module core(clk,
 	       else
 		 begin
 		    n_state = WRITE_EPC;
-		    n_update_csr_exc = 1'b1;
 		 end
 	    end
 	  WRITE_EPC:
 	    begin
+	       n_update_csr_exc = 1'b1;	       
 	       n_restart_pc = w_exc_pc;
 	       n_restart_valid = 1'b1;	       
 	       n_state = DRAIN;
@@ -1408,12 +1406,18 @@ module core(clk,
 	       begin
 `ifdef ENABLE_CYCLE_ACCOUNTING
 		  t_rob_tail.complete_cycle = r_cycle;
-`endif		  
+`endif
 		  if(t_uop.op == II)
+                   begin
+                      t_rob_tail.faulted = 1'b1;
+                      t_rob_tail.has_cause = 1'b1;
+                      t_rob_tail.cause = ILLEGAL_INSTRUCTION;
+                   end
+		  else if(t_uop.op == FETCH_PF)
 		    begin
-		       t_rob_tail.faulted = 1'b1;
-		       t_rob_tail.has_cause = 1'b1;
-		       t_rob_tail.cause = ILLEGAL_INSTRUCTION;
+                      t_rob_tail.faulted = 1'b1;
+                      t_rob_tail.has_cause = 1'b1;
+                      t_rob_tail.cause = FETCH_PAGE_FAULT;
 		    end
 		  else if(t_uop.op == J)
 		    begin
@@ -1450,12 +1454,18 @@ module core(clk,
 	       begin
 `ifdef ENABLE_CYCLE_ACCOUNTING
 		  t_rob_next_tail.complete_cycle = r_cycle;
-`endif		  
+`endif
 		  if(t_uop2.op == II)
+                   begin
+                      t_rob_next_tail.faulted = 1'b1;
+                      t_rob_next_tail.has_cause = 1'b1;
+                      t_rob_next_tail.cause = ILLEGAL_INSTRUCTION;
+                   end
+		  else if(t_uop2.op == FETCH_PF)
 		    begin
-		       t_rob_next_tail.faulted = 1'b1;
-		       t_rob_next_tail.has_cause = 1'b1;
-		       t_rob_next_tail.cause = ILLEGAL_INSTRUCTION;
+                      t_rob_next_tail.faulted = 1'b1;
+                      t_rob_next_tail.has_cause = 1'b1;
+                      t_rob_next_tail.cause = FETCH_PAGE_FAULT;
 		    end
 		  else if(t_uop2.op == J)
 		    begin
@@ -1881,7 +1891,8 @@ module core(clk,
    decode_riscv dec0 
      (
       .mode64(r_mode64),
-      .insn(insn.insn_bytes), 
+      .insn(insn.insn_bytes),
+      .page_fault(insn.page_fault),
       .pc(insn.pc), 
       .insn_pred(insn.pred), 
       .pht_idx(insn.pht_idx),
@@ -1896,7 +1907,8 @@ module core(clk,
    decode_riscv dec1 
      (	
 	.mode64(r_mode64),
-	.insn(insn_two.insn_bytes), 
+	.insn(insn_two.insn_bytes),
+	.page_fault(insn_two.page_fault), 
 	.pc(insn_two.pc), 
 	.insn_pred(insn_two.pred), 
 	.pht_idx(insn_two.pht_idx),
@@ -2001,10 +2013,16 @@ module core(clk,
 
    always_ff@(negedge clk)
      begin
+	// if(t_push_dq_one && (t_dec_uop.op==FETCH_PF)) 
+	//   begin
+	//      $display("decoded %x to uop %d, is FETCH_PF=%b", 
+	// 	      t_dec_uop.pc, t_dec_uop.op, t_dec_uop.op==FETCH_PF);
+	//   end
+	//if(t_push_dq_two && (t_dec_uop2.op==FETCH_PF)) $stop();
 	//if(t_push_dq_one)
-	//$display("decoded %x to uop %d, is II=%b", t_dec_uop.pc, t_dec_uop.op, t_dec_uop.op==II);
+	// $display("decoded %x to uop %d, is II=%b", t_dec_uop.pc, t_dec_uop.op, t_dec_uop.op==FETCH_PF);
 	//if(t_push_dq_two)
-	//$display("decoded %x to uop %d, is II=%b", t_dec_uop2.pc, t_dec_uop2.op, t_dec_uop2.op==II);	
+	// $display("decoded %x to uop %d, is II=%b", t_dec_uop2.pc, t_dec_uop2.op, t_dec_uop2.op==FETCH_PF);	
 
     	if(insn_ack && insn_ack_two && 1'b0)
     	  begin
