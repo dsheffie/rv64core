@@ -1081,7 +1081,7 @@ module perfect_l1d(clk,
 			 end // if (t_mem_head.is_store)
 		       else if(t_mem_head.is_atomic)
 			 begin
-			    if (t_mem_head.rob_ptr == head_of_rob_ptr)
+			    if (t_mem_head.rob_ptr == head_of_rob_ptr && (core_store_data_valid ? (t_mem_head.rob_ptr == core_store_data.rob_ptr) : 1'b0))
 			      begin
 				 t_pop_mq = 1'b1;
 				 n_req = t_mem_head;
