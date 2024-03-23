@@ -650,9 +650,17 @@ endfunction
 	       else if(t_hit && !fq_full)
 		 begin		    
 		    t_update_spec_hist = (t_pd != 4'd0);
-		    if(paging_active & (&r_cache_pc_pa))
+		    if(paging_active)
 		      begin
-			 t_page_fault = 1'b1;
+			 if((&r_cache_pc_pa))
+			   begin
+			      t_page_fault = 1'b1;
+			   end
+			 else
+			   begin
+			      $display("successful translation to tag %x, cache out %x", r_cache_pc_pa[`M_WIDTH-1:IDX_STOP], r_tag_out);
+			      $stop();
+			   end
 		      end
 		    //if(t_pd == 4'd1)
 		    //begin

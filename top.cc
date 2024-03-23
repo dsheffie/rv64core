@@ -124,39 +124,51 @@ void record_l1d(int req, int ack, int ack_st, int blocked, int stall_reason) {
 }
 
 long long ic_translate(long long va, long long root) {
-  //printf("translate va %lx with root of %lx\n", va, root);
+  bool v = (va ==0xffffffff80000098L);
   uint64_t a = 0, u = 0;
+  int mask_bits = -1;
   a = root + (((va >> 30) & 511)*8);
   u = *reinterpret_cast<int64_t*>(s->mem + a);
   if((u & 1) == 0) {
+    assert(!v);
     return (~0UL);
   }
-  if((u&0xe)) {
-    assert(false);
+  if((u>>1)&7) {
+    mask_bits = 30;
+    goto translation_complete;
   }
+
+  //2nd level walk
+  root = ((u >> 10) & ((1UL<<44)-1)) * 4096;
   a = root + (((va >> 21) & 511)*8);
   u = *reinterpret_cast<int64_t*>(s->mem + a);
   if((u & 1) == 0) {
-    printf("%s:%d\n", __PRETTY_FUNCTION__, __LINE__);
+    assert(!v);
     return (~0UL);
   }
-  if((u&0xe)) {
-    assert(false);
+  if((u>>1)&7) {
+    mask_bits = 21;
+    goto translation_complete;
   }
+  
+  //3rd level walk
+  root = ((u >> 10) & ((1UL<<44)-1)) * 4096;  
   a = root + (((va >> 12) & 511)*8);
   u = *reinterpret_cast<int64_t*>(s->mem + a);
   if((u & 1) == 0) {
-    printf("%s:%d\n", __PRETTY_FUNCTION__, __LINE__);
+    assert(!v);
     return (~0UL);
   }
-  if((u&0xe)) {
-    assert(false);
-  }  
+  assert((u>>1)&7);
+  mask_bits = 12;
+
  translation_complete:
-  printf("translation complete!\n");
-  exit(-1);
-  
-  return 0;
+  int64_t m = ((1L << mask_bits) - 1);
+  u = ((u >> 10) & ((1UL<<44)-1)) * 4096;
+  return (u&(~m)) | (va & m);
+  //printf("translation complete, pa %lx!\n", u);
+  //exit(-1);
+  //return 0;
 }
 
 long long read_dword(long long addr) {
