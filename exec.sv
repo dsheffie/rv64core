@@ -2558,6 +2558,7 @@ module exec(clk,
 	t_mem_tail.is_load = 1'b0;
 	t_mem_tail.is_store = 1'b0;
 	t_mem_tail.is_atomic = 1'b0;
+	t_mem_tail.amo_op = mem_uq.jmp_imm[4:0];
 	t_mem_tail.data = 'd0;
 	t_mem_tail.spans_cacheline = 1'b0;
 	t_mem_tail.unaligned = 1'b0;
@@ -2596,7 +2597,7 @@ module exec(clk,
 	  SCW:
 	    begin
 	       t_mem_tail.op = MEM_SCW;
-	       t_mem_tail.is_atomic = 1'b1;	       
+	       t_mem_tail.is_atomic = 1'b1;
 	       t_mem_tail.dst_valid = 1'b1;
 	       t_mem_tail.dst_ptr = mem_uq.dst;
 	       t_mem_tail.spans_cacheline = (w_agu_addr[1:0] != 2'd0);
@@ -2610,7 +2611,26 @@ module exec(clk,
 	       t_mem_tail.dst_ptr = mem_uq.dst;
 	       t_mem_tail.spans_cacheline = (w_agu_addr[2:0] != 3'd0);
 	       t_mem_tail.unaligned = |w_agu_addr[2:0];	       
+	    end // case: SW
+	  AMOW:
+	    begin
+	       t_mem_tail.op = MEM_AMOW;
+	       t_mem_tail.is_atomic = 1'b1;	       
+	       t_mem_tail.dst_valid = 1'b1;
+	       t_mem_tail.dst_ptr = mem_uq.dst;
+	       t_mem_tail.spans_cacheline = (w_agu_addr[1:0] != 2'd0);
+	       t_mem_tail.unaligned = |w_agu_addr[1:0];	       
+	    end // case: SW
+	 AMOD:
+	    begin
+	       t_mem_tail.op = MEM_AMOD;
+	       t_mem_tail.is_atomic = 1'b1;
+	       t_mem_tail.dst_valid = 1'b1;
+	       t_mem_tail.dst_ptr = mem_uq.dst;
+	       t_mem_tail.spans_cacheline = (w_agu_addr[2:0] != 3'd0);
+	       t_mem_tail.unaligned = |w_agu_addr[2:0];
 	    end // case: SW	  
+	  
 	  LW:
 	    begin
 	       t_mem_tail.is_load = 1'b1;

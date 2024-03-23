@@ -1276,10 +1276,6 @@ module core(clk,
      begin
 	t_alloc_uop = t_uop;
 	t_alloc_uop2 = t_uop2;
-`ifdef VERILATOR
-	t_alloc_uop.clear_id = r_clear_cnt;
-	t_alloc_uop2.clear_id = r_clear_cnt;
-`endif
 	t_alloc_uop.srcA = w_rn_srcA_1;
 	t_alloc_uop.srcB = w_rn_srcB_1;
 	t_alloc_uop2.srcA = w_rn_srcA_2;
@@ -1574,10 +1570,10 @@ module core(clk,
 		  r_rob[core_mem_rsp.rob_ptr].faulted <= core_mem_rsp.has_cause;
 		  r_rob[core_mem_rsp.rob_ptr].cause <= core_mem_rsp.cause;
 		  r_rob[core_mem_rsp.rob_ptr].has_cause <= core_mem_rsp.has_cause;
-		  if(core_mem_rsp.has_cause)
-		    begin
-		       $stop();
-		    end
+		  //if(core_mem_rsp.has_cause)
+		  //begin
+		  //    $stop();
+		  //end
 					    
 `ifdef ENABLE_CYCLE_ACCOUNTING
 		  r_rob[core_mem_rsp.rob_ptr].complete_cycle <= r_cycle;

@@ -158,11 +158,8 @@ module decode_riscv(
 	uop.dst = 'd0;
 	uop.srcA_valid = 1'b0;
 	uop.srcB_valid = 1'b0;
-	uop.fp_srcA_valid = 1'b0;
-	uop.fp_srcB_valid = 1'b0;
 	
 	uop.dst_valid = 1'b0;
-	uop.fp_dst_valid = 1'b0;
 	
 	uop.imm = 16'd0;
 	uop.jmp_imm = {(`M_WIDTH-16){1'b0}};
@@ -372,11 +369,23 @@ module decode_riscv(
 	       if(insn[14:12] == 3'd2 || insn[14:12] == 3'd3)
 		 begin
 		    uop.srcA = rs1;
+		    uop.srcB = rs2;		    
 		    uop.dst = rd;		    
 		    uop.dst_valid = (rd != 'd0);
 		    uop.srcA_valid = 1'b1;
 		    uop.is_mem = 1'b1;
+		    uop.jmp_imm = {43'd0, insn[31:27]};
 		    case(insn[31:27])
+		      5'd0:
+			begin /* amoadd */
+			   uop.op = insn[14:12]==3'd2 ? AMOW : AMOD;
+			   uop.srcB_valid = 1'b1;
+			end
+		      5'd1:
+			begin /* amoswap */
+			   uop.op = insn[14:12]==3'd2 ? AMOW : AMOD;
+			   uop.srcB_valid = 1'b1;			   
+			end		      
 		      5'd2: /* load linked - punt */
 			begin
 			   uop.op = insn[14:12]==3'd2 ? LW : LD;
@@ -384,6 +393,7 @@ module decode_riscv(
 		      5'd3: /* store conditional */
 			begin
 			   uop.op = insn[14:12]==3'd2 ? SCW : SCD;
+			   uop.srcB_valid = 1'b1;			   
 			end
 		      default:
 			begin

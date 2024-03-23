@@ -55,6 +55,8 @@ typedef enum logic [6:0]
    LRD,
    SCW,
    SCD,
+   AMOW,   
+   AMOD,
    MONITOR,
    RDCYCLE,
    RDINSTRET,
@@ -186,20 +188,17 @@ typedef struct packed {
    opcode_t op;
    
    logic [`LG_PRF_ENTRIES-1:0] srcA;
-   logic 		       srcA_valid;
-   logic 		       fp_srcA_valid;
+   logic		       srcA_valid;
    logic [`LG_PRF_ENTRIES-1:0] srcB;
    logic 		       srcB_valid;
    
-   logic 		       fp_srcB_valid;   
    logic [`LG_PRF_ENTRIES-1:0] dst;
    logic 		       dst_valid;
-   logic 		       fp_dst_valid;
 
 
    logic [`M_WIDTH-1:0]        rvimm;
-   logic [15:0] 		    imm;
-   logic [`M_WIDTH-17:0] 	    jmp_imm;
+   logic [15:0]		       imm;
+   logic [`M_WIDTH-17:0]       jmp_imm;
    
    logic [`M_WIDTH-1:0]        pc;
    logic [`LG_ROB_ENTRIES-1:0] rob_ptr;
@@ -212,9 +211,6 @@ typedef struct packed {
    logic 		       is_store;
    logic [`LG_PHT_SZ-1:0]      pht_idx;
    logic 		       is_cheap_int;
-`ifdef VERILATOR
-   logic [31:0] 	       clear_id;
-`endif
 `ifdef ENABLE_CYCLE_ACCOUNTING
    logic [63:0] 	    fetch_cycle;
 `endif   

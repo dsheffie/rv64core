@@ -79,6 +79,7 @@ typedef struct packed {
    logic 	is_load;
    logic	is_atomic;
    mem_op_t op;
+   logic [4:0]	amo_op;
    logic 	spans_cacheline;
    logic 	unaligned;
    logic [`LG_ROB_ENTRIES-1:0] rob_ptr;

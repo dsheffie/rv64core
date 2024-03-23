@@ -85,7 +85,9 @@ typedef enum logic [3:0] {
    MEM_NOP = 4'd10,
    MEM_LWU = 4'd11,
    MEM_LD  = 4'd12,
-   MEM_SD  = 4'd13			  			  
+   MEM_SD  = 4'd13,
+   MEM_AMOW = 4'd14,
+   MEM_AMOD = 4'd15			  			  
 } mem_op_t;
 
 /* MIPS R10000 exception ordering 
