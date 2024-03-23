@@ -1145,7 +1145,7 @@ module core(clk,
 		 FETCH_PAGE_FAULT:
 		   begin
 		      n_tval = t_rob_head.pc;
-		      $display("took fetch page fault for %x", t_rob_head.pc);
+		      //$display("took fetch page fault for %x", t_rob_head.pc);
 		   end
 		 default:
 		   begin

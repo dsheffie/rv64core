@@ -123,12 +123,16 @@ void record_l1d(int req, int ack, int ack_st, int blocked, int stall_reason) {
   l1d_stall_reasons[stall_reason&15]++;
 }
 
+static bool verbose_ic_translate = false;
+
 long long ic_translate(long long va, long long root) {
   uint64_t a = 0, u = 0;
   int mask_bits = -1;
   a = root + (((va >> 30) & 511)*8);
   u = *reinterpret_cast<int64_t*>(s->mem + a);
   if((u & 1) == 0) {
+    if(verbose_ic_translate)
+      printf("failed translation for %llx at level 3, u %lx r %lx\n", va, u, root);
     return (~0UL);
   }
   if((u>>1)&7) {
@@ -141,6 +145,8 @@ long long ic_translate(long long va, long long root) {
   a = root + (((va >> 21) & 511)*8);
   u = *reinterpret_cast<int64_t*>(s->mem + a);
   if((u & 1) == 0) {
+    if(verbose_ic_translate)
+      printf("failed translation for %lx at level 2\n", va);
     return (~0UL);
   }
   if((u>>1)&7) {
@@ -153,6 +159,8 @@ long long ic_translate(long long va, long long root) {
   a = root + (((va >> 12) & 511)*8);
   u = *reinterpret_cast<int64_t*>(s->mem + a);
   if((u & 1) == 0) {
+    if(verbose_ic_translate)
+      printf("failed translation for %lx at level 1\n", va);
     return (~0UL);
   }
   assert((u>>1)&7);
@@ -162,17 +170,20 @@ long long ic_translate(long long va, long long root) {
   int64_t m = ((1L << mask_bits) - 1);
   u = ((u >> 10) & ((1UL<<44)-1)) * 4096;
   uint64_t pa = (u&(~m)) | (va & m);
-  printf("translation complete, pa %lx!\n", pa);
+  //printf("translation complete, pa %lx!\n", pa);
   //exit(-1);
-  //return 0;
+  return pa;
 }
 
-std::string getAsmString(uint64_t addr, bool paging_enabled, uint64_t root) {
+std::string getAsmString(uint64_t addr, uint64_t root, bool paging_enabled) {
   int64_t pa = addr;
   if(paging_enabled) {
+    verbose_ic_translate = true;
     pa = ic_translate(addr, root);
+    verbose_ic_translate = false;
+    if(pa == -1) return "code page not present";
   }
-  return (pa == -1) ? "code page not present" : getAsmString(mem_r32(s,pa), addr);
+  return getAsmString(mem_r32(s,pa), addr);
 }
 
 long long read_dword(long long addr) {
@@ -641,9 +652,10 @@ int main(int argc, char **argv) {
 
       last_retired_pc = tb->retire_pc;
 
-      if(insns_retired >= start_trace_at)
+      if(insns_retired >= start_trace_at) {
 	trace_retirement = true;
-
+      }
+      trace_retirement |= tb->paging_active;
       
       
       

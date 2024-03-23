@@ -665,11 +665,11 @@ endfunction
 	       else if(t_hit && !fq_full)
 		 begin		    
 		    t_update_spec_hist = (t_pd != 4'd0);
-		    if(paging_active)
-		      begin
-			 $display("successful translation to tag %x, cache out %x", r_cache_pc_pa[`M_WIDTH-1:IDX_STOP], r_tag_out);
+		    //if(paging_active)
+		      //begin
+			 //$display("successful translation to tag %x, cache out %x", r_cache_pc_pa[`M_WIDTH-1:IDX_STOP], r_tag_out);
 			 //$stop();
-		      end
+		     // end
 		    //if(t_pd == 4'd1)
 		    //begin
 		    //$display("cycle %d : r_cache_pc %x is a cond br, predict %b, hist %b, r_pht_idx %d", 
@@ -980,13 +980,10 @@ endfunction
 
    always_ff@(posedge clk)
      begin
-	if(paging_active)
-	  begin
-	   r_cache_pc_pa <= paging_active ? 
-			    ic_translate(n_cache_pc, page_table_root) :
-			    n_cache_pc;
-	end
-   end
+	r_cache_pc_pa <= (n_req & paging_active) ? 
+			 ic_translate(n_cache_pc, page_table_root) :
+			 n_cache_pc;
+     end
    
 `ifdef VERILATOR
    always_ff@(negedge clk)

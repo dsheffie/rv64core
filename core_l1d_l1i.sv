@@ -315,14 +315,11 @@ module
 
    always_ff@(negedge clk)
      begin
-	if(w_paging_active & (l1i_mem_req_valid | l1d_mem_req_valid))
+	if(w_paging_active & l1d_mem_req_valid)
 	  begin
 	     $display("w_page_table_root = %x", w_page_table_root);
-	     if(l1d_mem_req_valid)
-	       begin
-		  $display("dfetch addr %x", l1d_mem_req_addr);
-		  $stop();		  
-	       end
+	     $display("dfetch addr %x", l1d_mem_req_addr);
+	     $stop();		  
 	  end
 	
      end
