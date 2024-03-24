@@ -1177,8 +1177,8 @@ module core(clk,
 	  WRITE_EPC:
 	    begin
 	       n_update_csr_exc = 1'b1;
-	       $display("exception handler pc %x. page root %x",
-			w_exc_pc, page_table_root);
+	       //$display("exception handler pc %x. page root %x",
+	       //w_exc_pc, page_table_root);
 	       if(w_exc_pc == r_epc)
 		 $stop();
 	       n_restart_pc = w_exc_pc;

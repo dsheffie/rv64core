@@ -2,7 +2,7 @@
 `include "rob.vh"
 
 `ifdef VERILATOR
-import "DPI-C" function void csr_putchar(input longint x);
+import "DPI-C" function void csr_putchar(input byte x);
 
 import "DPI-C" function void report_exec(input int int_valid, 
 					 input int int_blocked,
@@ -2380,6 +2380,9 @@ module exec(clk,
 	    t_rd_csr = r_pmpcfg0;
 	  RDBRANCH_CSR:
 	    t_rd_csr = 'd0;
+	  RDTIME_CSR:
+	    t_rd_csr = {30'd0, r_cycle[63:30]};
+	  
 	  default:
 	    begin
 	       if(t_rd_csr_en)
@@ -2511,7 +2514,7 @@ module exec(clk,
 	       PMPCFG0:
 		 r_pmpcfg0 <= t_wr_csr;
 	       RDBRANCH_CSR:
-		 csr_putchar(t_wr_csr);
+		 csr_putchar(t_wr_csr[7:0]);
 	       default:
 		 begin
 		    $display("implement %d", int_uop.imm[5:0]);

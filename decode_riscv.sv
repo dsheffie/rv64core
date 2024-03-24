@@ -61,6 +61,8 @@ function csr_t decode_csr(logic [11:0] csr);
        x = PMPADDR3;      
      12'hc00:
        x = RDCYCLE_CSR;
+     12'hc01:
+       x = RDTIME_CSR;
      12'hc02:
        x = RDINSTRET_CSR;
      12'hc03:

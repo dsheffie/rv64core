@@ -302,14 +302,14 @@ static inline std::ostream &operator<<(std::ostream &out, mstatus_t mstatus) {
 
 
 struct sv39_t {
-  uint64_t v : 1; //1
-  uint64_t r : 1; //2
-  uint64_t w : 1; //3
-  uint64_t x : 1; //4
-  uint64_t u : 1; //5
-  uint64_t g : 1; //6
-  uint64_t a : 1; //7
-  uint64_t d : 1; //8
+  uint64_t v : 1; //0
+  uint64_t r : 1; //1
+  uint64_t w : 1; //2
+  uint64_t x : 1; //3
+  uint64_t u : 1; //4
+  uint64_t g : 1; //5
+  uint64_t a : 1; //6
+  uint64_t d : 1; //7
   uint64_t rsw : 2; //10
   uint64_t ppn : 44;
   uint64_t mbz : 7;

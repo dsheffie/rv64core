@@ -125,8 +125,9 @@ void record_l1d(int req, int ack, int ack_st, int blocked, int stall_reason) {
 
 static bool verbose_ic_translate = false;
 
-void csr_putchar(long long x) {
-  printf("%c", x&0xff);
+void csr_putchar(char c) {
+  if(c==0) std::cout << "\n";
+  else std::cout << c;
 }
 
 long long translate(long long va, long long root, bool iside, bool store) {
@@ -136,7 +137,7 @@ long long translate(long long va, long long root, bool iside, bool store) {
   u = *reinterpret_cast<int64_t*>(s->mem + a);
   if((u & 1) == 0) {
     if(verbose_ic_translate)
-      printf("failed translation for %llx at level 3, u %lx r %lx\n", va, u, root);
+      printf("failed translation for %llx at level 3, u %lx r %llx\n", va, u, root);
     return (~0UL);
   }
   if((u>>1)&7) {
@@ -150,7 +151,7 @@ long long translate(long long va, long long root, bool iside, bool store) {
   u = *reinterpret_cast<int64_t*>(s->mem + a);
   if((u & 1) == 0) {
     if(verbose_ic_translate)
-      printf("failed translation for %lx at level 2\n", va);
+      printf("failed translation for %llx at level 2\n", va);
     return (~0UL);
   }
   if((u>>1)&7) {
@@ -164,7 +165,7 @@ long long translate(long long va, long long root, bool iside, bool store) {
   u = *reinterpret_cast<int64_t*>(s->mem + a);
   if((u & 1) == 0) {
     if(verbose_ic_translate)
-      printf("failed translation for %lx at level 1\n", va);
+      printf("failed translation for %llx at level 1\n", va);
     return (~0UL);
   }
   assert((u>>1)&7);
@@ -172,6 +173,20 @@ long long translate(long long va, long long root, bool iside, bool store) {
 
  translation_complete:
   int64_t m = ((1L << mask_bits) - 1);
+
+  /* accessed bit */
+  bool accessed = ((u >> 6) & 1);
+  bool dirty = ((u >> 7) & 1);
+  if(!accessed) {
+    u |= 1 << 6;
+    *reinterpret_cast<int64_t*>(s->mem + a) = u;
+  }
+
+  if(store and not(dirty)) {
+    u |= 1<<7;
+    *reinterpret_cast<int64_t*>(s->mem + a) = u;    
+  }
+  
   u = ((u >> 10) & ((1UL<<44)-1)) * 4096;
   uint64_t pa = (u&(~m)) | (va & m);
   //printf("translation complete, pa %lx!\n", pa);
