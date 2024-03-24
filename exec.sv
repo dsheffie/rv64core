@@ -146,7 +146,7 @@ module exec(clk,
    
    logic 			  t_wr_int_prf, t_wr_int_prf2;
    logic			  r_clear_tlb, t_clear_tlb;
-   logic [1:0]			  r_priv;
+   logic [1:0]			  r_priv, n_priv;
    assign priv = r_priv;
    assign clear_tlb = r_clear_tlb;
    
@@ -2296,6 +2296,19 @@ module exec(clk,
      begin
 	r_clear_tlb <= reset ? 1'b0 : t_clear_tlb;
      end
+
+   always_comb
+     begin
+	n_priv = r_priv;
+	if(update_csr_exc)
+	  begin
+	     n_priv = t_delegate ? 'd1 : 'd3;
+	  end
+	else if(t_wr_priv)
+	  begin
+	     n_priv = r_mstatus[12:11];
+	  end	
+     end
 	      
    always_ff@(posedge clk)
      begin
@@ -2303,16 +2316,18 @@ module exec(clk,
 	  begin /* begin in machine priv mode */
 	     r_priv <= 2'd3;
 	  end
-	else if(update_csr_exc)
+	else
 	  begin
-	     r_priv <= t_delegate ? 'd1 : 'd3;
-	  end
-	else if(t_wr_priv)
-	  begin
-	     r_priv <= r_mstatus[12:11];
+	     r_priv <= n_priv;	    
 	  end
      end // always_ff@ (posedge clk)
 
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if(r_priv != n_priv)
+   // 	  $display("cycle %d, priv change %d -> %d\n", r_cycle, r_priv, n_priv);
+   //   end
+   
    always_comb
      begin
 	t_rd_csr = 'd0;
@@ -2376,6 +2391,20 @@ module exec(clk,
 	endcase
      end // always_comb
 
+   logic r_satp_armed;
+   always_ff@(posedge clk)
+     begin
+	if(reset)
+	  begin
+	     r_paging_active <= 1'b0;
+	  end
+	else
+	  begin
+	     r_paging_active <= r_satp_armed & (!r_priv[1]);
+	  end
+     end // always_ff@ (posedge clk)
+
+   
    always_ff@(posedge clk)
      begin
 	if(reset)
@@ -2407,7 +2436,7 @@ module exec(clk,
 	     r_mscratch <= 'd0;
 	     r_mepc <= 'd0;
 	     r_mtval <= 'd0;
-	     r_paging_active <= 1'b0;
+	     r_satp_armed <= 1'b0;
 	     r_misa <= 64'h8000000000141101;
 	  end // if (reset)
 	else if(update_csr_exc)
@@ -2442,12 +2471,12 @@ module exec(clk,
 		 begin
 		    if((t_wr_csr[63:60] == 4'h8) && (t_wr_csr[59:44] == 'd0))
 		      begin
-			 r_paging_active <= 1'b1;
+			 r_satp_armed <= 1'b1;
 			 r_satp <= t_wr_csr;
 		      end
 		    else if(t_wr_csr[63:60] == 4'h0)
 		      begin
-			 r_paging_active <= 1'b0;			 
+			 r_satp_armed <= 1'b0;			 
 			 r_satp <= t_wr_csr;
 		      end
 		 end

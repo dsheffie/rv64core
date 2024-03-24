@@ -180,7 +180,9 @@ long long translate(long long va, long long root, bool iside, bool store) {
 }
 
 long long ic_translate(long long va, long long root) {
-  return translate(va,root,true, false);
+  uint64_t pa = 0;
+  pa = translate(va,root,true, false);
+  return pa;
 }
 
 long long dc_ld_translate(long long va, long long root) {

@@ -306,6 +306,7 @@ module
    
    wire [127:0] w_l1_mem_load_data;
    wire		w_mode64, w_paging_active;
+   wire [1:0]	w_priv;
    wire [63:0]	w_page_table_root;
    
    assign page_table_root = w_page_table_root;
@@ -418,6 +419,7 @@ module
 	      .clk(clk),
 	      .reset(reset),
 	      .mode64(w_mode64),
+	      .priv(w_priv),
 	      .page_table_root(w_page_table_root),
 	      .paging_active(w_paging_active),
 	      .clear_tlb(w_clear_tlb),
@@ -458,7 +460,7 @@ module
 	     .clk(clk),
 	     .reset(reset),
 	     .syscall_emu(syscall_emu),
-	     .priv(),
+	     .priv(w_priv),
 	     .clear_tlb(w_clear_tlb),
 	     .paging_active(w_paging_active),
 	     .page_table_root(w_page_table_root),

@@ -726,9 +726,16 @@ module core(clk,
    
 //`define DUMP_ROB
 `ifdef DUMP_ROB
+   logic [15:0] r_last_cycle;
+   
    always_ff@(negedge clk)
      begin
-	if(r_cycle >= 64'd485022)
+	if(retire_valid || retire_two_valid)
+	  r_last_cycle <= 'd0;
+	else
+	  r_last_cycle <= r_last_cycle + 'd1;
+	
+	if(r_last_cycle >= 'd16384)
 	  begin
 	     $display("cycle %d : state = %d, alu complete %b, mem complete %b,head_ptr %d, complete %b,  can_retire_rob_head %b, head pc %x, empty %b, full %b, bob full %b", 
 		      r_cycle,
@@ -885,12 +892,12 @@ module core(clk,
 			   end
 			 else
 			   begin
-			      n_ds_done = 1'b1;
 			      n_state = DRAIN;
 			      n_restart_cycles = 'd1;
 			      n_restart_valid = 1'b1;
 			      t_bump_rob_head = 1'b1;			      
 			   end // else: !if(t_rob_head.is_ii)
+			 n_ds_done = 1'b1;
 			 n_machine_clr = 1'b1;
 			 n_restart_pc = t_rob_head.target_pc;
 			 n_restart_src_pc = t_rob_head.pc;
@@ -992,7 +999,7 @@ module core(clk,
 	       if(r_rob_inflight == 'd0 && memq_empty && t_divide_ready)
 		 begin
 		    n_state = RAT;
-		    //$display(">>> restarting after fault at cycle %d", r_cycle);
+		    //$display(">>> restarting after fault at cycle %d at priv %d, paging enabled %b", r_cycle, priv, paging_active);
 		 end 
 	    end // case: DRAIN
 	  RAT:
@@ -1128,8 +1135,9 @@ module core(clk,
 	    end
 	  ARCH_FAULT:
 	    begin
-	       $display("took fault for %x with cause %d at cycle %d", 
-			t_rob_head.pc, t_rob_head.cause, r_cycle);	       
+	       $display("took fault for %x with cause %d at cycle %d, priv %d", 
+			t_rob_head.pc, t_rob_head.cause, r_cycle, priv);
+	       
 	       case(t_rob_head.cause)
 		 BREAKPOINT:
 		   begin
@@ -1155,7 +1163,6 @@ module core(clk,
 		   end
 	       endcase // case (t_rob_head.cause)
 	       t_bump_rob_head = 1'b1;
-	       n_ds_done = 1'b1;	       
 	       if(syscall_emu)
 		 begin
 		    n_flush_req_l1i = 1'b1;
@@ -1169,7 +1176,11 @@ module core(clk,
 	    end
 	  WRITE_EPC:
 	    begin
-	       n_update_csr_exc = 1'b1;	       
+	       n_update_csr_exc = 1'b1;
+	       $display("exception handler pc %x. page root %x",
+			w_exc_pc, page_table_root);
+	       if(w_exc_pc == r_epc)
+		 $stop();
 	       n_restart_pc = w_exc_pc;
 	       n_restart_valid = 1'b1;	       
 	       n_state = DRAIN;

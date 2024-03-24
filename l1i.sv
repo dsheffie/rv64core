@@ -90,6 +90,7 @@ endmodule
 
 module l1i(clk,
 	   reset,
+	   priv,
 	   page_table_root,
 	   paging_active,
 	   clear_tlb,
@@ -137,6 +138,7 @@ module l1i(clk,
    input logic [63:0]  page_table_root;
    input logic	       paging_active;
    input logic	       clear_tlb;
+   input logic [1:0]   priv;
    
    input logic mode64;
    
@@ -844,9 +846,11 @@ endfunction
    //   begin
    // 	if(t_page_fault)
    // 	  begin
-   // 	     $display("took instruction page fault for va %x, got pa %x",
+   // 	     $display("took instruction page fault for va %x, got pa %x at cycle %d, priv %d",
    // 		      r_cache_pc,
-   // 		      r_cache_pc_pa);
+   // 		      r_cache_pc_pa, 
+   // 		      r_cycle, 
+   // 		      priv);
    // 	  end
    //   end
 

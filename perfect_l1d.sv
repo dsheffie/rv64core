@@ -499,7 +499,7 @@ module perfect_l1d(clk,
    end
 `endif
 
-
+   logic r_dead_atomic, n_dead_atomic;
   
    always_ff@(posedge clk)
      begin
@@ -541,6 +541,7 @@ module perfect_l1d(clk,
 	     memq_empty <= 1'b1;
 	     r_must_forward <= 1'b0;
 	     r_must_forward2 <= 1'b0;
+	     r_dead_atomic <= 1'b0;
 	  end
 	else
 	  begin
@@ -588,6 +589,7 @@ module perfect_l1d(clk,
 	     
 	     r_must_forward  <= t_mh_block & t_pop_mq;
 	     r_must_forward2 <= t_cm_block & core_mem_req_ack;
+	     r_dead_atomic <= n_dead_atomic;
 	  end
      end // always_ff@ (posedge clk)
 
@@ -884,9 +886,18 @@ module perfect_l1d(clk,
 	       t_wr_array = r_got_req;
 	       t_rsp_data = 'd0;
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
-	       if(t_wr_array)
+	       if(t_wr_array  & !r_dead_atomic)
 		 write_dword(r_req.addr, r_req.data, paging_active ? page_table_root : 64'd0);
 	       //if(t_wr_array) $display("execute sc.d at cycle %d", r_cycle);
+	    end
+	  MEM_SCW:
+	    begin
+	       t_wr_array = r_got_req;
+	       t_rsp_data = 'd0;
+	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
+	       if(t_wr_array  & !r_dead_atomic)
+		 write_word(r_req.addr, r_req.data[31:0], paging_active ? page_table_root : 64'd0);
+	       
 	    end
 	  MEM_AMOW:
 	    begin
@@ -895,7 +906,7 @@ module perfect_l1d(clk,
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
 	       
 	       t_wr_array = r_got_req;
-	       if(t_wr_array)
+	       if(t_wr_array & !r_dead_atomic)
 		 begin
 		    write_word(r_req.addr, t_amo32_data, paging_active ? page_table_root : 64'd0);
 		 end
@@ -906,13 +917,17 @@ module perfect_l1d(clk,
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
 	       
 	       t_wr_array = r_got_req;
-	       if(t_wr_array)
+	       if(t_wr_array  & !r_dead_atomic)
 		 begin
 		    write_dword(r_req.addr, t_amo64_data, paging_active ? page_table_root : 64'd0);
 		 end
+	    end // case: MEM_AMOD
+	  MEM_NOP:
+	    begin
 	    end
 	  default:
 	    begin
+	       $display("opcode %d, pc %x", r_req.op, r_req.pc);
 	       $stop();
 	    end
 	endcase // case r_req.op
@@ -997,6 +1012,7 @@ module perfect_l1d(clk,
 
 
 	t_cm_block_stall = t_cm_block && !(r_is_retry);//1'b0;
+	n_dead_atomic = 1'b0;
 	
 	case(r_state)
 	  INITIALIZE:
@@ -1060,8 +1076,17 @@ module perfect_l1d(clk,
 		      end
 		    else
 		      begin
-			 t_push_miss = 1'b1;
-			 if(t_pf2) $stop();
+			 if(t_pf2)
+			   begin
+			      n_core_mem_rsp.data = t_rsp_data2[63:0];
+                              n_core_mem_rsp.dst_valid = t_rsp_dst_valid2;
+			      n_core_mem_rsp.has_cause = t_pf2;
+			      n_core_mem_rsp.cause = LOAD_PAGE_FAULT;			      
+			   end
+			 else
+			   begin
+			      t_push_miss = 1'b1;
+			   end
 			 if(t_port2_hit_cache)
 			   begin
 			      n_cache_hits = r_cache_hits + 'd1;
@@ -1125,11 +1150,11 @@ module perfect_l1d(clk,
 			 end // if (t_mem_head.is_store)
 		       else if(t_mem_head.is_atomic)
 			 begin
+			    
 			    if (t_mem_head.rob_ptr == head_of_rob_ptr && (core_store_data_valid ? (t_mem_head.rob_ptr == core_store_data.rob_ptr) : 1'b0))
 			      begin
 				 //$display("firing atomic for %x at cycle %d for rob ptr %d", 
 				 //t_mem_head.pc, r_cycle, t_mem_head.rob_ptr);	
-			 
 				 t_pop_mq = 1'b1;
 				 core_store_data_ack = 1'b1;
 				 n_req = t_mem_head;
@@ -1141,7 +1166,23 @@ module perfect_l1d(clk,
 				 t_got_req = 1'b1;
 				 n_is_retry = 1'b1;
 				 n_last_wr = 1'b1;
-			      end
+			      end // if (t_mem_head.rob_ptr == head_of_rob_ptr && (core_store_data_valid ? (t_mem_head.rob_ptr == core_store_data.rob_ptr) : 1'b0))
+			    else if(drain_ds_complete && dead_rob_mask[t_mem_head.rob_ptr])
+			      begin
+				 t_pop_mq = 1'b1;
+				 n_dead_atomic = 1'b1;
+				 //t_force_clear_busy = 1'b1;
+				 core_store_data_ack = 1'b1;
+				 n_req = t_mem_head;
+				 n_req.data = core_store_data.data;
+				 t_cache_idx = t_mem_head.addr[IDX_STOP-1:IDX_START];
+				 t_cache_tag = t_mem_head.addr[`M_WIDTH-1:IDX_STOP];
+				 t_addr = t_mem_head.addr;
+				 t_got_rd_retry = 1'b1;				 
+				 t_got_req = 1'b1;
+				 n_is_retry = 1'b1;
+				 n_last_wr = 1'b1;				 
+			      end			    
 			 end
 		       else
 			 begin
