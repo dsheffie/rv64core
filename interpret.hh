@@ -67,6 +67,8 @@ struct state_t{
   uint64_t epc;
   uint64_t maxicnt;
   uint64_t icnt;
+
+  bool took_exception;
   riscv_priv priv;
   
   /* lots of CSRs */

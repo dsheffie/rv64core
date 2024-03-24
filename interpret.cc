@@ -451,7 +451,7 @@ void execRiscv(state_t *s) {
   uint32_t inst = 0, opcode = 0, rd = 0, lop = 0;
   int64_t irq = 0;
   riscv_t m(0);
-
+  s->took_exception = false;
   //irq = take_interrupt(s);
   //if(irq) {
   //except_cause = CAUSE_INTERRUPT | irq;
@@ -1353,8 +1353,9 @@ void execRiscv(state_t *s) {
   return;
   
  handle_exception: {
+    s->took_exception = true;
     bool delegate = false;
-    
+    //printf("exception at %lx\n", s->pc);
     if(s->priv == priv_user || s->priv == priv_supervisor) {
       if(except_cause & CAUSE_INTERRUPT) {
 	assert(false);

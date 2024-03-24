@@ -765,7 +765,19 @@ int main(int argc, char **argv) {
        
       
       if( enable_checker) {
-	//std::cout << std::hex << tb->retire_pc << "," << ss->pc << std::dec << "\n";	  	
+	
+	int cnt = 0;
+	bool mismatch = (tb->retire_pc != ss->pc), exception = false;
+	while( (tb->retire_pc != ss->pc) and (cnt < 3)) {
+	  execRiscv(ss);
+	  exception |= ss->took_exception;
+	  cnt++;
+	}
+
+	if(mismatch and not(exception)) {
+	  abort();
+	}
+	
 	if(tb->retire_pc == ss->pc) {
 	  //std::cout << std::hex << tb->retire_pc << "," << ss->pc << std::dec << "\n";	  	
 	  execRiscv(ss);
