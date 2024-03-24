@@ -1135,8 +1135,8 @@ module core(clk,
 	    end
 	  ARCH_FAULT:
 	    begin
-	       $display("took fault for %x with cause %d at cycle %d, priv %d", 
-			t_rob_head.pc, t_rob_head.cause, r_cycle, priv);
+	       //$display("took fault for %x with cause %d at cycle %d, priv %d", 
+	       //t_rob_head.pc, t_rob_head.cause, r_cycle, priv);
 	       
 	       case(t_rob_head.cause)
 		 BREAKPOINT:
@@ -1146,7 +1146,7 @@ module core(clk,
 		 ILLEGAL_INSTRUCTION:
 		   begin
 		      n_pending_ii = 1'b1;
-		      $stop();
+		      //$stop();
 		   end
 		 SUPERVISOR_ECALL:
 		   begin
@@ -1177,8 +1177,8 @@ module core(clk,
 	  WRITE_EPC:
 	    begin
 	       n_update_csr_exc = 1'b1;
-	       $display("exception handler pc %x. page root %x",
-			w_exc_pc, page_table_root);
+	       //$display("exception handler pc %x. page root %x",
+	       //w_exc_pc, page_table_root);
 	       if(w_exc_pc == r_epc)
 		 $stop();
 	       n_restart_pc = w_exc_pc;
