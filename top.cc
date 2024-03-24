@@ -204,6 +204,13 @@ long long dc_ld_translate(long long va, long long root) {
   return translate(va,root, false, false);
 }
 
+uint64_t csr_time = 0;
+
+long long csr_gettime() {
+  return csr_time;
+}
+
+
 std::string getAsmString(uint64_t addr, uint64_t root, bool paging_enabled) {
   int64_t pa = addr;
   if(paging_enabled) {
@@ -562,7 +569,7 @@ int main(int argc, char **argv) {
   globals::sysArgc = buildArgcArgv(rv32_binary.c_str(),sysArgs.c_str(),&globals::sysArgv);
   initCapstone();
   std::unique_ptr<Vcore_l1d_l1i> tb(new Vcore_l1d_l1i);
-  uint32_t last_match_pc = 0;
+  uint64_t last_match_pc = 0;
   uint64_t last_retire = 0, last_check = 0, last_restart = 0;
   uint64_t last_retired_pc = 0, last_retired_fp_pc = 0;
   uint64_t mismatches = 0, n_stores = 0, n_loads = 0;
@@ -633,7 +640,7 @@ int main(int argc, char **argv) {
 
     if(tb->retire_reg_valid) {
       s->gpr[tb->retire_reg_ptr] = tb->retire_reg_data;
-      //if(tb->retire_reg_ptr == R_a0) {
+      //if(tb->retire_reg_ptr == R_a0) {      
       //std::cout << std::hex << "insn with pc " << tb->retire_pc << " updates a0 \n"
       //<< std::dec;
       //}      
@@ -708,11 +715,13 @@ int main(int argc, char **argv) {
       if(insns_retired >= start_trace_at) {
 	trace_retirement = true;
       }
-      //trace_retirement |= tb->paging_active;
       
-      
+      if(((insns_retired % (1<<20)) == 0)) {
+	++csr_time;
+      }
       
       if(((insns_retired % heartbeat) == 0) or trace_retirement ) {
+
 	std::cout << "port a "
 		  << " cycle " << cycle
 		  << " "
@@ -753,6 +762,10 @@ int main(int argc, char **argv) {
 		    << ", mispredict pki "
 		    << (static_cast<double>(n_mispredicts) / insns_retired) * 1000.0
 		    << std::defaultfloat
+		    << std::hex
+		    << " "
+		    << tb->retire_reg_two_data
+		    << std::dec
 		    <<" \n";
 	}
       }
@@ -768,6 +781,7 @@ int main(int argc, char **argv) {
 	
 	int cnt = 0;
 	bool mismatch = (tb->retire_pc != ss->pc), exception = false;
+	uint64_t initial_pc = ss->pc;
 	while( (tb->retire_pc != ss->pc) and (cnt < 3)) {
 	  execRiscv(ss);
 	  exception |= ss->took_exception;
@@ -775,7 +789,10 @@ int main(int argc, char **argv) {
 	}
 
 	if(mismatch and not(exception)) {
-	  abort();
+	  std::cout << "mismatch without an exception at icnt " << insns_retired << "\n";
+	  std::cout << std::hex << "last match " << std::hex << last_match_pc << std::dec << "\n";
+	  std::cout << std::hex << tb->retire_pc << "," << initial_pc << std::dec << "\n";
+	  break;
 	}
 	
 	if(tb->retire_pc == ss->pc) {
@@ -804,12 +821,12 @@ int main(int argc, char **argv) {
 			  << "\n";
 		//trace_retirement |= (wrong_bits != 0);
 		diverged = true;//(wrong_bits > 16);
-		uint32_t r_inst = mem_r32(ss, ss->pc);
 		std::cout << "incorrect "
 			  << std::hex
 			  << ss->pc 
 			  << std::dec
-			  << " : " << getAsmString(r_inst, ss->pc )
+			  << " : "
+			  << getAsmString(ss->pc, tb->page_table_root, tb->paging_active)	  	    		  
 			  << "\n";
 		
 	      }
@@ -820,12 +837,12 @@ int main(int argc, char **argv) {
 	  
 	  if(diverged) {
 	    incorrect = true;
-	    uint32_t r_inst = mem_r32(s, tb->retire_pc);
 	    std::cout << "incorrect "
 		      << std::hex
 		      << tb->retire_pc
 		      << std::dec
-		      << " : " << getAsmString(r_inst, tb->retire_pc)
+		      << " : "
+		      << getAsmString(tb->retire_pc, tb->page_table_root, tb->paging_active)	  	    		  	      
 		      << "\n";
 	    for(int i = 0; i < 32; i+=4) {
 	      std::cout << "reg "
@@ -859,12 +876,11 @@ int main(int argc, char **argv) {
 	else {
 	  ++last_check;
 	  if(last_check > 0) {
-	    uint32_t linsn = mem_r32(s,last_match_pc);
 	    std::cerr << "no match in " << last_check << " insts, last match : "
 		      << std::hex
 		      << last_match_pc
 		      << " "
-		      << getAsmString(linsn, last_match_pc)
+		      << getAsmString(last_match_pc, tb->page_table_root, tb->paging_active)	  	    		  	      	      
 		      << ", rtl pc =" << tb->retire_pc
 		      << ", sim pc =" << ss->pc
 		      << std::dec

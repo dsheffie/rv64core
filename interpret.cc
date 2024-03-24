@@ -108,6 +108,7 @@ void state_t::store64(uint64_t pa, int64_t x) {
   *reinterpret_cast<int64_t*>(mem + pa) = x;
 }
 
+extern uint64_t csr_time;
 
 static std::unordered_map<uint64_t, std::pair<uint64_t, uint64_t>> tlb;
 
@@ -328,7 +329,7 @@ static int64_t read_csr(int csr_id, state_t *s, bool &undef) {
     case 0xc00:
       return s->icnt;
     case 0xc01:
-      return (s->icnt >> 20);
+      return csr_time;
     case 0xf14:
       return s->mhartid;      
     default:
@@ -1243,6 +1244,8 @@ void execRiscv(state_t *s) {
 	break;
       }
       else if(is_ebreak) {
+	printf("hit ebreak at %lx\n", s->pc);
+	abort();
 	/* used as monitor in RTL */
       }
       else {
@@ -1390,7 +1393,7 @@ void execRiscv(state_t *s) {
       set_priv(s, priv_machine);
       s->pc = s->mtvec;      
     }
-    printf("after exception, new pc will be %lx\n", s->pc);
+    //printf("after exception, new pc will be %lx\n", s->pc);
   }
   return;
   

@@ -1135,8 +1135,8 @@ module core(clk,
 	    end
 	  ARCH_FAULT:
 	    begin
-	       $display("took fault for %x with cause %d at cycle %d, priv %d", 
-			t_rob_head.pc, t_rob_head.cause, r_cycle, priv);
+	       //$display("took fault for %x with cause %d at cycle %d, priv %d", 
+	       //t_rob_head.pc, t_rob_head.cause, r_cycle, priv);
 	       
 	       case(t_rob_head.cause)
 		 BREAKPOINT:

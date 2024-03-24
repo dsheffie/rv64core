@@ -3,6 +3,7 @@
 
 `ifdef VERILATOR
 import "DPI-C" function void csr_putchar(input byte x);
+import "DPI-C" function longint csr_gettime();
 
 import "DPI-C" function void report_exec(input int int_valid, 
 					 input int int_blocked,
@@ -1748,6 +1749,15 @@ module exec(clk,
       
    mwidth_add add3 (.A(int_uop.pc), .B('d4), .Y(w_pc4));
 
+   always_ff@(negedge clk)
+     begin
+	if((int_uop.pc == 64'hffffffff8000cec0) && r_start_int)
+	  begin
+	     $display("opcode %d, srcA %x, srcB %x, take br %b",
+		      int_uop.op, t_srcA, t_srcB, t_take_br);
+	  end
+     end
+   
    always_comb
      begin
 	t_sub = 1'b0;
@@ -2381,7 +2391,7 @@ module exec(clk,
 	  RDBRANCH_CSR:
 	    t_rd_csr = 'd0;
 	  RDTIME_CSR:
-	    t_rd_csr = {30'd0, r_cycle[63:30]};
+	    t_rd_csr = csr_gettime();
 	  
 	  default:
 	    begin
@@ -2635,7 +2645,7 @@ module exec(clk,
 	    begin
 	       t_mem_tail.op = MEM_SCW;
 	       t_mem_tail.is_atomic = 1'b1;
-	       t_mem_tail.dst_valid = 1'b1;
+	       t_mem_tail.dst_valid = mem_uq.dst_valid;
 	       t_mem_tail.dst_ptr = mem_uq.dst;
 	       t_mem_tail.spans_cacheline = (w_agu_addr[1:0] != 2'd0);
 	       t_mem_tail.unaligned = |w_agu_addr[1:0];	       
@@ -2644,7 +2654,7 @@ module exec(clk,
 	    begin
 	       t_mem_tail.op = MEM_SCD;
 	       t_mem_tail.is_atomic = 1'b1;
-	       t_mem_tail.dst_valid = 1'b1;
+	       t_mem_tail.dst_valid = mem_uq.dst_valid;
 	       t_mem_tail.dst_ptr = mem_uq.dst;
 	       t_mem_tail.spans_cacheline = (w_agu_addr[2:0] != 3'd0);
 	       t_mem_tail.unaligned = |w_agu_addr[2:0];	       
@@ -2653,7 +2663,7 @@ module exec(clk,
 	    begin
 	       t_mem_tail.op = MEM_AMOW;
 	       t_mem_tail.is_atomic = 1'b1;	       
-	       t_mem_tail.dst_valid = 1'b1;
+	       t_mem_tail.dst_valid = mem_uq.dst_valid;
 	       t_mem_tail.dst_ptr = mem_uq.dst;
 	       t_mem_tail.spans_cacheline = (w_agu_addr[1:0] != 2'd0);
 	       t_mem_tail.unaligned = |w_agu_addr[1:0];	       
@@ -2662,7 +2672,7 @@ module exec(clk,
 	    begin
 	       t_mem_tail.op = MEM_AMOD;
 	       t_mem_tail.is_atomic = 1'b1;
-	       t_mem_tail.dst_valid = 1'b1;
+	       t_mem_tail.dst_valid = mem_uq.dst_valid;
 	       t_mem_tail.dst_ptr = mem_uq.dst;
 	       t_mem_tail.spans_cacheline = (w_agu_addr[2:0] != 3'd0);
 	       t_mem_tail.unaligned = |w_agu_addr[2:0];
