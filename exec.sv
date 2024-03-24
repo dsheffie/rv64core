@@ -2183,7 +2183,7 @@ module exec(clk,
 	    begin
 	       t_rd_csr_en = 1'b1;
 	       t_result = t_rd_csr;
-	       t_wr_csr_en = (int_uop.imm[9:5] != 'd0)&r_start_int;
+	       t_wr_csr_en = (int_uop.imm[10:6] != 'd0)&r_start_int;
 	       t_wr_csr = t_srcA;
 	       t_wr_int_prf = int_uop.dst_valid;
 	       t_alu_valid = 1'b1;
@@ -2193,7 +2193,7 @@ module exec(clk,
 	    begin
 	       t_rd_csr_en = 1'b1;
 	       t_result = t_rd_csr;
-	       t_wr_csr_en = (int_uop.imm[9:5] != 'd0)&r_start_int;
+	       t_wr_csr_en = (int_uop.imm[10:6] != 'd0)&r_start_int;
 	       t_wr_csr = t_rd_csr | t_srcA;
 	       t_wr_int_prf = int_uop.dst_valid;
 	       t_alu_valid = 1'b1;
@@ -2203,7 +2203,7 @@ module exec(clk,
 	    begin
 	       t_rd_csr_en = 1'b1;
 	       t_result = t_rd_csr;
-	       t_wr_csr_en = (int_uop.imm[9:5] != 'd0)&r_start_int;
+	       t_wr_csr_en = (int_uop.imm[10:6] != 'd0)&r_start_int;
 	       t_wr_csr = t_rd_csr & (~t_srcA);
 	       t_wr_int_prf = int_uop.dst_valid;
 	       t_alu_valid = 1'b1;
@@ -2212,7 +2212,7 @@ module exec(clk,
 	  CSRRWI:
 	    begin
 	       t_rd_csr_en = 1'b1;
-	       t_wr_csr_en = (int_uop.imm[9:5] != 'd0)&r_start_int;
+	       t_wr_csr_en = (int_uop.imm[10:6] != 'd0)&r_start_int;
 	       t_wr_csr = t_rd_csr;
 	       t_result = t_rd_csr;
 	       t_wr_int_prf = int_uop.dst_valid;
@@ -2222,8 +2222,8 @@ module exec(clk,
 	  CSRRSI:
 	    begin
 	       t_rd_csr_en = 1'b1;
-	       t_wr_csr_en = (int_uop.imm[9:5] != 'd0)&r_start_int;
-	       t_wr_csr = t_rd_csr | {59'd0, int_uop.imm[9:5]};
+	       t_wr_csr_en = (int_uop.imm[10:6] != 'd0)&r_start_int;
+	       t_wr_csr = t_rd_csr | {59'd0, int_uop.imm[10:6]};
 	       t_result = t_rd_csr;
 	       t_wr_int_prf = int_uop.dst_valid;
 	       t_alu_valid = 1'b1;
@@ -2232,8 +2232,8 @@ module exec(clk,
 	  CSRRCI:
 	    begin
 	       t_rd_csr_en = 1'b1;
-	       t_wr_csr_en = (int_uop.imm[9:5] != 'd0)&r_start_int;
-	       t_wr_csr = t_rd_csr & {59'd0, ~int_uop.imm[9:5]};
+	       t_wr_csr_en = (int_uop.imm[10:6] != 'd0)&r_start_int;
+	       t_wr_csr = t_rd_csr & {59'd0, ~int_uop.imm[10:6]};
 	       t_result = t_rd_csr;
 	       t_wr_int_prf = int_uop.dst_valid;
 	       t_alu_valid = 1'b1;
@@ -2331,7 +2331,7 @@ module exec(clk,
    always_comb
      begin
 	t_rd_csr = 'd0;
-	case(int_uop.imm[4:0])
+	case(int_uop.imm[5:0])
 	  SSTATUS:
 	    t_rd_csr = r_sstatus;
 	  SCOUNTEREN:
@@ -2384,7 +2384,7 @@ module exec(clk,
 	    begin
 	       if(t_rd_csr_en)
 		 begin
-		    $display("read csr %d unimplemented for pc %x", int_uop.imm[4:0], int_uop.pc);
+		    $display("read csr %d unimplemented for pc %x", int_uop.imm[5:0], int_uop.pc);
 		    $stop();
 		 end
 	    end
@@ -2456,7 +2456,7 @@ module exec(clk,
 	  end
 	else if(t_wr_csr_en)
 	  begin
-	     case(int_uop.imm[4:0])
+	     case(int_uop.imm[5:0])
 	       SSTATUS:
 		 r_sstatus <= t_wr_csr;
 	       STVEC:
@@ -2514,7 +2514,7 @@ module exec(clk,
 		 csr_putchar(t_wr_csr);
 	       default:
 		 begin
-		    $display("implement %d", int_uop.imm[4:0]);
+		    $display("implement %d", int_uop.imm[5:0]);
 		    $stop();
 		 end
 	     endcase // case (int_uop.imm[4:0])

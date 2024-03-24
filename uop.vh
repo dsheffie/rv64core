@@ -3,7 +3,7 @@
 
 `include "machine.vh"
 
-typedef enum logic [4:0]
+typedef enum logic [5:0]
 {
  SSTATUS, //0
  SIE, //1

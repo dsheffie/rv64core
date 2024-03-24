@@ -761,11 +761,11 @@ module decode_riscv(
 		    uop.op = MRET;
 		    uop.serializing_op = 1'b1;
 		    uop.must_restart = 1'b1;
-		    uop.imm = {11'd0, MSTATUS};
+		    uop.imm = {10'd0, MSTATUS};
 		 end
 	       else		 
 		 begin
-		    uop.imm = {6'd0, rs1[4:0], csr_id};
+		    uop.imm = {5'd0, rs1[4:0], csr_id};
 		    //$display("pc %x, sel %x, rs1 %x, csr_id %x", pc, insn[14:12], rs1, csr_id);
 		    if(csr_id != BADCSR)
 		      begin
