@@ -129,7 +129,6 @@ module perfect_l1d(clk,
    
    logic 				  rr_got_req, rr_last_wr, rr_is_retry;
 
-   logic 				  r_lock_cache, n_lock_cache;
    
    logic [`LG_MRQ_ENTRIES:0] 		  r_n_inflight;   
 
@@ -499,6 +498,15 @@ module perfect_l1d(clk,
    end
 `endif
 
+   // always_ff@(negedge clk)
+   // begin
+   //    if(!mem_q_empty)
+   // 	begin
+   // 	   $display("mem head pc %x rob ptr %d at cycle %d", 
+   // 		     t_mem_head.pc, t_mem_head.rob_ptr, r_cycle);
+   // 	end
+   // end
+   
    logic r_dead_atomic, n_dead_atomic;
   
    always_ff@(posedge clk)
@@ -521,7 +529,6 @@ module perfect_l1d(clk,
 	     r_got_req2 <= 1'b0;
 	     
 	     rr_got_req <= 1'b0;
-	     r_lock_cache <= 1'b0;
 	     rr_is_retry <= 1'b0;
 	     
 	     rr_last_wr <= 1'b0;
@@ -563,7 +570,6 @@ module perfect_l1d(clk,
 	     r_got_req2 <= t_got_req2;
 	     
 	     rr_got_req <= r_got_req;
-	     r_lock_cache <= n_lock_cache;
 	     rr_is_retry <= r_is_retry;
 	     
 	     rr_last_wr <= r_last_wr;
@@ -1001,7 +1007,6 @@ module perfect_l1d(clk,
 	
 	t_incr_busy = 1'b0;
 	
-	n_lock_cache = r_lock_cache;
 	
 	t_mh_block = r_got_req && r_last_wr && 
 		     (r_cache_idx == t_mem_head.addr[IDX_STOP-1:IDX_START] );
@@ -1027,8 +1032,9 @@ module perfect_l1d(clk,
 		    n_core_mem_rsp.data = r_req2.addr;
 		    n_core_mem_rsp.rob_ptr = r_req2.rob_ptr;
 		    n_core_mem_rsp.dst_ptr = r_req2.dst_ptr;
+		    
 		    if(drain_ds_complete)
-		      begin
+		      begin		
 			 n_core_mem_rsp.dst_valid = r_req2.dst_valid;
 			 n_core_mem_rsp_valid = 1'b1;
 		      end
@@ -1076,17 +1082,7 @@ module perfect_l1d(clk,
 		      end
 		    else
 		      begin
-			 if(t_pf2)
-			   begin
-			      n_core_mem_rsp.data = t_rsp_data2[63:0];
-                              n_core_mem_rsp.dst_valid = t_rsp_dst_valid2;
-			      n_core_mem_rsp.has_cause = t_pf2;
-			      n_core_mem_rsp.cause = LOAD_PAGE_FAULT;			      
-			   end
-			 else
-			   begin
-			      t_push_miss = 1'b1;
-			   end
+			 t_push_miss = 1'b1;
 			 if(t_port2_hit_cache)
 			   begin
 			      n_cache_hits = r_cache_hits + 'd1;
@@ -1114,18 +1110,20 @@ module perfect_l1d(clk,
 		 end // if (r_got_req)
 
 	       
-	     if(!mem_q_empty && !r_lock_cache)
+	     if(!mem_q_empty)
 	       begin
+		   // $display("t_mem_head.rob_ptr = %d, grad %b, dq ptr %d valid %b, atomic %b, r_cycle %d", 
+		   // 	    t_mem_head.rob_ptr,
+		   // 	    r_graduated[t_mem_head.rob_ptr], 
+		   // 	    core_store_data.rob_ptr, 
+		   // 	    core_store_data_valid,
+		   // 	    t_mem_head.is_atomic,
+		   // 	    r_cycle);
+		  
 		  if(!t_mh_block)
 		    begin
 		       if(t_mem_head.is_store)
 			 begin
-			    // $display("t_mem_head.rob_ptr = %d, grad %b, dq ptr %d valid %b, atomic %b", 
-			    // 	     t_mem_head.rob_ptr,
-			    // 	     r_graduated[t_mem_head.rob_ptr], 
-			    // 	     core_store_data.rob_ptr, 
-			    // 	     core_store_data_valid,
-			    // 	     t_mem_head.is_atomic);
 			    
 			    if(r_graduated[t_mem_head.rob_ptr] == 2'b10 && (core_store_data_valid ? (t_mem_head.rob_ptr == core_store_data.rob_ptr) : 1'b0) )
 			      begin
@@ -1150,7 +1148,6 @@ module perfect_l1d(clk,
 			 end // if (t_mem_head.is_store)
 		       else if(t_mem_head.is_atomic)
 			 begin
-			    
 			    if (t_mem_head.rob_ptr == head_of_rob_ptr && (core_store_data_valid ? (t_mem_head.rob_ptr == core_store_data.rob_ptr) : 1'b0))
 			      begin
 				 //$display("firing atomic for %x at cycle %d for rob ptr %d", 
