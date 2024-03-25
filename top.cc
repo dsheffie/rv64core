@@ -260,14 +260,14 @@ void write_half(long long addr, short data, long long root) {
 
 }
 
-void write_word(long long addr, int data, long long root) {
+void write_word(long long addr, int data, long long root, int id) {
   int64_t pa = addr;
   //printf("%s:%lx:%lx\n", __PRETTY_FUNCTION__, addr, root);  
   if(root) {
     pa = translate(addr, root, false, true);
     //printf("translate %lx to %lx\n", addr, pa);    
     assert(pa != -1);
-  }    
+  }  
   uint32_t d = *reinterpret_cast<uint32_t*>(&data);
   *reinterpret_cast<uint32_t*>(s->mem + pa) = d;
 }

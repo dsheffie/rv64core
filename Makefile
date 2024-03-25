@@ -12,7 +12,7 @@ ifeq ($(UNAME_S),Linux)
 	VERILATOR_INC = /home/dsheffie/local/share/verilator/include
 	VERILATOR_DPI_INC = /home/dsheffie/local/share/verilator/include/vltstd/
 	VERILATOR = /home/dsheffie/local/bin/verilator
-	EXTRA_LD = -lcapstone -lboost_program_options  -lboost_serialization -lSDL2
+	EXTRA_LD = -lcapstone -lboost_program_options  -lboost_serialization -lSDL2 -lunwind
 endif
 
 ifeq ($(UNAME_S),FreeBSD)

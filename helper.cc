@@ -111,7 +111,7 @@ double timestamp() {
 }
 
 void dbt_backtrace() {
-#if 0
+#if 1
   unw_cursor_t cursor;
   unw_context_t context;
   

@@ -1749,14 +1749,14 @@ module exec(clk,
       
    mwidth_add add3 (.A(int_uop.pc), .B('d4), .Y(w_pc4));
 
-   always_ff@(negedge clk)
-     begin
-	if((int_uop.pc == 64'hffffffff8000cec0) && r_start_int)
-	  begin
-	     $display("opcode %d, srcA %x, srcB %x, take br %b",
-		      int_uop.op, t_srcA, t_srcB, t_take_br);
-	  end
-     end
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if((int_uop.pc == 64'hffffffff8000cec0) && r_start_int)
+   // 	  begin
+   // 	     $display("opcode %d, srcA %x, srcB %x, take br %b",
+   // 		      int_uop.op, t_srcA, t_srcB, t_take_br);
+   // 	  end
+   //   end
    
    always_comb
      begin

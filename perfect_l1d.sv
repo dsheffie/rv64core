@@ -9,7 +9,7 @@ import "DPI-C" function int read_word(input longint addr);
 import "DPI-C" function longint read_dword(input longint addr);
 import "DPI-C" function void write_byte(input longint addr, input byte data, input longint root);
 import "DPI-C" function void write_half(input longint addr, input shortint  data, input longint root);
-import "DPI-C" function void write_word(input longint addr, input int data, input longint root);
+import "DPI-C" function void write_word(input longint addr, input int data, input longint root, int id);
 import "DPI-C" function void write_dword(input longint addr, input longint data, input longint root);;
 import "DPI-C" function longint dc_ld_translate(longint va, longint root );
 import "DPI-C" function longint dc_st_translate(longint va, longint root );
@@ -741,6 +741,7 @@ module perfect_l1d(clk,
    logic [31:0]	t_amo32_data;
    logic [63:0]	t_amo64_data;
    
+   wire		w_dead_atomic = drain_ds_complete && dead_rob_mask[r_req.rob_ptr];
    
    always_comb
      begin
@@ -767,6 +768,11 @@ module perfect_l1d(clk,
 	       t_amo64_data = t_w64 + r_req.data[63:0];
 	       //$display("amo add data %x", r_req.data);
 	    end
+	  5'd1: /* amoswap */
+	    begin
+	       t_amo32_data = t_w32;
+	       t_amo64_data = t_w64;
+	    end
 	  5'd8: /* amdor */
 	    begin
 	       t_amo32_data = t_w32 | r_req.data[31:0];
@@ -779,6 +785,8 @@ module perfect_l1d(clk,
 	    end	    
 	  default:
 	    begin
+	       t_amo32_data = 32'hdeadbeef;
+	       t_amo64_data = 64'hd0debabefacebeef;
 	    end
 	endcase // case (r_req.amo_op)
 
@@ -879,7 +887,9 @@ module perfect_l1d(clk,
 	    begin
 	       t_wr_array = r_got_req;	       
 	       if(t_wr_array)
-		 write_word(r_req.addr, bswap32(r_req.data[31:0]),paging_active ? page_table_root : 64'd0);
+		 begin
+		    write_word(r_req.addr, bswap32(r_req.data[31:0]),paging_active ? page_table_root : 64'd0, 32'd0);
+		 end
 	    end
 	  MEM_SD:
 	    begin
@@ -892,7 +902,7 @@ module perfect_l1d(clk,
 	       t_wr_array = r_got_req;
 	       t_rsp_data = 'd0;
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
-	       if(t_wr_array  & !r_dead_atomic)
+	       if(t_wr_array & !(r_dead_atomic || w_dead_atomic))
 		 write_dword(r_req.addr, r_req.data, paging_active ? page_table_root : 64'd0);
 	       //if(t_wr_array) $display("execute sc.d at cycle %d", r_cycle);
 	    end
@@ -901,8 +911,10 @@ module perfect_l1d(clk,
 	       t_wr_array = r_got_req;
 	       t_rsp_data = 'd0;
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
-	       if(t_wr_array  & !r_dead_atomic)
-		 write_word(r_req.addr, r_req.data[31:0], paging_active ? page_table_root : 64'd0);
+	       if(t_wr_array & !(r_dead_atomic|w_dead_atomic))
+		 begin
+		    write_word(r_req.addr, r_req.data[31:0], paging_active ? page_table_root : 64'd0, 32'd1);
+		 end
 	       
 	    end
 	  MEM_AMOW:
@@ -912,9 +924,9 @@ module perfect_l1d(clk,
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
 	       
 	       t_wr_array = r_got_req;
-	       if(t_wr_array & !r_dead_atomic)
+	       if(t_wr_array & !(r_dead_atomic||w_dead_atomic))
 		 begin
-		    write_word(r_req.addr, t_amo32_data, paging_active ? page_table_root : 64'd0);
+		    write_word(r_req.addr, t_amo32_data, paging_active ? page_table_root : 64'd0, 32'd2);
 		 end
 	    end // case: MEM_AMOW
 	  MEM_AMOD:
@@ -923,7 +935,7 @@ module perfect_l1d(clk,
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
 	       
 	       t_wr_array = r_got_req;
-	       if(t_wr_array  & !r_dead_atomic)
+	       if(t_wr_array  & !(r_dead_atomic||w_dead_atomic))
 		 begin
 		    write_dword(r_req.addr, t_amo64_data, paging_active ? page_table_root : 64'd0);
 		 end
@@ -939,7 +951,7 @@ module perfect_l1d(clk,
 	endcase // case r_req.op
      end
 
-   
+
    logic [31:0] r_fwd_cnt;
    always_ff@(posedge clk)
      begin
@@ -1043,6 +1055,7 @@ module perfect_l1d(clk,
 			 //$display("accept atomic for pc %x, rob pointer %d, cycle %d", r_req2.pc, r_req2.rob_ptr, r_cycle);
 			 if(t_pf2)
 			   begin
+			      //$display("using resp port for atomic page fault at cycle %d", r_cycle);
 			      n_core_mem_rsp.dst_valid = 1'b1;
 			      n_core_mem_rsp.has_cause = t_pf2;
 			      n_core_mem_rsp.cause = STORE_PAGE_FAULT;
@@ -1151,7 +1164,7 @@ module perfect_l1d(clk,
 			    if (t_mem_head.rob_ptr == head_of_rob_ptr && (core_store_data_valid ? (t_mem_head.rob_ptr == core_store_data.rob_ptr) : 1'b0))
 			      begin
 				 //$display("firing atomic for %x at cycle %d for rob ptr %d", 
-				 //t_mem_head.pc, r_cycle, t_mem_head.rob_ptr);	
+				//	  t_mem_head.pc, r_cycle, t_mem_head.rob_ptr);	
 				 t_pop_mq = 1'b1;
 				 core_store_data_ack = 1'b1;
 				 n_req = t_mem_head;
