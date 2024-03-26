@@ -1749,14 +1749,14 @@ module exec(clk,
       
    mwidth_add add3 (.A(int_uop.pc), .B('d4), .Y(w_pc4));
 
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if((int_uop.pc == 64'hffffffff8000cec0) && r_start_int)
-   // 	  begin
-   // 	     $display("opcode %d, srcA %x, srcB %x, take br %b",
-   // 		      int_uop.op, t_srcA, t_srcB, t_take_br);
-   // 	  end
-   //   end
+    always_ff@(negedge clk)
+      begin
+    	if((int_uop.pc == 64'hffffffff80953468) && r_start_int)
+    	  begin
+    	     $display("opcode %d, srcA %x, srcB %x, dst valid %b, t_wr_csr_en = %b, int_uop.imm[10:6] = %d",
+    		      int_uop.op, t_srcA, t_srcB, int_uop.dst_valid, t_wr_csr_en, int_uop.imm[10:6]);
+    	  end
+      end
    
    always_comb
      begin
@@ -2183,6 +2183,12 @@ module exec(clk,
 			 MACHINE_ECALL;
 	       t_alu_valid = 1'b1;
 	    end
+	  EBREAK:
+	    begin
+	       t_has_cause = 1'b1;
+	       t_cause = BREAKPOINT;
+	       t_alu_valid = 1'b1;
+	    end
 	  SFENCEVMA:
 	    begin
 	       t_pc = w_pc4;
@@ -2193,7 +2199,7 @@ module exec(clk,
 	    begin
 	       t_rd_csr_en = 1'b1;
 	       t_result = t_rd_csr;
-	       t_wr_csr_en = (int_uop.imm[10:6] != 'd0)&r_start_int;
+	       t_wr_csr_en = r_start_int;
 	       t_wr_csr = t_srcA;
 	       t_wr_int_prf = int_uop.dst_valid;
 	       t_alu_valid = 1'b1;
@@ -2203,7 +2209,7 @@ module exec(clk,
 	    begin
 	       t_rd_csr_en = 1'b1;
 	       t_result = t_rd_csr;
-	       t_wr_csr_en = (int_uop.imm[10:6] != 'd0)&r_start_int;
+	       t_wr_csr_en = r_start_int;
 	       t_wr_csr = t_rd_csr | t_srcA;
 	       t_wr_int_prf = int_uop.dst_valid;
 	       t_alu_valid = 1'b1;
@@ -2213,7 +2219,7 @@ module exec(clk,
 	    begin
 	       t_rd_csr_en = 1'b1;
 	       t_result = t_rd_csr;
-	       t_wr_csr_en = (int_uop.imm[10:6] != 'd0)&r_start_int;
+	       t_wr_csr_en = r_start_int;
 	       t_wr_csr = t_rd_csr & (~t_srcA);
 	       t_wr_int_prf = int_uop.dst_valid;
 	       t_alu_valid = 1'b1;
@@ -2344,18 +2350,24 @@ module exec(clk,
 	case(int_uop.imm[5:0])
 	  SSTATUS:
 	    t_rd_csr = r_sstatus;
-	  SCOUNTEREN:
-	    t_rd_csr = r_scounteren;
 	  SIE:
 	    t_rd_csr = r_sie;
 	  STVEC:
 	    t_rd_csr = r_stvec;
 	  SSCRATCH:
 	    t_rd_csr = r_sscratch;
-	  SATP:
-	    t_rd_csr = r_satp;
+	  SEPC:
+	    t_rd_csr = r_sepc;
+	  SCAUSE:
+	    t_rd_csr = {60'd0, r_scause};
+	  SCOUNTEREN:
+	    t_rd_csr = r_scounteren;
+	  STVAL:
+	    t_rd_csr = r_stval;
 	  SIP:
 	    t_rd_csr = r_sip;
+	  SATP:
+	    t_rd_csr = r_satp;
 	  MSTATUS:
 	    t_rd_csr = r_mstatus;
 	  MCAUSE:
@@ -2456,6 +2468,8 @@ module exec(clk,
 	  begin
 	     if(t_delegate)
 	       begin
+		  $display("delegate cause %x, tval %x, epc %x",
+			   cause, tval, epc);
 		  r_scause <= cause;
 		  r_stval <= tval;
 		  r_sepc <= epc;
@@ -2472,12 +2486,18 @@ module exec(clk,
 	     case(int_uop.imm[5:0])
 	       SSTATUS:
 		 r_sstatus <= t_wr_csr;
-	       STVEC:
-		 r_stvec <= t_wr_csr;
-	       SCOUNTEREN:
-		 r_scounteren <= t_wr_csr;
 	       SIE:
 		 r_sie <= t_wr_csr;
+	       STVEC:
+		 r_stvec <= t_wr_csr;
+	       SSCRATCH:
+		 begin
+		    r_sscratch <= t_wr_csr;
+		 end
+	       SEPC:
+		 r_sepc <= t_wr_csr;
+	       SCOUNTEREN:
+		 r_scounteren <= t_wr_csr;
 	       SIP:
 		 r_sip <= t_wr_csr;
 	       SATP:
@@ -2505,6 +2525,8 @@ module exec(clk,
 		 r_mtvec <= t_wr_csr;
 	       MIE:
 		 r_mie <= t_wr_csr;
+	       MCAUSE:
+		 r_mcause <= t_wr_csr[3:0];
 	       MEDELEG:
 		 r_medeleg <= t_wr_csr;
 	       MIDELEG:
@@ -2527,7 +2549,7 @@ module exec(clk,
 		 csr_putchar(t_wr_csr[7:0]);
 	       default:
 		 begin
-		    $display("implement %d", int_uop.imm[5:0]);
+		    $display("write csr implement %d for pc %x opcode %d", int_uop.imm[5:0], int_uop.pc, int_uop.op);
 		    $stop();
 		 end
 	     endcase // case (int_uop.imm[4:0])

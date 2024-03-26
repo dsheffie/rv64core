@@ -1146,7 +1146,8 @@ module core(clk,
 		 ILLEGAL_INSTRUCTION:
 		   begin
 		      n_pending_ii = 1'b1;
-		      $stop();
+		      //$display("took fault for %x with cause %d at cycle %d, priv %d", 
+		      //t_rob_head.pc, t_rob_head.cause, r_cycle, priv);
 		   end
 		 SUPERVISOR_ECALL:
 		   begin
@@ -1154,12 +1155,10 @@ module core(clk,
 		 FETCH_PAGE_FAULT:
 		   begin
 		      n_tval = t_rob_head.pc;
-		      //
 		   end
 		 default:
 		   begin
 		      $display("t_rob_head.cause = %d, ", t_rob_head.cause);
-		      $stop();
 		   end
 	       endcase // case (t_rob_head.cause)
 	       t_bump_rob_head = 1'b1;

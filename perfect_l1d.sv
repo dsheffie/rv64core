@@ -10,7 +10,7 @@ import "DPI-C" function longint read_dword(input longint addr);
 import "DPI-C" function void write_byte(input longint addr, input byte data, input longint root);
 import "DPI-C" function void write_half(input longint addr, input shortint  data, input longint root);
 import "DPI-C" function void write_word(input longint addr, input int data, input longint root, int id);
-import "DPI-C" function void write_dword(input longint addr, input longint data, input longint root);;
+import "DPI-C" function void write_dword(input longint addr, input longint data, input longint root, int id);
 import "DPI-C" function longint dc_ld_translate(longint va, longint root );
 import "DPI-C" function longint dc_st_translate(longint va, longint root );
 `endif
@@ -773,7 +773,7 @@ module perfect_l1d(clk,
 	       t_amo32_data = t_w32;
 	       t_amo64_data = t_w64;
 	    end
-	  5'd8: /* amdor */
+	  5'd8: /* amoor */
 	    begin
 	       t_amo32_data = t_w32 | r_req.data[31:0];
 	       t_amo64_data = t_w64 | r_req.data[63:0];
@@ -895,7 +895,7 @@ module perfect_l1d(clk,
 	    begin
 	       t_wr_array = r_got_req;	       
 	       if(t_wr_array)
-		 write_dword(r_req.addr, r_req.data, paging_active ? page_table_root : 64'd0);	       	       
+		 write_dword(r_req.addr, r_req.data, paging_active ? page_table_root : 64'd0, 32'd0);	       	       
 	    end
 	  MEM_SCD:
 	    begin
@@ -903,7 +903,7 @@ module perfect_l1d(clk,
 	       t_rsp_data = 'd0;
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
 	       if(t_wr_array & !(r_dead_atomic || w_dead_atomic))
-		 write_dword(r_req.addr, r_req.data, paging_active ? page_table_root : 64'd0);
+		 write_dword(r_req.addr, r_req.data, paging_active ? page_table_root : 64'd0, 32'd1);
 	       //if(t_wr_array) $display("execute sc.d at cycle %d", r_cycle);
 	    end
 	  MEM_SCW:
@@ -926,6 +926,7 @@ module perfect_l1d(clk,
 	       t_wr_array = r_got_req;
 	       if(t_wr_array & !(r_dead_atomic||w_dead_atomic))
 		 begin
+		    //$display("AMOW for pc %x, data %x, cycle %d", r_req.pc, t_amo64_data, r_cycle);		    
 		    write_word(r_req.addr, t_amo32_data, paging_active ? page_table_root : 64'd0, 32'd2);
 		 end
 	    end // case: MEM_AMOW
@@ -937,7 +938,8 @@ module perfect_l1d(clk,
 	       t_wr_array = r_got_req;
 	       if(t_wr_array  & !(r_dead_atomic||w_dead_atomic))
 		 begin
-		    write_dword(r_req.addr, t_amo64_data, paging_active ? page_table_root : 64'd0);
+		    //$display("AMOD op %d for pc %x, data %x, cycle %d", r_req.amo_op, r_req.pc, t_amo64_data, r_cycle);
+		    write_dword(r_req.addr, t_amo64_data, paging_active ? page_table_root : 64'd0, 32'd2);
 		 end
 	    end // case: MEM_AMOD
 	  MEM_NOP:

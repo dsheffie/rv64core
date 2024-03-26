@@ -377,6 +377,7 @@ module decode_riscv(
 		    uop.srcA_valid = 1'b1;
 		    uop.is_mem = 1'b1;
 		    uop.jmp_imm = {43'd0, insn[31:27]};
+		    uop.serializing_op = 1'b1;
 		    case(insn[31:27])
 		      5'd0:
 			begin /* amoadd */
@@ -768,7 +769,7 @@ module decode_riscv(
 	       else		 
 		 begin
 		    uop.imm = {5'd0, rs1[4:0], csr_id};
-		    //$display("pc %x, sel %x, rs1 %x, csr_id %x", pc, insn[14:12], rs1, csr_id);
+
 		    if(csr_id != BADCSR)
 		      begin
 			 case(insn[14:12])
@@ -883,7 +884,8 @@ module decode_riscv(
 			     begin
 			     end
 			 endcase // case (insn[14:12])
-		      end
+		      end // if (csr_id != BADCSR)
+		    //$display("pc %x, sel %x, rs1 %x, csr_id %x, generated op %d, nop %b", pc, insn[14:12], rs1, csr_id, uop.op, uop.op==NOP);		    
 		 end // else: !if((insn[31:20] == 12'h302) && insn[19:7] == 'd0)
 	    end
 	  default:

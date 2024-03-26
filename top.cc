@@ -272,7 +272,7 @@ void write_word(long long addr, int data, long long root, int id) {
   *reinterpret_cast<uint32_t*>(s->mem + pa) = d;
 }
 
-void write_dword(long long addr, long long data, long long root) {
+void write_dword(long long addr, long long data, long long root, int id) {
   int64_t pa = addr;
   //printf("%s:%lx:%lx\n", __PRETTY_FUNCTION__, addr, root);
   if(root) {
@@ -715,6 +715,9 @@ int main(int argc, char **argv) {
       if(insns_retired >= start_trace_at) {
 	trace_retirement = true;
       }
+
+      if(last_retired_pc == 0xffffffff8095338c)
+	trace_retirement = true;
       
       if(((insns_retired % (1<<20)) == 0)) {
 	++csr_time;
@@ -738,7 +741,11 @@ int main(int argc, char **argv) {
 		  << ((static_cast<double>(mem_reqs)/insns_retired)*100.0)
 		  << ", mispredict pki "
 		  << (static_cast<double>(n_mispredicts) / insns_retired) * 1000.0
-		  << std::defaultfloat	  
+		  << std::defaultfloat
+		  << std::hex
+		  << " "
+		  << tb->retire_reg_data
+		  << std::dec	  
 		  <<" \n";
       }
       if(tb->retire_two_valid) {
