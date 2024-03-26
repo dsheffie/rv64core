@@ -398,8 +398,7 @@ module core(clk,
 			     HALT_WAIT_FOR_RESTART, //11
 			     WAIT_FOR_SERIALIZE_AND_RESTART, //12
 			     ARCH_FAULT,
-			     WRITE_EPC,
-			     WRITE_CAUSE
+			     WRITE_CSRS
 			     } state_t;
    
    state_t r_state, n_state;
@@ -1156,6 +1155,14 @@ module core(clk,
 		   begin
 		      n_tval = t_rob_head.pc;
 		   end
+		 LOAD_PAGE_FAULT:
+		   begin
+
+		   end
+		 STORE_PAGE_FAULT:
+		   begin
+		      
+		   end
 		 default:
 		   begin
 		      $display("t_rob_head.cause = %d, ", t_rob_head.cause);
@@ -1170,10 +1177,10 @@ module core(clk,
 		 end
 	       else
 		 begin
-		    n_state = WRITE_EPC;
+		    n_state = WRITE_CSRS;
 		 end
 	    end
-	  WRITE_EPC:
+	  WRITE_CSRS:
 	    begin
 	       n_update_csr_exc = 1'b1;
 	       //$display("exception handler pc %x. page root %x",
@@ -1184,13 +1191,6 @@ module core(clk,
 	       n_restart_valid = 1'b1;	       
 	       n_state = DRAIN;
 	    end
-	  WRITE_CAUSE:
-	    begin
-	       n_state = FLUSH_FOR_HALT;
-	       t_bump_rob_head = 1'b1;
-	       n_ds_done = 1'b1;
-	    end
-
 	  default:
 	    begin
 	    end
