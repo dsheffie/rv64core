@@ -1157,11 +1157,11 @@ module core(clk,
 		   end
 		 LOAD_PAGE_FAULT:
 		   begin
-
+		      n_tval = t_rob_head.addr;
 		   end
 		 STORE_PAGE_FAULT:
 		   begin
-		      
+		      n_tval = t_rob_head.addr;
 		   end
 		 default:
 		   begin
@@ -1372,7 +1372,8 @@ module core(clk,
 	t_rob_tail.cause = 4'd0;
 	t_rob_tail.take_br = 1'b0;
 	t_rob_tail.is_br = t_alloc_uop.is_br;	
-	t_rob_tail.data = 'd0;
+	t_rob_tail.data= 'd0;
+	t_rob_tail.addr = 'd0;
 	t_rob_tail.pht_idx = t_alloc_uop.pht_idx;
 
 	t_rob_next_tail.faulted  = 1'b0;
@@ -1392,6 +1393,7 @@ module core(clk,
 	t_rob_next_tail.take_br = 1'b0;
 	t_rob_next_tail.is_br = t_alloc_uop2.is_br;
 	t_rob_next_tail.data = 'd0;
+	t_rob_next_tail.addr = 'd0;
 	t_rob_next_tail.pht_idx = t_alloc_uop2.pht_idx;
 	
 	
@@ -1577,6 +1579,7 @@ module core(clk,
 	     if(core_mem_rsp_valid)
 	       begin
 		  r_rob[core_mem_rsp.rob_ptr].data <= core_mem_rsp.data;
+		  r_rob[core_mem_rsp.rob_ptr].addr <= core_mem_rsp.addr;
 		  r_rob[core_mem_rsp.rob_ptr].faulted <= core_mem_rsp.has_cause;
 		  r_rob[core_mem_rsp.rob_ptr].cause <= core_mem_rsp.cause;
 		  r_rob[core_mem_rsp.rob_ptr].has_cause <= core_mem_rsp.has_cause;

@@ -40,6 +40,7 @@ typedef struct packed {
    logic 			 is_indirect;
    logic 			 take_br;
    logic [`M_WIDTH-1:0] 	 data;
+   logic [`M_WIDTH-1:0]		 addr;
    logic [`LG_PHT_SZ-1:0] 	 pht_idx;
 
 `ifdef ENABLE_CYCLE_ACCOUNTING
@@ -100,13 +101,13 @@ typedef struct packed {
 } mem_data_t;
 
 typedef struct packed {
-   logic [`M_WIDTH-1:0] data;
+   logic [`M_WIDTH-1:0]	data;
+   logic [`M_WIDTH-1:0]	addr;
    logic [`LG_ROB_ENTRIES-1:0] rob_ptr;
    logic [`LG_PRF_ENTRIES-1:0] dst_ptr;
    logic 		       dst_valid;
    logic [3:0]		       cause;
    logic		       has_cause;   
-   logic [`M_WIDTH-1:0]        pc;
 } mem_rsp_t;
 
 typedef struct packed {

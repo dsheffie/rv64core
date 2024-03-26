@@ -999,6 +999,7 @@ module perfect_l1d(clk,
 	n_core_mem_rsp_valid = 1'b0;
 	
 	n_core_mem_rsp.data = r_req.addr;
+	n_core_mem_rsp.addr = r_req.addr;
 	n_core_mem_rsp.rob_ptr = r_req.rob_ptr;
 	n_core_mem_rsp.dst_ptr = r_req.dst_ptr;
 	n_core_mem_rsp.has_cause = 1'b0;
@@ -1044,6 +1045,7 @@ module perfect_l1d(clk,
 	       if(r_got_req2)
 		 begin
 		    n_core_mem_rsp.data = r_req2.addr;
+		    n_core_mem_rsp.addr = r_req2.addr;
 		    n_core_mem_rsp.rob_ptr = r_req2.rob_ptr;
 		    n_core_mem_rsp.dst_ptr = r_req2.dst_ptr;
 		    
