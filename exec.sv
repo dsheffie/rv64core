@@ -2209,7 +2209,7 @@ module exec(clk,
 	    begin
 	       t_rd_csr_en = 1'b1;
 	       t_result = t_rd_csr;
-	       t_wr_csr_en = r_start_int;
+	       t_wr_csr_en = r_start_int & (int_uop.imm[10:6] != 'd0);
 	       t_wr_csr = t_rd_csr | t_srcA;
 	       t_wr_int_prf = int_uop.dst_valid;
 	       t_alu_valid = 1'b1;
@@ -2219,7 +2219,7 @@ module exec(clk,
 	    begin
 	       t_rd_csr_en = 1'b1;
 	       t_result = t_rd_csr;
-	       t_wr_csr_en = r_start_int;
+	       t_wr_csr_en = r_start_int & (int_uop.imm[10:6] != 'd0);
 	       t_wr_csr = t_rd_csr & (~t_srcA);
 	       t_wr_int_prf = int_uop.dst_valid;
 	       t_alu_valid = 1'b1;
@@ -2228,7 +2228,7 @@ module exec(clk,
 	  CSRRWI:
 	    begin
 	       t_rd_csr_en = 1'b1;
-	       t_wr_csr_en = (int_uop.imm[10:6] != 'd0)&r_start_int;
+	       t_wr_csr_en = r_start_int;
 	       t_wr_csr = t_rd_csr;
 	       t_result = t_rd_csr;
 	       t_wr_int_prf = int_uop.dst_valid;
@@ -2525,6 +2525,8 @@ module exec(clk,
 		 r_mtvec <= t_wr_csr;
 	       MIE:
 		 r_mie <= t_wr_csr;
+	       MIP:
+		 r_mip <= t_wr_csr;
 	       MCAUSE:
 		 r_mcause <= t_wr_csr[3:0];
 	       MEDELEG:
@@ -2549,7 +2551,8 @@ module exec(clk,
 		 csr_putchar(t_wr_csr[7:0]);
 	       default:
 		 begin
-		    $display("write csr implement %d for pc %x opcode %d", int_uop.imm[5:0], int_uop.pc, int_uop.op);
+		    $display("write csr implement %d for pc %x opcode %d", 
+			     int_uop.imm[5:0], int_uop.pc, int_uop.op);
 		    $stop();
 		 end
 	     endcase // case (int_uop.imm[4:0])

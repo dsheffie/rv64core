@@ -716,9 +716,6 @@ int main(int argc, char **argv) {
 	trace_retirement = true;
       }
 
-      if(last_retired_pc == 0xffffffff8095338c)
-	trace_retirement = true;
-      
       if(((insns_retired % (1<<20)) == 0)) {
 	++csr_time;
       }
