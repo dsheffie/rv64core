@@ -252,6 +252,7 @@ module core(clk,
       
    rob_entry_t r_rob[N_ROB_ENTRIES-1:0];   
    bob_entry_t r_bob[N_BOB_ENTRIES-1:0];
+   logic [63:0] r_rob_addr[N_ROB_ENTRIES-1:0];
    
    logic [N_ROB_ENTRIES-1:0] 		  r_rob_complete;
    logic [N_ROB_ENTRIES-1:0] 		  r_rob_sd_complete;
@@ -421,6 +422,7 @@ module core(clk,
       
    assign head_of_rob_ptr_valid = (r_state == ACTIVE);
    assign head_of_rob_ptr = r_rob_head_ptr[`LG_ROB_ENTRIES-1:0];
+   wire [63:0]	w_rob_head_addr = r_rob_addr[r_rob_head_ptr[`LG_ROB_ENTRIES-1:0]];
    
    assign flush_req_l1d = r_flush_req_l1d;
    assign flush_req_l1i = r_flush_req_l1i;
@@ -1151,24 +1153,21 @@ module core(clk,
 		      //$display("took fault for %x with cause %d at cycle %d, priv %d", 
 		      //t_rob_head.pc, t_rob_head.cause, r_cycle, priv);
 		   end
-		 SUPERVISOR_ECALL:
-		   begin
-		   end
 		 FETCH_PAGE_FAULT:
 		   begin
 		      n_tval = t_rob_head.pc;
 		   end
 		 LOAD_PAGE_FAULT:
 		   begin
-		      n_tval = t_rob_head.addr;
+		      n_tval = w_rob_head_addr;
 		   end
 		 STORE_PAGE_FAULT:
 		   begin
-		      n_tval = t_rob_head.addr;
+		      n_tval = w_rob_head_addr;		      
 		   end
 		 default:
 		   begin
-		      $display("t_rob_head.cause = %d, ", t_rob_head.cause);
+		     // $display("t_rob_head.cause = %d, ", t_rob_head.cause);
 		   end
 	       endcase // case (t_rob_head.cause)
 	       t_bump_rob_head = 1'b1;
@@ -1376,7 +1375,6 @@ module core(clk,
 	t_rob_tail.take_br = 1'b0;
 	t_rob_tail.is_br = t_alloc_uop.is_br;	
 	t_rob_tail.data= 'd0;
-	t_rob_tail.addr = 'd0;
 	t_rob_tail.pht_idx = t_alloc_uop.pht_idx;
 
 	t_rob_next_tail.faulted  = 1'b0;
@@ -1396,7 +1394,6 @@ module core(clk,
 	t_rob_next_tail.take_br = 1'b0;
 	t_rob_next_tail.is_br = t_alloc_uop2.is_br;
 	t_rob_next_tail.data = 'd0;
-	t_rob_next_tail.addr = 'd0;
 	t_rob_next_tail.pht_idx = t_alloc_uop2.pht_idx;
 	
 	
@@ -1535,6 +1532,15 @@ module core(clk,
 	       end
 	  end
      end // always_ff@ (posedge clk)
+
+
+   always_ff@(posedge clk)
+     begin
+	if(core_mem_rsp_valid)
+	  begin
+	     r_rob_addr[core_mem_rsp.rob_ptr] <= core_mem_rsp.addr;
+	  end
+     end
    
    always_ff@(posedge clk)
      begin
@@ -1582,7 +1588,6 @@ module core(clk,
 	     if(core_mem_rsp_valid)
 	       begin
 		  r_rob[core_mem_rsp.rob_ptr].data <= core_mem_rsp.data;
-		  r_rob[core_mem_rsp.rob_ptr].addr <= core_mem_rsp.addr;
 		  r_rob[core_mem_rsp.rob_ptr].faulted <= core_mem_rsp.has_cause;
 		  r_rob[core_mem_rsp.rob_ptr].cause <= core_mem_rsp.cause;
 		  r_rob[core_mem_rsp.rob_ptr].has_cause <= core_mem_rsp.has_cause;

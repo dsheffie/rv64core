@@ -779,7 +779,7 @@ void execRiscv(state_t *s) {
 	    pa = s->translate(s->gpr[m.a.rs1], page_fault, 8, true);
 	    assert(!page_fault);
 	    int64_t x = s->load64(pa);
-	    s->store64(pa, x);
+	    s->store64(pa, s->gpr[m.a.rs2]);
 	    if(m.a.rd != 0) {
 	      s->gpr[m.a.rd] = x;
 	    }

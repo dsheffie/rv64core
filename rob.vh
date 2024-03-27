@@ -40,7 +40,6 @@ typedef struct packed {
    logic 			 is_indirect;
    logic 			 take_br;
    logic [`M_WIDTH-1:0] 	 data;
-   logic [`M_WIDTH-1:0]		 addr;
    logic [`LG_PHT_SZ-1:0] 	 pht_idx;
 
 `ifdef ENABLE_CYCLE_ACCOUNTING

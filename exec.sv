@@ -1749,15 +1749,6 @@ module exec(clk,
       
    mwidth_add add3 (.A(int_uop.pc), .B('d4), .Y(w_pc4));
 
-    always_ff@(negedge clk)
-      begin
-    	if((int_uop.pc == 64'hffffffff80953468) && r_start_int)
-    	  begin
-    	     $display("opcode %d, srcA %x, srcB %x, dst valid %b, t_wr_csr_en = %b, int_uop.imm[10:6] = %d",
-    		      int_uop.op, t_srcA, t_srcB, int_uop.dst_valid, t_wr_csr_en, int_uop.imm[10:6]);
-    	  end
-      end
-   
    always_comb
      begin
 	t_sub = 1'b0;
@@ -2402,6 +2393,8 @@ module exec(clk,
 	    t_rd_csr = r_pmpcfg0;
 	  RDBRANCH_CSR:
 	    t_rd_csr = 'd0;
+	  RDFAULTEDBRANCH_CSR:
+	    t_rd_csr = 'd0;
 	  RDTIME_CSR:
 	    t_rd_csr = csr_gettime();
 	  
@@ -2549,6 +2542,9 @@ module exec(clk,
 		 r_pmpcfg0 <= t_wr_csr;
 	       RDBRANCH_CSR:
 		 csr_putchar(t_wr_csr[7:0]);
+	       RDFAULTEDBRANCH_CSR:
+		 begin
+		 end
 	       default:
 		 begin
 		    $display("write csr implement %d for pc %x opcode %d", 

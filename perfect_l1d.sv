@@ -743,24 +743,6 @@ module perfect_l1d(clk,
    
    wire		w_dead_atomic = drain_ds_complete && dead_rob_mask[r_req.rob_ptr];
 
-   always_ff@(negedge clk)
-     begin
-	if(r_req.addr == 64'hffffffff812efba8 && t_wr_array)
-	  begin
-	     $display(">>> instruction at pc %x, op %d writes array, data %x, amo data %x", r_req.pc, r_req.op, r_req.data, t_amo32_data);
-	  end
-	if(r_req.pc == 64'hffffffff8093f45c)
-	  begin
-	     $display(">>> instruction at pc %x, op %d writes array, data %x, write array %b, cycle %d", 
-		      r_req.pc, r_req.op, r_req.data, t_wr_array, r_cycle);
-	  end
-	//if(r_req.op == MEM_AMOW &&t_wr_array)
-	  //begin
-	    // $display("amo at pc %x, addr %x, old data %x, new data %x",
-	//	      r_req.pc, r_req.addr, t_w32, t_amo32_data);
-	  // end
-
-     end
 
    always_ff@(negedge clk)
      begin

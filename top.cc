@@ -228,10 +228,6 @@ long long read_dword(long long addr) {
   int64_t pa = addr;
   pa &= ((1UL<<32)-1);
   long long x = *reinterpret_cast<long long*>(s->mem + pa);
-  if(verbose) {
-    printf("loaded %llx from %lx\n", x, pa);
-  }
-
   return x;
 }
 
@@ -286,10 +282,6 @@ void write_dword(long long addr, long long data, long long root, int id) {
     //printf("translate %lx to %lx\n", addr, pa);    
     assert(pa != -1);
   }
-  if(pa == 0xfa1fe0UL || verbose)  {
-    printf("%s: addr %lx pa %lx, data %lx callsite %d\n", __PRETTY_FUNCTION__, addr, pa, data, id);
-    verbose =true;
-  }  
   uint64_t d = *reinterpret_cast<uint64_t*>(&data);
   *reinterpret_cast<uint64_t*>(s->mem + pa) = d;
 }
@@ -962,14 +954,6 @@ int main(int argc, char **argv) {
       break;
     }
 
-    if(tb->took_exc) {
-      int mem_eq = memcmp(ss->mem, s->mem, 1UL<<32);
-      if(mem_eq != 0) {
-	printf("memory mismatch at icnt %ld\n", insns_retired);
-      	break;
-      }
-    }
-      
     
     if(tb->got_ud) {
       uint32_t insn = get_insn(tb->epc, s);
