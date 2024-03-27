@@ -315,7 +315,8 @@ endfunction
 			  t_push_insn3, t_push_insn4;
    
    logic		  t_page_fault, t_unaligned_fetch;
-   
+   wire [63:0]		  w_btb_pc;
+   wire			  w_btb_hit;  
    
    logic 		  t_clear_fq;
    logic 		  r_flush_req, n_flush_req;
@@ -667,11 +668,11 @@ endfunction
 	       else if(t_hit && !fq_full)
 		 begin		    
 		    t_update_spec_hist = (t_pd != 4'd0);
-		    //if(paging_active)
-		      //begin
-			 //$display("successful translation to tag %x, cache out %x", r_cache_pc_pa[`M_WIDTH-1:IDX_STOP], r_tag_out);
-			 //$stop();
-		     // end
+		    if(paging_active)
+		      begin
+			 $display("successful translation to tag %x, cache out %x", r_cache_pc_pa[`M_WIDTH-1:IDX_STOP], r_tag_out);
+			 $display("btb hit %b, btb pa %x", w_btb_hit, w_btb_pc);			 
+		      end
 		    //if(t_pd == 4'd1)
 		    //begin
 		    //$display("cycle %d : r_cache_pc %x is a cond br, predict %b, hist %b, r_pht_idx %d", 
@@ -999,6 +1000,18 @@ endfunction
 			 ic_translate(n_cache_pc, page_table_root) :
 			 n_cache_pc;
      end
+
+
+   btb ibtb(.clk(clk), 
+	    .reset(reset), 
+	    .va(n_cache_pc),
+	    .pa(w_btb_pc),
+	    .hit(w_btb_hit),
+	    .replace(r_req && paging_active && !w_btb_hit),
+	    .replace_va(r_cache_pc),
+	    .replace_pa(r_cache_pc_pa)
+	    );
+   
    
 `ifdef VERILATOR
    always_ff@(negedge clk)
