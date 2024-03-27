@@ -742,6 +742,88 @@ module perfect_l1d(clk,
    logic [63:0]	t_amo64_data;
    
    wire		w_dead_atomic = drain_ds_complete && dead_rob_mask[r_req.rob_ptr];
+
+   always_ff@(negedge clk)
+     begin
+	if(r_req.addr == 64'hffffffff812efba8 && t_wr_array)
+	  begin
+	     $display(">>> instruction at pc %x, op %d writes array, data %x, amo data %x", r_req.pc, r_req.op, r_req.data, t_amo32_data);
+	  end
+	if(r_req.pc == 64'hffffffff8093f45c)
+	  begin
+	     $display(">>> instruction at pc %x, op %d writes array, data %x, write array %b, cycle %d", 
+		      r_req.pc, r_req.op, r_req.data, t_wr_array, r_cycle);
+	  end
+	//if(r_req.op == MEM_AMOW &&t_wr_array)
+	  //begin
+	    // $display("amo at pc %x, addr %x, old data %x, new data %x",
+	//	      r_req.pc, r_req.addr, t_w32, t_amo32_data);
+	  // end
+
+     end
+
+   always_ff@(negedge clk)
+     begin
+	case(r_req.op)
+	  MEM_SB:
+	    begin
+	       if(t_wr_array)
+		 write_byte(r_req.addr, r_req.data[7:0],paging_active ? page_table_root : 64'd0);
+
+	    end
+	  MEM_SH:
+	    begin
+	       if(t_wr_array)
+		 write_half(r_req.addr, bswap16(r_req.data[15:0]),paging_active ? page_table_root : 64'd0);
+	    end
+	  MEM_SW:
+	    begin
+	       if(t_wr_array)
+		 begin
+		    write_word(r_req.addr, bswap32(r_req.data[31:0]),paging_active ? page_table_root : 64'd0, 32'd0);
+		 end
+	    end
+	  MEM_SD:
+	    begin
+	       if(t_wr_array)
+		 write_dword(r_req.addr, r_req.data, paging_active ? page_table_root : 64'd0, r_cycle[31:0]);	       	       
+	    end
+	  MEM_SCD:
+	    begin
+	       if(t_wr_array & !(r_dead_atomic || w_dead_atomic))
+		 write_dword(r_req.addr, r_req.data, paging_active ? page_table_root : 64'd0, 32'd1);
+	       //if(t_wr_array) $display("execute sc.d at cycle %d", r_cycle);
+	    end
+	  MEM_SCW:
+	    begin
+	       if(t_wr_array & !(r_dead_atomic|w_dead_atomic))
+		 begin
+		    write_word(r_req.addr, r_req.data[31:0], paging_active ? page_table_root : 64'd0, 32'd1);
+		 end
+	       
+	    end
+	  MEM_AMOW:
+	    begin
+	       if(t_wr_array & !(r_dead_atomic||w_dead_atomic))
+		 begin
+		    //$display("AMOW for pc %x, data %x, cycle %d", r_req.pc, t_amo64_data, r_cycle);		    
+		    write_word(r_req.addr, t_amo32_data, paging_active ? page_table_root : 64'd0, 32'd2);
+		 end
+	    end // case: MEM_AMOW
+	  MEM_AMOD:
+	    begin
+	       if(t_wr_array  & !(r_dead_atomic||w_dead_atomic))
+		 begin
+		    //$display("AMOD op %d for pc %x, data %x, cycle %d", r_req.amo_op, r_req.pc, t_amo64_data, r_cycle);
+		    write_dword(r_req.addr, t_amo64_data, paging_active ? page_table_root : 64'd0, 32'd2);
+		 end
+	    end // case: MEM_AMOD
+	  default:
+	    begin
+	    end
+	endcase // case r_req.op
+     end // always_ff@ (negedge clk)
+   
    
    always_comb
      begin
@@ -770,8 +852,8 @@ module perfect_l1d(clk,
 	    end
 	  5'd1: /* amoswap */
 	    begin
-	       t_amo32_data = t_w32;
-	       t_amo64_data = t_w64;
+	       t_amo32_data = r_req.data[31:0];
+	       t_amo64_data = r_req.data[63:0];
 	    end
 	  5'd8: /* amoor */
 	    begin
@@ -873,48 +955,47 @@ module perfect_l1d(clk,
 	  MEM_SB:
 	    begin
 	       t_wr_array = r_got_req;
-	       if(t_wr_array)
-		 write_byte(r_req.addr, r_req.data[7:0],paging_active ? page_table_root : 64'd0);
+	       //if(t_wr_array)
+	       //write_byte(r_req.addr, r_req.data[7:0],paging_active ? page_table_root : 64'd0);
 
 	    end
 	  MEM_SH:
 	    begin
 	       t_wr_array = r_got_req;	       
-	       if(t_wr_array)
-		 write_half(r_req.addr, bswap16(r_req.data[15:0]),paging_active ? page_table_root : 64'd0);
+	       //if(t_wr_array)
+	       //write_half(r_req.addr, bswap16(r_req.data[15:0]),paging_active ? page_table_root : 64'd0);
 	    end
 	  MEM_SW:
 	    begin
 	       t_wr_array = r_got_req;	       
-	       if(t_wr_array)
-		 begin
-		    write_word(r_req.addr, bswap32(r_req.data[31:0]),paging_active ? page_table_root : 64'd0, 32'd0);
-		 end
+	       // if(t_wr_array)
+	       // 	 begin
+	       // 	    write_word(r_req.addr, bswap32(r_req.data[31:0]),paging_active ? page_table_root : 64'd0, 32'd0);
+	       // 	 end
 	    end
 	  MEM_SD:
 	    begin
 	       t_wr_array = r_got_req;	       
-	       if(t_wr_array)
-		 write_dword(r_req.addr, r_req.data, paging_active ? page_table_root : 64'd0, 32'd0);	       	       
+	       //if(t_wr_array)
+		// write_dword(r_req.addr, r_req.data, paging_active ? page_table_root : 64'd0, 32'd0);	       	       
 	    end
 	  MEM_SCD:
 	    begin
 	       t_wr_array = r_got_req;
 	       t_rsp_data = 'd0;
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
-	       if(t_wr_array & !(r_dead_atomic || w_dead_atomic))
-		 write_dword(r_req.addr, r_req.data, paging_active ? page_table_root : 64'd0, 32'd1);
-	       //if(t_wr_array) $display("execute sc.d at cycle %d", r_cycle);
+	       //if(t_wr_array & !(r_dead_atomic || w_dead_atomic))
+		 //write_dword(r_req.addr, r_req.data, paging_active ? page_table_root : 64'd0, 32'd1);
 	    end
 	  MEM_SCW:
 	    begin
 	       t_wr_array = r_got_req;
 	       t_rsp_data = 'd0;
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
-	       if(t_wr_array & !(r_dead_atomic|w_dead_atomic))
-		 begin
-		    write_word(r_req.addr, r_req.data[31:0], paging_active ? page_table_root : 64'd0, 32'd1);
-		 end
+	       //if(t_wr_array & !(r_dead_atomic|w_dead_atomic))
+		 //begin
+		   // write_word(r_req.addr, r_req.data[31:0], paging_active ? page_table_root : 64'd0, 32'd1);
+		 //end
 	       
 	    end
 	  MEM_AMOW:
@@ -924,11 +1005,10 @@ module perfect_l1d(clk,
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
 	       
 	       t_wr_array = r_got_req;
-	       if(t_wr_array & !(r_dead_atomic||w_dead_atomic))
-		 begin
-		    //$display("AMOW for pc %x, data %x, cycle %d", r_req.pc, t_amo64_data, r_cycle);		    
-		    write_word(r_req.addr, t_amo32_data, paging_active ? page_table_root : 64'd0, 32'd2);
-		 end
+	       //if(t_wr_array & !(r_dead_atomic||w_dead_atomic))
+	       //begin
+	       // write_word(r_req.addr, t_amo32_data, paging_active ? page_table_root : 64'd0, 32'd2);
+	       //end
 	    end // case: MEM_AMOW
 	  MEM_AMOD:
 	    begin
@@ -936,11 +1016,10 @@ module perfect_l1d(clk,
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
 	       
 	       t_wr_array = r_got_req;
-	       if(t_wr_array  & !(r_dead_atomic||w_dead_atomic))
-		 begin
-		    //$display("AMOD op %d for pc %x, data %x, cycle %d", r_req.amo_op, r_req.pc, t_amo64_data, r_cycle);
-		    write_dword(r_req.addr, t_amo64_data, paging_active ? page_table_root : 64'd0, 32'd2);
-		 end
+	       //if(t_wr_array  & !(r_dead_atomic||w_dead_atomic))
+	       //begin
+	       // write_dword(r_req.addr, t_amo64_data, paging_active ? page_table_root : 64'd0, 32'd2);
+	       //end
 	    end // case: MEM_AMOD
 	  MEM_NOP:
 	    begin

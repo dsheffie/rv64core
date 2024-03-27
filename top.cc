@@ -222,16 +222,22 @@ std::string getAsmString(uint64_t addr, uint64_t root, bool paging_enabled) {
   return getAsmString(mem_r32(s,pa), addr);
 }
 
+bool verbose = false;
 
 long long read_dword(long long addr) {
   int64_t pa = addr;
   pa &= ((1UL<<32)-1);
-  return *reinterpret_cast<long long*>(s->mem + pa);
+  long long x = *reinterpret_cast<long long*>(s->mem + pa);
+  if(verbose) {
+    printf("loaded %llx from %lx\n", x, pa);
+  }
+
+  return x;
 }
 
 int read_word(long long addr) {
   int64_t pa = addr;
-  pa &= ((1UL<<32)-1);  
+  pa &= ((1UL<<32)-1);
   return *reinterpret_cast<int*>(s->mem + pa);
 }
 
@@ -274,12 +280,16 @@ void write_word(long long addr, int data, long long root, int id) {
 
 void write_dword(long long addr, long long data, long long root, int id) {
   int64_t pa = addr;
-  //printf("%s:%lx:%lx\n", __PRETTY_FUNCTION__, addr, root);
+
   if(root) {
     pa = translate(addr, root, false, true);
     //printf("translate %lx to %lx\n", addr, pa);    
     assert(pa != -1);
-  }      
+  }
+  if(pa == 0xfa1fe0UL || verbose)  {
+    printf("%s: addr %lx pa %lx, data %lx callsite %d\n", __PRETTY_FUNCTION__, addr, pa, data, id);
+    verbose =true;
+  }  
   uint64_t d = *reinterpret_cast<uint64_t*>(&data);
   *reinterpret_cast<uint64_t*>(s->mem + pa) = d;
 }
@@ -952,6 +962,15 @@ int main(int argc, char **argv) {
       break;
     }
 
+    if(tb->took_exc) {
+      int mem_eq = memcmp(ss->mem, s->mem, 1UL<<32);
+      if(mem_eq != 0) {
+	printf("memory mismatch at icnt %ld\n", insns_retired);
+      	break;
+      }
+    }
+      
+    
     if(tb->got_ud) {
       uint32_t insn = get_insn(tb->epc, s);
       std::cerr << "GOT UD for "
@@ -1047,6 +1066,15 @@ int main(int argc, char **argv) {
     }
     else {
       std::cout << "checker mem does not equal rtl mem\n";
+      for(uint64_t p = 0; p < (1UL<<32); p+=8) {
+	uint64_t t0 = *reinterpret_cast<uint64_t*>(ss->mem + p);
+	uint64_t t1 = *reinterpret_cast<uint64_t*>(s->mem + p);
+	if(t0 != t1) {
+	  printf("qword at %lx does not match SIM %lx vs RTL %lx\n",
+		 p, t0, t1);
+	}
+	  
+      }
     }       
   }
   
@@ -1155,11 +1183,6 @@ int main(int argc, char **argv) {
     out << n_active << " cycles where the machine is in active state\n";
     out << rob_full << " cycles where the rob is full\n";
   
-    //for(int i = 0; i < 3; i++) {
-    //out << "insn ready " << i
-    //		<< " "
-    //<< n_rdy[i] << "\n";
-    //}
     double avg_restart = 0.0;
     uint64_t total_restart = 0, accum_restart = 0;
     for(auto &p : restart_distribution) {

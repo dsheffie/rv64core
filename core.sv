@@ -38,6 +38,7 @@ import "DPI-C" function int check_insn_bytes(input longint pc, input int data);
 module core(clk, 
 	    reset,
 	    syscall_emu,
+	    took_exc,
 	    priv,
 	    clear_tlb,
 	    paging_active,
@@ -119,6 +120,7 @@ module core(clk,
    input logic clk;
    input logic reset;
    input logic syscall_emu;
+   output logic	took_exc;
    output logic [1:0] priv;
    output	      clear_tlb;
    output logic	      paging_active;
@@ -464,6 +466,7 @@ module core(clk,
    logic r_update_csr_exc, n_update_csr_exc;
    logic r_mode64, n_mode64;
    assign mode64 = r_mode64;
+   assign took_exc = r_update_csr_exc;
    
    logic [63:0] r_cycle;
    always_ff@(posedge clk)
@@ -785,7 +788,7 @@ module core(clk,
 	       end
 	  end // else: !if(reset)
      end // always_ff@ (posedge clk)
-   
+
    always_comb
      begin
 	n_mode64 = r_mode64;
@@ -1190,7 +1193,7 @@ module core(clk,
 	       n_restart_pc = w_exc_pc;
 	       n_restart_valid = 1'b1;	       
 	       n_state = DRAIN;
-	    end
+	    end // case: WRITE_CSRS
 	  default:
 	    begin
 	    end

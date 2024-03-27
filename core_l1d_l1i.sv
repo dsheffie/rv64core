@@ -14,6 +14,7 @@ module
 		   clk, 
 		   reset,
 		   syscall_emu,
+		   took_exc,
 		   paging_active,
 		   page_table_root,
 		   extern_irq,
@@ -59,7 +60,8 @@ module
 		       got_bad_addr,
 		       got_monitor,
 		       inflight,
-		       epc);
+		       epc,
+		   restart_ack);
 
    localparam L1D_CL_LEN = 1 << `LG_L1D_CL_LEN;
    localparam L1D_CL_LEN_BITS = 1 << (`LG_L1D_CL_LEN + 3);
@@ -67,6 +69,7 @@ module
    input logic clk;
    input logic reset;
    input logic syscall_emu;
+   output logic	took_exc;
    output logic	paging_active;
    output logic	[63:0] page_table_root;
    
@@ -122,13 +125,13 @@ module
    
    output logic [`LG_ROB_ENTRIES:0] 	  inflight;
    output logic [`M_WIDTH-1:0] 		  epc;
-
+   output logic				  restart_ack;
 
    logic [(`M_WIDTH-1):0] 	restart_pc;
    logic [(`M_WIDTH-1):0] 	restart_src_pc;
    logic 			restart_src_is_indirect;
    logic 			restart_valid;
-   logic 			restart_ack;
+
    logic [`LG_PHT_SZ-1:0] 	branch_pht_idx;
    logic 			took_branch;
 
@@ -460,6 +463,7 @@ module
 	     .clk(clk),
 	     .reset(reset),
 	     .syscall_emu(syscall_emu),
+	     .took_exc(took_exc),
 	     .priv(w_priv),
 	     .clear_tlb(w_clear_tlb),
 	     .paging_active(w_paging_active),
