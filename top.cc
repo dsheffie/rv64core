@@ -697,19 +697,22 @@ int main(int argc, char **argv) {
       cycles_in_faulted++;
     }
 
-    if(tb->rob_empty) {
-      tip_map[last_retired_pc]+= 1.0;
-    }
-    else if(!(tb->retire_valid or tb->retire_two_valid)) {
-      tip_map[tb->retire_pc]+= 1.0;
-    }
-    else {
-      assert(tb->retire_valid or tb->retire_two_valid);      
-      double total = static_cast<double>(tb->retire_valid) +
-	static_cast<double>(tb->retire_two_valid);
-      tip_map[tb->retire_pc]+= 1.0 / total;
-      if(tb->retire_two_valid) {
-	tip_map[tb->retire_two_pc]+= 1.0 / total;
+    /* virtual addresses */
+    if(globals::syscall_emu) {
+      if(tb->rob_empty) {
+	tip_map[last_retired_pc]+= 1.0;
+      }
+      else if(!(tb->retire_valid or tb->retire_two_valid)) {
+	tip_map[tb->retire_pc]+= 1.0;
+      }
+      else {
+	assert(tb->retire_valid or tb->retire_two_valid);      
+	double total = static_cast<double>(tb->retire_valid) +
+	  static_cast<double>(tb->retire_two_valid);
+	tip_map[tb->retire_pc]+= 1.0 / total;
+	if(tb->retire_two_valid) {
+	  tip_map[tb->retire_two_pc]+= 1.0 / total;
+	}
       }
     }
     
@@ -1278,13 +1281,15 @@ int main(int argc, char **argv) {
     std::cout << "total_retire = " << total_retire << "\n";
     std::cout << "total_cycle  = " << total_cycle << "\n";
     std::cout << "total ipc    = " << static_cast<double>(total_retire) / total_cycle << "\n";
-    double tip_cycles = 0.0;
-    for(auto &p : tip_map) {
-      tip_cycles += p.second;
+    if(globals::syscall_emu) {
+      double tip_cycles = 0.0;
+      for(auto &p : tip_map) {
+	tip_cycles += p.second;
+      }
+      std::cout << "tip cycles  = " << tip_cycles << "\n";
+      dump_histo("tip.txt", tip_map, s);    
+      out.close();
     }
-    std::cout << "tip cycles  = " << tip_cycles << "\n";
-    dump_histo("tip.txt", tip_map, s);    
-    out.close();
   }
   else {
     std::cout << "instructions retired = " << insns_retired << "\n";
