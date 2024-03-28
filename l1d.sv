@@ -285,6 +285,9 @@ module l1d(clk,
    logic [63:0] 	       n_cache_hits, r_cache_hits;
    
    logic [63:0] 	       r_store_stalls, n_store_stalls;
+
+   logic		       n_mmu_rsp_valid, r_mmu_rsp_valid;
+   logic [63:0]		       n_mmu_rsp_data, r_mmu_rsp_data;
    
    
    logic [31:0] 			 r_cycle;
@@ -296,6 +299,9 @@ module l1d(clk,
 
    assign core_mem_rsp_valid = n_core_mem_rsp_valid;
    assign core_mem_rsp = n_core_mem_rsp;
+
+   assign mmu_rsp_valid = r_mmu_rsp_valid;
+   assign mmu_rsp_data = r_mmu_rsp_data;
    
    assign cache_accesses = r_cache_accesses;
    assign cache_hits = r_cache_hits;
@@ -558,6 +564,8 @@ module l1d(clk,
      begin
 	if(reset)
 	  begin
+	     r_mmu_rsp_valid <= 1'b0;
+	     r_mmu_rsp_data <= 64'd0;
 	     r_ack_ld_early <= 1'b0;
 	     r_did_reload <= 1'b0;
 	     r_stall_store <= 1'b0;
@@ -604,6 +612,8 @@ module l1d(clk,
 	  end
 	else
 	  begin
+	     r_mmu_rsp_valid <= n_mmu_rsp_valid;
+	     r_mmu_rsp_data <= n_mmu_rsp_data;
 	     r_ack_ld_early <= t_ack_ld_early;
 	     r_did_reload <= n_did_reload;
 	     r_stall_store <= n_stall_store;
@@ -1016,6 +1026,9 @@ module l1d(clk,
 
    always_comb
      begin
+	n_mmu_rsp_valid = 1'b0;
+	n_mmu_rsp_data = r_mmu_rsp_data;
+	
 	t_ack_ld_early = 1'b0;
 	t_got_rd_retry = 1'b0;
 	t_port2_hit_cache = r_valid_out2 && (r_tag_out2 == r_cache_tag2);
@@ -1501,8 +1514,10 @@ module l1d(clk,
 	       
 	       if(w_mmu_hit)
 		 begin
-		    $display("MMU HIT!");
-		    $stop();
+		    $display("MMU HIT, data %x!", r_cache_tag[3] ? r_array_out[127:64] : r_array_out[63:0]);
+		    n_mmu_rsp_valid = 1'b1;
+		    n_mmu_rsp_data = r_cache_tag[3] ? r_array_out[127:64] : r_array_out[63:0];
+		    n_state = ACTIVE;
 		 end
 	       else
 		 begin
