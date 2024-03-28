@@ -98,6 +98,7 @@ module l1i(clk,
 	   page_walk_rsp_valid,
 	   page_walk_rsp_pa,
 	   page_walk_rsp_fault,
+	   page_walk_rsp_executable,
 	   flush_req,
 	   flush_complete,
 	   restart_pc,
@@ -150,7 +151,7 @@ module l1i(clk,
    input logic		    page_walk_rsp_valid;
    input logic [63:0]	    page_walk_rsp_pa;
    input logic		    page_walk_rsp_fault;
-   
+   input logic		    page_walk_rsp_executable;
    
    input logic 	      flush_req;
    output logic       flush_complete;

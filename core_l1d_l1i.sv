@@ -447,6 +447,7 @@ module
      end
    
    wire w_page_fault;
+   wire	w_page_executable;
    wire	w_l1d_rsp_valid;
    wire	w_l1i_rsp_valid;
    wire [63:0] w_phys_addr;
@@ -467,6 +468,8 @@ module
 	    .mem_rsp_valid(t_mmu_rsp_valid),
 	    .mem_rsp_data(t_mmu_rsp_data),
 	    .phys_addr(w_phys_addr),
+	    .page_dirty(),
+	    .page_executable(w_page_executable),
 	    .page_fault(w_page_fault),
 	    .l1d_rsp_valid(w_l1d_rsp_valid),
 	    .l1i_rsp_valid(w_l1i_rsp_valid)
@@ -488,6 +491,7 @@ module
 	      .page_walk_rsp_valid(w_l1i_rsp_valid),
 	      .page_walk_rsp_pa(w_phys_addr),
 	      .page_walk_rsp_fault(w_page_fault),
+	      .page_walk_rsp_executable(w_page_executable),
 	      
 	      .flush_req(flush_req_l1i),
 	      .flush_complete(l1i_flush_complete),

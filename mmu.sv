@@ -2,7 +2,8 @@ module mmu(clk, reset, page_table_root,
 	   l1i_req, l1i_va, l1d_req, l1d_st, l1d_va,
 	   mem_req_valid, mem_req_addr, mem_req_data,  mem_req_store,
 	   mem_rsp_valid, mem_rsp_data,
-	   page_fault, phys_addr, l1d_rsp_valid, l1i_rsp_valid);
+	   page_fault, page_dirty, page_executable, 
+	   phys_addr, l1d_rsp_valid, l1i_rsp_valid);
    input logic clk;
    input logic reset;
    input logic [63:0] page_table_root;
@@ -21,6 +22,9 @@ module mmu(clk, reset, page_table_root,
    input logic [63:0]  mem_rsp_data;
 
    output logic	       page_fault;
+   output logic	       page_dirty;
+   output logic	       page_executable;
+   
    output logic [63:0] phys_addr;
    output logic	       l1d_rsp_valid;
    output logic	       l1i_rsp_valid;
@@ -35,6 +39,8 @@ module mmu(clk, reset, page_table_root,
    logic	       r_do_l1i, n_do_l1i;
    logic	       r_do_l1d, n_do_l1d;
    logic [1:0]	       n_hit_lvl, r_hit_lvl;
+   logic	       r_page_dirty, n_page_dirty;
+   logic	       n_page_executable, r_page_executable;
    
    assign mem_req_valid = r_req;
    assign mem_req_addr = r_addr;
@@ -42,6 +48,8 @@ module mmu(clk, reset, page_table_root,
    assign l1i_rsp_valid = r_l1i_rsp_valid;
    assign phys_addr = r_pa;
    assign page_fault = r_page_fault;
+   assign page_dirty = r_page_dirty;
+   assign page_executable = r_page_executable;
    
    typedef enum	logic [3:0] {
 			     IDLE,
@@ -58,7 +66,10 @@ module mmu(clk, reset, page_table_root,
    logic	n_l1i_req, r_l1i_req;
    logic	n_l1d_req, r_l1d_req;
 
-   
+   wire		w_lo_va = (&r_va[63:39]) & (r_va[39] == r_va[38]);
+   wire		w_hi_va = (&(~r_va[63:39])) & (r_va[39] == r_va[38]);
+   wire		w_bad_va = (w_lo_va | w_hi_va) == 1'b0;
+   	
    always_comb
      begin
 	n_l1i_req = r_l1i_req | l1i_req;
@@ -71,6 +82,9 @@ module mmu(clk, reset, page_table_root,
 	n_pa = r_pa;
 	n_state = r_state;
 	n_page_fault = 1'b0;
+	n_page_dirty = 1'b0;
+	n_page_executable = 1'b0;
+			    
 	n_do_l1i = r_do_l1i;
 	n_do_l1d = r_do_l1d;
 	n_hit_lvl = r_hit_lvl;
@@ -96,8 +110,18 @@ module mmu(clk, reset, page_table_root,
 	    begin
 	       //$display("r_va = %x, r_va[38:30] = %d", r_va, r_va[38:30]);
 	       n_addr = page_table_root + {52'd0, r_va[38:30], 3'd0};
-	       n_req = 1'b1;
-	       n_state = WAIT0;
+	       if(w_bad_va)
+		 begin
+		    n_state = IDLE;
+		    n_page_fault = 1'b1;
+		    n_l1i_rsp_valid = r_do_l1i;
+		    n_l1d_rsp_valid = r_do_l1d;		    
+		 end
+	       else
+		 begin
+		    n_req = 1'b1;
+		    n_state = WAIT0;
+		 end
 	    end
 	  WAIT0:
 	    begin
@@ -200,6 +224,9 @@ module mmu(clk, reset, page_table_root,
 	       /* can ack now, but need to check if accessed needs to be set */
 	       n_l1i_rsp_valid = r_do_l1i;
 	       n_l1d_rsp_valid = r_do_l1d;
+	       n_page_dirty = r_addr[7];
+	       n_page_executable = r_addr[2];
+	       
 	       if(r_addr[6] == 1'b0)
 		 begin
 		    $stop();
@@ -230,6 +257,8 @@ module mmu(clk, reset, page_table_root,
 	     r_l1i_rsp_valid <= 1'b0;
 	     r_l1d_rsp_valid <= 1'b0;
 	     r_page_fault <= 1'b0;
+	     r_page_dirty <= 1'b0;
+	     r_page_executable <= 1'b0;
 	     r_do_l1i <= 1'b0;
 	     r_do_l1d <= 1'b0;
 	     r_hit_lvl <= 2'd0;
@@ -246,6 +275,8 @@ module mmu(clk, reset, page_table_root,
 	     r_l1i_rsp_valid <= n_l1i_rsp_valid;
 	     r_l1d_rsp_valid <= n_l1d_rsp_valid;
 	     r_page_fault <= n_page_fault;
+	     r_page_dirty <= n_page_dirty;
+	     r_page_executable <= n_page_executable;
 	     r_do_l1i <= n_do_l1i;
 	     r_do_l1d <= n_do_l1d;
 	     r_hit_lvl <= n_hit_lvl;
