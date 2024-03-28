@@ -1112,10 +1112,6 @@ module l1d(clk,
 	    end
 	  ACTIVE:
 	    begin
-	       if(mmu_req_valid)
-		 begin
-		    $stop();
-		 end
 	       
 	       if(r_got_req2)
 		 begin
@@ -1321,13 +1317,14 @@ module l1d(clk,
 			 end
 		    end
 	       end
-	     
+	       
 	       if(core_mem_req_valid &&
 		  !t_got_miss && 
 		  !(mem_q_almost_full||mem_q_full) && 
 		  !t_got_rd_retry &&
 		  !(r_last_wr2 && (r_cache_idx2 == core_mem_req.addr[IDX_STOP-1:IDX_START]) && !core_mem_req.is_store) && 
 		  !t_cm_block_stall &&
+		  !mmu_req_valid &&
 		  (!r_rob_inflight[core_mem_req.rob_ptr])
 		  )
 	       begin
@@ -1350,6 +1347,10 @@ module l1d(clk,
 		  
 		  n_cache_accesses =  r_cache_accesses + 'd1;
 	       end // if (core_mem_req_valid &&...
+	       else if(mmu_req_valid && mem_q_empty && !(r_got_req && r_last_wr))
+		 begin
+		    $stop();
+		 end
 	       else if(r_flush_req && mem_q_empty && !(r_got_req && r_last_wr))
 		 begin
 		    n_state = FLUSH_CACHE;
