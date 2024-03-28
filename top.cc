@@ -233,6 +233,7 @@ long long read_dword(long long addr) {
   int64_t pa = addr;
   pa &= ((1UL<<32)-1);
   long long x = *reinterpret_cast<long long*>(s->mem + pa);
+  //std::cout << std::hex << addr << " -> " << x << std::hex << "\n";
   return x;
 }
 

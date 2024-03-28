@@ -429,6 +429,48 @@ module
    logic			    r_l1i_page_walk_rsp_fault;
    logic [63:0]			    r_l1i_page_walk_rsp_pa;
    logic [63:0]			    t_l1i_pa;
+
+   wire				    w_mmu_req_valid;
+   wire [63:0]			    w_mmu_req_addr;
+
+   
+   logic [63:0]			    t_mmu_rsp_data;
+   logic			    t_mmu_rsp_valid;
+
+   always_ff@(posedge clk)
+     begin
+	t_mmu_rsp_valid <= w_mmu_req_valid;
+	if(w_mmu_req_valid)
+	  begin
+	     t_mmu_rsp_data <= read_dword(w_mmu_req_addr);
+	  end
+     end
+   
+   wire w_page_fault;
+   wire	w_l1d_rsp_valid;
+   wire	w_l1i_rsp_valid;
+   
+   mmu mmu0(
+	    .clk(clk),
+	    .reset(reset),
+	    .page_table_root(w_page_table_root), 
+	    .l1i_req(w_l1i_page_walk_req_valid), 
+	    .l1i_va(w_l1i_page_walk_req_va), 
+	    .l1d_req(1'b0),
+	    .l1d_st(1'b0), 
+	    .l1d_va(64'd0),
+	    .mem_req_valid(w_mmu_req_valid), 
+	    .mem_req_addr(w_mmu_req_addr),
+	    .mem_req_data(),
+	    .mem_req_store(),
+	    .mem_rsp_valid(t_mmu_rsp_valid),
+	    .mem_rsp_data(t_mmu_rsp_data),
+
+	    .page_fault(w_page_fault),
+	    .l1d_rsp_valid(w_l1d_rsp_valid),
+	    .l1i_rsp_valid(w_l1i_rsp_valid)
+	    
+	    );
    
    always_comb
      begin
