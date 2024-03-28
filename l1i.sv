@@ -308,7 +308,8 @@ endfunction
                              FLUSH_CACHE = 'd5,
 			     WAIT_FOR_NOT_FULL = 'd6,
 			     INIT_PHT = 'd7,
-			     TLB_MISS = 'd8
+			     TLB_MISS = 'd8,
+			     TLB_MISS_TURNAROUND = 'd9
 			    } state_t;
    
    logic [(`M_WIDTH-1):0] r_pc, n_pc, r_miss_pc, n_miss_pc;
@@ -883,15 +884,11 @@ endfunction
 	    end // case: WAIT_FOR_NOT_FULL
 	  TLB_MISS:
 	    begin
-	       n_cache_pc = r_miss_pc;
-	       t_cache_idx = r_miss_pc[IDX_STOP-1:IDX_START];
-	       t_cache_tag = r_miss_pc[(`M_WIDTH-1):IDX_STOP];
 	       if(page_walk_rsp_valid)
 	          begin
-	             n_state = ACTIVE;
-	             n_req = 1'b1;
 	             n_page_fault = page_walk_rsp_fault;
 	             t_reload_tlb = page_walk_rsp_fault==1'b0;
+		     n_state = TLB_MISS_TURNAROUND;
 		     //$display("mmu returns for %x, page fault %b at cycle %d", 
 		     //r_miss_pc, page_walk_rsp_fault, r_cycle);
 		     //if(t_page_walk_pa != page_walk_rsp_pa)
@@ -908,7 +905,14 @@ endfunction
 	       //t_cache_tag = r_miss_pc[(`M_WIDTH-1):IDX_STOP];	       
 	       //n_page_fault = &t_page_walk_pa;
 	       //t_reload_tlb = (&t_page_walk_pa)==1'b0;
-
+	    end // case: TLB_MISS
+	  TLB_MISS_TURNAROUND:
+	    begin
+	       n_cache_pc = r_miss_pc;
+	       t_cache_idx = r_miss_pc[IDX_STOP-1:IDX_START];
+	       t_cache_tag = r_miss_pc[(`M_WIDTH-1):IDX_STOP];
+	       n_state = ACTIVE;
+	       n_req = 1'b1;
 	    end
 	  default:
 	    begin
