@@ -1083,7 +1083,13 @@ endfunction
 	   .va(n_cache_pc),
 	   .pa(w_tlb_pc),
 	   .hit(w_tlb_hit),
+	   .dirty(),
+	   .readable(),
+	   .writable(),
 	   .replace(t_reload_tlb),
+	   .replace_dirty(1'b0),
+	   .replace_readable(1'b0),
+	   .replace_writable(1'b0),
 	   .replace_va(r_miss_pc),
 	   .replace_pa(page_walk_rsp_pa)
 	   );
