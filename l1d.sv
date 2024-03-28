@@ -1514,9 +1514,10 @@ module l1d(clk,
 	       
 	       if(w_mmu_hit)
 		 begin
-		    $display("MMU HIT, data %x!", r_cache_tag[3] ? r_array_out[127:64] : r_array_out[63:0]);
+		    $display("MMU HIT, data %x!, low %b", r_array_out, mmu_req_addr[3:0]);
+		    
 		    n_mmu_rsp_valid = 1'b1;
-		    n_mmu_rsp_data = r_cache_tag[3] ? r_array_out[127:64] : r_array_out[63:0];
+		    n_mmu_rsp_data = mmu_req_addr[3] ? r_array_out[127:64] : r_array_out[63:0];
 		    n_state = ACTIVE;
 		 end
 	       else
@@ -1532,8 +1533,9 @@ module l1d(clk,
 		      end
 		    else
 		      begin
-			 $display("clean miss for address %x", mmu_req_addr);
-			 $stop();
+			 n_state = MMU_RELOAD;
+			 //$display("clean miss for address %x", mmu_req_addr);
+			 //$stop();
 		      end
 		 end // else: !if(w_mmu_hit)
 	       
@@ -1560,6 +1562,7 @@ module l1d(clk,
 		 begin
 		    n_inhibit_write = 1'b0;
 		    n_state = MMU_RETRY_LOAD;
+		    $display(">>>>> mmu reload data %x", mem_rsp_load_data);
 		 end
 	    end
 	  MMU_RETRY_LOAD:
