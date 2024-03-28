@@ -2,9 +2,6 @@
 `include "rob.vh"
 `include "uop.vh"
 
-`ifdef VERILATOR
-import "DPI-C" function longint ic_translate(longint va, longint root);
-`endif
 
 //`define FPGA64_32
 

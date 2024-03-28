@@ -194,11 +194,6 @@ long long translate(long long va, long long root, bool iside, bool store) {
   return pa;
 }
 
-long long ic_translate(long long va, long long root) {
-  uint64_t pa = 0;
-  pa = translate(va,root,true, false);
-  return pa;
-}
 
 long long dc_ld_translate(long long va, long long root) {
   return translate(va,root, false, false);
@@ -220,7 +215,7 @@ std::string getAsmString(uint64_t addr, uint64_t root, bool paging_enabled) {
   int64_t pa = addr;
   if(paging_enabled) {
     verbose_ic_translate = true;
-    pa = ic_translate(addr, root);
+    pa = translate(addr, root, true, false);
     verbose_ic_translate = false;
     if(pa == -1) return "code page not present";
   }

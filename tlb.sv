@@ -73,9 +73,9 @@ module tlb(clk,
 	r_va <= reset ? 64'd0 : va;
 	pa <= active ? {r_pa_data[w_idx[LG_N-1:0]], va[11:0]} : va;
      end
-   
+
    always_ff@(posedge clk)
-     begin
+     begin   
 	if(reset || clear)
 	  begin
 	     r_valid <= 'd0;
@@ -83,13 +83,20 @@ module tlb(clk,
 	else if(replace)
 	  begin
 	     r_valid[r_cnt] <= 1'b1;
+	  end
+     end // always_ff@ (posedge clk)
+   
+   always_ff@(posedge clk)
+     begin
+	if(replace)
+	  begin
 	     r_dirty[r_cnt] <= replace_dirty;
 	     r_readable[r_cnt] <= replace_readable;
 	     r_writable[r_cnt] <= replace_writable;
 	     r_va_tags[r_cnt] <= replace_va[39:12];
 	     r_pa_data[r_cnt] <= replace_pa[63:12];
 	  end
-     end
+     end // always_ff@ (posedge clk)
    
 
 endmodule
