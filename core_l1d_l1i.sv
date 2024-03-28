@@ -449,6 +449,7 @@ module
    wire w_page_fault;
    wire	w_l1d_rsp_valid;
    wire	w_l1i_rsp_valid;
+   wire [63:0] w_phys_addr;
    
    mmu mmu0(
 	    .clk(clk),
@@ -465,37 +466,14 @@ module
 	    .mem_req_store(),
 	    .mem_rsp_valid(t_mmu_rsp_valid),
 	    .mem_rsp_data(t_mmu_rsp_data),
-
+	    .phys_addr(w_phys_addr),
 	    .page_fault(w_page_fault),
 	    .l1d_rsp_valid(w_l1d_rsp_valid),
 	    .l1i_rsp_valid(w_l1i_rsp_valid)
 	    
 	    );
    
-   always_comb
-     begin
-	t_l1i_pa = 64'd0;
-	if(w_l1i_page_walk_req_valid)
-	  begin
-	     t_l1i_pa = ic_translate(w_l1i_page_walk_req_va, w_page_table_root);
-	  end
-     end
    
-   always_ff@(posedge clk)
-     begin
-	r_l1i_page_walk_rsp_valid <= reset ? 1'b0 : w_l1i_page_walk_req_valid;
-	if(reset)
-	  begin
-	     r_l1i_page_walk_rsp_fault <= 1'b0;
-	  end
-	else if(w_l1i_page_walk_req_valid)
-	  begin
-	     r_l1i_page_walk_rsp_pa <= t_l1i_pa;
-	     r_l1i_page_walk_rsp_fault <= &t_l1i_pa;
-	     //$display("translated va %x to pa %x, fault %b, cr3 %x", 
-	     //w_l1i_page_walk_req_va, t_l1i_pa, &t_l1i_pa, w_page_table_root);
-	  end
-     end
    
    l1i icache(
 	      .clk(clk),
@@ -507,9 +485,9 @@ module
 
 	      .page_walk_req_va(w_l1i_page_walk_req_va),
 	      .page_walk_req_valid(w_l1i_page_walk_req_valid),
-	      .page_walk_rsp_valid(r_l1i_page_walk_rsp_valid),
-	      .page_walk_rsp_pa(r_l1i_page_walk_rsp_pa),
-	      .page_walk_rsp_fault(r_l1i_page_walk_rsp_fault),
+	      .page_walk_rsp_valid(w_l1i_rsp_valid),
+	      .page_walk_rsp_pa(w_phys_addr),
+	      .page_walk_rsp_fault(w_page_fault),
 	      
 	      .flush_req(flush_req_l1i),
 	      .flush_complete(l1i_flush_complete),
