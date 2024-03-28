@@ -2,6 +2,10 @@
 `include "rob.vh"
 `include "uop.vh"
 
+`ifdef VERILATOR
+import "DPI-C" function longint ic_translate(longint va, longint root);
+`endif
+
 //`define FPGA64_32
 
 module
@@ -418,14 +422,53 @@ module
 	       .cache_hits(l1d_cache_hits)
 	       );
 
+   wire [63:0]			    w_l1i_page_walk_req_va;
+   wire				    w_l1i_page_walk_req_valid;
+   
+   logic			    r_l1i_page_walk_rsp_valid;
+   logic			    r_l1i_page_walk_rsp_fault;
+   logic [63:0]			    r_l1i_page_walk_rsp_pa;
+   logic [63:0]			    t_l1i_pa;
+   
+   always_comb
+     begin
+	t_l1i_pa = 64'd0;
+	if(w_l1i_page_walk_req_valid)
+	  begin
+	     t_l1i_pa = ic_translate(w_l1i_page_walk_req_va, w_page_table_root);
+	  end
+     end
+   
+   always_ff@(posedge clk)
+     begin
+	r_l1i_page_walk_rsp_valid <= reset ? 1'b0 : w_l1i_page_walk_req_valid;
+	if(reset)
+	  begin
+	     r_l1i_page_walk_rsp_fault <= 1'b0;
+	  end
+	else if(w_l1i_page_walk_req_valid)
+	  begin
+	     r_l1i_page_walk_rsp_pa <= t_l1i_pa;
+	     r_l1i_page_walk_rsp_fault <= &t_l1i_pa;
+	     //$display("translated va %x to pa %x, fault %b, cr3 %x", 
+	     //w_l1i_page_walk_req_va, t_l1i_pa, &t_l1i_pa, w_page_table_root);
+	  end
+     end
+   
    l1i icache(
 	      .clk(clk),
 	      .reset(reset),
 	      .mode64(w_mode64),
 	      .priv(w_priv),
-	      .page_table_root(w_page_table_root),
 	      .paging_active(w_paging_active),
 	      .clear_tlb(w_clear_tlb),
+
+	      .page_walk_req_va(w_l1i_page_walk_req_va),
+	      .page_walk_req_valid(w_l1i_page_walk_req_valid),
+	      .page_walk_rsp_valid(r_l1i_page_walk_rsp_valid),
+	      .page_walk_rsp_pa(r_l1i_page_walk_rsp_pa),
+	      .page_walk_rsp_fault(r_l1i_page_walk_rsp_fault),
+	      
 	      .flush_req(flush_req_l1i),
 	      .flush_complete(l1i_flush_complete),
 	      .restart_pc(restart_pc),

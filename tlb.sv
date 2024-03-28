@@ -1,5 +1,8 @@
-module btb(clk,
+module tlb(clk,
 	   reset,
+	   clear,
+	   active,
+	   req,
 	   va,
 	   pa,
 	   hit,
@@ -8,10 +11,14 @@ module btb(clk,
 	   replace_pa);
    input logic clk;
    input logic reset;
+   input logic clear;
+   input logic active;
+   input logic req;
+   
    input logic [63:0] va;
    output logic [63:0] pa;
    output logic	       hit;
-
+   
    input logic	       replace;
    input logic [63:0]  replace_va;
    input logic [63:0]  replace_pa;
@@ -23,6 +30,7 @@ module btb(clk,
 
    logic [N-1:0]       r_valid;
    logic [LG_N-1:0]    r_cnt;
+   logic [63:0]	       r_va;
    
    logic [27:0]	       r_va_tags[N-1:0];
    logic [51:0]	       r_pa_data[N-1:0];
@@ -44,13 +52,14 @@ module btb(clk,
    always_ff@(posedge clk)
      begin
 	r_cnt <= reset ? 'd0 : r_cnt + 'd1;
-	hit <= reset ? 1'b0 : |w_hits;
-	pa <= {r_pa_data[w_idx[LG_N-1:0]], 12'd0};
+	hit <= reset ? 1'b0 : (active ? (req & |w_hits) : 1'b1);
+	r_va <= reset ? 64'd0 : va;
+	pa <= active ? {r_pa_data[w_idx[LG_N-1:0]], va[11:0]} : va;
      end
    
    always_ff@(posedge clk)
      begin
-	if(reset)
+	if(reset || clear)
 	  begin
 	     r_valid <= 'd0;
 	  end
