@@ -601,6 +601,9 @@ endmodule // core_l1d_l1i
 module core_l1d_l1i(clk, 
 		    reset,
 		    syscall_emu,
+		    took_exc,
+		    paging_active,
+		    page_table_root,
 		    extern_irq,
 		    in_flush_mode,
 		    resume,
@@ -644,7 +647,8 @@ module core_l1d_l1i(clk,
 		    got_bad_addr,
 		    got_monitor,
 		    inflight,
-		    epc);
+		    epc,
+		    restart_ack);
 
    localparam L1D_CL_LEN = 1 << `LG_L1D_CL_LEN;
    localparam L1D_CL_LEN_BITS = 1 << (`LG_L1D_CL_LEN + 3);
@@ -652,6 +656,9 @@ module core_l1d_l1i(clk,
    input logic clk;
    input logic reset;
    input logic syscall_emu;
+   output logic	took_exc;
+   output logic	paging_active;
+   output logic	[63:0] page_table_root;
    input logic extern_irq;
    input logic resume;
    input logic [31:0] resume_pc;
@@ -703,7 +710,8 @@ module core_l1d_l1i(clk,
    
    output logic [`LG_ROB_ENTRIES:0]		 inflight;
    output logic [31:0]				 epc;
-
+   output logic 				 restart_ack;
+   
    wire [63:0]					 w_resume_pc64 = {32'd0, resume_pc};
    
    wire [63:0]					 w_mem_req_addr64;
@@ -729,6 +737,9 @@ module core_l1d_l1i(clk,
 		     .clk(clk),
                      .reset(reset),
 		     .syscall_emu(syscall_emu),
+		     .took_exc(took_exc),
+		     .paging_active(paging_active),
+		     .page_table_root(page_table_root),
                      .extern_irq(extern_irq),
                      .in_flush_mode(in_flush_mode),
                      .resume(resume),
@@ -771,7 +782,8 @@ module core_l1d_l1i(clk,
                      .got_bad_addr(got_bad_addr),
                      .got_monitor(got_monitor),
                      .inflight(inflight),
-                     .epc(w_epc64)
+                     .epc(w_epc64),
+		     .restart_ack(restart_ack)
 		     );
 
    

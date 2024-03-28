@@ -106,7 +106,7 @@ module perfect_l1d(clk,
    
    output logic [63:0] 			 cache_accesses;
    output logic [63:0] 			 cache_hits;
-
+`ifdef VERILATOR
          
    localparam LG_WORDS_PER_CL = `LG_L1D_CL_LEN - 2;
    localparam LG_DWORDS_PER_CL = `LG_L1D_CL_LEN - 3;
@@ -1376,6 +1376,7 @@ module perfect_l1d(clk,
    
 
 `endif
-    
+`endif //  `ifdef VERILATOR
+   
 endmodule // l1d
 

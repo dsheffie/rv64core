@@ -2541,12 +2541,14 @@ module exec(clk,
 		 r_pmpaddr3 <= t_wr_csr;
 	       PMPCFG0:
 		 r_pmpcfg0 <= t_wr_csr;
+`ifdef VERILATOR
 	       RDBRANCH_CSR:
 		 csr_putchar(t_wr_csr[7:0]);
 	       RDFAULTEDBRANCH_CSR:
 		 begin
 		    term_sim();
 		 end
+`endif
 	       default:
 		 begin
 		    $display("write csr implement %d for pc %x opcode %d", 
