@@ -185,9 +185,6 @@ module perfect_l1d(clk,
    logic 				  t_mh_block, t_cm_block, t_cm_block2,
 					  t_cm_block_stall;
 
-   logic 				  r_must_forward, r_must_forward2;
-      
-
    logic                                  t_incr_busy,t_force_clear_busy;
       
    logic 				  n_is_retry, r_is_retry;
@@ -546,8 +543,6 @@ module perfect_l1d(clk,
 	     r_cache_accesses <= 'd0;
 	     r_store_stalls <= 'd0;
 	     memq_empty <= 1'b1;
-	     r_must_forward <= 1'b0;
-	     r_must_forward2 <= 1'b0;
 	     r_dead_atomic <= 1'b0;
 	  end
 	else
@@ -593,8 +588,6 @@ module perfect_l1d(clk,
 			   && !t_push_miss
 			   && (r_n_inflight == 'd0);
 	     
-	     r_must_forward  <= t_mh_block & t_pop_mq;
-	     r_must_forward2 <= t_cm_block & core_mem_req_ack;
 	     r_dead_atomic <= n_dead_atomic;
 	  end
      end // always_ff@ (posedge clk)
@@ -1015,11 +1008,6 @@ module perfect_l1d(clk,
      end
 
 
-   logic [31:0] r_fwd_cnt;
-   always_ff@(posedge clk)
-     begin
-	r_fwd_cnt <= reset ? 'd0 : (r_got_req && r_must_forward ? r_fwd_cnt + 'd1 : r_fwd_cnt);
-     end
 	         
    always_comb
      begin
