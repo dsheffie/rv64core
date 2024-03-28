@@ -618,7 +618,14 @@ module perfect_l1d(clk,
 
    logic [63:0]	t_req2_addr_pa, t_pa2;
    logic	t_pf2;
- 
+
+
+
+   always_ff@(posedge clk)
+     begin
+	t_pa2 <= dc_ld_translate({n_req2.addr[63:12], 12'd0}, page_table_root);
+     end
+   
    always_comb
      begin
 	t_hit_cache2 =  r_got_req2 && (r_state == ACTIVE);
@@ -626,7 +633,6 @@ module perfect_l1d(clk,
 	t_rsp_dst_valid2 = 1'b0;
 	t_rsp_data2 = 'd0;
 
-	t_pa2 = dc_ld_translate({r_req2.addr[63:12], 12'd0}, page_table_root);
 	t_req2_addr_pa = paging_active ? t_pa2 : {r_req2.addr[63:12], 12'd0};
 	t_pf2 = paging_active & (&t_req2_addr_pa);
 	
@@ -799,11 +805,16 @@ module perfect_l1d(clk,
 	endcase // case r_req.op
      end // always_ff@ (negedge clk)
    
+
+   always_ff@(posedge clk)
+     begin
+	t_pa <= dc_ld_translate({n_req.addr[63:12], 12'd0}, page_table_root);
+     end
    
    always_comb
      begin
 	t_data = 'd0;
-	t_pa = dc_ld_translate({r_req.addr[63:12], 12'd0}, page_table_root);
+	
 	t_req_addr_pa = paging_active ? t_pa : {r_req.addr[63:12], 12'd0};
 	t_pf = paging_active & (&t_req_addr_pa);
 	
