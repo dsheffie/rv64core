@@ -210,6 +210,11 @@ long long csr_gettime() {
   return csr_time;
 }
 
+bool kernel_panicd = false;
+void term_sim() {
+  kernel_panicd = true;
+}
+
 
 std::string getAsmString(uint64_t addr, uint64_t root, bool paging_enabled) {
   int64_t pa = addr;
@@ -623,7 +628,9 @@ int main(int argc, char **argv) {
     tb->clk = 1;
     tb->eval();
 
-
+    if(kernel_panicd) {
+      break;
+    }
     //std::cout << "got to host " << std::hex << to_host << std::dec << ", flush = " << static_cast<int>(tb->in_flush_mode) << "\n";
 
     

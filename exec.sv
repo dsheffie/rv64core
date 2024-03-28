@@ -4,6 +4,7 @@
 `ifdef VERILATOR
 import "DPI-C" function void csr_putchar(input byte x);
 import "DPI-C" function longint csr_gettime();
+import "DPI-C" function void term_sim();
 
 import "DPI-C" function void report_exec(input int int_valid, 
 					 input int int_blocked,
@@ -2544,6 +2545,7 @@ module exec(clk,
 		 csr_putchar(t_wr_csr[7:0]);
 	       RDFAULTEDBRANCH_CSR:
 		 begin
+		    term_sim();
 		 end
 	       default:
 		 begin
