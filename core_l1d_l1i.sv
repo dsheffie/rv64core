@@ -2,6 +2,9 @@
 `include "rob.vh"
 `include "uop.vh"
 
+`ifdef VERILATOR
+import "DPI-C" function longint read_dword(input longint addr);
+`endif
 
 //`define FPGA64_32
 
@@ -370,7 +373,7 @@ module
 
    logic	drain_ds_complete;
    logic [(1<<`LG_ROB_ENTRIES)-1:0] dead_rob_mask;
-`define PERFECT_L1D
+//`define PERFECT_L1D
 `ifdef PERFECT_L1D
    perfect_l1d 
 `else

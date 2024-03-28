@@ -20,6 +20,9 @@ import "DPI-C" function void record_miss(input int pc,
 
 module l1d(clk, 
 	   reset,
+	   page_table_root,
+	   paging_active,
+	   clear_tlb,
 	   head_of_rob_ptr,
 	   head_of_rob_ptr_valid,
 	   retired_rob_ptr_valid,
@@ -63,6 +66,10 @@ module l1d(clk,
    
    input logic clk;
    input logic reset;
+   input logic [63:0]  page_table_root;
+   input logic	       paging_active;
+   input logic	       clear_tlb;
+   
    input logic [`LG_ROB_ENTRIES-1:0] head_of_rob_ptr;
    input logic 			     head_of_rob_ptr_valid;
    input logic retired_rob_ptr_valid;
@@ -174,7 +181,6 @@ module l1d(clk,
    logic 				  t_mark_invalid;
    logic 				  t_wr_array;
    logic				  t_wr_store;
-   logic				  t_silent_store;   
    logic 				  t_hit_cache;
    logic 				  t_rsp_dst_valid;
    logic [63:0] 			  t_rsp_data;
@@ -928,19 +934,18 @@ module l1d(clk,
 	       t_array_data = (t_store_shift & t_store_mask) | ((~t_store_mask) & t_data);
 	       t_wr_store = t_hit_cache && (r_is_retry || r_did_reload);
 	    end	  
-	  MEM_SC:
-	    begin
-	       t_array_data = (t_store_shift & t_store_mask) | ((~t_store_mask) & t_data);	       
-	       t_rsp_data = 64'd1;
-	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
-	       t_wr_store = t_hit_cache && (r_is_retry || r_did_reload);
-	    end
+	  // MEM_SC:
+	  //   begin
+	  //      t_array_data = (t_store_shift & t_store_mask) | ((~t_store_mask) & t_data);	       
+	  //      t_rsp_data = 64'd1;
+	  //      t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
+	  //      t_wr_store = t_hit_cache && (r_is_retry || r_did_reload);
+	  //   end
 	  default:
 	    begin
 	    end
 	endcase // case r_req.op
-	t_silent_store = (t_array_data == t_data);
-	t_wr_array = t_wr_store & !t_silent_store;
+	t_wr_array = t_wr_store;
      end
 
 
@@ -1004,7 +1009,6 @@ module l1d(clk,
 	n_core_mem_rsp.dst_valid = 1'b0;
 	n_core_mem_rsp.has_cause = 1'b0;
 	n_core_mem_rsp.cause = 4'd0;
-	n_core_mem_rsp.pc = r_req.pc;
 	
 	n_cache_accesses = r_cache_accesses;
 	n_cache_hits = r_cache_hits;
@@ -1069,7 +1073,6 @@ module l1d(clk,
 		    n_core_mem_rsp.data = r_req2.addr;
 		    n_core_mem_rsp.rob_ptr = r_req2.rob_ptr;
 		    n_core_mem_rsp.dst_ptr = r_req2.dst_ptr;
-		    n_core_mem_rsp.pc = r_req2.pc;
 		    //if(r_req2.op == MEM_NOP)
 		    //begin
 		    //$display("mem nop! - bad %b", r_req2.spans_cacheline);
@@ -1336,7 +1339,6 @@ module l1d(clk,
 			 n_core_mem_rsp.rob_ptr = r_req.rob_ptr;
 			 n_core_mem_rsp.dst_ptr = r_req.dst_ptr;			 
 			 n_core_mem_rsp.data = t_rsp_data[`M_WIDTH-1:0];
-			 n_core_mem_rsp.pc = r_req.pc;
 			 n_core_mem_rsp.has_cause = r_req.spans_cacheline;
 			 n_core_mem_rsp_valid = 1'b1;
 			 n_core_mem_rsp.dst_valid = r_req.dst_valid & n_core_mem_rsp_valid;
