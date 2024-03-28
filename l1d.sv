@@ -223,7 +223,6 @@ module l1d(clk,
    logic 				  n_stall_store, r_stall_store;
       
    logic 				  n_is_retry, r_is_retry;
-   logic 				  r_q_priority, n_q_priority;
    
    logic 				  n_core_mem_rsp_valid, r_core_mem_rsp_valid;
    mem_rsp_t n_core_mem_rsp, r_core_mem_rsp;
@@ -606,7 +605,6 @@ module l1d(clk,
 	     r_store_stalls <= 'd0;
 	     r_inhibit_write <= 1'b0;
 	     memq_empty <= 1'b1;
-	     r_q_priority <= 1'b0;
 	     r_must_forward <= 1'b0;
 	     r_must_forward2 <= 1'b0;
 	  end
@@ -662,7 +660,6 @@ module l1d(clk,
 			   && !t_push_miss
 			   && (r_n_inflight == 'd0);
 	     
-	     r_q_priority <= n_q_priority;
 	     r_must_forward  <= t_mh_block & t_pop_mq;
 	     r_must_forward2 <= t_cm_block & core_mem_req_ack;
 	  end
@@ -844,16 +841,7 @@ module l1d(clk,
    wire	       w_mmu_hit = r_valid_out ? (r_tag_out == r_cache_tag) : 1'b0;
    wire	       w_mmu_dirty = r_valid_out ? r_dirty_out : 1'b0;
    
-   always_ff@(negedge clk)
-     begin
-	if(r_got_req2 & paging_active)
-	  begin
-	     $display("TLB %b", w_tlb_hit);
-	     $stop();
-	  end
-	//if(paging_active)
-	//$stop();
-     end
+
    always_comb
      begin
 	t_data2 = r_got_req2 && r_must_forward2 ? r_array_wr_data : r_array_out2;
@@ -1094,7 +1082,6 @@ module l1d(clk,
 	t_incr_busy = 1'b0;
 	
 	n_stall_store = 1'b0;
-	n_q_priority = !r_q_priority;
 	
 	n_did_reload = 1'b0;
 	n_lock_cache = r_lock_cache;
@@ -1138,16 +1125,16 @@ module l1d(clk,
 		    n_core_mem_rsp.data = r_req2.addr;
 		    n_core_mem_rsp.rob_ptr = r_req2.rob_ptr;
 		    n_core_mem_rsp.dst_ptr = r_req2.dst_ptr;
-		    //if(r_req2.op == MEM_NOP)
-		    //begin
-		    //$display("mem nop! - bad %b", r_req2.spans_cacheline);
-		    //end
 		    
 		    if(drain_ds_complete || r_req2.op == MEM_NOP)
 		      begin
 			 n_core_mem_rsp.dst_valid = r_req2.dst_valid;
 			 n_core_mem_rsp.has_cause = r_req2.spans_cacheline;
 			 n_core_mem_rsp_valid = 1'b1;
+		      end
+		    else if(!w_tlb_hit)
+		      begin
+			 $stop();
 		      end
 		    else if(r_req2.is_store)
 		      begin
@@ -1165,9 +1152,6 @@ module l1d(clk,
 		      end // if (r_req2.is_store)
 		    else if(t_port2_hit_cache && (!r_hit_busy_addr2 || (1'b0 & r_req2.op == MEM_LW && !r_hit_busy_word_addr2 && !r_any_unaligned )) )
 		      begin
-`ifdef VERBOSE_L1D
-			 $display("cycle %d port2 hit for addr %x, data %x", r_cycle, r_req2.addr, t_rsp_data2);
-`endif
 			 n_core_mem_rsp.data = t_rsp_data2[`M_WIDTH-1:0];
                          n_core_mem_rsp.dst_valid = t_rsp_dst_valid2;
                          n_cache_hits = r_cache_hits + 'd1;
@@ -1356,11 +1340,11 @@ module l1d(clk,
 		  core_mem_req_ack = 1'b1;
 		  t_got_req2 = 1'b1;
 		  
-//`ifdef VERBOSE_L1D		 		  //       
+`ifdef VERBOSE_L1D		 		  //       
 		  $display("accepting new op %d, addr %x for rob ptr %d at cycle %d, mem_q_empty %b", 
 			   core_mem_req.op, core_mem_req.addr,
 			   core_mem_req.rob_ptr, r_cycle, mem_q_empty);
-//`endif
+`endif
 		  
 		  n_last_wr2 = core_mem_req.is_store;
 		  n_last_rd2 = !core_mem_req.is_store;
