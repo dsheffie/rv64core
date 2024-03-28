@@ -317,17 +317,6 @@ module
    assign paging_active = w_paging_active;
    
    wire		w_clear_tlb;
-
-   always_ff@(negedge clk)
-     begin
-	if(w_paging_active & l1d_mem_req_valid)
-	  begin
-	     $display("w_page_table_root = %x", w_page_table_root);
-	     $display("dfetch addr %x", l1d_mem_req_addr);
-	     $stop();		  
-	  end
-	
-     end
    
    l2 l2cache (
 	       .clk(clk),

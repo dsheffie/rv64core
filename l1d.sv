@@ -261,7 +261,12 @@ module l1d(clk,
 			     FLUSH_CACHE_LAST_WAIT, //6
                              FLUSH_CL,
                              FLUSH_CL_WAIT,
-                             HANDLE_RELOAD
+                             HANDLE_RELOAD,
+			     MMU_LOAD,
+			     MMU_WRITEBACK,
+			     MMU_RELOAD,
+			     MMU_RETRY_LOAD,
+			     MMU_RELOAD_WAIT
                              } state_t;
 
    
@@ -826,6 +831,8 @@ module l1d(clk,
 	   .replace_pa(64'd0)
 	   );
 
+   wire	       w_mmu_hit = r_valid_out ? (r_tag_out == r_cache_tag) : 1'b0;
+   wire	       w_mmu_dirty = r_valid_out ? r_dirty_out : 1'b0;
    
    always_ff@(negedge clk)
      begin
@@ -1238,16 +1245,16 @@ module l1d(clk,
 			    
 			    if((rr_cache_idx == r_cache_idx) && rr_last_wr)
 			      begin
-				 n_mem_req_addr = {r_tag_out,r_cache_idx,{`LG_L1D_CL_LEN{1'b0}}};
-			    n_lock_cache = 1'b1;
-			    n_mem_req_opcode = MEM_SW;
-			    n_state = WAIT_INJECT_RELOAD;
-			    n_mem_req_valid = 1'b0;
+				 n_mem_req_addr = {r_tag_out,r_cache_idx,4'd0};
+				 n_lock_cache = 1'b1;
+				 n_mem_req_opcode = MEM_SW;
+				 n_state = WAIT_INJECT_RELOAD;
+				 n_mem_req_valid = 1'b0;
 			      end                                                             
 			    else
 			      begin
 				 n_lock_cache = 1'b0;
-				 n_mem_req_addr = {r_req.addr[`M_WIDTH-1:`LG_L1D_CL_LEN], {`LG_L1D_CL_LEN{1'b0}}};
+				 n_mem_req_addr = {r_req.addr[`M_WIDTH-1:`LG_L1D_CL_LEN],4'd0};
 				 n_mem_req_opcode = MEM_LW;				 
 				 n_state = INJECT_RELOAD;
 				 n_mem_req_valid = 1'b1;
@@ -1349,7 +1356,9 @@ module l1d(clk,
 	       end // if (core_mem_req_valid &&...
 	       else if(mmu_req_valid && mem_q_empty && !(r_got_req && r_last_wr))
 		 begin
-		    $stop();
+		    t_cache_idx = mmu_req_addr[IDX_STOP-1:IDX_START];
+		    t_cache_tag = mmu_req_addr[`M_WIDTH-1:IDX_STOP];		    
+		    n_state = MMU_LOAD;
 		 end
 	       else if(r_flush_req && mem_q_empty && !(r_got_req && r_last_wr))
 		 begin
@@ -1392,9 +1401,6 @@ module l1d(clk,
 			 n_core_mem_rsp.has_cause = r_req.spans_cacheline;
 			 n_core_mem_rsp_valid = 1'b1;
 			 n_core_mem_rsp.dst_valid = r_req.dst_valid & n_core_mem_rsp_valid;
-			 //
-			 //$display("early ack at cycle %d for load with rob ptr %d, data %x, dst valid %b, addr %x, r_lock_cache = %b",
-			 //r_cycle, r_req.rob_ptr, n_core_mem_rsp.data , n_core_mem_rsp.dst_valid, r_req.addr, r_lock_cache );
 		      end
 		 end
 	    end
@@ -1412,11 +1418,11 @@ module l1d(clk,
 	    begin
 	       if(r_dirty_out)
 		 begin
-		    n_mem_req_addr = {r_tag_out,r_cache_idx,{`LG_L1D_CL_LEN{1'b0}}};
-	       n_mem_req_opcode = MEM_SW;
-	       n_mem_req_store_data = t_data;
-	       n_state = FLUSH_CL_WAIT;
-	       n_inhibit_write = 1'b1;
+		    n_mem_req_addr = {r_tag_out,r_cache_idx,4'd0};
+		    n_mem_req_opcode = MEM_SW;
+		    n_mem_req_store_data = t_data;
+		    n_state = FLUSH_CL_WAIT;
+		    n_inhibit_write = 1'b1;
 	            n_mem_req_valid = 1'b1;	       
 		 end
 	       else
@@ -1454,13 +1460,13 @@ module l1d(clk,
 		 end
 	       else
 		 begin
-		    n_mem_req_addr = {r_tag_out,r_cache_idx,{`LG_L1D_CL_LEN{1'b0}}};
-	       n_mem_req_opcode = MEM_SW;
-	       n_mem_req_store_data = t_data;
-	       n_state = (r_cache_idx == (L1D_NUM_SETS-1)) ? FLUSH_CACHE_LAST_WAIT : FLUSH_CACHE_WAIT;
-	       n_inhibit_write = 1'b1;
-	       n_mem_req_valid = 1'b1;
-	    end // else: !if(r_valid_out && !r_dirty_out)
+		    n_mem_req_addr = {r_tag_out,r_cache_idx,4'd0};
+		    n_mem_req_opcode = MEM_SW;
+		    n_mem_req_store_data = t_data;
+		    n_state = (r_cache_idx == (L1D_NUM_SETS-1)) ? FLUSH_CACHE_LAST_WAIT : FLUSH_CACHE_WAIT;
+		    n_inhibit_write = 1'b1;
+		    n_mem_req_valid = 1'b1;
+		 end // else: !if(r_valid_out && !r_dirty_out)
 	    end // case: FLUSH_CACHE
 	  FLUSH_CACHE_LAST_WAIT:
 	    begin
@@ -1482,6 +1488,70 @@ module l1d(clk,
 		     n_state = FLUSH_CACHE;
 		     n_inhibit_write = 1'b0;
 		  end
+	    end
+	  MMU_LOAD:
+	    begin
+	       $display("mmu_req_addr %x mmu array tag %x, mmu tag %x valid %b, dirty %b, cycle %d",
+			mmu_req_addr,
+			r_tag_out, 
+			r_cache_tag, 
+			r_valid_out, 
+			r_dirty_out, 
+			r_cycle);
+	       
+	       if(w_mmu_hit)
+		 begin
+		    $display("MMU HIT!");
+		    $stop();
+		 end
+	       else
+		 begin
+		    if(w_mmu_dirty)
+		      begin
+			 n_mem_req_addr = {r_tag_out,r_cache_idx,4'd0};
+			 n_mem_req_opcode = MEM_SW;
+			 n_mem_req_store_data = r_array_out;
+			 n_state = MMU_WRITEBACK;
+			 n_inhibit_write = 1'b1;
+			 n_mem_req_valid = 1'b1;			 
+		      end
+		    else
+		      begin
+			 $display("clean miss for address %x", mmu_req_addr);
+			 $stop();
+		      end
+		 end // else: !if(w_mmu_hit)
+	       
+	    end // case: MMU_LOAD
+	  MMU_WRITEBACK:
+	    begin
+	       if(mem_rsp_valid)
+		 begin
+		    n_inhibit_write = 1'b0;
+		    n_state = MMU_RELOAD;
+		 end
+	    end
+	  MMU_RELOAD:
+	    begin
+	       n_state = MMU_RELOAD_WAIT;
+	       n_mem_req_addr = {mmu_req_addr[63:4],4'd0};
+	       n_mem_req_opcode = MEM_LW;
+	       n_state = MMU_RELOAD_WAIT;
+	       n_mem_req_valid = 1'b1;			 	       
+	    end
+	  MMU_RELOAD_WAIT:
+	    begin
+	       if(mem_rsp_valid)
+		 begin
+		    n_inhibit_write = 1'b0;
+		    n_state = MMU_RETRY_LOAD;
+		 end
+	    end
+	  MMU_RETRY_LOAD:
+	    begin
+	       t_cache_idx = mmu_req_addr[IDX_STOP-1:IDX_START];
+	       t_cache_tag = mmu_req_addr[`M_WIDTH-1:IDX_STOP];		    
+	       n_state = MMU_LOAD;
 	    end
 	  default:
 	    begin
