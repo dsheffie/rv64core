@@ -20,7 +20,6 @@ import "DPI-C" function void record_miss(input int pc,
 
 module l1d(clk, 
 	   reset,
-	   page_table_root,
 	   paging_active,
 	   clear_tlb,
 	   head_of_rob_ptr,
@@ -56,6 +55,14 @@ module l1d(clk,
 	   //reply from memory system
 	   mem_rsp_valid,
 	   mem_rsp_load_data,
+	   //page walker signals
+	   mmu_req_valid, 
+	   mmu_req_addr, 
+	   mmu_req_data,  
+	   mmu_req_store,
+	   mmu_rsp_valid,
+	   mmu_rsp_data,	   
+	   
 	   cache_accesses,
 	   cache_hits
 	   );
@@ -66,7 +73,6 @@ module l1d(clk,
    
    input logic clk;
    input logic reset;
-   input logic [63:0]  page_table_root;
    input logic	       paging_active;
    input logic	       clear_tlb;
    
@@ -106,6 +112,13 @@ module l1d(clk,
    input logic 				  mem_rsp_valid;
    input logic [L1D_CL_LEN_BITS-1:0] 	  mem_rsp_load_data;
 
+   input logic				  mmu_req_valid;
+   input logic [63:0]			  mmu_req_addr;
+   input logic [63:0]			  mmu_req_data;
+   input logic				  mmu_req_store;
+   output logic				  mmu_rsp_valid;
+   output logic [63:0]			  mmu_rsp_data;
+   
    
    output logic [63:0] 			 cache_accesses;
    output logic [63:0] 			 cache_hits;
@@ -790,11 +803,40 @@ module l1d(clk,
 	end
    endgenerate
 
-
-
- 
+   wire w_tlb_hit;
+   wire [63:0] w_tlb_pa;
    
+   tlb dtlb(
+	   .clk(clk), 
+	   .reset(reset),
+	   .clear(clear_tlb),
+	   .active(paging_active),
+	   .req(t_got_req2),
+	   .va(n_req2.addr),
+	   .pa(w_tlb_pa),
+	   .hit(w_tlb_hit),
+	   .dirty(),
+	   .readable(),
+	   .writable(),
+	   .replace(1'b0),
+	   .replace_dirty(1'b0),
+	   .replace_readable(1'b0),
+	   .replace_writable(1'b0),
+	   .replace_va(64'd0),
+	   .replace_pa(64'd0)
+	   );
+
    
+   always_ff@(negedge clk)
+     begin
+	if(r_got_req2 & paging_active)
+	  begin
+	     $display("TLB %b", w_tlb_hit);
+	     $stop();
+	  end
+	//if(paging_active)
+	//$stop();
+     end
    always_comb
      begin
 	t_data2 = r_got_req2 && r_must_forward2 ? r_array_wr_data : r_array_out2;
@@ -843,7 +885,6 @@ module l1d(clk,
 	    end	  
 	  default:
 	    begin
-	       $stop();
 	    end
 	endcase
      end
@@ -943,6 +984,9 @@ module l1d(clk,
 	  //   end
 	  default:
 	    begin
+	       $display("implement op %d, pc %x", 
+			r_req.op, r_req.pc);
+	       $stop();
 	    end
 	endcase // case r_req.op
 	t_wr_array = t_wr_store;
@@ -1068,6 +1112,11 @@ module l1d(clk,
 	    end
 	  ACTIVE:
 	    begin
+	       if(mmu_req_valid)
+		 begin
+		    $stop();
+		 end
+	       
 	       if(r_got_req2)
 		 begin
 		    n_core_mem_rsp.data = r_req2.addr;

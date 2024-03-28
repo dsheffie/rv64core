@@ -2,9 +2,6 @@
 `include "rob.vh"
 `include "uop.vh"
 
-`ifdef VERILATOR
-import "DPI-C" function longint read_dword(input longint addr);
-`endif
 
 //`define FPGA64_32
 
@@ -370,6 +367,12 @@ module
 	       );
    
    
+   wire				    w_mmu_req_valid;
+   wire				    w_mmu_req_store;
+   wire [63:0]			    w_mmu_req_addr;
+   wire [63:0]			    w_mmu_req_data;
+   wire [63:0]			    w_mmu_rsp_data;
+   wire				    w_mmu_rsp_valid;
 
    logic	drain_ds_complete;
    logic [(1<<`LG_ROB_ENTRIES)-1:0] dead_rob_mask;
@@ -382,7 +385,6 @@ module
        dcache (
 	       .clk(clk),
 	       .reset(reset),
-	       .page_table_root(w_page_table_root),
 	       .paging_active(w_paging_active),
 	       .clear_tlb(w_clear_tlb),
 	       .head_of_rob_ptr_valid(head_of_rob_ptr_valid),
@@ -417,7 +419,13 @@ module
 	       
 	       .mem_rsp_valid(l1d_mem_rsp_valid),
 	       .mem_rsp_load_data(w_l1_mem_load_data),
-
+	       .mmu_req_valid(w_mmu_req_valid),
+	       .mmu_req_addr(w_mmu_req_addr),
+	       .mmu_req_data(w_mmu_req_data),
+	       .mmu_req_store(w_mmu_req_store),
+	       .mmu_rsp_valid(w_mmu_rsp_valid),
+	       .mmu_rsp_data(w_mmu_rsp_data),
+	       
 	       .cache_accesses(l1d_cache_accesses),
 	       .cache_hits(l1d_cache_hits)
 	       );
@@ -430,22 +438,8 @@ module
    logic [63:0]			    r_l1i_page_walk_rsp_pa;
    logic [63:0]			    t_l1i_pa;
 
-   wire				    w_mmu_req_valid;
-   wire [63:0]			    w_mmu_req_addr;
 
-   
-   logic [63:0]			    t_mmu_rsp_data;
-   logic			    t_mmu_rsp_valid;
-
-   always_ff@(posedge clk)
-     begin
-	t_mmu_rsp_valid <= w_mmu_req_valid;
-	if(w_mmu_req_valid)
-	  begin
-	     t_mmu_rsp_data <= read_dword(w_mmu_req_addr);
-	  end
-     end
-   
+      
    wire w_page_fault;
    wire	w_page_executable;
    wire	w_l1d_rsp_valid;
@@ -463,10 +457,10 @@ module
 	    .l1d_va(64'd0),
 	    .mem_req_valid(w_mmu_req_valid), 
 	    .mem_req_addr(w_mmu_req_addr),
-	    .mem_req_data(),
-	    .mem_req_store(),
-	    .mem_rsp_valid(t_mmu_rsp_valid),
-	    .mem_rsp_data(t_mmu_rsp_data),
+	    .mem_req_data(w_mmu_req_data),
+	    .mem_req_store(w_mmu_req_store),
+	    .mem_rsp_valid(w_mmu_rsp_valid),
+	    .mem_rsp_data(w_mmu_rsp_data),
 	    .phys_addr(w_phys_addr),
 	    .page_dirty(),
 	    .page_executable(w_page_executable),
