@@ -2635,6 +2635,8 @@ module exec(clk,
 	t_mem_tail.spans_cacheline = 1'b0;
 	t_mem_tail.unaligned = 1'b0;
 	t_mem_tail.pc = mem_uq.pc;
+	t_mem_tail.has_cause = 1'b0;
+	t_mem_tail.cause = 'd0;
 	case(mem_uq.op)
 	  SB:
 	    begin

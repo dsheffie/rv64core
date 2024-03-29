@@ -363,6 +363,18 @@ module
    wire [63:0]			    w_mmu_rsp_data;
    wire				    w_mmu_rsp_valid;
 
+   wire [63:0]			    w_l1d_page_walk_req_va;
+   wire				    w_l1d_page_walk_req_valid;
+
+   wire				    w_page_fault;
+   wire	w_page_executable;
+   wire	w_page_readable;
+   wire	w_page_writable;
+   wire	w_page_dirty;
+   wire	w_l1d_rsp_valid;
+   wire	w_l1i_rsp_valid;
+   wire [63:0] w_phys_addr;
+   
    logic	drain_ds_complete;
    logic [(1<<`LG_ROB_ENTRIES)-1:0] dead_rob_mask;
 //`define PERFECT_L1D
@@ -376,6 +388,15 @@ module
 	       .reset(reset),
 	       .paging_active(w_paging_active),
 	       .clear_tlb(w_clear_tlb),
+	       .page_walk_req_va(w_l1d_page_walk_req_va),
+	       .page_walk_req_valid(w_l1d_page_walk_req_valid),
+	       
+	       .page_walk_rsp_valid(w_l1d_rsp_valid),
+	       .page_walk_rsp_pa(w_phys_addr),
+	       .page_walk_rsp_fault(w_page_fault),
+	       .page_walk_rsp_readable(w_page_readable),
+	       .page_walk_rsp_writable(w_page_writable),
+	       
 	       .head_of_rob_ptr_valid(head_of_rob_ptr_valid),
 	       .head_of_rob_ptr(head_of_rob_ptr),
 	       .retired_rob_ptr_valid(retired_rob_ptr_valid),
@@ -429,11 +450,6 @@ module
 
 
       
-   wire w_page_fault;
-   wire	w_page_executable;
-   wire	w_l1d_rsp_valid;
-   wire	w_l1i_rsp_valid;
-   wire [63:0] w_phys_addr;
    
    mmu mmu0(
 	    .clk(clk),
@@ -441,9 +457,9 @@ module
 	    .page_table_root(w_page_table_root), 
 	    .l1i_req(w_l1i_page_walk_req_valid), 
 	    .l1i_va(w_l1i_page_walk_req_va), 
-	    .l1d_req(1'b0),
+	    .l1d_req(w_l1d_page_walk_req_valid),
 	    .l1d_st(1'b0), 
-	    .l1d_va(64'd0),
+	    .l1d_va(w_l1d_page_walk_req_va),
 	    .mem_req_valid(w_mmu_req_valid), 
 	    .mem_req_addr(w_mmu_req_addr),
 	    .mem_req_data(w_mmu_req_data),
@@ -451,8 +467,10 @@ module
 	    .mem_rsp_valid(w_mmu_rsp_valid),
 	    .mem_rsp_data(w_mmu_rsp_data),
 	    .phys_addr(w_phys_addr),
-	    .page_dirty(),
+	    .page_dirty(w_page_dirty),
 	    .page_executable(w_page_executable),
+	    .page_readable(w_page_readable),
+	    .page_writable(w_page_writable),
 	    .page_fault(w_page_fault),
 	    .l1d_rsp_valid(w_l1d_rsp_valid),
 	    .l1i_rsp_valid(w_l1i_rsp_valid)

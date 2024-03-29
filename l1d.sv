@@ -22,6 +22,13 @@ module l1d(clk,
 	   reset,
 	   paging_active,
 	   clear_tlb,
+	   page_walk_req_valid,
+	   page_walk_req_va,
+	   page_walk_rsp_valid,
+	   page_walk_rsp_pa,
+	   page_walk_rsp_fault,
+	   page_walk_rsp_readable,
+	   page_walk_rsp_writable,	   
 	   head_of_rob_ptr,
 	   head_of_rob_ptr_valid,
 	   retired_rob_ptr_valid,
@@ -75,6 +82,13 @@ module l1d(clk,
    input logic reset;
    input logic	       paging_active;
    input logic	       clear_tlb;
+   output logic	       page_walk_req_valid;
+   output logic [63:0] page_walk_req_va;
+   input logic	       page_walk_rsp_valid;
+   input logic [63:0]  page_walk_rsp_pa;
+   input logic	       page_walk_rsp_fault;
+   input logic	       page_walk_rsp_readable;
+   input logic	       page_walk_rsp_writable;
    
    input logic [`LG_ROB_ENTRIES-1:0] head_of_rob_ptr;
    input logic 			     head_of_rob_ptr_valid;
@@ -223,6 +237,8 @@ module l1d(clk,
    logic 				  n_stall_store, r_stall_store;
       
    logic 				  n_is_retry, r_is_retry;
+
+   logic				  r_tlb_miss, n_tlb_miss;
    
    logic 				  n_core_mem_rsp_valid, r_core_mem_rsp_valid;
    mem_rsp_t n_core_mem_rsp, r_core_mem_rsp;
@@ -250,17 +266,19 @@ module l1d(clk,
    mem_req_t t_mem_tail, t_mem_head;
    logic 	mem_q_full, mem_q_empty, mem_q_almost_full;
    
-   typedef enum logic [3:0] {INITIALIZE, //0
+   typedef enum logic [4:0] {INITIALIZE, //0
 			     INIT_CACHE, //1
 			     ACTIVE, //2
                              INJECT_RELOAD, //3
 			     WAIT_INJECT_RELOAD, //4
                              FLUSH_CACHE, //5
                              FLUSH_CACHE_WAIT, //6
-			     FLUSH_CACHE_LAST_WAIT, //6
-                             FLUSH_CL,
-                             FLUSH_CL_WAIT,
-                             HANDLE_RELOAD,
+			     FLUSH_CACHE_LAST_WAIT, //7
+                             FLUSH_CL, //8
+                             FLUSH_CL_WAIT, //9
+                             HANDLE_RELOAD, //10
+			     TLB_MISS, //11
+			     TLB_MISS_TURNAROUND,
 			     MMU_LOAD,
 			     MMU_WRITEBACK,
 			     MMU_RELOAD,
@@ -290,6 +308,8 @@ module l1d(clk,
    
    
    logic [31:0] 			 r_cycle;
+   assign page_walk_req_valid = r_tlb_miss;
+   assign page_walk_req_va = r_req2.addr;
    assign flush_complete = r_flush_complete;
    assign mem_req_addr = r_mem_req_addr;
    assign mem_req_store_data = r_mem_req_store_data;
@@ -436,11 +456,11 @@ module l1d(clk,
 		  
 		  r_rob_inflight[r_req2.rob_ptr] <= 1'b1;
 	       end
-	     if(r_got_req && r_valid_out && (r_tag_out == r_cache_tag) || t_ack_ld_early)
+	     if(r_got_req && r_valid_out && (r_tag_out == r_cache_tag) && w_tlb_hit || t_ack_ld_early)
 	       begin
 		  //$display("rob entry %d leaves at cycle %d", r_req.rob_ptr, r_cycle);
 		  if(r_rob_inflight[r_req.rob_ptr] == 1'b0) 
-		    $display("huh %d should be inflight....\n", r_req.rob_ptr);
+		    $display("huh %d should be inflight...., faulted %b\n", r_req.rob_ptr, r_req.has_cause);
 		  
 		  r_rob_inflight[r_req.rob_ptr] <= 1'b0;
 	       end
@@ -563,6 +583,7 @@ module l1d(clk,
      begin
 	if(reset)
 	  begin
+	     r_tlb_miss <= 1'b0;
 	     r_mmu_rsp_valid <= 1'b0;
 	     r_mmu_rsp_data <= 64'd0;
 	     r_ack_ld_early <= 1'b0;
@@ -610,6 +631,7 @@ module l1d(clk,
 	  end
 	else
 	  begin
+	     r_tlb_miss <= n_tlb_miss;
 	     r_mmu_rsp_valid <= n_mmu_rsp_valid;
 	     r_mmu_rsp_data <= n_mmu_rsp_data;
 	     r_ack_ld_early <= t_ack_ld_early;
@@ -830,12 +852,12 @@ module l1d(clk,
 	   .dirty(),
 	   .readable(),
 	   .writable(),
-	   .replace(1'b0),
+	   .replace(t_load_tlb),
 	   .replace_dirty(1'b0),
 	   .replace_readable(1'b0),
 	   .replace_writable(1'b0),
-	   .replace_va(64'd0),
-	   .replace_pa(64'd0)
+	   .replace_va(r_req2.addr),
+	   .replace_pa(r_pa)
 	   );
 
    wire	       w_mmu_hit = r_valid_out ? (r_tag_out == r_cache_tag) : 1'b0;
@@ -962,23 +984,23 @@ module l1d(clk,
 	  MEM_SB:
 	    begin
 	       t_array_data = (t_store_shift & t_store_mask) | ((~t_store_mask) & t_data);	       
-	       t_wr_store = t_hit_cache && (r_is_retry || r_did_reload);
+	       t_wr_store = t_hit_cache && (r_is_retry || r_did_reload) &(!r_req.has_cause);
 	    end
 	  MEM_SH:
 	    begin
 	       t_array_data = (t_store_shift & t_store_mask) | ((~t_store_mask) & t_data);	       
-	       t_wr_store = t_hit_cache && (r_is_retry || r_did_reload);
+	       t_wr_store = t_hit_cache && (r_is_retry || r_did_reload) & (!r_req.has_cause);
 	    end
 	  MEM_SW:
 	    begin
 	       t_array_data = (t_store_shift & t_store_mask) | ((~t_store_mask) & t_data);
 	       //t_array_data = t_store_shift;
-	       t_wr_store = t_hit_cache && (r_is_retry || r_did_reload);
+	       t_wr_store = t_hit_cache && (r_is_retry || r_did_reload) &(!r_req.has_cause);
 	    end
 	  MEM_SD:
 	    begin
 	       t_array_data = (t_store_shift & t_store_mask) | ((~t_store_mask) & t_data);
-	       t_wr_store = t_hit_cache && (r_is_retry || r_did_reload);
+	       t_wr_store = t_hit_cache && (r_is_retry || r_did_reload) & (!r_req.has_cause);
 	    end	  
 	  // MEM_SC:
 	  //   begin
@@ -1004,16 +1026,35 @@ module l1d(clk,
 	    assign w_store_byte_en[i] = mem_rsp_valid ? 1'b1 : (t_wr_array & t_store_mask[i*8]);
 	 end
    endgenerate
+
+   logic t_load_tlb;
    
+   logic n_page_walk_rsp_valid, r_page_walk_rsp_valid;
+   logic n_waiting_for_page_walk, r_waiting_for_page_walk;
+   logic n_page_fault, r_page_fault;
+   logic [63:0]	r_pa, n_pa;
    
-   logic [31:0] r_fwd_cnt;
+   logic [31:0]	r_fwd_cnt;
    always_ff@(posedge clk)
      begin
 	r_fwd_cnt <= reset ? 'd0 : (r_got_req && r_must_forward ? r_fwd_cnt + 'd1 : r_fwd_cnt);
+	r_waiting_for_page_walk <= reset ? 1'b0 : n_waiting_for_page_walk;
+	r_page_walk_rsp_valid <= reset ? 1'b0 : n_page_walk_rsp_valid;
+	r_page_fault <= reset ? 1'b0 : n_page_fault;
+	r_pa <= n_pa;
      end
 
+   
+   
    always_comb
      begin
+	t_load_tlb = 1'b0;
+	n_page_walk_rsp_valid = page_walk_rsp_valid | r_page_walk_rsp_valid;
+	n_waiting_for_page_walk = r_waiting_for_page_walk;
+	n_page_fault = r_page_fault | page_walk_rsp_fault;
+	n_pa = r_pa | page_walk_rsp_pa;
+	
+	n_tlb_miss = 1'b0;
 	n_mmu_rsp_valid = 1'b0;
 	n_mmu_rsp_data = r_mmu_rsp_data;
 	
@@ -1059,8 +1100,8 @@ module l1d(clk,
 	n_core_mem_rsp.rob_ptr = r_req.rob_ptr;
 	n_core_mem_rsp.dst_ptr = r_req.dst_ptr;
 	n_core_mem_rsp.dst_valid = 1'b0;
-	n_core_mem_rsp.has_cause = 1'b0;
-	n_core_mem_rsp.cause = 4'd0;
+	n_core_mem_rsp.has_cause = r_req.has_cause;
+	n_core_mem_rsp.cause = r_req.cause;
 	
 	n_cache_accesses = r_cache_accesses;
 	n_cache_hits = r_cache_hits;
@@ -1134,7 +1175,8 @@ module l1d(clk,
 		      end
 		    else if(!w_tlb_hit)
 		      begin
-			 $stop();
+			 t_cache_idx2 = r_req2.addr[IDX_STOP-1:IDX_START];
+			 t_cache_tag2 = r_req2.addr[`M_WIDTH-1:IDX_STOP];
 		      end
 		    else if(r_req2.is_store)
 		      begin
@@ -1150,7 +1192,7 @@ module l1d(clk,
 			 n_core_mem_rsp_valid = 1'b1;
 			 n_core_mem_rsp.has_cause = r_req2.spans_cacheline;
 		      end // if (r_req2.is_store)
-		    else if(t_port2_hit_cache && (!r_hit_busy_addr2 || (1'b0 & r_req2.op == MEM_LW && !r_hit_busy_word_addr2 && !r_any_unaligned )) )
+		    else if(t_port2_hit_cache && (!r_hit_busy_addr2 ) )
 		      begin
 			 n_core_mem_rsp.data = t_rsp_data2[`M_WIDTH-1:0];
                          n_core_mem_rsp.dst_valid = t_rsp_dst_valid2;
@@ -1321,8 +1363,18 @@ module l1d(clk,
 			 end
 		    end
 	       end
-	       
-	       if(core_mem_req_valid &&
+
+	       if(r_got_req2 & !w_tlb_hit)
+		 begin
+		    n_state = TLB_MISS;
+		    $display(">>>>>l1d missed tlb for va %x at cycle %d, got req2 %b", r_req2.addr, r_cycle, r_got_req2);
+		    n_waiting_for_page_walk = 1'b1;
+		    n_tlb_miss = 1'b1;
+		    n_pa = 'd0;
+		    n_page_fault = 1'b0;
+		    n_page_walk_rsp_valid = 1'b0;
+		 end
+	       else if(core_mem_req_valid &&
 		  !t_got_miss && 
 		  !(mem_q_almost_full||mem_q_full) && 
 		  !t_got_rd_retry &&
@@ -1340,11 +1392,11 @@ module l1d(clk,
 		  core_mem_req_ack = 1'b1;
 		  t_got_req2 = 1'b1;
 		  
-`ifdef VERBOSE_L1D		 		  //       
+//`ifdef VERBOSE_L1D		 		  //       
 		  $display("accepting new op %d, addr %x for rob ptr %d at cycle %d, mem_q_empty %b", 
 			   core_mem_req.op, core_mem_req.addr,
 			   core_mem_req.rob_ptr, r_cycle, mem_q_empty);
-`endif
+//`endif
 		  
 		  n_last_wr2 = core_mem_req.is_store;
 		  n_last_rd2 = !core_mem_req.is_store;
@@ -1502,7 +1554,7 @@ module l1d(clk,
 		    
 		    n_mmu_rsp_valid = 1'b1;
 		    n_mmu_rsp_data = mmu_req_addr[3] ? r_array_out[127:64] : r_array_out[63:0];
-		    n_state = ACTIVE;
+		    n_state = r_waiting_for_page_walk ? TLB_MISS : ACTIVE;
 		 end
 	       else
 		 begin
@@ -1554,6 +1606,34 @@ module l1d(clk,
 	       t_cache_idx = mmu_req_addr[IDX_STOP-1:IDX_START];
 	       t_cache_tag = mmu_req_addr[`M_WIDTH-1:IDX_STOP];		    
 	       n_state = MMU_LOAD;
+	    end
+	  TLB_MISS:
+	    begin
+	       if(mmu_req_valid)
+		 begin
+		    t_cache_idx = mmu_req_addr[IDX_STOP-1:IDX_START];
+		    t_cache_tag = mmu_req_addr[`M_WIDTH-1:IDX_STOP];		    
+		    n_state = MMU_LOAD;		    
+		 end
+	       if(r_page_walk_rsp_valid)
+		 begin
+		    $display("l1d walk done : pf = %b, pa %x, cycle %d",
+			     r_page_fault, r_pa, r_cycle);
+		    n_page_walk_rsp_valid = 1'b0;
+		    n_waiting_for_page_walk = 1'b0;
+		    n_state = TLB_MISS_TURNAROUND;
+		    if((r_req2.has_cause == 1'b0) & r_page_fault)
+		      begin
+			 n_req2.cause = (r_req2.is_store|r_req2.is_atomic ? STORE_PAGE_FAULT : LOAD_PAGE_FAULT);
+			 n_req2.has_cause = 1'b1;
+		      end
+		    t_load_tlb = 1'b1;
+		 end
+	    end // case: TLB_MISS
+	  TLB_MISS_TURNAROUND:
+	    begin
+	       t_push_miss = 1'b1;
+	       n_state = ACTIVE;
 	    end
 	  default:
 	    begin
@@ -1615,8 +1695,10 @@ module l1d(clk,
 	  end // if (core_mem_req_valid && !core_mem_req_ack)
      end // always_comb
    
-   // always_ff@(negedge clk)
-   //   begin
+    //always_ff@(negedge clk)
+   //begin
+   //$display("r_cycle %d, r_state = %d", r_cycle, r_state);
+   // end
    // 	record_l1d(core_mem_req_valid ? 32'd1 : 32'd0,
    // 		   core_mem_req_ack & core_mem_req_valid ? 32'd1 : 32'd0,
    // 		   core_mem_req_ack & core_mem_req_valid & core_mem_req.is_store ? 32'd1 : 32'd0,		   

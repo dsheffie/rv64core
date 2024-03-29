@@ -2,7 +2,7 @@ module mmu(clk, reset, page_table_root,
 	   l1i_req, l1i_va, l1d_req, l1d_st, l1d_va,
 	   mem_req_valid, mem_req_addr, mem_req_data,  mem_req_store,
 	   mem_rsp_valid, mem_rsp_data,
-	   page_fault, page_dirty, page_executable, 
+	   page_fault, page_dirty, page_executable, page_readable, page_writable,
 	   phys_addr, l1d_rsp_valid, l1i_rsp_valid);
    input logic clk;
    input logic reset;
@@ -24,6 +24,9 @@ module mmu(clk, reset, page_table_root,
    output logic	       page_fault;
    output logic	       page_dirty;
    output logic	       page_executable;
+   output logic	       page_readable;
+   output logic	       page_writable;
+   
    
    output logic [63:0] phys_addr;
    output logic	       l1d_rsp_valid;
@@ -103,7 +106,12 @@ module mmu(clk, reset, page_table_root,
 		 end
 	       else if(n_l1d_req)
 		 begin
-		    $stop();
+		    n_state = LOAD0;
+		    n_va = l1d_va;
+		    n_l1d_req = 1'b0;
+		    $display("starting translation for %x", l1d_va);
+		    n_do_l1i = 1'b0;
+		    n_do_l1d = 1'b1;
 		 end
 	    end
 	  LOAD0:

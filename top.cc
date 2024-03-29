@@ -1056,16 +1056,16 @@ int main(int argc, char **argv) {
     }
     else {
       std::cout << "checker mem does not equal rtl mem\n";
-      for(uint64_t p = 0; p < (1UL<<32); p+=8) {
-	uint64_t t0 = *reinterpret_cast<uint64_t*>(ss->mem + p);
-	uint64_t t1 = *reinterpret_cast<uint64_t*>(s->mem + p);
-	if(t0 != t1) {
-	  printf("qword at %lx does not match SIM %lx vs RTL %lx\n",
-		 p, t0, t1);
-	}
+      // for(uint64_t p = 0; p < (1UL<<32); p+=8) {
+      // 	uint64_t t0 = *reinterpret_cast<uint64_t*>(ss->mem + p);
+      // 	uint64_t t1 = *reinterpret_cast<uint64_t*>(s->mem + p);
+      // 	if(t0 != t1) {
+      // 	  printf("qword at %lx does not match SIM %lx vs RTL %lx\n",
+      // 		 p, t0, t1);
+      // 	}
 	  
-      }
-    }       
+      // }
+    }  
   }
   
   if(!incorrect) {
