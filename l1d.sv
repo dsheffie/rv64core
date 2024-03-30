@@ -1038,6 +1038,8 @@ module l1d(clk,
    
    logic n_page_walk_rsp_valid, r_page_walk_rsp_valid;
    logic n_waiting_for_page_walk, r_waiting_for_page_walk;
+   logic n_pending_mmu_req, r_pending_mmu_req;
+   
    logic n_page_fault, r_page_fault;
    logic [63:0]	r_pa, n_pa;
    
@@ -1048,6 +1050,7 @@ module l1d(clk,
 	r_waiting_for_page_walk <= reset ? 1'b0 : n_waiting_for_page_walk;
 	r_page_walk_rsp_valid <= reset ? 1'b0 : n_page_walk_rsp_valid;
 	r_page_fault <= reset ? 1'b0 : n_page_fault;
+	r_pending_mmu_req <= reset ? 1'b0 : n_pending_mmu_req;
 	r_pa <= n_pa;
      end
 
@@ -1056,6 +1059,7 @@ module l1d(clk,
    always_comb
      begin
 	t_load_tlb = 1'b0;
+	n_pending_mmu_req = r_pending_mmu_req | mmu_req_valid;
 	n_page_walk_rsp_valid = page_walk_rsp_valid | r_page_walk_rsp_valid;
 	n_waiting_for_page_walk = r_waiting_for_page_walk;
 	n_page_fault = r_page_fault | page_walk_rsp_fault;
@@ -1297,10 +1301,10 @@ module l1d(clk,
 		  else
 		    begin
 		       
-//`ifdef VERBOSE_L1D
+`ifdef VERBOSE_L1D
 		       $display("at cycle %d : cache invalid miss for rob ptr %d, r_is_retry %b, addr %x, is store %b, r_cache_idx = %d, r_cache_tag = %x, valid %b, paging %b",
 				r_cycle, r_req.rob_ptr, r_is_retry, r_req.addr, r_req.is_store, r_cache_idx, r_cache_tag, r_valid_out, paging_active);
-//`endif
+`endif
 
 		       t_got_miss = 1'b1;
 		       n_inhibit_write = 1'b0;	
@@ -1414,7 +1418,7 @@ module l1d(clk,
 		  !t_got_rd_retry &&
 		  !(r_last_wr2 && (r_cache_idx2 == core_mem_req.addr[IDX_STOP-1:IDX_START]) && !core_mem_req.is_store) && 
 		  !t_cm_block_stall &&
-		  !mmu_req_valid &&
+		  !n_pending_mmu_req &&
 		  (!r_rob_inflight[core_mem_req.rob_ptr])
 		  )
 	       begin
@@ -1437,7 +1441,7 @@ module l1d(clk,
 		  
 		  n_cache_accesses =  r_cache_accesses + 'd1;
 	       end // if (core_mem_req_valid &&...
-	       else if(mmu_req_valid && mem_q_empty && !(r_got_req && r_last_wr))
+	       else if(n_pending_mmu_req && mem_q_empty && !(r_got_req && r_last_wr))
 		 begin
 		    t_cache_idx = mmu_req_addr[IDX_STOP-1:IDX_START];
 		    t_cache_tag = mmu_req_addr[`M_WIDTH-1:IDX_STOP];		    
@@ -1574,21 +1578,22 @@ module l1d(clk,
 	    end
 	  MMU_LOAD:
 	    begin
-	       //$display("mmu_req_addr %x mmu array tag %x, mmu tag %x valid %b, dirty %b, cycle %d",
-		//	mmu_req_addr,
-		//	r_tag_out, 
-		//	r_cache_tag, 
-		//	r_valid_out, 
-		//	r_dirty_out, 
-		//	r_cycle);
+	       $display("mmu_req_addr %x mmu array tag %x, mmu tag %x valid %b, dirty %b, cycle %d",
+			mmu_req_addr,
+			r_tag_out, 
+			r_cache_tag, 
+			r_valid_out, 
+			r_dirty_out, 
+			r_cycle);
 	       
 	       if(w_mmu_hit)
 		 begin
-		    //$display("MMU HIT, data %x!, low %b", r_array_out, mmu_req_addr[3:0]);
+		    $display("MMU ACK, data %x, low %b", r_array_out, mmu_req_addr[3:0]);
 		    
 		    n_mmu_rsp_valid = 1'b1;
 		    n_mmu_rsp_data = mmu_req_addr[3] ? r_array_out[127:64] : r_array_out[63:0];
 		    n_state = r_waiting_for_page_walk ? TLB_MISS : ACTIVE;
+		    n_pending_mmu_req = 1'b0;
 		 end
 	       else
 		 begin
@@ -1643,7 +1648,7 @@ module l1d(clk,
 	    end
 	  TLB_MISS:
 	    begin
-	       if(mmu_req_valid)
+	       if(n_pending_mmu_req)
 		 begin
 		    t_cache_idx = mmu_req_addr[IDX_STOP-1:IDX_START];
 		    t_cache_tag = mmu_req_addr[`M_WIDTH-1:IDX_STOP];		    

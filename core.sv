@@ -728,7 +728,7 @@ module core(clk,
      end
 `endif
    
-//`define DUMP_ROB
+`define DUMP_ROB
 `ifdef DUMP_ROB
    logic [15:0] r_last_cycle;
    
