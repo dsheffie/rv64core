@@ -100,7 +100,7 @@ module mmu(clk, reset, page_table_root,
 		    n_state = LOAD0;
 		    n_va = l1i_va;
 		    n_l1i_req = 1'b0;
-		    $display("starting translation for %x", l1i_va);
+		    //$display("starting translation for %x", l1i_va);
 		    n_do_l1i = 1'b1;
 		    n_do_l1d = 1'b0;
 		 end
@@ -109,14 +109,14 @@ module mmu(clk, reset, page_table_root,
 		    n_state = LOAD0;
 		    n_va = l1d_va;
 		    n_l1d_req = 1'b0;
-		    $display("starting translation for %x", l1d_va);
+		    //$display("starting translation for %x", l1d_va);
 		    n_do_l1i = 1'b0;
 		    n_do_l1d = 1'b1;
 		 end
 	    end
 	  LOAD0:
 	    begin
-	       $display("r_va = %x, r_va[38:30] = %d", r_va, r_va[38:30]);
+	       //$display("r_va = %x, r_va[38:30] = %d", r_va, r_va[38:30]);
 	       n_addr = page_table_root + {52'd0, r_va[38:30], 3'd0};
 	       if(w_bad_va)
 		 begin
@@ -135,8 +135,8 @@ module mmu(clk, reset, page_table_root,
 	    begin
 	       if(mem_rsp_valid)
 		 begin
-		    $display("walker level 0 got %x", 
-			     mem_rsp_data);
+		    //$display("walker level 0 got %x", 
+		    //	     mem_rsp_data);
 		    n_addr = mem_rsp_data;
 		    if(mem_rsp_data[0] == 1'b0)
 		      begin
@@ -167,8 +167,8 @@ module mmu(clk, reset, page_table_root,
 	       if(mem_rsp_valid)
 		 begin
 		    n_addr = mem_rsp_data;
-		    $display("walker level 1 got %x", 
-			     mem_rsp_data);
+		    //$display("walker level 1 got %x", 
+		    //	     mem_rsp_data);
 		    if(mem_rsp_data[0] == 1'b0)
 		      begin
 			 n_state = IDLE;
@@ -197,8 +197,8 @@ module mmu(clk, reset, page_table_root,
 	    begin
 	       if(mem_rsp_valid)
 		 begin
-		    $display("walker level 2 got %x", 
-			     mem_rsp_data);
+		    //$display("walker level 2 got %x", 
+		    //	     mem_rsp_data);
 		    n_addr = mem_rsp_data;
 		    if(mem_rsp_data[0] == 1'b0)
 		      begin
@@ -216,7 +216,7 @@ module mmu(clk, reset, page_table_root,
 	    end
 	  WALK_DONE:
 	    begin
-	       $display("pa root address %x, hit lvl %d", {8'd0, r_addr[53:10], 12'd0}, r_hit_lvl);
+	       //$display("pa root address %x, hit lvl %d", {8'd0, r_addr[53:10], 12'd0}, r_hit_lvl);
 	       if(r_hit_lvl == 2'd0)
 		 begin /* 4k page */
 		    n_pa = {8'd0, r_addr[53:10], 12'd0};

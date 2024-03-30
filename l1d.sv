@@ -244,8 +244,10 @@ module l1d(clk,
    mem_rsp_t n_core_mem_rsp, r_core_mem_rsp;
       
    mem_req_t n_req, r_req, t_req;
+   mem_req_t n_tlb_req;
    mem_req_t n_req2, r_req2;
 
+   
    mem_req_t r_mem_q[N_MQ_ENTRIES-1:0];
    logic [`LG_MRQ_ENTRIES:0] r_mq_head_ptr, n_mq_head_ptr;
    logic [`LG_MRQ_ENTRIES:0] r_mq_tail_ptr, n_mq_tail_ptr;
@@ -460,7 +462,7 @@ module l1d(clk,
 	       begin
 		  //$display("rob entry %d leaves at cycle %d", r_req.rob_ptr, r_cycle);
 		  if(r_rob_inflight[r_req.rob_ptr] == 1'b0) 
-		    $display("huh %d should be inflight...., faulted %b\n", r_req.rob_ptr, r_req.has_cause);
+		    $display("huh %d should be inflight...., faulted %b, store %b pc %x\n", r_req.rob_ptr, r_req.has_cause, r_req.is_store, r_req.pc);
 		  
 		  r_rob_inflight[r_req.rob_ptr] <= 1'b0;
 	       end
@@ -488,7 +490,12 @@ module l1d(clk,
      begin
 	if(t_push_miss)
 	  begin
-	     r_mem_q[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0] ] <= r_req2;
+	     r_mem_q[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0] ] <= n_tlb_req;
+	     if(n_tlb_req.addr[63] & paging_active)
+	       begin
+		  $display("pushing virtual address %x", r_req2.addr);
+		  $stop();
+	       end
 	     r_mq_addr[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]] <= r_req2.addr[IDX_STOP-1:IDX_START];
 	     r_mq_op[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]] <= r_req2.op;
 	     r_mq_is_load[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]] <= r_req2.is_load;
@@ -1060,7 +1067,8 @@ module l1d(clk,
 	
 	t_ack_ld_early = 1'b0;
 	t_got_rd_retry = 1'b0;
-	t_port2_hit_cache = r_valid_out2 && (r_tag_out2 == r_cache_tag2);
+	t_port2_hit_cache = r_valid_out2 && (r_tag_out2 == w_tlb_pa[`M_WIDTH-1:IDX_STOP]) && 
+			    w_tlb_hit;
 	
 	n_state = r_state;
 	t_miss_idx = r_miss_idx;
@@ -1085,6 +1093,7 @@ module l1d(clk,
 	
 	n_req = r_req;
 	n_req2 = r_req2;
+	n_tlb_req = r_req2;
 	
 	core_mem_req_ack = 1'b0;
 	core_store_data_ack = 1'b0;
@@ -1159,19 +1168,31 @@ module l1d(clk,
 		 end
 	    end
 	  ACTIVE:
-	    begin
-	       
+	    begin	       
 	       if(r_got_req2)
 		 begin
 		    n_core_mem_rsp.data = r_req2.addr;
 		    n_core_mem_rsp.rob_ptr = r_req2.rob_ptr;
 		    n_core_mem_rsp.dst_ptr = r_req2.dst_ptr;
+		    n_core_mem_rsp.has_cause = r_req2.has_cause;
+		    n_core_mem_rsp.cause = r_req2.cause;
+		    if(r_req2.has_cause) 
+		      begin
+			 $display("rob ptr %d has cause, pc %x cycle %d", r_req2.rob_ptr, r_req2.pc, r_cycle);
+		      end
 		    
 		    if(drain_ds_complete || r_req2.op == MEM_NOP)
 		      begin
 			 n_core_mem_rsp.dst_valid = r_req2.dst_valid;
-			 n_core_mem_rsp.has_cause = r_req2.spans_cacheline;
+			 n_core_mem_rsp.has_cause = r_req2.has_cause | r_req2.spans_cacheline;
 			 n_core_mem_rsp_valid = 1'b1;
+		      end
+		    else if(r_req2.has_cause)
+		      begin
+			 $display("rob ptr %d has cause, pc %x ACK NOW, cycle %d", r_req2.rob_ptr, r_req2.pc, r_cycle);
+			 n_core_mem_rsp.data = t_rsp_data2[`M_WIDTH-1:0];
+                         n_core_mem_rsp.dst_valid = t_rsp_dst_valid2;
+                         n_core_mem_rsp_valid = 1'b1;
 		      end
 		    else if(!w_tlb_hit)
 		      begin
@@ -1183,6 +1204,9 @@ module l1d(clk,
 			 t_push_miss = 1'b1;
 			 t_incr_busy = 1'b1;
 			 n_stall_store = 1'b1;
+			 n_tlb_req.addr = {w_tlb_pa[63:12], r_req2.addr[11:0]};
+			 
+			 $display("accepting store with rob ptr %d, faulted %b", r_req2.rob_ptr, r_req2.has_cause);
 			 //ack early
 			 n_core_mem_rsp.dst_valid = 1'b0;
 			 if(t_port2_hit_cache)
@@ -1203,6 +1227,7 @@ module l1d(clk,
 		    else
 		      begin
 			 t_push_miss = 1'b1;
+			 n_tlb_req.addr = {w_tlb_pa[63:12], r_req2.addr[11:0]};
 			 if(t_port2_hit_cache)
 			   begin
 			      n_cache_hits = r_cache_hits + 'd1;
@@ -1213,6 +1238,11 @@ module l1d(clk,
 
 	       if(r_got_req)
 		 begin
+		    if(paging_active)
+		      begin
+			 $display(">>>>> primary port, paging active, rob ptr %d, pc %x", r_req.rob_ptr, r_req.pc);
+		      end
+		    
 		    if(r_valid_out && (r_tag_out == r_cache_tag))
 		      begin /* valid cacheline - hit in cache */
 			 if(r_req.is_store)
@@ -1267,10 +1297,10 @@ module l1d(clk,
 		  else
 		    begin
 		       
-`ifdef VERBOSE_L1D
-		       $display("at cycle %d : cache invalid miss for rob ptr %d, r_is_retry %b, addr %x, is store %b, r_cache_idx = %d, r_cache_tag = %d, valid %b",
-				r_cycle, r_req.rob_ptr, r_is_retry, r_req.addr, r_req.is_store, r_cache_idx, r_cache_tag, r_valid_out);
-`endif
+//`ifdef VERBOSE_L1D
+		       $display("at cycle %d : cache invalid miss for rob ptr %d, r_is_retry %b, addr %x, is store %b, r_cache_idx = %d, r_cache_tag = %x, valid %b, paging %b",
+				r_cycle, r_req.rob_ptr, r_is_retry, r_req.addr, r_req.is_store, r_cache_idx, r_cache_tag, r_valid_out, paging_active);
+//`endif
 
 		       t_got_miss = 1'b1;
 		       n_inhibit_write = 1'b0;	
@@ -1312,10 +1342,14 @@ module l1d(clk,
 		    begin
 		       if(t_mem_head.is_store)
 			 begin
-			    //$display("STORE DATA t_mem_head.rob_ptr = %d, grad %b, dq ptr %d valid %b, data %x", 
-			    //t_mem_head.rob_ptr, r_graduated[t_mem_head.rob_ptr], 
-			    //core_store_data.rob_ptr, core_store_data_valid,
-			    //core_store_data.data);
+			    $display("STORE DATA t_mem_head.rob_ptr = %d, pc %x, grad %b, dq ptr %d valid %b, data %x, faulted %b", 
+				     t_mem_head.rob_ptr,
+				     t_mem_head.pc,
+				     r_graduated[t_mem_head.rob_ptr], 
+				     core_store_data.rob_ptr, 
+				     core_store_data_valid,
+				     core_store_data.data,
+				     t_mem_head.has_cause);
 			    
 			    if(r_graduated[t_mem_head.rob_ptr] == 2'b10 && (core_store_data_valid ? (t_mem_head.rob_ptr == core_store_data.rob_ptr) : 1'b0) )
 			      begin
@@ -1364,10 +1398,10 @@ module l1d(clk,
 		    end
 	       end
 
-	       if(r_got_req2 & !w_tlb_hit)
+	       if(r_got_req2 & !w_tlb_hit & !r_req2.has_cause)
 		 begin
 		    n_state = TLB_MISS;
-		    $display(">>>>>l1d missed tlb for va %x at cycle %d, got req2 %b", r_req2.addr, r_cycle, r_got_req2);
+		    $display(">>>>>l1d missed tlb for pc %x va %x at cycle %d, rob ptr %d", r_req2.pc, r_req2.addr, r_cycle, r_req2.rob_ptr);
 		    n_waiting_for_page_walk = 1'b1;
 		    n_tlb_miss = 1'b1;
 		    n_pa = 'd0;
@@ -1540,17 +1574,17 @@ module l1d(clk,
 	    end
 	  MMU_LOAD:
 	    begin
-	       $display("mmu_req_addr %x mmu array tag %x, mmu tag %x valid %b, dirty %b, cycle %d",
-			mmu_req_addr,
-			r_tag_out, 
-			r_cache_tag, 
-			r_valid_out, 
-			r_dirty_out, 
-			r_cycle);
+	       //$display("mmu_req_addr %x mmu array tag %x, mmu tag %x valid %b, dirty %b, cycle %d",
+		//	mmu_req_addr,
+		//	r_tag_out, 
+		//	r_cache_tag, 
+		//	r_valid_out, 
+		//	r_dirty_out, 
+		//	r_cycle);
 	       
 	       if(w_mmu_hit)
 		 begin
-		    $display("MMU HIT, data %x!, low %b", r_array_out, mmu_req_addr[3:0]);
+		    //$display("MMU HIT, data %x!, low %b", r_array_out, mmu_req_addr[3:0]);
 		    
 		    n_mmu_rsp_valid = 1'b1;
 		    n_mmu_rsp_data = mmu_req_addr[3] ? r_array_out[127:64] : r_array_out[63:0];
@@ -1598,7 +1632,7 @@ module l1d(clk,
 		 begin
 		    n_inhibit_write = 1'b0;
 		    n_state = MMU_RETRY_LOAD;
-		    $display(">>>>> mmu reload data %x", mem_rsp_load_data);
+		    //$display(">>>>> mmu reload data %x", mem_rsp_load_data);
 		 end
 	    end
 	  MMU_RETRY_LOAD:
@@ -1617,8 +1651,8 @@ module l1d(clk,
 		 end
 	       if(r_page_walk_rsp_valid)
 		 begin
-		    $display("l1d walk done : pf = %b, pa %x, cycle %d",
-			     r_page_fault, r_pa, r_cycle);
+		    $display("l1d walk done : pf = %b, pa %x, cycle %d, is store %b, is atomic %b, pc %x, rob ptr %d",
+			     r_page_fault, r_pa, r_cycle, r_req2.is_store, r_req2.is_atomic, r_req2.pc, r_req2.rob_ptr);
 		    n_page_walk_rsp_valid = 1'b0;
 		    n_waiting_for_page_walk = 1'b0;
 		    n_state = TLB_MISS_TURNAROUND;
@@ -1626,14 +1660,17 @@ module l1d(clk,
 		      begin
 			 n_req2.cause = (r_req2.is_store|r_req2.is_atomic ? STORE_PAGE_FAULT : LOAD_PAGE_FAULT);
 			 n_req2.has_cause = 1'b1;
+			 //n_req2.addr = {r_pa[63:12], r_req2.addr[11:0]};			 
 		      end
 		    t_load_tlb = 1'b1;
 		 end
 	    end // case: TLB_MISS
 	  TLB_MISS_TURNAROUND:
 	    begin
-	       t_push_miss = 1'b1;
+	       //t_push_miss = r_page_fault & (!r_req2.is_store);
+	       t_got_req2 = 1'b1;
 	       n_state = ACTIVE;
+	       $display("tlb miss turn around at cycle %d, t_got_req2 = %b, push miss = %b", r_cycle, t_got_req2, t_push_miss);	       
 	    end
 	  default:
 	    begin

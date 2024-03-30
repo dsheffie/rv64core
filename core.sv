@@ -756,10 +756,11 @@ module core(clk,
 	     
 	     for(logic [`LG_ROB_ENTRIES:0] i = r_rob_head_ptr; i != (r_rob_tail_ptr); i=i+1)
 	       begin
-		  $display("\trob entry %d, pc %x, complete %b, is br %b, faulted %b, cause %d",
+		  $display("\trob entry %d, pc %x, complete %b, sd complete %b, is br %b, faulted %b, cause %d",
 			   i[`LG_ROB_ENTRIES-1:0], 
 			   r_rob[i[`LG_ROB_ENTRIES-1:0]].pc, 
 			   r_rob_complete[i[`LG_ROB_ENTRIES-1:0]],
+			   r_rob_sd_complete[i[`LG_ROB_ENTRIES-1:0]],
 			   r_rob[i[`LG_ROB_ENTRIES-1:0]].is_br,
 			   r_rob[i[`LG_ROB_ENTRIES-1:0]].faulted,
 			   r_rob[i[`LG_ROB_ENTRIES-1:0]].cause
@@ -1139,8 +1140,8 @@ module core(clk,
 	    end
 	  ARCH_FAULT:
 	    begin
-	       //$display("took fault for %x with cause %d at cycle %d, priv %d", 
-	       //t_rob_head.pc, t_rob_head.cause, r_cycle, priv);
+	       $display("took fault for %x with cause %d at cycle %d, priv %d", 
+			t_rob_head.pc, t_rob_head.cause, r_cycle, priv);
 	       
 	       case(t_rob_head.cause)
 		 BREAKPOINT:
@@ -1591,10 +1592,8 @@ module core(clk,
 		  r_rob[core_mem_rsp.rob_ptr].faulted <= core_mem_rsp.has_cause;
 		  r_rob[core_mem_rsp.rob_ptr].cause <= core_mem_rsp.cause;
 		  r_rob[core_mem_rsp.rob_ptr].has_cause <= core_mem_rsp.has_cause;
-		  //if(core_mem_rsp.has_cause)
-		  //begin
-		  //    $stop();
-		  //end
+		  //$display("mem_rsp rob ; %x, rob ptr %d has cause %b %d", r_rob[core_mem_rsp.rob_ptr].pc, core_mem_rsp.rob_ptr, core_mem_rsp.has_cause, core_mem_rsp.cause);
+		  
 					    
 `ifdef ENABLE_CYCLE_ACCOUNTING
 		  r_rob[core_mem_rsp.rob_ptr].complete_cycle <= r_cycle;
