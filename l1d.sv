@@ -280,10 +280,10 @@ module l1d(clk,
                              FLUSH_CL_WAIT, //9
                              HANDLE_RELOAD, //10
 			     TLB_MISS, //11
-			     TLB_MISS_TURNAROUND,
-			     MMU_LOAD,
-			     MMU_WRITEBACK,
-			     MMU_RELOAD,
+			     TLB_MISS_TURNAROUND,//12
+			     MMU_LOAD,//13
+			     MMU_WRITEBACK,//14
+			     MMU_RELOAD,//15
 			     MMU_RETRY_LOAD,
 			     MMU_RELOAD_WAIT
                              } state_t;
@@ -1404,8 +1404,9 @@ module l1d(clk,
 
 	       if(r_got_req2 & !w_tlb_hit & !r_req2.has_cause)
 		 begin
-		    n_state = TLB_MISS;
 		    $display(">>>>>l1d missed tlb for pc %x va %x at cycle %d, rob ptr %d", r_req2.pc, r_req2.addr, r_cycle, r_req2.rob_ptr);
+		    if(n_state != ACTIVE) $stop();
+		    n_state = TLB_MISS;		    
 		    n_waiting_for_page_walk = 1'b1;
 		    n_tlb_miss = 1'b1;
 		    n_pa = 'd0;
@@ -1578,18 +1579,10 @@ module l1d(clk,
 	    end
 	  MMU_LOAD:
 	    begin
-	       $display("mmu_req_addr %x mmu array tag %x, mmu tag %x valid %b, dirty %b, cycle %d",
-			mmu_req_addr,
-			r_tag_out, 
-			r_cache_tag, 
-			r_valid_out, 
-			r_dirty_out, 
-			r_cycle);
 	       
 	       if(w_mmu_hit)
 		 begin
-		    $display("MMU ACK, data %x, low %b", r_array_out, mmu_req_addr[3:0]);
-		    
+		    $display("MMU ACK, data %x at cycle %d", r_array_out, r_cycle);
 		    n_mmu_rsp_valid = 1'b1;
 		    n_mmu_rsp_data = mmu_req_addr[3] ? r_array_out[127:64] : r_array_out[63:0];
 		    n_state = r_waiting_for_page_walk ? TLB_MISS : ACTIVE;
@@ -1613,6 +1606,17 @@ module l1d(clk,
 			 //$stop();
 		      end
 		 end // else: !if(w_mmu_hit)
+
+	       $display("mmu_req_addr %x mmu hit %b, mmu array tag %x, mmu tag %x valid %b, dirty %b, cycle %d, n_state = %d",
+			mmu_req_addr,
+			w_mmu_hit,
+			r_tag_out, 
+			r_cache_tag, 
+			r_valid_out, 
+			r_dirty_out, 
+			r_cycle,
+			n_state);
+
 	       
 	    end // case: MMU_LOAD
 	  MMU_WRITEBACK:
@@ -1627,6 +1631,7 @@ module l1d(clk,
 	    begin
 	       n_state = MMU_RELOAD_WAIT;
 	       n_mem_req_addr = {mmu_req_addr[63:4],4'd0};
+	       $display("mmu load address %x", n_mem_req_addr);
 	       n_mem_req_opcode = MEM_LW;
 	       n_state = MMU_RELOAD_WAIT;
 	       n_mem_req_valid = 1'b1;			 	       
@@ -1637,7 +1642,7 @@ module l1d(clk,
 		 begin
 		    n_inhibit_write = 1'b0;
 		    n_state = MMU_RETRY_LOAD;
-		    //$display(">>>>> mmu reload data %x", mem_rsp_load_data);
+		    $display(">>>>> mmu reload data %x", mem_rsp_load_data);
 		 end
 	    end
 	  MMU_RETRY_LOAD:
@@ -1658,6 +1663,7 @@ module l1d(clk,
 		 begin
 		    $display("l1d walk done : pf = %b, pa %x, cycle %d, is store %b, is atomic %b, pc %x, rob ptr %d",
 			     r_page_fault, r_pa, r_cycle, r_req2.is_store, r_req2.is_atomic, r_req2.pc, r_req2.rob_ptr);
+		    if(r_page_fault && (r_req2.pc == 64'hffffffff80a03d70)) $stop();
 		    n_page_walk_rsp_valid = 1'b0;
 		    n_waiting_for_page_walk = 1'b0;
 		    n_state = TLB_MISS_TURNAROUND;
@@ -1755,6 +1761,16 @@ module l1d(clk,
    // 	  end // if (t_push_miss && (r_req2.is_store == 1'b0))
    //   end
 `endif
-    
+
+
+   always_ff@(negedge clk)
+     begin
+	//$display("r_state = %d", r_state);
+	
+	if(n_mem_req_valid)
+	  $display("generating mem req in state %d for addr %x at cycle %d",
+		   r_state, n_mem_req_addr, r_cycle);
+	
+     end
 endmodule // l1d
 

@@ -580,7 +580,7 @@ int main(int argc, char **argv) {
   uint64_t mismatches = 0, n_stores = 0, n_loads = 0;
   uint64_t n_branches = 0, n_mispredicts = 0, n_checks = 0, n_flush_cycles = 0;
   bool got_mem_req = false, got_mem_rsp = false, got_monitor = false, incorrect = false;
-
+  bool was_in_flush_mode = false;
 #ifdef USE_SDL
   if(use_fb) {
     assert(SDL_Init(SDL_INIT_VIDEO) == 0);
@@ -944,6 +944,13 @@ int main(int argc, char **argv) {
       }
     }
 
+    if(not(tb->in_flush_mode) and was_in_flush_mode) {
+      int mem_eq = memcmp(ss->mem, s->mem, 1UL<<32);
+      std::cout << "flush completes, mem eq = " << mem_eq << ", cycle " << cycle << "\n";
+      assert(mem_eq == 0);
+      printf("0000000080e04030 = %lx\n", *reinterpret_cast<uint64_t*>(&s->mem[0x80e04030]));
+    }
+    was_in_flush_mode = tb->in_flush_mode;
     
     ++last_retire;
     if(last_retire > (1U<<16) && not(tb->in_flush_mode)) {
@@ -1012,6 +1019,7 @@ int main(int argc, char **argv) {
       if(tb->mem_req_opcode == 4) {/*load word */
 	for(int i = 0; i < 4; i++) {
 	  uint64_t ea = (tb->mem_req_addr + 4*i) & ((1UL<<32)-1);
+	  printf("got dram request for address %lx\n", ea);
 	  tb->mem_rsp_load_data[i] = mem_r32(s,ea);
 	}
 	last_load_addr = tb->mem_req_addr;
