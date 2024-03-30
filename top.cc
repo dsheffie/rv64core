@@ -217,7 +217,9 @@ std::string getAsmString(uint64_t addr, uint64_t root, bool paging_enabled) {
     verbose_ic_translate = true;
     pa = translate(addr, root, true, false);
     verbose_ic_translate = false;
-    if(pa == -1) return "code page not present";
+    if(pa == -1) {
+      return "code page not present";
+    }
   }
   return getAsmString(mem_r32(s,pa), addr);
 }

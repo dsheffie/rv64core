@@ -1206,7 +1206,7 @@ module l1d(clk,
 			 n_stall_store = 1'b1;
 			 n_tlb_req.addr = {w_tlb_pa[63:12], r_req2.addr[11:0]};
 			 
-			 $display("accepting store with rob ptr %d, faulted %b", r_req2.rob_ptr, r_req2.has_cause);
+			 //$display("accepting store with rob ptr %d, faulted %b", r_req2.rob_ptr, r_req2.has_cause);
 			 //ack early
 			 n_core_mem_rsp.dst_valid = 1'b0;
 			 if(t_port2_hit_cache)
@@ -1342,14 +1342,14 @@ module l1d(clk,
 		    begin
 		       if(t_mem_head.is_store)
 			 begin
-			    $display("STORE DATA t_mem_head.rob_ptr = %d, pc %x, grad %b, dq ptr %d valid %b, data %x, faulted %b", 
-				     t_mem_head.rob_ptr,
-				     t_mem_head.pc,
-				     r_graduated[t_mem_head.rob_ptr], 
-				     core_store_data.rob_ptr, 
-				     core_store_data_valid,
-				     core_store_data.data,
-				     t_mem_head.has_cause);
+			    // $display("STORE DATA t_mem_head.rob_ptr = %d, pc %x, grad %b, dq ptr %d valid %b, data %x, faulted %b", 
+			    // 	     t_mem_head.rob_ptr,
+			    // 	     t_mem_head.pc,
+			    // 	     r_graduated[t_mem_head.rob_ptr], 
+			    // 	     core_store_data.rob_ptr, 
+			    // 	     core_store_data_valid,
+			    // 	     core_store_data.data,
+			    // 	     t_mem_head.has_cause);
 			    
 			    if(r_graduated[t_mem_head.rob_ptr] == 2'b10 && (core_store_data_valid ? (t_mem_head.rob_ptr == core_store_data.rob_ptr) : 1'b0) )
 			      begin
@@ -1426,11 +1426,11 @@ module l1d(clk,
 		  core_mem_req_ack = 1'b1;
 		  t_got_req2 = 1'b1;
 		  
-//`ifdef VERBOSE_L1D		 		  //       
+`ifdef VERBOSE_L1D		 		  //       
 		  $display("accepting new op %d, addr %x for rob ptr %d at cycle %d, mem_q_empty %b", 
 			   core_mem_req.op, core_mem_req.addr,
 			   core_mem_req.rob_ptr, r_cycle, mem_q_empty);
-//`endif
+`endif
 		  
 		  n_last_wr2 = core_mem_req.is_store;
 		  n_last_rd2 = !core_mem_req.is_store;

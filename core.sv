@@ -394,7 +394,7 @@ module core(clk,
 			     DRAIN, //3
 			     RAT, //4
 			     ALLOC_FOR_SERIALIZE, //6
-			     MONITOR_FLUSH_CACHE, //7
+			     FLUSH_CACHE, //7
 			     HANDLE_MONITOR, //8
 			     ALLOC_FOR_MONITOR, //9
 			     WAIT_FOR_MONITOR, //10
@@ -962,11 +962,11 @@ module core(clk,
 
 		    if(t_uop.serializing_op && t_rob_empty)
 		      begin
-			 if(t_uop.op == MONITOR)
+			 if(t_uop.op == MONITOR || t_uop.op == SFENCEVMA)
 			   begin
-			      n_flush_req_l1i = 1'b0;
+			      n_flush_req_l1i = 1'b1;
 			      n_flush_req_l1d = 1'b1;
-			      n_state = MONITOR_FLUSH_CACHE;
+			      n_state = FLUSH_CACHE;
 			   end // if (t_uop.op == MONITOR)
 			 else
 			   begin
@@ -1047,13 +1047,13 @@ module core(clk,
 		      end
 		 end
 	    end
-	  MONITOR_FLUSH_CACHE:
+	  FLUSH_CACHE:
 	    begin
 	       //$display("monitor flush %b %b", n_l1d_flush_complete, n_l2_flush_complete);
-	       if(/*n_l1i_flush_complete &&*/ n_l1d_flush_complete && n_l2_flush_complete)
+	       if(n_l1i_flush_complete && n_l1d_flush_complete && n_l2_flush_complete)
 		 begin
-		    n_got_monitor = 1'b1;
-		    n_state = HANDLE_MONITOR;
+		    n_got_monitor = t_uop.op == MONITOR;
+		    n_state = (t_uop.op == MONITOR) ? HANDLE_MONITOR : ALLOC_FOR_SERIALIZE;
 		    n_l1i_flush_complete = 1'b0;
 		    n_l1d_flush_complete = 1'b0;
 		    n_l2_flush_complete = 1'b0;
