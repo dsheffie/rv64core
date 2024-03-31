@@ -350,6 +350,15 @@ module
 
 	       .mem_rsp_valid(mem_rsp_valid),
 	       .mem_rsp_load_data(mem_rsp_load_data),
+
+	       .mmu_req_valid(w_mmu_req_valid),
+	       .mmu_req_addr(w_mmu_req_addr),
+	       .mmu_req_data(w_mmu_req_data),
+	       .mmu_req_store(w_mmu_req_store),
+	       .mmu_rsp_valid(w_mmu_rsp_valid),
+	       .mmu_rsp_data(w_mmu_rsp_data),
+
+	       
 	       .cache_accesses(l2_cache_accesses),
 	       .cache_hits(l2_cache_hits)
 
@@ -429,12 +438,6 @@ module
 	       
 	       .mem_rsp_valid(l1d_mem_rsp_valid),
 	       .mem_rsp_load_data(w_l1_mem_load_data),
-	       .mmu_req_valid(w_mmu_req_valid),
-	       .mmu_req_addr(w_mmu_req_addr),
-	       .mmu_req_data(w_mmu_req_data),
-	       .mmu_req_store(w_mmu_req_store),
-	       .mmu_rsp_valid(w_mmu_rsp_valid),
-	       .mmu_rsp_data(w_mmu_rsp_data),
 	       
 	       .cache_accesses(l1d_cache_accesses),
 	       .cache_hits(l1d_cache_hits)

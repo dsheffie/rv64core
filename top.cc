@@ -953,7 +953,7 @@ int main(int argc, char **argv) {
     was_in_flush_mode = tb->in_flush_mode;
     
     ++last_retire;
-    if(last_retire > (1U<<16) && not(tb->in_flush_mode)) {
+    if(last_retire > (1U<<12) && not(tb->in_flush_mode)) {
       std::cout << "in flush mode = " << static_cast<int>(tb->in_flush_mode) << "\n";
       std::cerr << "no retire in " << last_retire << " cycles, last retired "
     		<< std::hex
@@ -1019,7 +1019,7 @@ int main(int argc, char **argv) {
       if(tb->mem_req_opcode == 4) {/*load word */
 	for(int i = 0; i < 4; i++) {
 	  uint64_t ea = (tb->mem_req_addr + 4*i) & ((1UL<<32)-1);
-	  printf("got dram request for address %lx\n", ea);
+	  //printf("got dram request for address %lx\n", ea);
 	  tb->mem_rsp_load_data[i] = mem_r32(s,ea);
 	}
 	last_load_addr = tb->mem_req_addr;

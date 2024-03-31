@@ -36,6 +36,14 @@ module l2(clk,
 	  //mem -> l2
 	  mem_rsp_valid,
 	  mem_rsp_load_data,
+	  
+	  //page walker signals
+	   mmu_req_valid, 
+	   mmu_req_addr, 
+	   mmu_req_data,  
+	   mmu_req_store,
+	   mmu_rsp_valid,
+	   mmu_rsp_data,	   
 
 	  cache_hits,
 	  cache_accesses
@@ -71,6 +79,20 @@ module l2(clk,
    input logic 		mem_rsp_valid;
    input logic [(1 << (`LG_L2_CL_LEN+3)) - 1 :0] mem_rsp_load_data;
 
+   input logic				  mmu_req_valid;
+   input logic [63:0]			  mmu_req_addr;
+   input logic [63:0]			  mmu_req_data;
+   input logic				  mmu_req_store;
+   output logic				  mmu_rsp_valid;
+   output logic [63:0]			  mmu_rsp_data;
+
+   logic [63:0] r_mmu_rsp_data, n_mmu_rsp_data;
+   logic	r_mmu_rsp_valid, n_mmu_rsp_valid;
+
+   assign mmu_rsp_valid = r_mmu_rsp_valid;
+   assign mmu_rsp_data = r_mmu_rsp_data;
+   
+   
    output logic [63:0] cache_hits;
    output logic [63:0] cache_accesses;
    
@@ -176,7 +198,8 @@ module l2(clk,
    wire 		w_hit = w_valid ? (r_tag == w_tag) : 1'b0;
    wire 		w_need_wb = w_valid ? w_dirty : 1'b0;
 
-   logic 		r_l1d_req, n_l1d_req;
+   logic 		r_mmu_req, n_mmu_req;
+   logic		r_l1d_req, n_l1d_req;
    logic 		r_l1i_req, n_l1i_req;
    logic 		r_last_gnt, n_last_gnt;
    logic 		n_req, r_req;
@@ -187,6 +210,8 @@ module l2(clk,
      begin
 	if(reset)
 	  begin
+	     r_mmu_rsp_data <= 'd0;
+	     r_mmu_rsp_valid <= 1'b0;
 	     r_state <= INITIALIZE;
 	     r_flush_state <= WAIT_FOR_FLUSH;
 	     r_flush_complete <= 1'b0;
@@ -210,6 +235,7 @@ module l2(clk,
 	     r_cache_accesses <= 'd0;
 	     r_l1d_req <= 1'b0;
 	     r_l1i_req <= 1'b0;
+	     r_mmu_req <= 1'b0;
 	     r_last_gnt <= 1'b0;
 	     r_req <= 1'b0;
 	     r_last_l1i_addr <= 'd0;
@@ -217,6 +243,8 @@ module l2(clk,
 	  end
 	else
 	  begin
+	     r_mmu_rsp_data <= n_mmu_rsp_data;
+	     r_mmu_rsp_valid <= n_mmu_rsp_valid;
 	     r_state <= n_state;
 	     r_flush_state <= n_flush_state;
 	     r_flush_complete <= n_flush_complete;
@@ -240,6 +268,7 @@ module l2(clk,
 	     r_cache_accesses <= n_cache_accesses;
 	     r_l1d_req <= n_l1d_req;
 	     r_l1i_req <= n_l1i_req;
+	     r_mmu_req <= n_mmu_req;	     
 	     r_last_gnt <= n_last_gnt;
 	     r_req <= n_req;
 	     r_last_l1i_addr <= n_last_l1i_addr;
@@ -303,7 +332,7 @@ module l2(clk,
 
    wire w_l1i_req = r_l1i_req | l1i_req;
    wire w_l1d_req = r_l1d_req | l1d_req;
-
+   wire	w_mmu_req = r_mmu_req | mmu_req_valid;
 
    
    always_comb
@@ -311,8 +340,10 @@ module l2(clk,
 	n_last_gnt = r_last_gnt;
 	n_l1i_req = r_l1i_req | l1i_req;
 	n_l1d_req = r_l1d_req | l1d_req;
+	n_mmu_req = r_mmu_req | mmu_req_valid;
 	n_req = r_req;
-	
+	n_mmu_rsp_data = r_mmu_rsp_data;
+	n_mmu_rsp_valid = 1'b0;
 	
 	n_state = r_state;
 	n_flush_complete = 1'b0;
@@ -386,6 +417,16 @@ module l2(clk,
 		    t_idx = 'd0;
 		    n_state = FLUSH_WAIT;
 		 end
+	       else if(w_mmu_req)
+		 begin
+		    t_idx = mmu_req_addr[LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN];			 
+		    n_tag = mmu_req_addr[(`M_WIDTH-1):LG_L2_LINES+`LG_L2_CL_LEN];
+		    n_addr = {mmu_req_addr[(`M_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
+		    n_saveaddr = {mmu_req_addr[(`M_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
+		    n_opcode = MEM_LW;
+		    n_state = CHECK_VALID_AND_TAG;
+		    $display("l2 : mmu req addr %x", r_addr);		    
+		 end
 	       else if(w_l1d_req | w_l1i_req)
 		 begin
 		    if(w_l1i_req & (!w_l1d_req))
@@ -404,7 +445,7 @@ module l2(clk,
 		      end
 		    else if((!w_l1i_req) & w_l1d_req)
 		      begin
-			 $display("accepting d-side, addr = %x, store=%b", l1d_addr, l1d_opcode == MEM_SW);
+			 //$display("accepting d-side, addr = %x, store=%b", l1d_addr, l1d_opcode == MEM_SW);
 			 n_last_gnt = 1'b1;
 			 t_idx = l1d_addr[LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN];			 
 			 n_tag = l1d_addr[(`M_WIDTH-1):LG_L2_LINES+`LG_L2_CL_LEN];
@@ -469,7 +510,14 @@ module l2(clk,
 		      begin			 
 			 n_rsp_data = w_d0;
 			 n_state = IDLE;
-			 if(r_last_gnt == 1'b0)
+			 if(r_mmu_req)
+			   begin
+			      n_mmu_rsp_data = r_addr[3] ? w_d0[127:64] : w_d0[63:0];
+			      n_mmu_rsp_valid = 1'b1;
+			      $display("l2 : mmu returns %x for addr %x", n_mmu_rsp_data, r_addr);
+			      n_mmu_req = 1'b0;
+			   end
+			 else if(r_last_gnt == 1'b0)
 			   begin
 			      n_l1i_rsp_valid  = 1'b1;
 			   end

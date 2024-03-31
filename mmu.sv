@@ -72,7 +72,13 @@ module mmu(clk, reset, page_table_root,
    wire		w_lo_va = (&r_va[63:39]) & (r_va[39] == r_va[38]);
    wire		w_hi_va = (&(~r_va[63:39])) & (r_va[39] == r_va[38]);
    wire		w_bad_va = (w_lo_va | w_hi_va) == 1'b0;
-   	
+
+   logic [63:0]	r_cycle;
+   
+   always_ff@(posedge clk)
+     r_cycle <= reset ? 64'd0 : (r_cycle + 64'd1);
+	      
+	     
    always_comb
      begin
 	n_l1i_req = r_l1i_req | l1i_req;
@@ -100,7 +106,7 @@ module mmu(clk, reset, page_table_root,
 		    n_state = LOAD0;
 		    n_va = l1i_va;
 		    n_l1i_req = 1'b0;
-		    //$display("starting translation for %x", l1i_va);
+		    $display("starting translation for %x", l1i_va);
 		    n_do_l1i = 1'b1;
 		    n_do_l1d = 1'b0;
 		 end
@@ -116,8 +122,8 @@ module mmu(clk, reset, page_table_root,
 	    end
 	  LOAD0:
 	    begin
-	       if(r_do_l1d) $display("r_va = %x, r_va[38:30] = %d", r_va, r_va[38:30]);
 	       n_addr = page_table_root + {52'd0, r_va[38:30], 3'd0};
+	       if(r_do_l1i) $display("r_va = %x, r_va[38:30] = %d, addr %x", r_va, r_va[38:30], n_addr);
 	       if(w_bad_va)
 		 begin
 		    n_state = IDLE;
@@ -135,7 +141,7 @@ module mmu(clk, reset, page_table_root,
 	    begin
 	       if(mem_rsp_valid)
 		 begin
-		    if(r_do_l1d) $display("walker level 0 got %x", mem_rsp_data);
+		    if(r_do_l1i) $display("walker level 0 got %x, cycle %d", mem_rsp_data, r_cycle);
 		    n_addr = mem_rsp_data;
 		    if(mem_rsp_data[0] == 1'b0)
 		      begin

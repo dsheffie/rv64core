@@ -62,13 +62,6 @@ module l1d(clk,
 	   //reply from memory system
 	   mem_rsp_valid,
 	   mem_rsp_load_data,
-	   //page walker signals
-	   mmu_req_valid, 
-	   mmu_req_addr, 
-	   mmu_req_data,  
-	   mmu_req_store,
-	   mmu_rsp_valid,
-	   mmu_rsp_data,	   
 	   
 	   cache_accesses,
 	   cache_hits
@@ -126,12 +119,6 @@ module l1d(clk,
    input logic 				  mem_rsp_valid;
    input logic [L1D_CL_LEN_BITS-1:0] 	  mem_rsp_load_data;
 
-   input logic				  mmu_req_valid;
-   input logic [63:0]			  mmu_req_addr;
-   input logic [63:0]			  mmu_req_data;
-   input logic				  mmu_req_store;
-   output logic				  mmu_rsp_valid;
-   output logic [63:0]			  mmu_rsp_data;
    
    
    output logic [63:0] 			 cache_accesses;
@@ -280,12 +267,7 @@ module l1d(clk,
                              FLUSH_CL_WAIT, //9
                              HANDLE_RELOAD, //10
 			     TLB_MISS, //11
-			     TLB_MISS_TURNAROUND,//12
-			     MMU_LOAD,//13
-			     MMU_WRITEBACK,//14
-			     MMU_RELOAD,//15
-			     MMU_RETRY_LOAD,
-			     MMU_RELOAD_WAIT
+			     TLB_MISS_TURNAROUND
                              } state_t;
 
    
@@ -305,8 +287,6 @@ module l1d(clk,
    
    logic [63:0] 	       r_store_stalls, n_store_stalls;
 
-   logic		       n_mmu_rsp_valid, r_mmu_rsp_valid;
-   logic [63:0]		       n_mmu_rsp_data, r_mmu_rsp_data;
    
    
    logic [31:0] 			 r_cycle;
@@ -321,8 +301,6 @@ module l1d(clk,
    assign core_mem_rsp_valid = n_core_mem_rsp_valid;
    assign core_mem_rsp = n_core_mem_rsp;
 
-   assign mmu_rsp_valid = r_mmu_rsp_valid;
-   assign mmu_rsp_data = r_mmu_rsp_data;
    
    assign cache_accesses = r_cache_accesses;
    assign cache_hits = r_cache_hits;
@@ -591,8 +569,6 @@ module l1d(clk,
 	if(reset)
 	  begin
 	     r_tlb_miss <= 1'b0;
-	     r_mmu_rsp_valid <= 1'b0;
-	     r_mmu_rsp_data <= 64'd0;
 	     r_ack_ld_early <= 1'b0;
 	     r_did_reload <= 1'b0;
 	     r_stall_store <= 1'b0;
@@ -639,8 +615,6 @@ module l1d(clk,
 	else
 	  begin
 	     r_tlb_miss <= n_tlb_miss;
-	     r_mmu_rsp_valid <= n_mmu_rsp_valid;
-	     r_mmu_rsp_data <= n_mmu_rsp_data;
 	     r_ack_ld_early <= t_ack_ld_early;
 	     r_did_reload <= n_did_reload;
 	     r_stall_store <= n_stall_store;
@@ -867,9 +841,6 @@ module l1d(clk,
 	   .replace_pa(r_pa)
 	   );
 
-   wire	       w_mmu_hit = r_valid_out ? (r_tag_out == r_cache_tag) : 1'b0;
-   wire	       w_mmu_dirty = r_valid_out ? r_dirty_out : 1'b0;
-   
 
    always_comb
      begin
@@ -1038,36 +1009,38 @@ module l1d(clk,
    
    logic n_page_walk_rsp_valid, r_page_walk_rsp_valid;
    logic n_waiting_for_page_walk, r_waiting_for_page_walk;
-   logic n_pending_mmu_req, r_pending_mmu_req;
    
-   logic n_page_fault, r_page_fault;
-   logic [63:0]	r_pa, n_pa;
+   logic r_page_fault;
+   logic [63:0]	r_pa;
    
    logic [31:0]	r_fwd_cnt;
+   logic	n_l1d_inflight, r_l1d_inflight;
+   
    always_ff@(posedge clk)
      begin
 	r_fwd_cnt <= reset ? 'd0 : (r_got_req && r_must_forward ? r_fwd_cnt + 'd1 : r_fwd_cnt);
 	r_waiting_for_page_walk <= reset ? 1'b0 : n_waiting_for_page_walk;
 	r_page_walk_rsp_valid <= reset ? 1'b0 : n_page_walk_rsp_valid;
-	r_page_fault <= reset ? 1'b0 : n_page_fault;
-	r_pending_mmu_req <= reset ? 1'b0 : n_pending_mmu_req;
-	r_pa <= n_pa;
-     end
-
+	
+	r_page_fault <= reset ? 1'b0 : page_walk_rsp_valid ? page_walk_rsp_fault : r_page_fault;
+	r_l1d_inflight <= reset ? 1'b0 : n_l1d_inflight;
+	
+	
+	if(page_walk_rsp_valid)
+	  begin
+	     r_pa <= page_walk_rsp_pa;
+	  end
+     end // always_ff@ (posedge clk)
    
    
    always_comb
      begin
 	t_load_tlb = 1'b0;
-	n_pending_mmu_req = r_pending_mmu_req | mmu_req_valid;
+	n_l1d_inflight = r_l1d_inflight;
+	
 	n_page_walk_rsp_valid = page_walk_rsp_valid | r_page_walk_rsp_valid;
 	n_waiting_for_page_walk = r_waiting_for_page_walk;
-	n_page_fault = r_page_fault | page_walk_rsp_fault;
-	n_pa = r_pa | page_walk_rsp_pa;
-	
 	n_tlb_miss = 1'b0;
-	n_mmu_rsp_valid = 1'b0;
-	n_mmu_rsp_data = r_mmu_rsp_data;
 	
 	t_ack_ld_early = 1'b0;
 	t_got_rd_retry = 1'b0;
@@ -1293,7 +1266,8 @@ module l1d(clk,
 			      else
 				begin
 				   //$display("no wait");
-				   n_state = INJECT_RELOAD;				   
+				   n_state = INJECT_RELOAD;
+				   n_l1d_inflight = 1'b1;				   
 				   n_mem_req_valid = 1'b1;
 				end
 			   end // if (!t_stall_for_busy)
@@ -1330,6 +1304,7 @@ module l1d(clk,
 				 n_mem_req_addr = {r_req.addr[`M_WIDTH-1:`LG_L1D_CL_LEN],4'd0};
 				 n_mem_req_opcode = MEM_LW;				 
 				 n_state = INJECT_RELOAD;
+				 n_l1d_inflight = 1'b1;
 				 n_mem_req_valid = 1'b1;
 			      end
 			 end // if (!t_stall_for_busy)
@@ -1402,16 +1377,26 @@ module l1d(clk,
 		    end
 	       end
 
-	       if(r_got_req2 & !w_tlb_hit & !r_req2.has_cause)
+	       if(r_waiting_for_page_walk)
+		 begin
+		    n_state = TLB_MISS;		    
+		    n_tlb_miss = 1'b1;
+		    n_page_walk_rsp_valid = 1'b0;		    
+		 end
+	       else if(r_got_req2 & !w_tlb_hit & !r_req2.has_cause)
 		 begin
 		    $display(">>>>>l1d missed tlb for pc %x va %x at cycle %d, rob ptr %d", r_req2.pc, r_req2.addr, r_cycle, r_req2.rob_ptr);
-		    if(n_state != ACTIVE) $stop();
-		    n_state = TLB_MISS;		    
 		    n_waiting_for_page_walk = 1'b1;
-		    n_tlb_miss = 1'b1;
-		    n_pa = 'd0;
-		    n_page_fault = 1'b0;
-		    n_page_walk_rsp_valid = 1'b0;
+		    if(n_state == ACTIVE)
+		      begin
+			 n_state = TLB_MISS;		    
+			 n_tlb_miss = 1'b1;
+			 n_page_walk_rsp_valid = 1'b0;
+		      end
+		    else
+		      begin
+			 $display("..earlier request consumed request port");
+		      end
 		 end
 	       else if(core_mem_req_valid &&
 		  !t_got_miss && 
@@ -1419,8 +1404,7 @@ module l1d(clk,
 		  !t_got_rd_retry &&
 		  !(r_last_wr2 && (r_cache_idx2 == core_mem_req.addr[IDX_STOP-1:IDX_START]) && !core_mem_req.is_store) && 
 		  !t_cm_block_stall &&
-		  !n_pending_mmu_req &&
-		  (!r_rob_inflight[core_mem_req.rob_ptr])
+		       (!r_rob_inflight[core_mem_req.rob_ptr])
 		  )
 	       begin
 		  //use 2nd read port
@@ -1442,12 +1426,6 @@ module l1d(clk,
 		  
 		  n_cache_accesses =  r_cache_accesses + 'd1;
 	       end // if (core_mem_req_valid &&...
-	       else if(n_pending_mmu_req && mem_q_empty && !(r_got_req && r_last_wr))
-		 begin
-		    t_cache_idx = mmu_req_addr[IDX_STOP-1:IDX_START];
-		    t_cache_tag = mmu_req_addr[`M_WIDTH-1:IDX_STOP];		    
-		    n_state = MMU_LOAD;
-		 end
 	       else if(r_flush_req && mem_q_empty && !(r_got_req && r_last_wr))
 		 begin
 		    n_state = FLUSH_CACHE;
@@ -1473,6 +1451,7 @@ module l1d(clk,
 	       n_mem_req_valid = 1'b1;
 	       n_state = INJECT_RELOAD;
 	       n_mem_req_store_data = t_data;
+	       n_l1d_inflight = 1'b1;	       
 	    end
 	  INJECT_RELOAD:
 	    begin
@@ -1501,6 +1480,9 @@ module l1d(clk,
 	       t_addr  = r_req.addr;
 	       n_did_reload = 1'b1;
 	       n_state = ACTIVE;
+	       if(r_l1d_inflight != 1'b1)
+		 $stop();
+	       n_l1d_inflight = 1'b0;
 	    end
 	  FLUSH_CL:
 	    begin
@@ -1577,88 +1559,8 @@ module l1d(clk,
 		     n_inhibit_write = 1'b0;
 		  end
 	    end
-	  MMU_LOAD:
-	    begin
-	       
-	       if(w_mmu_hit)
-		 begin
-		    $display("MMU ACK, data %x at cycle %d", r_array_out, r_cycle);
-		    n_mmu_rsp_valid = 1'b1;
-		    n_mmu_rsp_data = mmu_req_addr[3] ? r_array_out[127:64] : r_array_out[63:0];
-		    n_state = r_waiting_for_page_walk ? TLB_MISS : ACTIVE;
-		    n_pending_mmu_req = 1'b0;
-		 end
-	       else
-		 begin
-		    if(w_mmu_dirty)
-		      begin
-			 n_mem_req_addr = {r_tag_out,r_cache_idx,4'd0};
-			 n_mem_req_opcode = MEM_SW;
-			 n_mem_req_store_data = r_array_out;
-			 n_state = MMU_WRITEBACK;
-			 n_inhibit_write = 1'b1;
-			 n_mem_req_valid = 1'b1;			 
-		      end
-		    else
-		      begin
-			 n_state = MMU_RELOAD;
-			 //$display("clean miss for address %x", mmu_req_addr);
-			 //$stop();
-		      end
-		 end // else: !if(w_mmu_hit)
-
-	       $display("mmu_req_addr %x mmu hit %b, mmu array tag %x, mmu tag %x valid %b, dirty %b, cycle %d, n_state = %d",
-			mmu_req_addr,
-			w_mmu_hit,
-			r_tag_out, 
-			r_cache_tag, 
-			r_valid_out, 
-			r_dirty_out, 
-			r_cycle,
-			n_state);
-
-	       
-	    end // case: MMU_LOAD
-	  MMU_WRITEBACK:
-	    begin
-	       if(mem_rsp_valid)
-		 begin
-		    n_inhibit_write = 1'b0;
-		    n_state = MMU_RELOAD;
-		 end
-	    end
-	  MMU_RELOAD:
-	    begin
-	       n_state = MMU_RELOAD_WAIT;
-	       n_mem_req_addr = {mmu_req_addr[63:4],4'd0};
-	       $display("mmu load address %x", n_mem_req_addr);
-	       n_mem_req_opcode = MEM_LW;
-	       n_state = MMU_RELOAD_WAIT;
-	       n_mem_req_valid = 1'b1;			 	       
-	    end
-	  MMU_RELOAD_WAIT:
-	    begin
-	       if(mem_rsp_valid)
-		 begin
-		    n_inhibit_write = 1'b0;
-		    n_state = MMU_RETRY_LOAD;
-		    $display(">>>>> mmu reload data %x", mem_rsp_load_data);
-		 end
-	    end
-	  MMU_RETRY_LOAD:
-	    begin
-	       t_cache_idx = mmu_req_addr[IDX_STOP-1:IDX_START];
-	       t_cache_tag = mmu_req_addr[`M_WIDTH-1:IDX_STOP];		    
-	       n_state = MMU_LOAD;
-	    end
 	  TLB_MISS:
 	    begin
-	       if(n_pending_mmu_req)
-		 begin
-		    t_cache_idx = mmu_req_addr[IDX_STOP-1:IDX_START];
-		    t_cache_tag = mmu_req_addr[`M_WIDTH-1:IDX_STOP];		    
-		    n_state = MMU_LOAD;		    
-		 end
 	       if(r_page_walk_rsp_valid)
 		 begin
 		    $display("l1d walk done : pf = %b, pa %x, cycle %d, is store %b, is atomic %b, pc %x, rob ptr %d",
@@ -1765,7 +1667,8 @@ module l1d(clk,
 
    always_ff@(negedge clk)
      begin
-	//$display("r_state = %d", r_state);
+	//$display("r_state = %d, r_l1d_inflight = %b", 
+	//	 r_state, r_l1d_inflight);
 	
 	if(n_mem_req_valid)
 	  $display("generating mem req in state %d for addr %x at cycle %d",
