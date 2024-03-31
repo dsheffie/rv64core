@@ -846,7 +846,7 @@ endfunction
 	    begin
 	       if(mem_rsp_valid)
 		 begin
-		    $display("icache fetch request for %x returns with data %x at cycle %d", r_pc, mem_rsp_load_data, r_cycle);
+		    //$display("icache fetch request for %x returns with data %x at cycle %d", r_pc, mem_rsp_load_data, r_cycle);
 		    n_state = RELOAD_TURNAROUND;
 		 end
 	    end

@@ -69,8 +69,7 @@ module l1d(clk,
 
    localparam L1D_NUM_SETS = 1 << `LG_L1D_NUM_SETS;
    localparam L1D_CL_LEN = 1 << `LG_L1D_CL_LEN;
-   localparam L1D_CL_LEN_BITS = 1 << (`LG_L1D_CL_LEN + 3);
-   
+   localparam L1D_CL_LEN_BITS = 1 << (`LG_L1D_CL_LEN + 3);   
    input logic clk;
    input logic reset;
    input logic	       paging_active;
@@ -429,16 +428,16 @@ module l1d(clk,
 	  begin
 	     if(r_got_req2 && !drain_ds_complete && t_push_miss)
 	       begin
-		  //$display("rob entry %d enters at cycle %d", r_req2.rob_ptr, r_cycle);
+		  $display("rob entry %d enters at cycle %d for pc %x", r_req2.rob_ptr, r_cycle, r_req2.pc);
 		  
 		  if(r_rob_inflight[r_req2.rob_ptr] == 1'b1)
 		    $display("entry %d should not be inflight\n", r_req2.rob_ptr);
 		  
 		  r_rob_inflight[r_req2.rob_ptr] <= 1'b1;
 	       end
-	     if(r_got_req && r_valid_out && (r_tag_out == r_cache_tag) && w_tlb_hit || t_ack_ld_early)
+	     if(r_got_req && r_valid_out && (r_tag_out == r_cache_tag) || t_ack_ld_early)
 	       begin
-		  //$display("rob entry %d leaves at cycle %d", r_req.rob_ptr, r_cycle);
+		  $display("rob entry %d leaves at cycle %d", r_req.rob_ptr, r_cycle);
 		  if(r_rob_inflight[r_req.rob_ptr] == 1'b0) 
 		    $display("huh %d should be inflight...., faulted %b, store %b pc %x\n", r_req.rob_ptr, r_req.has_cause, r_req.is_store, r_req.pc);
 		  
@@ -1217,7 +1216,12 @@ module l1d(clk,
 		 begin
 		    if(paging_active)
 		      begin
-			 $display(">>>>> primary port, paging active, rob ptr %d, pc %x", r_req.rob_ptr, r_req.pc);
+			 $display(">>>>> primary port, paging active, rob ptr %d, pc %x store %b hit %b, cycle %d", 
+				  r_req.rob_ptr, r_req.pc,
+				  r_req.is_store,
+				  r_valid_out && (r_tag_out == r_cache_tag),
+				  r_cycle
+				  );
 		      end
 		    
 		    if(r_valid_out && (r_tag_out == r_cache_tag))
@@ -1377,15 +1381,17 @@ module l1d(clk,
 		    end
 	       end
 
-	       if(r_waiting_for_page_walk)
+	       if(r_waiting_for_page_walk && (n_state == ACTIVE))
 		 begin
+		    $display("waiting for a page walk... walk for pc %x, rob ptr %d", r_req2.pc, r_req2.rob_ptr);
 		    n_state = TLB_MISS;		    
 		    n_tlb_miss = 1'b1;
-		    n_page_walk_rsp_valid = 1'b0;		    
+		    n_page_walk_rsp_valid = 1'b0;
+		    //$stop();
 		 end
 	       else if(r_got_req2 & !w_tlb_hit & !r_req2.has_cause)
 		 begin
-		    //$display(">>>>>l1d missed tlb for pc %x va %x at cycle %d, rob ptr %d", r_req2.pc, r_req2.addr, r_cycle, r_req2.rob_ptr);
+		    $display(">>>>>l1d missed tlb for pc %x va %x at cycle %d, rob ptr %d", r_req2.pc, r_req2.addr, r_cycle, r_req2.rob_ptr);
 		    n_waiting_for_page_walk = 1'b1;
 		    if(n_state == ACTIVE)
 		      begin
@@ -1395,15 +1401,21 @@ module l1d(clk,
 		      end
 		    else
 		      begin
-			 $display("..earlier request consumed request port");
+			 $display("conflicts with pc %x, rob ptr %d", r_req.pc, r_req.rob_ptr);
+			 //$stop();
 		      end
+		    //else
+		    //begin
+		    //$display("..earlier request consumed request port");
+		    //$stop();
+		    // end
 		 end
 	       else if(core_mem_req_valid &&
-		  !t_got_miss && 
-		  !(mem_q_almost_full||mem_q_full) && 
-		  !t_got_rd_retry &&
-		  !(r_last_wr2 && (r_cache_idx2 == core_mem_req.addr[IDX_STOP-1:IDX_START]) && !core_mem_req.is_store) && 
-		  !t_cm_block_stall &&
+		       !t_got_miss && 
+		       !(mem_q_almost_full||mem_q_full) && 
+		       !t_got_rd_retry &&
+		       !(r_last_wr2 && (r_cache_idx2 == core_mem_req.addr[IDX_STOP-1:IDX_START]) && !core_mem_req.is_store) && 
+		       !t_cm_block_stall &&
 		       (!r_rob_inflight[core_mem_req.rob_ptr])
 		  )
 	       begin
@@ -1415,11 +1427,11 @@ module l1d(clk,
 		  core_mem_req_ack = 1'b1;
 		  t_got_req2 = 1'b1;
 		  
-`ifdef VERBOSE_L1D		 		  //       
+//`ifdef VERBOSE_L1D		 		  //       
 		  $display("accepting new op %d, addr %x for rob ptr %d at cycle %d, mem_q_empty %b", 
 			   core_mem_req.op, core_mem_req.addr,
 			   core_mem_req.rob_ptr, r_cycle, mem_q_empty);
-`endif
+//`endif
 		  
 		  n_last_wr2 = core_mem_req.is_store;
 		  n_last_rd2 = !core_mem_req.is_store;
@@ -1593,7 +1605,10 @@ module l1d(clk,
 
    always_ff@(negedge clk)
      begin
-      if(t_push_miss && mem_q_full)
+	$display("at cycle %d, memory queue is full %b, is empty %b, state %d, core_mem_req_valid %b, rob pointer inflight %b, rob ptr %d",
+		 r_cycle, mem_q_full, mem_q_empty, r_state, core_mem_req_valid, r_rob_inflight[core_mem_req.rob_ptr], core_mem_req.rob_ptr);
+
+	if(t_push_miss && mem_q_full)
 	begin
 	   $display("attempting to push to a full memory queue");
 	   $stop();
