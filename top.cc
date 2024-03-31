@@ -194,6 +194,28 @@ long long translate(long long va, long long root, bool iside, bool store) {
   return pa;
 }
 
+uint64_t page_table_root = ~0UL;
+
+int check_bad_fetch(long long pc, long long rtl_pa, int insn) {
+  assert(page_table_root != (~0UL));
+  uint64_t pa = translate(pc, page_table_root, false, false);
+  if (pa==(~0UL)) return 0;
+  rtl_pa &= ~4095UL;
+  rtl_pa |= (pc & 4095);
+  uint32_t u = *reinterpret_cast<uint32_t*>(s->mem + pa);
+  bool match = u == *reinterpret_cast<uint32_t*>(&insn);
+
+  printf("check : pc %llx, pa %lx, rtl pa %lx, match %d, sim %x, rtl %x\n",
+	 pc,
+	 pa,
+	 rtl_pa,
+	 match,
+	 u,
+	 *reinterpret_cast<uint32_t*>(&insn));
+    
+  return not(match);
+}
+
 
 long long dc_ld_translate(long long va, long long root) {
   return translate(va,root, false, false);
@@ -631,6 +653,7 @@ int main(int argc, char **argv) {
     }
     //std::cout << "got to host " << std::hex << to_host << std::dec << ", flush = " << static_cast<int>(tb->in_flush_mode) << "\n";
 
+    page_table_root = tb->page_table_root;
     
     if(tb->got_monitor) {
       uint32_t to_host = mem_r32(s, globals::tohost_addr);
@@ -1018,7 +1041,9 @@ int main(int argc, char **argv) {
       if(tb->mem_req_opcode == 4) {/*load word */
 	for(int i = 0; i < 4; i++) {
 	  uint64_t ea = (tb->mem_req_addr + 4*i) & ((1UL<<32)-1);
-	  //printf("got dram request for address %lx\n", ea);
+	  //if(tb->paging_active) {
+	  //printf("got dram read for %lx, data %x\n", ea, mem_r32(s,ea));
+	  //}
 	  tb->mem_rsp_load_data[i] = mem_r32(s,ea);
 	}
 	last_load_addr = tb->mem_req_addr;
@@ -1029,6 +1054,9 @@ int main(int argc, char **argv) {
       else if(tb->mem_req_opcode == 7) { /* store word */
 	for(int i = 0; i < 4; i++) {
 	  uint64_t ea = (tb->mem_req_addr + 4*i) & ((1UL<<32)-1);
+	  //if(tb->paging_active) {
+	  //printf("got dram write for %lx, data %x\n", ea, tb->mem_req_store_data[i]);
+	  //}
 	  mem_w32(s, ea, tb->mem_req_store_data[i]);
 	}
 	last_store_addr = tb->mem_req_addr;

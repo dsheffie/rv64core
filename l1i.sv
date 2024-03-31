@@ -7,6 +7,8 @@ import "DPI-C" function void record_fetch(int push1, int push2, int push3, int p
 					  longint pc0, longint pc1, longint pc2, longint pc3,
 					  int bubble, int fq_full);
 
+import "DPI-C" function int check_bad_fetch(longint pc, longint pa, int insn);
+
 `endif
 
 
@@ -517,6 +519,40 @@ endfunction
 	
      end
 
+   always_ff@(negedge clk)
+     begin
+	if(t_push_insn & paging_active)
+	  begin
+	     if(check_bad_fetch(t_insn.pc, w_tlb_pc, t_insn.insn_bytes) == 32'b1)
+	       begin
+
+		  $stop();
+	       end
+	  end
+	if(t_push_insn2 & paging_active)
+	  begin
+	     if(check_bad_fetch(t_insn2.pc, w_tlb_pc, t_insn2.insn_bytes) == 32'b1)
+	       begin
+		  $stop();
+	       end
+	  end
+	if(t_push_insn3 & paging_active)
+	  begin
+	     if(check_bad_fetch(t_insn3.pc, w_tlb_pc, t_insn3.insn_bytes) == 32'b1)
+	       begin
+		  $stop();
+	       end
+	  end
+	if(t_push_insn4 & paging_active)
+	  begin
+	     if(check_bad_fetch(t_insn4.pc, w_tlb_pc, t_insn4.insn_bytes) == 32'b1)
+	       begin
+		  $display("rtl pa = %x, cycle = %d, insn = %x", {w_tlb_pc[63:12], r_cache_pc[11:0]} + 64'd12, r_cycle,t_insn4.insn_bytes );
+		  $stop();
+	       end
+	  end			
+     end
+   
    // logic [63:0] r_tlb_hits, r_tlb_accesses;
    // always_ff@(posedge clk)
    //   begin
@@ -561,8 +597,6 @@ endfunction
 	t_next_spec_rs_tos = r_spec_rs_tos+'d1;
 	n_restart_req = restart_valid | r_restart_req;
 	
-	//t_tag_match = r_tag_out == (paging_active ? r_cache_pc_pa[`M_WIDTH-1:IDX_STOP] : r_cache_tag);
-	//t_tag_match = r_tag_out == (paging_active ? w_tlb_pc[`M_WIDTH-1:IDX_STOP] : r_cache_tag);
 	t_tag_match = r_tag_out == w_tlb_pc[`M_WIDTH-1:IDX_STOP];
 	
 	t_miss = r_req && !(r_valid_out && t_tag_match);
@@ -812,6 +846,7 @@ endfunction
 	    begin
 	       if(mem_rsp_valid)
 		 begin
+		    $display("icache fetch request for %x returns with data %x at cycle %d", r_pc, mem_rsp_load_data, r_cycle);
 		    n_state = RELOAD_TURNAROUND;
 		 end
 	    end
