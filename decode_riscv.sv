@@ -180,6 +180,7 @@ module decode_riscv(
 	uop.is_store = 1'b0;
 `ifdef ENABLE_CYCLE_ACCOUNTING
 	uop.fetch_cycle = fetch_cycle;
+	uop.raw_insn = insn;
 `endif
 	case(opcode)
 	  7'h3:

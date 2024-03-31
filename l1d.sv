@@ -1385,7 +1385,7 @@ module l1d(clk,
 		 end
 	       else if(r_got_req2 & !w_tlb_hit & !r_req2.has_cause)
 		 begin
-		    $display(">>>>>l1d missed tlb for pc %x va %x at cycle %d, rob ptr %d", r_req2.pc, r_req2.addr, r_cycle, r_req2.rob_ptr);
+		    //$display(">>>>>l1d missed tlb for pc %x va %x at cycle %d, rob ptr %d", r_req2.pc, r_req2.addr, r_cycle, r_req2.rob_ptr);
 		    n_waiting_for_page_walk = 1'b1;
 		    if(n_state == ACTIVE)
 		      begin
@@ -1665,15 +1665,5 @@ module l1d(clk,
 `endif
 
 
-   always_ff@(negedge clk)
-     begin
-	//$display("r_state = %d, r_l1d_inflight = %b", 
-	//	 r_state, r_l1d_inflight);
-	
-	if(n_mem_req_valid)
-	  $display("generating mem req in state %d for addr %x at cycle %d",
-		   r_state, n_mem_req_addr, r_cycle);
-	
-     end
 endmodule // l1d
 

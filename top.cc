@@ -948,7 +948,6 @@ int main(int argc, char **argv) {
       int mem_eq = memcmp(ss->mem, s->mem, 1UL<<32);
       std::cout << "flush completes, mem eq = " << mem_eq << ", cycle " << cycle << "\n";
       assert(mem_eq == 0);
-      printf("0000000080e04030 = %lx\n", *reinterpret_cast<uint64_t*>(&s->mem[0x80e04030]));
     }
     was_in_flush_mode = tb->in_flush_mode;
     

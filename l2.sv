@@ -425,7 +425,7 @@ module l2(clk,
 		    n_saveaddr = {mmu_req_addr[(`M_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
 		    n_opcode = MEM_LW;
 		    n_state = CHECK_VALID_AND_TAG;
-		    $display("l2 : mmu req addr %x", r_addr);		    
+		    //$display("l2 : mmu req addr %x", r_addr);		    
 		 end
 	       else if(w_l1d_req | w_l1i_req)
 		 begin
@@ -514,7 +514,7 @@ module l2(clk,
 			   begin
 			      n_mmu_rsp_data = r_addr[3] ? w_d0[127:64] : w_d0[63:0];
 			      n_mmu_rsp_valid = 1'b1;
-			      $display("l2 : mmu returns %x for addr %x", n_mmu_rsp_data, r_addr);
+			      //$display("l2 : mmu returns %x for addr %x", n_mmu_rsp_data, r_addr);
 			      n_mmu_req = 1'b0;
 			   end
 			 else if(r_last_gnt == 1'b0)

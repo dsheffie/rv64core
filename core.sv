@@ -728,7 +728,7 @@ module core(clk,
      end
 `endif
    
-//`define DUMP_ROB
+`define DUMP_ROB
 `ifdef DUMP_ROB
    logic [15:0] r_last_cycle;
    
@@ -739,8 +739,8 @@ module core(clk,
 	else
 	  r_last_cycle <= r_last_cycle + 'd1;
 	
-	if(r_last_cycle >= 'd16384)
-	  begin
+	if(r_last_cycle >= 'd16384 || paging_active)
+	  begin 
 	     $display("cycle %d : state = %d, alu complete %b, mem complete %b,head_ptr %d, complete %b,  can_retire_rob_head %b, head pc %x, empty %b, full %b, bob full %b", 
 		      r_cycle,
 		      r_state,
@@ -756,9 +756,10 @@ module core(clk,
 	     
 	     for(logic [`LG_ROB_ENTRIES:0] i = r_rob_head_ptr; i != (r_rob_tail_ptr); i=i+1)
 	       begin
-		  $display("\trob entry %d, pc %x, complete %b, sd complete %b, is br %b, faulted %b, cause %d",
+		  $display("\trob entry %d, pc %x, insn %x complete %b, sd complete %b, is br %b, faulted %b, cause %d",
 			   i[`LG_ROB_ENTRIES-1:0], 
-			   r_rob[i[`LG_ROB_ENTRIES-1:0]].pc, 
+			   r_rob[i[`LG_ROB_ENTRIES-1:0]].pc,
+			   r_rob[i[`LG_ROB_ENTRIES-1:0]].raw_insn, 
 			   r_rob_complete[i[`LG_ROB_ENTRIES-1:0]],
 			   r_rob_sd_complete[i[`LG_ROB_ENTRIES-1:0]],
 			   r_rob[i[`LG_ROB_ENTRIES-1:0]].is_br,
@@ -1140,9 +1141,8 @@ module core(clk,
 	    end
 	  ARCH_FAULT:
 	    begin
-	       $display("took fault for %x with cause %d at cycle %d, priv %d", 
-			t_rob_head.pc, t_rob_head.cause, r_cycle, priv);
-	       
+	       //$display("took fault for %x with cause %d at cycle %d, priv %d", 
+	       //t_rob_head.pc, t_rob_head.cause, r_cycle, priv);
 	       case(t_rob_head.cause)
 		 BREAKPOINT:
 		   begin
@@ -1403,6 +1403,7 @@ module core(clk,
 `ifdef ENABLE_CYCLE_ACCOUNTING
 	     t_rob_tail.fetch_cycle = t_alloc_uop.fetch_cycle;
 	     t_rob_tail.alloc_cycle = r_cycle;
+	     t_rob_tail.raw_insn = t_alloc_uop.raw_insn;
 	     t_rob_tail.complete_cycle = 'd0;
 `endif	     
 	     if(t_uop.dst_valid)
@@ -1447,6 +1448,7 @@ module core(clk,
 `ifdef ENABLE_CYCLE_ACCOUNTING
 	     t_rob_next_tail.fetch_cycle = t_alloc_uop2.fetch_cycle;
 	     t_rob_next_tail.alloc_cycle = r_cycle;
+	     t_rob_next_tail.raw_insn = t_alloc_uop2.raw_insn;
 	     t_rob_next_tail.complete_cycle = 'd0;
 `endif
 

@@ -46,6 +46,7 @@ typedef struct packed {
    logic [63:0] 	    fetch_cycle;
    logic [63:0] 	    alloc_cycle;
    logic [63:0] 	    complete_cycle;
+   logic [31:0]		    raw_insn;
 `endif
    
 } rob_entry_t;

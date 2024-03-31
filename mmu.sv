@@ -106,7 +106,7 @@ module mmu(clk, reset, page_table_root,
 		    n_state = LOAD0;
 		    n_va = l1i_va;
 		    n_l1i_req = 1'b0;
-		    $display("starting translation for %x", l1i_va);
+		    //$display("starting translation for %x", l1i_va);
 		    n_do_l1i = 1'b1;
 		    n_do_l1d = 1'b0;
 		 end
@@ -115,7 +115,7 @@ module mmu(clk, reset, page_table_root,
 		    n_state = LOAD0;
 		    n_va = l1d_va;
 		    n_l1d_req = 1'b0;
-		    $display("starting translation for %x", l1d_va);
+		    //$display("starting translation for %x", l1d_va);
 		    n_do_l1i = 1'b0;
 		    n_do_l1d = 1'b1;
 		 end
@@ -123,7 +123,7 @@ module mmu(clk, reset, page_table_root,
 	  LOAD0:
 	    begin
 	       n_addr = page_table_root + {52'd0, r_va[38:30], 3'd0};
-	       if(r_do_l1i) $display("r_va = %x, r_va[38:30] = %d, addr %x", r_va, r_va[38:30], n_addr);
+	       //if(r_do_l1i) $display("r_va = %x, r_va[38:30] = %d, addr %x", r_va, r_va[38:30], n_addr);
 	       if(w_bad_va)
 		 begin
 		    n_state = IDLE;
@@ -141,7 +141,7 @@ module mmu(clk, reset, page_table_root,
 	    begin
 	       if(mem_rsp_valid)
 		 begin
-		    if(r_do_l1i) $display("walker level 0 got %x, cycle %d", mem_rsp_data, r_cycle);
+		    //if(r_do_l1i) $display("walker level 0 got %x, cycle %d", mem_rsp_data, r_cycle);
 		    n_addr = mem_rsp_data;
 		    if(mem_rsp_data[0] == 1'b0)
 		      begin
