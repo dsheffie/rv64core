@@ -203,13 +203,15 @@ module l2(clk,
    logic 		r_l1i_req, n_l1i_req;
    logic 		r_last_gnt, n_last_gnt;
    logic 		n_req, r_req;
-
+   logic		r_mmu_addr3, n_mmu_addr3;
+   
 
       
    always_ff@(posedge clk)
      begin
 	if(reset)
 	  begin
+	     r_mmu_addr3 <= 1'b0;
 	     r_mmu_rsp_data <= 'd0;
 	     r_mmu_rsp_valid <= 1'b0;
 	     r_state <= INITIALIZE;
@@ -243,6 +245,7 @@ module l2(clk,
 	  end
 	else
 	  begin
+	     r_mmu_addr3 <= n_mmu_addr3;
 	     r_mmu_rsp_data <= n_mmu_rsp_data;
 	     r_mmu_rsp_valid <= n_mmu_rsp_valid;
 	     r_state <= n_state;
@@ -344,6 +347,7 @@ module l2(clk,
 	n_req = r_req;
 	n_mmu_rsp_data = r_mmu_rsp_data;
 	n_mmu_rsp_valid = 1'b0;
+	n_mmu_addr3 = r_mmu_addr3;
 	
 	n_state = r_state;
 	n_flush_complete = 1'b0;
@@ -419,6 +423,7 @@ module l2(clk,
 		 end
 	       else if(w_mmu_req)
 		 begin
+		    n_mmu_addr3 = mmu_req_addr[3];		    
 		    t_idx = mmu_req_addr[LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN];			 
 		    n_tag = mmu_req_addr[(`M_WIDTH-1):LG_L2_LINES+`LG_L2_CL_LEN];
 		    n_addr = {mmu_req_addr[(`M_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
@@ -512,9 +517,9 @@ module l2(clk,
 			 n_state = IDLE;
 			 if(r_mmu_req)
 			   begin
-			      n_mmu_rsp_data = r_addr[3] ? w_d0[127:64] : w_d0[63:0];
+			      n_mmu_rsp_data = r_mmu_addr3 ? w_d0[127:64] : w_d0[63:0];
 			      n_mmu_rsp_valid = 1'b1;
-			      //$display("l2 : mmu returns %x for addr %x", n_mmu_rsp_data, r_addr);
+			      $display("l2 : mmu returns %x for addr %x", n_mmu_rsp_data, r_addr);
 			      n_mmu_req = 1'b0;
 			   end
 			 else if(r_last_gnt == 1'b0)
