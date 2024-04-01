@@ -233,6 +233,7 @@ module l1d(clk,
    mem_req_t n_tlb_req;
    mem_req_t n_req2, r_req2;
 
+
    
    mem_req_t r_mem_q[N_MQ_ENTRIES-1:0];
    logic [`LG_MRQ_ENTRIES:0] r_mq_head_ptr, n_mq_head_ptr;
@@ -844,8 +845,8 @@ module l1d(clk,
    always_comb
      begin
 	t_data2 = r_got_req2 && r_must_forward2 ? r_array_wr_data : r_array_out2;
-	t_hit_cache2 = r_valid_out2 && (r_tag_out2 == r_cache_tag2) && r_got_req2 && 
-		      (r_state == ACTIVE);
+	t_hit_cache2 = r_valid_out2 && (r_tag_out2 == w_tlb_pa[`M_WIDTH-1:IDX_STOP]) 
+	  && r_got_req2 && (r_state == ACTIVE);
 	t_rsp_dst_valid2 = 1'b0;
 	t_rsp_data2 = 'd0;
 
@@ -1162,6 +1163,7 @@ module l1d(clk,
 			 n_core_mem_rsp.dst_valid = r_req2.dst_valid;
 			 n_core_mem_rsp.has_cause = r_req2.has_cause | r_req2.spans_cacheline;
 			 n_core_mem_rsp_valid = 1'b1;
+			 $display("case a");
 		      end
 		    else if(r_req2.has_cause)
 		      begin
@@ -1169,6 +1171,7 @@ module l1d(clk,
 			 n_core_mem_rsp.data = t_rsp_data2[`M_WIDTH-1:0];
                          n_core_mem_rsp.dst_valid = t_rsp_dst_valid2;
                          n_core_mem_rsp_valid = 1'b1;
+			 $display("case b");
 		      end
 		    else if(!w_tlb_hit)
 		      begin
@@ -1190,6 +1193,7 @@ module l1d(clk,
 			      n_cache_hits = r_cache_hits + 'd1;
 			   end
 			 n_core_mem_rsp_valid = 1'b1;
+			 $display("case c");
 			 n_core_mem_rsp.has_cause = r_req2.spans_cacheline;
 		      end // if (r_req2.is_store)
 		    else if(t_port2_hit_cache && (!r_hit_busy_addr2 ) )
@@ -1198,6 +1202,7 @@ module l1d(clk,
                          n_core_mem_rsp.dst_valid = t_rsp_dst_valid2;
                          n_cache_hits = r_cache_hits + 'd1;
                          n_core_mem_rsp_valid = 1'b1;
+			 $display("case d");
 			 n_core_mem_rsp.has_cause = r_req2.spans_cacheline;
 		      end
 		    else
@@ -1234,6 +1239,8 @@ module l1d(clk,
 			   begin
 			      n_core_mem_rsp.data = t_rsp_data[`M_WIDTH-1:0];
 			      n_core_mem_rsp.dst_valid = t_rsp_dst_valid;
+			      if(n_core_mem_rsp_valid) $stop();
+			      $display("case e");
 			      n_core_mem_rsp_valid = 1'b1;
 			      n_core_mem_rsp.has_cause = r_req.spans_cacheline;
 
@@ -1428,9 +1435,14 @@ module l1d(clk,
 		  t_got_req2 = 1'b1;
 		  
 //`ifdef VERBOSE_L1D		 		  //       
-		  $display("accepting new op %d, addr %x for rob ptr %d at cycle %d, mem_q_empty %b", 
-			   core_mem_req.op, core_mem_req.addr,
-			   core_mem_req.rob_ptr, r_cycle, mem_q_empty);
+		  $display("accepting new op %d, pc %x, addr %x for rob ptr %d dst ptr %d dst ptr valid %b at cycle %d, mem_q_empty %b", 
+			   core_mem_req.op,
+			   core_mem_req.pc,
+			   core_mem_req.addr,
+			   core_mem_req.rob_ptr,
+			   core_mem_req.dst_ptr,
+			   core_mem_req.dst_valid,
+			   r_cycle, mem_q_empty);
 //`endif
 		  
 		  n_last_wr2 = core_mem_req.is_store;
@@ -1605,8 +1617,8 @@ module l1d(clk,
 
    always_ff@(negedge clk)
      begin
-	$display("at cycle %d, memory queue is full %b, is empty %b, state %d, core_mem_req_valid %b, rob pointer inflight %b, rob ptr %d",
-		 r_cycle, mem_q_full, mem_q_empty, r_state, core_mem_req_valid, r_rob_inflight[core_mem_req.rob_ptr], core_mem_req.rob_ptr);
+	//$display("at cycle %d, memory queue is full %b, is empty %b, state %d, core_mem_req_valid %b, rob pointer inflight %b, rob ptr %d, r_waiting_for_page_walk = %b",
+	//r_cycle, mem_q_full, mem_q_empty, r_state, core_mem_req_valid, r_rob_inflight[core_mem_req.rob_ptr], core_mem_req.rob_ptr, r_waiting_for_page_walk);
 
 	if(t_push_miss && mem_q_full)
 	begin
