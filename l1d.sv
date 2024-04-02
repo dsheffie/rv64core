@@ -997,10 +997,13 @@ module l1d(clk,
    wire [63:0] w_store_mask = 
 	       r_req.op == MEM_SB ? 64'hff :
 	       r_req.op == MEM_SH ? 64'hffff :
-	       r_req.op == MEM_SW ? 64'hffffffff :
-	       r_req.op == MEM_SD ? 64'hffffffffffffffff :
+	       (r_req.op == MEM_SW || r_req.op == MEM_AMOW || r_req.op == MEM_SCW)  ? 64'hffffffff :
+	       (r_req.op == MEM_SD || r_req.op == MEM_AMOD || r_req.op == MEM_SCD) ? 64'hffffffffffffffff :
 	       'd0;
-
+   
+   logic [31:0] t_amo32_data;
+   logic [63:0]	t_amo64_data;
+   
 
    
    always_comb
@@ -1021,6 +1024,36 @@ module l1d(clk,
 	t_shift = t_data >> {r_req.addr[`LG_L1D_CL_LEN-1:0], 3'd0};
 	t_store_shift = {64'd0, r_req.data} << {r_req.addr[`LG_L1D_CL_LEN-1:0], 3'd0};
 	t_store_mask = {64'd0, w_store_mask} << {r_req.addr[`LG_L1D_CL_LEN-1:0], 3'd0};
+	
+	t_amo32_data = 32'hdeadbeef;
+	t_amo64_data = 64'hd0debabefacebeef;
+	
+	case(r_req.amo_op)
+	  5'd0: /* amoadd */
+	    begin
+	       t_amo32_data = t_shift[31:0] + r_req.data[31:0];
+	       t_amo64_data = t_shift[63:0] + r_req.data[63:0];
+	       //$display("amo add data %x", r_req.data);
+	    end
+	  5'd1: /* amoswap */
+	    begin
+	       t_amo32_data = r_req.data[31:0];
+	       t_amo64_data = r_req.data[63:0];
+	    end
+	  5'd8: /* amoor */
+	    begin
+	       t_amo32_data = t_shift[31:0] | r_req.data[31:0];
+	       t_amo64_data = t_shift[63:0] | r_req.data[63:0];
+	    end
+	  5'd12:
+	    begin
+	       t_amo32_data = t_shift[31:0] & r_req.data[31:0];
+	       t_amo64_data = t_shift[63:0] & r_req.data[63:0];
+	    end
+	  default:
+	    begin
+	    end
+	endcase // case (r_req.amo_op)
 
 	
 	case(r_req.op)
@@ -1079,7 +1112,37 @@ module l1d(clk,
 	    begin
 	       t_array_data = (t_store_shift & t_store_mask) | ((~t_store_mask) & t_data);
 	       t_wr_store = t_hit_cache && (r_is_retry || r_did_reload) & (!r_req.has_cause);
-	    end	  
+	    end
+	  MEM_SCD:
+	    begin
+	       t_rsp_data = 64'd0;
+	       t_array_data = (t_store_shift & t_store_mask) | ((~t_store_mask) & t_data);
+	       t_wr_store = t_hit_cache && (r_is_retry || r_did_reload) & (!r_req.has_cause);
+	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
+	    end
+	  MEM_SCW:
+	    begin
+	       t_rsp_data = 64'd0;
+	       t_array_data = (t_store_shift & t_store_mask) | ((~t_store_mask) & t_data);
+	       t_wr_store = t_hit_cache && (r_is_retry || r_did_reload) & (!r_req.has_cause);
+	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
+	    end
+	  MEM_AMOW:
+	    begin
+	       //return old data
+	       t_rsp_data = {{32{t_shift[31:0][31]}}, t_shift[31:0]};
+	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
+	       t_array_data = (t_store_shift & t_store_mask) | ((~t_store_mask) & t_data);
+	       t_wr_store = t_hit_cache && (r_is_retry || r_did_reload) & (!r_req.has_cause);
+	    end // case: MEM_AMOW
+	  MEM_AMOD:
+	    begin
+	       t_rsp_data = t_shift[63:0];
+	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
+	       t_array_data = (t_store_shift & t_store_mask) | ((~t_store_mask) & t_data);
+	       t_wr_store = t_hit_cache && (r_is_retry || r_did_reload) & (!r_req.has_cause);
+
+	    end
 	  // MEM_SC:
 	  //   begin
 	  //      t_array_data = (t_store_shift & t_store_mask) | ((~t_store_mask) & t_data);	       
@@ -1235,6 +1298,10 @@ module l1d(clk,
 			 n_core_mem_rsp.dst_valid = r_req2.dst_valid;
 			 n_core_mem_rsp.has_cause = r_req2.has_cause | r_req2.spans_cacheline;
 			 n_core_mem_rsp_valid = 1'b1;
+		      end
+		    else if(r_req2.is_atomic)
+		      begin /* serializing so no need to deal with busy */
+			 t_push_miss = 1'b1;
 		      end
 		    else if(r_req2.is_store)
 		      begin
