@@ -420,9 +420,9 @@ module
 	       .flush_cl_req(flush_cl_req),
 	       .flush_cl_addr(flush_cl_addr),
 	       .flush_complete(l1d_flush_complete),
-	       .core_mem_req_valid(core_mem_req_valid),
-	       .core_mem_req(core_mem_req),
-	       .core_mem_req_ack(core_mem_req_ack),
+	       .core_mem_va_req_valid(core_mem_req_valid),
+	       .core_mem_va_req(core_mem_req),
+	       .core_mem_va_req_ack(core_mem_req_ack),
 
 	       .core_store_data_valid(core_store_data_valid),
 	       .core_store_data(core_store_data),
