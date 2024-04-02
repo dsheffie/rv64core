@@ -285,8 +285,6 @@ module l1d(clk,
    
    logic [31:0] 			 r_cycle;
   
-   assign page_walk_req_valid = 1'b0;
-   assign page_walk_req_va = 64'd0;
    
    assign flush_complete = r_flush_complete;
    assign mem_req_addr = r_mem_req_addr;
@@ -817,18 +815,29 @@ module l1d(clk,
    
    
    logic       t_core_mem_req_ack;
-   logic       n_tlb_req, r_tlb_req;
-
+   
+   
    typedef enum	logic [1:0] {
 			     RUN,
-			     TLB_MISS
+			     TLB_MISS,
+			     TLB_MISS_TURNAROUND
+			     
 		 } tlb_state_t;
 
    tlb_state_t n_tlb_state, r_tlb_state;
+
+   logic	n_page_walk_req_valid, r_page_walk_req_valid;
+   logic [63:0]	r_tlb_addr, n_tlb_addr;
+   logic t_reload_tlb;
+   
+   assign page_walk_req_valid = r_page_walk_req_valid;
+   assign page_walk_req_va = r_tlb_addr;
+
    always_ff@(posedge clk)
      begin
 	r_tlb_state <= reset ? RUN : n_tlb_state;
-	n_tlb_req <= reset ? 1'b0 : r_tlb_req;
+	r_tlb_addr <= n_tlb_addr;
+	r_page_walk_req_valid <= reset ? 1'b0 : n_page_walk_req_valid;
 	r_core_mem_va_req_valid <= reset ? 1'b0 :n_core_mem_va_req_valid;
 	r_core_mem_va_req <= n_core_mem_va_req;
      end
@@ -847,22 +856,31 @@ module l1d(clk,
    always_comb
      begin
 	n_tlb_state = r_tlb_state;
-	
-	core_mem_req_valid = r_core_mem_va_req_valid;
-	core_mem_req = r_core_mem_va_req;
 
+	n_tlb_addr = r_tlb_addr;
+	core_mem_req_valid = r_core_mem_va_req_valid & w_tlb_hit & (r_tlb_state == RUN);
+	core_mem_req = r_core_mem_va_req;
+	core_mem_req.addr = w_tlb_pa;
+	
 	n_core_mem_va_req = r_core_mem_va_req;
 	n_core_mem_va_req_valid = r_core_mem_va_req_valid;
 	
-	n_tlb_req = 1'b0;
+	n_page_walk_req_valid = 1'b0;
 	core_mem_va_req_ack = 1'b0;
+	t_reload_tlb = 1'b0;
 	
 	case(r_tlb_state)
 	  RUN:
 	    begin
 	       if(r_core_mem_va_req_valid)
 		 begin
-		    if(t_core_mem_req_ack) /* can accept new */
+		    if(!w_tlb_hit)
+		      begin
+			 n_page_walk_req_valid = 1'b1;
+			 n_tlb_addr = r_core_mem_va_req.addr;
+			 n_tlb_state = TLB_MISS;
+		      end
+		    else if(t_core_mem_req_ack) /* can accept new */
 		      begin
 			 n_core_mem_va_req = core_mem_va_req;		    
 			 n_core_mem_va_req_valid = core_mem_va_req_valid;		
@@ -879,6 +897,20 @@ module l1d(clk,
 		    n_core_mem_va_req_valid = core_mem_va_req_valid;
 		    core_mem_va_req_ack = core_mem_va_req_valid;
 		 end
+	    end // case: RUN
+	  TLB_MISS:
+	    begin
+	       if(page_walk_rsp_valid)
+		 begin
+		    t_reload_tlb = page_walk_rsp_fault==1'b0;
+		    if(page_walk_rsp_fault) $stop();
+		    n_tlb_state = TLB_MISS_TURNAROUND;
+		    $display("phys addr %x", page_walk_rsp_pa);
+		 end
+	    end
+	  TLB_MISS_TURNAROUND:
+	    begin
+	       n_tlb_state = RUN;
 	    end
 	  default:
 	    begin
@@ -888,31 +920,25 @@ module l1d(clk,
 	// = t_core_mem_req_ack;
      end // always_comb
    
-   
-   always_ff@(negedge clk)
-     begin
-	if(paging_active)
-	  $stop();
-     end
-   
+      
    tlb dtlb(
     	    .clk(clk), 
     	    .reset(reset),
     	    .clear(clear_tlb),
     	    .active(paging_active),
-    	    .req(n_tlb_req),
-	    .va(core_mem_va_req.addr),
+    	    .req(n_core_mem_va_req_valid),
+	    .va(n_core_mem_va_req.addr),
 	    .pa(w_tlb_pa),
 	    .hit(w_tlb_hit),
 	    .dirty(),
 	    .readable(),
 	    .writable(),
-	    .replace(1'b0),
+	    .replace(t_reload_tlb),
 	    .replace_dirty(1'b0),
 	    .replace_readable(1'b0),
 	    .replace_writable(1'b0),
-	    .replace_va(64'd0),
-	    .replace_pa(64'd0)
+	    .replace_va(r_tlb_addr),
+	    .replace_pa(page_walk_rsp_pa)
 	    );
 
 
