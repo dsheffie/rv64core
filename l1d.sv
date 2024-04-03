@@ -1119,6 +1119,8 @@ module l1d(clk,
 	       t_array_data = (t_store_shift & t_store_mask) | ((~t_store_mask) & t_data);
 	       t_wr_store = t_hit_cache && (r_is_retry || r_did_reload) & (!r_req.has_cause);
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
+	       if(t_rsp_dst_valid)
+		 $display("performing sc.d to address %x for pc %x with data %x, r_req.data %x", r_req.addr, r_req.pc, t_data, r_req.data);
 	    end
 	  MEM_SCW:
 	    begin
@@ -1174,7 +1176,9 @@ module l1d(clk,
      begin
 	r_fwd_cnt <= reset ? 'd0 : (r_got_req && r_must_forward ? r_fwd_cnt + 'd1 : r_fwd_cnt);
      end // always_ff@ (posedge clk)
+
    
+   wire w_st_amo_grad = t_mem_head.is_store ? r_graduated[t_mem_head.rob_ptr] == 2'b10 : 1'b1;
    
    always_comb
      begin
@@ -1299,22 +1303,21 @@ module l1d(clk,
 			 n_core_mem_rsp.has_cause = r_req2.has_cause | r_req2.spans_cacheline;
 			 n_core_mem_rsp_valid = 1'b1;
 		      end
-		    else if(r_req2.is_atomic)
-		      begin /* serializing so no need to deal with busy */
-			 t_push_miss = 1'b1;
-		      end
-		    else if(r_req2.is_store)
+		    else if(r_req2.is_store || r_req2.is_atomic)
 		      begin
 			 t_push_miss = 1'b1;
-			 t_incr_busy = 1'b1;
-			 n_stall_store = 1'b1;
-			 //ack early
-			 n_core_mem_rsp.dst_valid = 1'b0;
+			 if(r_req2.is_store)
+			   begin
+			      n_stall_store = 1'b1;
+			      t_incr_busy = 1'b1;
+			      //ack early
+			      n_core_mem_rsp.dst_valid = 1'b0;
+			      n_core_mem_rsp_valid = 1'b1;
+			   end
 			 if(t_port2_hit_cache)
 			   begin
 			      n_cache_hits = r_cache_hits + 'd1;
 			   end
-			 n_core_mem_rsp_valid = 1'b1;
 		      end // if (r_req2.is_store)
 		    else if(t_port2_hit_cache && (!r_hit_busy_addr2 ) )
 		      begin
@@ -1435,19 +1438,20 @@ module l1d(clk,
 	       begin
 		  if(!t_mh_block)
 		    begin
-		       if(t_mem_head.is_store)
+		       if(t_mem_head.is_store || t_mem_head.is_atomic)
 			 begin
 `ifdef VERBOSE_L1D
-			     $display("STORE DATA t_mem_head.rob_ptr = %d, pc %x, grad %b, dq ptr %d valid %b, data %x, faulted %b", 
-			     	     t_mem_head.rob_ptr,
-			     	     t_mem_head.pc,
-			     	     r_graduated[t_mem_head.rob_ptr], 
-			     	     core_store_data.rob_ptr, 
-			     	     core_store_data_valid,
-			     	     core_store_data.data,
-			     	     t_mem_head.has_cause);
+			     $display("STORE DATA atomic %b t_mem_head.rob_ptr = %d, pc %x, grad %b, dq ptr %d valid %b, data %x, faulted %b",
+				      t_mem_head.is_atomic,
+			     	      t_mem_head.rob_ptr,
+			     	      t_mem_head.pc,
+			     	      r_graduated[t_mem_head.rob_ptr], 
+			     	      core_store_data.rob_ptr, 
+			     	      core_store_data_valid,
+			     	      core_store_data.data,
+			     	      t_mem_head.has_cause);
 `endif
-			    if(r_graduated[t_mem_head.rob_ptr] == 2'b10 && (core_store_data_valid ? (t_mem_head.rob_ptr == core_store_data.rob_ptr) : 1'b0) )
+			    if(w_st_amo_grad && (core_store_data_valid ? (t_mem_head.rob_ptr == core_store_data.rob_ptr) : 1'b0) )
 			      begin
 `ifdef VERBOSE_L1D
 				 $display("firing store for %x with data %x at cycle %d for rob ptr %d", 
