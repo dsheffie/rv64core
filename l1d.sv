@@ -829,6 +829,7 @@ module l1d(clk,
    logic	n_page_walk_req_valid, r_page_walk_req_valid;
    logic [63:0]	r_tlb_addr, n_tlb_addr;
    logic t_reload_tlb;
+   logic r_was_page_fault, n_was_page_fault;
    
    assign page_walk_req_valid = r_page_walk_req_valid;
    assign page_walk_req_va = r_tlb_addr;
@@ -839,6 +840,7 @@ module l1d(clk,
 	r_tlb_addr <= n_tlb_addr;
 	r_page_walk_req_valid <= reset ? 1'b0 : n_page_walk_req_valid;
 	r_core_mem_va_req_valid <= reset ? 1'b0 :n_core_mem_va_req_valid;
+	r_was_page_fault <= reset ? 1'b0 : n_was_page_fault;
 	r_core_mem_va_req <= n_core_mem_va_req;
      end
 
@@ -858,7 +860,7 @@ module l1d(clk,
 	n_tlb_state = r_tlb_state;
 
 	n_tlb_addr = r_tlb_addr;
-	core_mem_req_valid = r_core_mem_va_req_valid & w_tlb_hit & (r_tlb_state == RUN);
+	core_mem_req_valid = r_core_mem_va_req_valid & (r_tlb_state == RUN) & (w_tlb_hit | r_was_page_fault);
 	core_mem_req = r_core_mem_va_req;
 	core_mem_req.addr = w_tlb_pa;
 	
@@ -868,13 +870,33 @@ module l1d(clk,
 	n_page_walk_req_valid = 1'b0;
 	core_mem_va_req_ack = 1'b0;
 	t_reload_tlb = 1'b0;
+	n_was_page_fault = 1'b0;
 	
 	case(r_tlb_state)
 	  RUN:
 	    begin
+	       if(r_was_page_fault) 
+		 begin
+		    $display("r_core_mem_va_req_valid = %b", r_core_mem_va_req_valid);
+		 end
+	       
 	       if(r_core_mem_va_req_valid)
 		 begin
-		    if(!w_tlb_hit)
+		    if(r_was_page_fault)
+		      begin
+			 if(t_core_mem_req_ack)
+			   begin
+			      n_core_mem_va_req = core_mem_va_req;		    
+			      n_core_mem_va_req_valid = core_mem_va_req_valid;		
+			      core_mem_va_req_ack = core_mem_va_req_valid;
+			   end
+			 else
+			   begin
+			      n_was_page_fault = 1'b1;
+			      //$stop();
+			   end
+		      end
+		    else if(!w_tlb_hit)
 		      begin
 			 n_page_walk_req_valid = 1'b1;
 			 n_tlb_addr = r_core_mem_va_req.addr;
@@ -903,14 +925,23 @@ module l1d(clk,
 	       if(page_walk_rsp_valid)
 		 begin
 		    t_reload_tlb = page_walk_rsp_fault==1'b0;
-		    if(page_walk_rsp_fault) $stop();
 		    n_tlb_state = TLB_MISS_TURNAROUND;
-		    $display("phys addr %x", page_walk_rsp_pa);
+		    if(page_walk_rsp_fault)
+		      begin
+			 n_core_mem_va_req.op = MEM_NOP;
+			 n_core_mem_va_req.is_store = 1'b0;
+			 n_core_mem_va_req.has_cause = 1'b1;
+			 n_core_mem_va_req.cause = (r_core_mem_va_req.is_store | r_core_mem_va_req.is_atomic) ? STORE_PAGE_FAULT : LOAD_PAGE_FAULT;
+			 n_was_page_fault = 1'b1;
+			 $display("PC %x generated a page fault", r_core_mem_va_req.pc);
+		      end
+		    //$display("phys addr %x", page_walk_rsp_pa);
 		 end
 	    end
 	  TLB_MISS_TURNAROUND:
 	    begin
 	       n_tlb_state = RUN;
+	       n_was_page_fault = r_was_page_fault;
 	    end
 	  default:
 	    begin
@@ -1525,7 +1556,6 @@ module l1d(clk,
 			   core_mem_req.dst_valid,
 			   r_cycle, mem_q_empty);
 `endif
-		  
 		  n_last_wr2 = core_mem_req.is_store;
 		  n_last_rd2 = !core_mem_req.is_store;
 		  
