@@ -842,11 +842,15 @@ module l1d(clk,
 	r_tlb_state <= reset ? RUN : n_tlb_state;
 	r_tlb_addr <= n_tlb_addr;
 	r_page_walk_req_valid <= reset ? 1'b0 : n_page_walk_req_valid;
-	r_core_mem_va_req_valid <= reset ? 1'b0 :n_core_mem_va_req_valid;
+	r_core_mem_va_req_valid <= reset|restart_complete ? 1'b0 :n_core_mem_va_req_valid;
 	r_was_page_fault <= reset ? 1'b0 : n_was_page_fault;
 	r_core_mem_va_req <= n_core_mem_va_req;
      end
 
+   //always_ff@(negedge clk)
+   //begin
+   //if(restart_complete) $display("l1d restarts at %d", r_cycle);
+   //end
    
    always_comb
      begin

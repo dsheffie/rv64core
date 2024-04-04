@@ -115,7 +115,7 @@ module mmu(clk, reset, page_table_root,
 		    n_state = LOAD0;
 		    n_va = l1d_va;
 		    n_l1d_req = 1'b0;
-		    $display("starting translation for %x", l1d_va);
+		    //$display("starting translation for %x", l1d_va);
 		    n_do_l1i = 1'b0;
 		    n_do_l1d = 1'b1;
 		 end
