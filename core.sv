@@ -37,6 +37,7 @@ import "DPI-C" function int check_insn_bytes(input longint pc, input int data);
 
 module core(clk, 
 	    reset,
+	    restart_complete,
 	    syscall_emu,
 	    took_exc,
 	    priv,
@@ -119,6 +120,7 @@ module core(clk,
 	    epc);
    input logic clk;
    input logic reset;
+   output logic	restart_complete;
    input logic syscall_emu;
    output logic	took_exc;
    output logic [1:0] priv;
@@ -772,6 +774,8 @@ module core(clk,
 `endif
 
    logic t_restart_complete;
+   assign restart_complete = t_restart_complete;
+   
    logic t_clr_extern_irq;
    logic r_extern_irq;
    always_ff@(posedge clk)

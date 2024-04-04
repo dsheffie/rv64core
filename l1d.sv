@@ -20,6 +20,7 @@ import "DPI-C" function void record_miss(input int pc,
 
 module l1d(clk, 
 	   reset,
+	   restart_complete,
 	   paging_active,
 	   clear_tlb,
 	   page_walk_req_valid,
@@ -72,9 +73,10 @@ module l1d(clk,
    localparam L1D_CL_LEN_BITS = 1 << (`LG_L1D_CL_LEN + 3);   
    input logic clk;
    input logic reset;
-   input logic	       paging_active;
-   input logic	       clear_tlb;
-   output logic	       page_walk_req_valid;
+   input logic restart_complete;
+   input logic paging_active;
+   input logic clear_tlb;
+   output logic	page_walk_req_valid;
    output logic [63:0] page_walk_req_va;
    input logic	       page_walk_rsp_valid;
    input logic [63:0]  page_walk_rsp_pa;
@@ -834,6 +836,7 @@ module l1d(clk,
    assign page_walk_req_valid = r_page_walk_req_valid;
    assign page_walk_req_va = r_tlb_addr;
 
+   
    always_ff@(posedge clk)
      begin
 	r_tlb_state <= reset ? RUN : n_tlb_state;
@@ -844,16 +847,6 @@ module l1d(clk,
 	r_core_mem_va_req <= n_core_mem_va_req;
      end
 
-   always_ff@(negedge clk)
-     begin
-	//if(r_core_mem_va_req_valid & t_core_mem_req_ack)
-	//begin
-	//$display("accept op for pc %x rob %d at cycle %d", 
-	//r_core_mem_va_req.pc , r_core_mem_va_req.rob_ptr, r_cycle);
-	//end
-	//if(core_mem_va_req_valid)
-	//$display("pending request for pc %x", core_mem_va_req.pc);
-     end
    
    always_comb
      begin

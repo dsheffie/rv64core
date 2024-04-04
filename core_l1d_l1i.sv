@@ -383,6 +383,7 @@ module
    wire	w_l1d_rsp_valid;
    wire	w_l1i_rsp_valid;
    wire [63:0] w_phys_addr;
+   wire	       w_restart_complete;
    
    logic	drain_ds_complete;
    logic [(1<<`LG_ROB_ENTRIES)-1:0] dead_rob_mask;
@@ -395,6 +396,7 @@ module
        dcache (
 	       .clk(clk),
 	       .reset(reset),
+	       .restart_complete(w_restart_complete),
 	       .paging_active(w_paging_active),
 	       .clear_tlb(w_clear_tlb),
 	       .page_walk_req_va(w_l1d_page_walk_req_va),
@@ -533,6 +535,7 @@ module
    core cpu (
 	     .clk(clk),
 	     .reset(reset),
+	     .restart_complete(w_restart_complete),
 	     .syscall_emu(syscall_emu),
 	     .took_exc(took_exc),
 	     .priv(w_priv),
