@@ -1359,7 +1359,7 @@ void execRiscv(state_t *s) {
  handle_exception: {
     s->took_exception = true;
     bool delegate = false;
-    //printf("exception at %lx\n", s->pc);
+    printf("CHECKER: exception at %lx, cause %d\n", s->pc, except_cause);
     if(s->priv == priv_user || s->priv == priv_supervisor) {
       if(except_cause & CAUSE_INTERRUPT) {
 	assert(false);

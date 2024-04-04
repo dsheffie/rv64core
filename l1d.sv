@@ -5,6 +5,9 @@
 //`define VERBOSE_L1D 1
 
 `ifdef VERILATOR
+import "DPI-C" function longint ld_translate(input longint va);
+
+
 import "DPI-C" function void record_l1d(input int req, 
 					input int ack,
 					input int ack_st,
@@ -847,10 +850,19 @@ module l1d(clk,
 	r_core_mem_va_req <= n_core_mem_va_req;
      end
 
-   //always_ff@(negedge clk)
-   //begin
-   //if(restart_complete) $display("l1d restarts at %d", r_cycle);
-   //end
+   always_ff@(negedge clk)
+     begin
+	if(core_mem_req_valid && paging_active && t_core_mem_req_ack && !r_was_page_fault)
+	  begin
+	     if(ld_translate(r_core_mem_va_req.addr) != w_tlb_pa)
+	       begin
+		  $display("translated to %x by tlbs, %x by software", 
+			   w_tlb_pa, ld_translate(r_core_mem_va_req.addr));
+		  $stop();
+	       end
+	  end
+     end // always_ff@ (negedge clk)
+   
    
    always_comb
      begin
@@ -872,10 +884,10 @@ module l1d(clk,
 	case(r_tlb_state)
 	  RUN:
 	    begin
-	       if(r_was_page_fault) 
-		 begin
-		    $display("r_core_mem_va_req_valid = %b", r_core_mem_va_req_valid);
-		 end
+	       //if(r_was_page_fault) 
+		 //begin
+		   // $display("r_core_mem_va_req_valid = %b", r_core_mem_va_req_valid);
+		// end
 	       
 	       if(r_core_mem_va_req_valid)
 		 begin
@@ -930,7 +942,7 @@ module l1d(clk,
 			 n_core_mem_va_req.has_cause = 1'b1;
 			 n_core_mem_va_req.cause = (r_core_mem_va_req.is_store | r_core_mem_va_req.is_atomic) ? STORE_PAGE_FAULT : LOAD_PAGE_FAULT;
 			 n_was_page_fault = 1'b1;
-			 $display("PC %x generated a page fault", r_core_mem_va_req.pc);
+			 //$display("PC %x generated a page fault", r_core_mem_va_req.pc);
 		      end
 		    //$display("phys addr %x", page_walk_rsp_pa);
 		 end
@@ -1031,7 +1043,14 @@ module l1d(clk,
    
    logic [31:0] t_amo32_data;
    logic [63:0]	t_amo64_data;
-   
+
+   always_ff@(negedge clk)
+     begin
+	if(t_wr_store)
+	  begin
+	     $display(">> pc %x writes %x with %x write %b", r_req.pc, r_req.addr, r_req.data, t_wr_store);
+	  end
+     end
 
    
    always_comb
@@ -1147,8 +1166,8 @@ module l1d(clk,
 	       t_array_data = (t_store_shift & t_store_mask) | ((~t_store_mask) & t_data);
 	       t_wr_store = t_hit_cache && (r_is_retry || r_did_reload) & (!r_req.has_cause);
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
-	       if(t_rsp_dst_valid)
-		 $display("performing sc.d to address %x for pc %x with data %x, r_req.data %x", r_req.addr, r_req.pc, t_data, r_req.data);
+	       //if(t_rsp_dst_valid)
+		// $display("performing sc.d to address %x for pc %x with data %x, r_req.data %x", r_req.addr, r_req.pc, t_data, r_req.data);
 	    end
 	  MEM_SCW:
 	    begin
@@ -1320,10 +1339,6 @@ module l1d(clk,
 		    n_core_mem_rsp.dst_ptr = r_req2.dst_ptr;
 		    n_core_mem_rsp.has_cause = r_req2.has_cause;
 		    n_core_mem_rsp.cause = r_req2.cause;
-		    if(r_req2.has_cause) 
-		      begin
-			 $display("rob ptr %d has cause, pc %x cycle %d", r_req2.rob_ptr, r_req2.pc, r_cycle);
-		      end
 		    
 		    if(drain_ds_complete || r_req2.op == MEM_NOP)
 		      begin

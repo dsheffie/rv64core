@@ -738,7 +738,7 @@ endfunction
 		 end
 	       else if(!w_tlb_hit & r_req && paging_active)
 		 begin
-		    //$display("TLB MISS for r_cache_pc %x, r_cycle %d", r_cache_pc, r_cycle);
+		    $display("TLB MISS for r_cache_pc %x, r_cycle %d", r_cache_pc, r_cycle);
 		    n_state = TLB_MISS;
 		    n_pc = r_pc;
 		    n_miss_pc = r_cache_pc;

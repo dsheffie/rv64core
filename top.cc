@@ -217,8 +217,8 @@ int check_bad_fetch(long long pc, long long rtl_pa, int insn) {
 }
 
 
-long long dc_ld_translate(long long va, long long root) {
-  return translate(va,root, false, false);
+long long ld_translate(long long va) {
+  return translate(va, page_table_root, false, false);
 }
 
 uint64_t csr_time = 0;
@@ -969,7 +969,8 @@ int main(int argc, char **argv) {
 
     if(not(tb->in_flush_mode) and was_in_flush_mode) {
       int mem_eq = memcmp(ss->mem, s->mem, 1UL<<32);
-      std::cout << "flush completes, mem eq = " << mem_eq << ", cycle " << cycle << "\n";
+      printf("%lx, %lx\n", *(uint64_t*)&s->mem[0xffffe028],  *(uint64_t*)&ss->mem[0xffffe028]);
+      //std::cout << "flush completes, mem eq = " << mem_eq << ", cycle " << cycle << "\n";
       //assert(mem_eq == 0);
     }
     was_in_flush_mode = tb->in_flush_mode;
