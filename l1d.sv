@@ -6,6 +6,7 @@
 
 `ifdef VERILATOR
 import "DPI-C" function longint ld_translate(input longint va);
+import "DPI-C" function void wr_log(input longint pc, input longint addr, input longint data, int is_atomic);
 
 
 import "DPI-C" function void record_l1d(input int req, 
@@ -852,6 +853,9 @@ module l1d(clk,
 
    always_ff@(negedge clk)
      begin
+	//if(t_reload_tlb)
+	//$display("page_walk_rsp_pa = %x", page_walk_rsp_pa);
+	
 	if(core_mem_req_valid && paging_active && t_core_mem_req_ack && !r_was_page_fault)
 	  begin
 	     if(ld_translate(r_core_mem_va_req.addr) != w_tlb_pa)
@@ -1043,16 +1047,26 @@ module l1d(clk,
    
    logic [31:0] t_amo32_data;
    logic [63:0]	t_amo64_data;
-
+`ifdef VERILATOR
    always_ff@(negedge clk)
      begin
+	// if(r_got_req & r_req.is_atomic & !t_hit_cache)
+	//   begin
+	//      $display("valid = %b, dirty %b, tag out %x, cache tag %x", r_valid_out, r_dirty_out, r_tag_out, r_cache_tag);
+	//   end
+	
 	if(t_wr_store)
 	  begin
-	     $display(">> pc %x writes %x with %x write %b", r_req.pc, r_req.addr, r_req.data, t_wr_store);
+	     wr_log(r_req.pc, r_req.addr, r_req.data, r_req.is_atomic ? 32'd1 : 32'd0);
+	     if(r_req.is_atomic && r_req.amo_op == 5'd0)
+	       begin
+		  $display("amoadd at %x : load %x, reg %x, will write %x", r_req.pc, t_shift, r_req.data, t_amo64_data);
+	       end
+	     //$display(">> pc %x writes %x with %x write %b", r_req.pc, r_req.addr, r_req.data, t_wr_store);
 	  end
-     end
-
-   
+     end // always_ff@ (negedge clk)
+`endif
+      
    always_comb
      begin
 	t_data = mem_rsp_valid ? mem_rsp_load_data : 
@@ -1181,13 +1195,18 @@ module l1d(clk,
 	       //return old data
 	       t_rsp_data = {{32{t_shift[31:0][31]}}, t_shift[31:0]};
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
+	       t_store_shift = {96'd0, t_amo32_data} << {r_req.addr[`LG_L1D_CL_LEN-1:0], 3'd0};	       
 	       t_array_data = (t_store_shift & t_store_mask) | ((~t_store_mask) & t_data);
 	       t_wr_store = t_hit_cache && (r_is_retry || r_did_reload) & (!r_req.has_cause);
+	       //$display("t_wr_store = %b, hit_cache %b for pc %x, cause %b", 
+	       //	t_wr_store, t_hit_cache, r_req.pc, r_req.has_cause);
+	       //$stop();
 	    end // case: MEM_AMOW
 	  MEM_AMOD:
 	    begin
 	       t_rsp_data = t_shift[63:0];
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
+	       t_store_shift = {64'd0, t_amo64_data} << {r_req.addr[`LG_L1D_CL_LEN-1:0], 3'd0};
 	       t_array_data = (t_store_shift & t_store_mask) | ((~t_store_mask) & t_data);
 	       t_wr_store = t_hit_cache && (r_is_retry || r_did_reload) & (!r_req.has_cause);
 
@@ -1383,8 +1402,9 @@ module l1d(clk,
 
 	       if(r_got_req)
 		 begin
-		    if(r_valid_out && (r_tag_out == r_cache_tag))
+		    if(r_valid_out && (r_tag_out == r_cache_tag))		    
 		      begin /* valid cacheline - hit in cache */
+
 			 if(r_req.is_store)
 			   begin
 			      t_reset_graduated = 1'b1;				   
@@ -1397,11 +1417,11 @@ module l1d(clk,
 			      n_core_mem_rsp_valid = 1'b1;
 			      n_core_mem_rsp.has_cause = r_req.spans_cacheline;
 
-			      if(r_did_reload)
-				begin
-				   $display("late ack at cycle %d for load with rob ptr %d, data %x, dst valid %b", 
-					    r_cycle, r_req.rob_ptr, n_core_mem_rsp.data , n_core_mem_rsp.dst_valid );
-				end
+			      //if(r_did_reload)
+				//begin
+				  // $display("late ack at cycle %d for load with rob ptr %d, data %x, dst valid %b", 
+				//	    r_cycle, r_req.rob_ptr, n_core_mem_rsp.data , n_core_mem_rsp.dst_valid );
+				//end
 
 			      
 			   end // else: !if(r_req.is_store)
@@ -1440,7 +1460,8 @@ module l1d(clk,
 		       
 `ifdef VERBOSE_L1D
 		       $display("at cycle %d : cache invalid miss for rob ptr %d, r_is_retry %b, addr %x, is store %b, r_cache_idx = %d, r_cache_tag = %x, valid %b, paging %b",
-				r_cycle, r_req.rob_ptr, r_is_retry, r_req.addr, r_req.is_store, r_cache_idx, r_cache_tag, r_valid_out, paging_active);
+				r_cycle, r_req.rob_ptr, r_is_retry, r_req.addr, 
+				r_req.is_store, r_cache_idx, r_cache_tag, r_valid_out, paging_active);
 `endif
 
 		       t_got_miss = 1'b1;
@@ -1605,7 +1626,7 @@ module l1d(clk,
 		 begin
 		    n_state = HANDLE_RELOAD;
 		    n_inhibit_write = 1'b0;
-		    if(!(r_req.is_store || r_lock_cache))
+		    if(!(r_req.is_store || r_req.is_atomic || r_lock_cache))
 		      begin
 			 t_ack_ld_early = 1'b1;
 			 n_core_mem_rsp.rob_ptr = r_req.rob_ptr;

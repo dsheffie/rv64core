@@ -106,7 +106,7 @@ module mmu(clk, reset, page_table_root,
 		    n_state = LOAD0;
 		    n_va = l1i_va;
 		    n_l1i_req = 1'b0;
-		    $display("starting translation for %x, page_table_root %x", l1i_va, page_table_root);
+		    //$display("starting translation for %x, page_table_root %x", l1i_va, page_table_root);
 		    n_do_l1i = 1'b1;
 		    n_do_l1d = 1'b0;
 		 end
@@ -141,7 +141,7 @@ module mmu(clk, reset, page_table_root,
 	    begin
 	       if(mem_rsp_valid)
 		 begin
-		    $display("walker level 0 got %x, cycle %d", mem_rsp_data, r_cycle);
+		    //$display("walker level 0 got %x, cycle %d", mem_rsp_data, r_cycle);
 		    n_addr = mem_rsp_data;
 		    if(mem_rsp_data[0] == 1'b0)
 		      begin
@@ -173,7 +173,7 @@ module mmu(clk, reset, page_table_root,
 	       if(mem_rsp_valid)
 		 begin
 		    n_addr = mem_rsp_data;
-		    $display("walker level 1 got %x", mem_rsp_data);
+		    //$display("walker level 1 got %x", mem_rsp_data);
 		    if(mem_rsp_data[0] == 1'b0)
 		      begin
 			 n_state = IDLE;
@@ -202,7 +202,7 @@ module mmu(clk, reset, page_table_root,
 	    begin
 	       if(mem_rsp_valid)
 		 begin
-		    $display("walker level 2 got %x",  mem_rsp_data);
+		    //$display("walker level 2 got %x",  mem_rsp_data);
 		    n_addr = mem_rsp_data;
 		    if(mem_rsp_data[0] == 1'b0)
 		      begin
@@ -220,8 +220,7 @@ module mmu(clk, reset, page_table_root,
 	    end
 	  WALK_DONE:
 	    begin
-	       $display("pa root address %x, hit lvl %d", {8'd0, r_addr[53:10], 12'd0}, r_hit_lvl);
-	       if(r_hit_lvl == 2'd0)
+	       if(r_hit_lvl == 2'd2)
 		 begin /* 4k page */
 		    n_pa = {8'd0, r_addr[53:10], 12'd0};
 		 end
@@ -229,10 +228,11 @@ module mmu(clk, reset, page_table_root,
 		 begin /* 2mbyte page */
 		    n_pa = {8'd0, r_addr[53:19], r_va[20:12], 12'd0};
 		 end
-	       else if(r_hit_lvl == 2'd2)
+	       else if(r_hit_lvl == 2'd0)
 		 begin /* 1gig page */
 		    n_pa = {8'd0, r_addr[53:28], r_va[29:12], 12'd0};
 		 end
+	       //$display("pa root address %x, hit lvl %d", n_pa, r_hit_lvl);	       
 	       /* can ack now, but need to check if accessed needs to be set */
 	       n_l1i_rsp_valid = r_do_l1i;
 	       n_l1d_rsp_valid = r_do_l1d;

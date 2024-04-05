@@ -195,6 +195,29 @@ long long translate(long long va, long long root, bool iside, bool store) {
 }
 
 uint64_t page_table_root = ~0UL;
+std::list<store_rec> store_queue;
+std::list<store_rec> atomic_queue;
+
+void wr_log(long long pc, long long addr, long long data, int is_atomic) {
+  if(is_atomic) {
+    printf("pc %llx, addr %llx, data %llx, atomic %d\n",
+	   pc, addr, data, is_atomic);
+  }
+
+  if(is_atomic) {
+    atomic_queue.emplace_back(pc, addr, data);
+    return;
+  }
+  assert(not(store_queue.empty()));
+
+  auto &t = store_queue.front();
+  if(not(t.pc == pc and t.addr == addr and t.data == data)) {
+    printf("you have a store error! for an atomic %d\n", is_atomic);
+    printf("%lx, %lx, %lx\n", t.pc, t.addr, t.data);
+    exit(-1);
+  }
+  store_queue.pop_front();
+}
 
 int check_bad_fetch(long long pc, long long rtl_pa, int insn) {
   assert(page_table_root != (~0UL));
@@ -968,8 +991,8 @@ int main(int argc, char **argv) {
     }
 
     if(not(tb->in_flush_mode) and was_in_flush_mode) {
-      int mem_eq = memcmp(ss->mem, s->mem, 1UL<<32);
-      printf("%lx, %lx\n", *(uint64_t*)&s->mem[0xffffe028],  *(uint64_t*)&ss->mem[0xffffe028]);
+      //int mem_eq = memcmp(ss->mem, s->mem, 1UL<<32);
+      //printf("%lx, %lx\n", *(uint64_t*)&s->mem[0xffffe028],  *(uint64_t*)&ss->mem[0xffffe028]);
       //std::cout << "flush completes, mem eq = " << mem_eq << ", cycle " << cycle << "\n";
       //assert(mem_eq == 0);
     }

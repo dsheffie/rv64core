@@ -55,7 +55,6 @@ struct satp_t {
   uint64_t mode : 4;
 };
 
-
 struct state_t{
   uint64_t pc;
   uint64_t last_pc;
@@ -145,6 +144,15 @@ struct state_t{
 };
 
 void handle_syscall(state_t *s, uint64_t tohost);
+
+struct store_rec {
+  uint64_t pc;
+  uint64_t addr;
+  uint64_t data;
+  store_rec(uint64_t pc, uint64_t addr, uint64_t data) :
+    pc(pc), addr(addr), data(data) {}
+
+};
 
 
 struct utype_t {

@@ -1057,7 +1057,7 @@ module core(clk,
 	       //$display("monitor flush %b %b", n_l1d_flush_complete, n_l2_flush_complete);
 	       if(n_l1i_flush_complete && n_l1d_flush_complete && n_l2_flush_complete)
 		 begin
-		    $display("caches flushed at cycle %d", r_cycle);
+		    //$display("caches flushed at cycle %d", r_cycle);
 		    n_got_monitor = t_uop.op == MONITOR;
 		    n_state = (t_uop.op == MONITOR) ? HANDLE_MONITOR : ALLOC_FOR_SERIALIZE;
 		    n_l1i_flush_complete = 1'b0;
