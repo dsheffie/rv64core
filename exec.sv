@@ -515,6 +515,10 @@ module exec(clk,
 	t_dq0.src_ptr = uq_uop.srcB;
 	t_dq1.rob_ptr = uq_uop_two.rob_ptr;
 	t_dq1.src_ptr = uq_uop_two.srcB;
+`ifdef ENABLE_CYCLE_ACCOUNTING
+	t_dq0.fetch_cycle = uq_uop.fetch_cycle;
+	t_dq1.fetch_cycle = uq_uop_two.fetch_cycle;
+`endif
      end
 
        
@@ -1623,7 +1627,17 @@ module exec(clk,
 	  end
      end
 
-
+   always_ff@(negedge clk)
+     begin
+	if(t_mem_dq.rob_ptr == 'd5)
+	  begin
+	     $display("head of memory data queue for rob ptr %d is ready %b at cycle %d, fetch_cycle %d",
+		      t_mem_dq.rob_ptr, w_dq_ready, r_cycle, t_mem_dq.fetch_cycle);
+	  end
+     end
+   
+	     
+	      
    
    always_comb
      begin
@@ -2584,6 +2598,9 @@ module exec(clk,
      begin
 	t_core_store_data.rob_ptr = mem_dq.rob_ptr;
 	t_core_store_data.data = t_mem_srcB;
+`ifdef ENABLE_CYCLE_ACCOUNTING
+	t_core_store_data.fetch_cycle = mem_dq.fetch_cycle;
+`endif
 	core_store_data_ptr = mem_dq.rob_ptr;
 	core_store_data_ptr_valid = r_dq_ready;
      end
@@ -2592,7 +2609,10 @@ module exec(clk,
      begin
 	if(r_dq_ready)
 	  begin
-	     //$display("STORE DATA value %x for rob ptr %d", t_core_store_data.data, mem_dq.rob_ptr);
+	     if(mem_dq.rob_ptr == 'd5)
+	       begin
+		  $display("STORE DATA value %x for rob ptr %d, fetch cycle %d, cycle %d", t_core_store_data.data,  mem_dq.rob_ptr, t_core_store_data.fetch_cycle, r_cycle);
+	       end
 	     r_mdq[r_mdq_tail_ptr[`LG_MQ_ENTRIES-1:0]] <= t_core_store_data;
 	  end
      end
@@ -2619,6 +2639,15 @@ module exec(clk,
    wire w_bad_16b_addr = &w_agu_addr[3:0];
    wire w_bad_32b_addr = (&w_agu_addr[3:2]) & (|w_agu_addr[1:0]);
    wire	w_bad_64b_addr = w_agu_addr[3] & (|w_agu_addr[2:0]);
+
+`ifdef ENABLE_CYCLE_ACCOUNTING
+   logic [63:0]	r_restart_counter;
+   always_ff@(posedge clk)
+     begin
+	r_restart_counter <= reset ? 'd0 : 
+			     (restart_complete ? r_restart_counter + 'd1 : r_restart_counter);
+     end
+`endif
    
    always_comb
      begin
@@ -2637,6 +2666,10 @@ module exec(clk,
 	t_mem_tail.pc = mem_uq.pc;
 	t_mem_tail.has_cause = 1'b0;
 	t_mem_tail.cause = 'd0;
+`ifdef ENABLE_CYCLE_ACCOUNTING
+	t_mem_tail.fetch_cycle = mem_uq.fetch_cycle;
+	t_mem_tail.restart_id = r_restart_counter;
+`endif
 	case(mem_uq.op)
 	  SB:
 	    begin

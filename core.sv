@@ -741,7 +741,7 @@ module core(clk,
 	else
 	  r_last_cycle <= r_last_cycle + 'd1;
 	
-	if(r_last_cycle >= 'd16384 || paging_active)
+	if(r_last_cycle >= 'd8192)
 	  begin 
 	     $display("cycle %d : state = %d, alu complete %b, mem complete %b,head_ptr %d, complete %b,  can_retire_rob_head %b, head pc %x, empty %b, full %b, bob full %b", 
 		      r_cycle,
@@ -758,7 +758,7 @@ module core(clk,
 	     
 	     for(logic [`LG_ROB_ENTRIES:0] i = r_rob_head_ptr; i != (r_rob_tail_ptr); i=i+1)
 	       begin
-		  $display("\trob entry %d, pc %x, insn %x complete %b, sd complete %b, is br %b, faulted %b, cause %d",
+		  $display("\trob entry %d, pc %x, insn %x complete %b, sd complete %b, is br %b, faulted %b, cause %d, fetched at %d, done at %d",
 			   i[`LG_ROB_ENTRIES-1:0], 
 			   r_rob[i[`LG_ROB_ENTRIES-1:0]].pc,
 			   r_rob[i[`LG_ROB_ENTRIES-1:0]].raw_insn, 
@@ -766,7 +766,9 @@ module core(clk,
 			   r_rob_sd_complete[i[`LG_ROB_ENTRIES-1:0]],
 			   r_rob[i[`LG_ROB_ENTRIES-1:0]].is_br,
 			   r_rob[i[`LG_ROB_ENTRIES-1:0]].faulted,
-			   r_rob[i[`LG_ROB_ENTRIES-1:0]].cause
+			   r_rob[i[`LG_ROB_ENTRIES-1:0]].cause,
+			   r_rob[i[`LG_ROB_ENTRIES-1:0]].fetch_cycle,
+			   r_rob[i[`LG_ROB_ENTRIES-1:0]].complete_cycle
 			   );
 	       end
 	  end
@@ -1009,7 +1011,8 @@ module core(clk,
 	       if(r_rob_inflight == 'd0 && memq_empty && t_divide_ready)
 		 begin
 		    n_state = RAT;
-		    //$display(">>> restarting after fault at cycle %d at priv %d, paging enabled %b", r_cycle, priv, paging_active);
+		    $display(">>> clear pc %x, restart pc %x after fault at cycle %d at priv %d, paging enabled %b", 
+			     r_restart_src_pc, r_restart_pc, r_cycle, priv, paging_active);
 		 end 
 	    end // case: DRAIN
 	  RAT:
@@ -1512,31 +1515,59 @@ module core(clk,
 	  begin
 	     if(t_alloc)
 	       begin
+		  if(r_rob_tail_ptr[`LG_ROB_ENTRIES-1:0] == 'd5)
+		   begin
+		     $display("alloc 1 : marking entry 5 in flight at cycle %d for pc %x, dst %d, fetch cycle %d", 
+		  	r_cycle, t_alloc_uop.pc, t_alloc_uop.dst, t_uop.fetch_cycle);
+		   end
 		  r_rob_complete[r_rob_tail_ptr[`LG_ROB_ENTRIES-1:0]] <= t_fold_uop;
 		  r_rob_sd_complete[r_rob_tail_ptr[`LG_ROB_ENTRIES-1:0]] <= !(t_uop.is_mem & t_uop.srcB_valid);
 	       end
 	     if(t_alloc_two)
 	       begin
+		  if(r_rob_next_tail_ptr[`LG_ROB_ENTRIES-1:0] == 'd5)
+		  begin
+		   $display("alloc 2 : marking entry 5 in flight at cycle %d, fetch cycle %d", r_cycle, t_uop2.fetch_cycle);
+		  end		  
 		  r_rob_complete[r_rob_next_tail_ptr[`LG_ROB_ENTRIES-1:0]] <= t_fold_uop2;
-		  r_rob_sd_complete[r_rob_next_tail_ptr[`LG_ROB_ENTRIES-1:0]] <= !(t_uop2.is_mem & t_uop2.srcB_valid);				    
+		  r_rob_sd_complete[r_rob_next_tail_ptr[`LG_ROB_ENTRIES-1:0]] <= !(t_uop2.is_mem & t_uop2.srcB_valid);
 	       end
 	     if(t_complete_valid_1)
 	       begin
+		  //if(t_complete_bundle_1.complete == 1'b0)
+		  // begin
+		  //  $display("marking entry %d as incomplete?", t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]);
+		  //  $stop();
+		  // end		  
 		  r_rob_complete[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]] <= t_complete_bundle_1.complete;
 	       end
 	     if(t_complete_valid_2)
 	       begin
+		  //if(t_complete_bundle_2.complete == 1'b0)
+		  //begin
+		  //$display("marking entry %d as incomplete?", t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]);
+		  //$stop();
+		  //end
 		  r_rob_complete[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]] <= t_complete_bundle_2.complete;
 	       end
 	     if(core_mem_rsp_valid)
 	       begin
-		  //$display("rob entry %d marked complete by mem port", core_mem_rsp.rob_ptr);
+		  if(core_mem_rsp.rob_ptr == 'd5)
+		   begin
+		     $display("rob entry %d, dst ptr %d marked complete by mem port at cycle %d, fetch_cycle %d",
+		  	      core_mem_rsp.rob_ptr, core_mem_rsp.dst_ptr, r_cycle, r_rob[core_mem_rsp.rob_ptr].fetch_cycle);
+		   end
 		  r_rob_complete[core_mem_rsp.rob_ptr] <= 1'b1;
 	       end
 
 	     if(t_core_store_data_ptr_valid)
 	       begin
 		  r_rob_sd_complete[t_core_store_data_ptr] <= 1'b1;
+		  if(r_rob_complete[t_core_store_data_ptr] == 1'b0 && t_core_store_data_ptr == 'd5)
+		    begin
+		       $display("store data complete but rob isnt for entry %d at cycle %d, fetch cycle %d",
+				t_core_store_data_ptr, r_cycle,  r_rob[t_core_store_data_ptr].fetch_cycle);
+		    end
 	       end
 	  end
      end // always_ff@ (posedge clk)
@@ -1599,13 +1630,14 @@ module core(clk,
 		  r_rob[core_mem_rsp.rob_ptr].faulted <= core_mem_rsp.has_cause;
 		  r_rob[core_mem_rsp.rob_ptr].cause <= core_mem_rsp.cause;
 		  r_rob[core_mem_rsp.rob_ptr].has_cause <= core_mem_rsp.has_cause;
-		  // $display("mem_rsp rob : %x, rob ptr %d prf ptr %d dst valid %b has cause %b %d",
-		  // 	   r_rob[core_mem_rsp.rob_ptr].pc, 
-		  // 	   core_mem_rsp.rob_ptr, 
-		  // 	   core_mem_rsp.dst_ptr,
-		  // 	   core_mem_rsp.dst_valid,
-		  // 	   core_mem_rsp.has_cause, 
-		  // 	   core_mem_rsp.cause);
+		  if(r_rob[core_mem_rsp.rob_ptr].pc == 64'hffffffff80952c9c)
+		    $display("mem_rsp rob : %x, rob ptr %d prf ptr %d dst valid %b has cause %b %d",
+		   	     r_rob[core_mem_rsp.rob_ptr].pc, 
+		   	     core_mem_rsp.rob_ptr, 
+		   	     core_mem_rsp.dst_ptr,
+		   	     core_mem_rsp.dst_valid,
+		   	     core_mem_rsp.has_cause, 
+		   	     core_mem_rsp.cause);
 `ifdef ENABLE_CYCLE_ACCOUNTING
 		  r_rob[core_mem_rsp.rob_ptr].complete_cycle <= r_cycle;
 `endif	    	     	     

@@ -90,16 +90,26 @@ typedef struct packed {
    logic 		       dst_valid;
    logic [`M_WIDTH-1:0]        data;
    logic [`M_WIDTH-1:0]        pc;
+`ifdef ENABLE_CYCLE_ACCOUNTING
+   logic [63:0] 	    fetch_cycle;
+   logic [63:0]		    restart_id;
+`endif   
 } mem_req_t;
 
 typedef struct packed {
    logic [`LG_ROB_ENTRIES-1:0] rob_ptr;
    logic [`LG_PRF_ENTRIES-1:0] src_ptr;
+`ifdef ENABLE_CYCLE_ACCOUNTING
+   logic [63:0] 	    fetch_cycle;
+`endif   
 } dq_t;
 
 typedef struct packed {
    logic [`M_WIDTH-1:0] data;
    logic [`LG_ROB_ENTRIES-1:0] rob_ptr;
+`ifdef ENABLE_CYCLE_ACCOUNTING
+   logic [63:0] 	    fetch_cycle;
+`endif      
 } mem_data_t;
 
 typedef struct packed {

@@ -199,10 +199,10 @@ std::list<store_rec> store_queue;
 std::list<store_rec> atomic_queue;
 
 void wr_log(long long pc, long long addr, long long data, int is_atomic) {
-  if(is_atomic) {
-    printf("pc %llx, addr %llx, data %llx, atomic %d\n",
-	   pc, addr, data, is_atomic);
-  }
+  //  if(is_atomic) {
+  //printf("pc %llx, addr %llx, data %llx, atomic %d\n",
+  //	   pc, addr, data, is_atomic);
+  //}
 
   if(is_atomic) {
     atomic_queue.emplace_back(pc, addr, data);
@@ -999,7 +999,7 @@ int main(int argc, char **argv) {
     was_in_flush_mode = tb->in_flush_mode;
     
     ++last_retire;
-    if(last_retire > (1U<<12) && not(tb->in_flush_mode)) {
+    if(last_retire > (1U<<15) && not(tb->in_flush_mode)) {
       std::cout << "in flush mode = " << static_cast<int>(tb->in_flush_mode) << "\n";
       std::cerr << "no retire in " << last_retire << " cycles, last retired "
     		<< std::hex
