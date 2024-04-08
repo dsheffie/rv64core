@@ -1122,7 +1122,7 @@ module l1d(clk,
 	
 	if(t_wr_store)
 	  begin
-	     wr_log(r_req.pc, r_req.addr, r_req.op == MEM_AMOD ? t_amo64_data : (r_req.op == MEM_AMOW ? {32'd0,t_amo32_data} : r_req.data), 
+	     wr_log(r_req.pc, r_req.addr, r_req.op == MEM_AMOD ? t_amo64_data : (r_req.op == MEM_AMOW ? {{32{t_amo32_data[31]}},t_amo32_data} : r_req.data), 
 		    r_req.is_atomic ? 32'd1 : 32'd0);
 	     //if(r_req.is_atomic && r_req.amo_op == 5'd0)
 	       //begin

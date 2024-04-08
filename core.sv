@@ -1630,14 +1630,6 @@ module core(clk,
 		  r_rob[core_mem_rsp.rob_ptr].faulted <= core_mem_rsp.has_cause;
 		  r_rob[core_mem_rsp.rob_ptr].cause <= core_mem_rsp.cause;
 		  r_rob[core_mem_rsp.rob_ptr].has_cause <= core_mem_rsp.has_cause;
-		  if(r_rob[core_mem_rsp.rob_ptr].pc == 64'hffffffff80952c9c)
-		    $display("mem_rsp rob : %x, rob ptr %d prf ptr %d dst valid %b has cause %b %d",
-		   	     r_rob[core_mem_rsp.rob_ptr].pc, 
-		   	     core_mem_rsp.rob_ptr, 
-		   	     core_mem_rsp.dst_ptr,
-		   	     core_mem_rsp.dst_valid,
-		   	     core_mem_rsp.has_cause, 
-		   	     core_mem_rsp.cause);
 `ifdef ENABLE_CYCLE_ACCOUNTING
 		  r_rob[core_mem_rsp.rob_ptr].complete_cycle <= r_cycle;
 `endif	    	     	     
