@@ -1627,17 +1627,6 @@ module exec(clk,
 	  end
      end
 
-   always_ff@(negedge clk)
-     begin
-	if(t_mem_dq.rob_ptr == 'd5)
-	  begin
-	     $display("head of memory data queue for rob ptr %d is ready %b at cycle %d, fetch_cycle %d",
-		      t_mem_dq.rob_ptr, w_dq_ready, r_cycle, t_mem_dq.fetch_cycle);
-	  end
-     end
-   
-	     
-	      
    
    always_comb
      begin
@@ -2609,10 +2598,6 @@ module exec(clk,
      begin
 	if(r_dq_ready)
 	  begin
-	     if(mem_dq.rob_ptr == 'd5)
-	       begin
-		  $display("STORE DATA value %x for rob ptr %d, fetch cycle %d, cycle %d", t_core_store_data.data,  mem_dq.rob_ptr, t_core_store_data.fetch_cycle, r_cycle);
-	       end
 	     r_mdq[r_mdq_tail_ptr[`LG_MQ_ENTRIES-1:0]] <= t_core_store_data;
 	  end
      end

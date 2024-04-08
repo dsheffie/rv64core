@@ -1011,8 +1011,8 @@ module core(clk,
 	       if(r_rob_inflight == 'd0 && memq_empty && t_divide_ready)
 		 begin
 		    n_state = RAT;
-		    $display(">>> clear pc %x, restart pc %x after fault at cycle %d at priv %d, paging enabled %b", 
-			     r_restart_src_pc, r_restart_pc, r_cycle, priv, paging_active);
+		    //$display(">>> clear pc %x, restart pc %x after fault at cycle %d at priv %d, paging enabled %b", 
+		    //r_restart_src_pc, r_restart_pc, r_cycle, priv, paging_active);
 		 end 
 	    end // case: DRAIN
 	  RAT:
@@ -1515,20 +1515,20 @@ module core(clk,
 	  begin
 	     if(t_alloc)
 	       begin
-		  if(r_rob_tail_ptr[`LG_ROB_ENTRIES-1:0] == 'd5)
-		   begin
-		     $display("alloc 1 : marking entry 5 in flight at cycle %d for pc %x, dst %d, fetch cycle %d", 
-		  	r_cycle, t_alloc_uop.pc, t_alloc_uop.dst, t_uop.fetch_cycle);
-		   end
+		  //if(r_rob_tail_ptr[`LG_ROB_ENTRIES-1:0] == 'd5)
+		  // begin
+		  //$display("alloc 1 : marking entry 5 in flight at cycle %d for pc %x, dst %d, fetch cycle %d", 
+		  //r_cycle, t_alloc_uop.pc, t_alloc_uop.dst, t_uop.fetch_cycle);
+		  // end
 		  r_rob_complete[r_rob_tail_ptr[`LG_ROB_ENTRIES-1:0]] <= t_fold_uop;
 		  r_rob_sd_complete[r_rob_tail_ptr[`LG_ROB_ENTRIES-1:0]] <= !(t_uop.is_mem & t_uop.srcB_valid);
 	       end
 	     if(t_alloc_two)
 	       begin
-		  if(r_rob_next_tail_ptr[`LG_ROB_ENTRIES-1:0] == 'd5)
-		  begin
-		   $display("alloc 2 : marking entry 5 in flight at cycle %d, fetch cycle %d", r_cycle, t_uop2.fetch_cycle);
-		  end		  
+		  //if(r_rob_next_tail_ptr[`LG_ROB_ENTRIES-1:0] == 'd5)
+		  // begin
+		  //$display("alloc 2 : marking entry 5 in flight at cycle %d, fetch cycle %d", r_cycle, t_uop2.fetch_cycle);
+		  //end		  
 		  r_rob_complete[r_rob_next_tail_ptr[`LG_ROB_ENTRIES-1:0]] <= t_fold_uop2;
 		  r_rob_sd_complete[r_rob_next_tail_ptr[`LG_ROB_ENTRIES-1:0]] <= !(t_uop2.is_mem & t_uop2.srcB_valid);
 	       end
@@ -1552,22 +1552,22 @@ module core(clk,
 	       end
 	     if(core_mem_rsp_valid)
 	       begin
-		  if(core_mem_rsp.rob_ptr == 'd5)
-		   begin
-		     $display("rob entry %d, dst ptr %d marked complete by mem port at cycle %d, fetch_cycle %d",
-		  	      core_mem_rsp.rob_ptr, core_mem_rsp.dst_ptr, r_cycle, r_rob[core_mem_rsp.rob_ptr].fetch_cycle);
-		   end
+		  //if(core_mem_rsp.rob_ptr == 'd5)
+		   //begin
+		  //$display("rob entry %d, dst ptr %d marked complete by mem port at cycle %d, fetch_cycle %d",
+		  //core_mem_rsp.rob_ptr, core_mem_rsp.dst_ptr, r_cycle, r_rob[core_mem_rsp.rob_ptr].fetch_cycle);
+		  //end
 		  r_rob_complete[core_mem_rsp.rob_ptr] <= 1'b1;
 	       end
 
 	     if(t_core_store_data_ptr_valid)
 	       begin
 		  r_rob_sd_complete[t_core_store_data_ptr] <= 1'b1;
-		  if(r_rob_complete[t_core_store_data_ptr] == 1'b0 && t_core_store_data_ptr == 'd5)
-		    begin
-		       $display("store data complete but rob isnt for entry %d at cycle %d, fetch cycle %d",
-				t_core_store_data_ptr, r_cycle,  r_rob[t_core_store_data_ptr].fetch_cycle);
-		    end
+		  //if(r_rob_complete[t_core_store_data_ptr] == 1'b0 && t_core_store_data_ptr == 'd5)
+		  //begin
+		  //$display("store data complete but rob isnt for entry %d at cycle %d, fetch cycle %d",
+		  //t_core_store_data_ptr, r_cycle,  r_rob[t_core_store_data_ptr].fetch_cycle);
+		  // end
 	       end
 	  end
      end // always_ff@ (posedge clk)

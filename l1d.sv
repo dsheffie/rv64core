@@ -332,29 +332,29 @@ module l1d(clk,
    logic [63:0] r_rob_pc [N_ROB_ENTRIES-1:0];
 
 
-   always_ff@(negedge clk)
-     begin
-	if(retired_rob_ptr_valid & retired_rob_ptr == 'd5)
-	  begin
-	     $display("retire primary port, cycle %d", r_cycle);
-	  end
-	if(retired_rob_ptr_two_valid && retired_rob_ptr_two == 'd5)
-	  begin
-	     $display("retire second port, cycle %d", r_cycle);
-	  end
-	if(t_incr_busy && r_req2.rob_ptr == 'd5)
-	  begin
-	     $display("set busy, cycle %d", r_cycle);
-	  end
-	if(t_reset_graduated)
-	  begin
-	     $display("reset, cycle %d", r_cycle);
-	  end
-	if(t_force_clear_busy)
-	  begin
-	     $display("clear, cycle %d", r_cycle);
-	  end
-     end
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if(retired_rob_ptr_valid & retired_rob_ptr == 'd5)
+   // 	  begin
+   // 	     $display("retire primary port, cycle %d", r_cycle);
+   // 	  end
+   // 	if(retired_rob_ptr_two_valid && retired_rob_ptr_two == 'd5)
+   // 	  begin
+   // 	     $display("retire second port, cycle %d", r_cycle);
+   // 	  end
+   // 	if(t_incr_busy && r_req2.rob_ptr == 'd5)
+   // 	  begin
+   // 	     $display("set busy, cycle %d", r_cycle);
+   // 	  end
+   // 	if(t_reset_graduated)
+   // 	  begin
+   // 	     $display("reset, cycle %d", r_cycle);
+   // 	  end
+   // 	if(t_force_clear_busy)
+   // 	  begin
+   // 	     $display("clear, cycle %d", r_cycle);
+   // 	  end
+   //   end
    
    logic t_reset_graduated;
 
@@ -896,11 +896,9 @@ module l1d(clk,
 	r_core_mem_va_req <= n_core_mem_va_req;
      end
 
+`ifdef VERILATOR
    always_ff@(negedge clk)
      begin
-	//if(t_reload_tlb)
-	//$display("page_walk_rsp_pa = %x", page_walk_rsp_pa);
-	
 	if(core_mem_req_valid && paging_active && t_core_mem_req_ack && !r_was_page_fault)
 	  begin
 	     if(ld_translate(r_core_mem_va_req.addr) != w_tlb_pa)
@@ -911,24 +909,21 @@ module l1d(clk,
 	       end
 
 	  end
-	if(restart_complete && |r_rob_inflight)
-	  begin
-	     $display("cpu completed flush but memory ops are still inflight %b", r_rob_inflight);
-	     for(integer i = 0; i < 32; i=i+1)
-	       begin
-		  if(r_rob_inflight[i])
-		    $display("entry %d was inflight, pc %x", i, r_rob_pc[i[4:0]]);
-	       end
-	     //$stop();
-	  end
-`ifdef ENABLE_CYCLE_ACCOUNTING
+ `ifdef ENABLE_CYCLE_ACCOUNTING
 	if(core_mem_req_valid && paging_active && t_core_mem_req_ack && !r_was_page_fault && r_restart_counter != core_mem_req.restart_id)
 	  begin
-	     $display("current restart id is %d but ingesting %d", r_restart_counter, core_mem_req.restart_id);
+	     $display("cycld %d : current restart id is %d but ingesting %d", r_cycle, r_restart_counter, core_mem_req.restart_id);
+	     $stop();
 	  end
+	//if(restart_complete)
+	  //begin
+	//$display("restart complete at cycle %d", r_cycle);
+	//$display("core_mem_va_req.restart_id = %d, valid %b", 
+	//core_mem_va_req.restart_id, core_mem_va_req_valid);
+	//end
 `endif
      end // always_ff@ (negedge clk)
-   
+`endif
    
    always_comb
      begin
@@ -940,7 +935,7 @@ module l1d(clk,
 	core_mem_req.addr = w_tlb_pa;
 	
 	n_core_mem_va_req = r_core_mem_va_req;
-	n_core_mem_va_req_valid = r_core_mem_va_req_valid;
+	n_core_mem_va_req_valid = restart_complete ? 1'b0 : r_core_mem_va_req_valid;
 	
 	n_page_walk_req_valid = 1'b0;
 	core_mem_va_req_ack = 1'b0;
@@ -954,7 +949,6 @@ module l1d(clk,
 		 //begin
 		   // $display("r_core_mem_va_req_valid = %b", r_core_mem_va_req_valid);
 		// end
-	       
 	       if(r_core_mem_va_req_valid)
 		 begin
 		    if(r_was_page_fault)
@@ -991,7 +985,7 @@ module l1d(clk,
 	       else /* no request last cycle */
 		 begin		   
 		    n_core_mem_va_req = core_mem_va_req;		    
-		    n_core_mem_va_req_valid = core_mem_va_req_valid;
+		    n_core_mem_va_req_valid = core_mem_va_req_valid && (r_restart_counter == core_mem_va_req.restart_id);
 		    core_mem_va_req_ack = core_mem_va_req_valid;
 		 end
 	    end // case: RUN
@@ -1117,14 +1111,14 @@ module l1d(clk,
 	//      $display("valid = %b, dirty %b, tag out %x, cache tag %x", r_valid_out, r_dirty_out, r_tag_out, r_cache_tag);
 	//   end
 
-     if(retired_rob_ptr_valid && retired_rob_ptr == 'd5)
-       begin
-          $display("rob ptr 5 marked retired at cycle %d, grad %d", r_cycle, r_graduated[retired_rob_ptr]);
-       end
-     if(retired_rob_ptr_two_valid && retired_rob_ptr_two == 'd5)
-       begin
-          $display("rob ptr 5 marked retired at cycle %d, grad %d", r_cycle, r_graduated[retired_rob_ptr_two]);
-       end
+	//if(retired_rob_ptr_valid && retired_rob_ptr == 'd5)
+       //begin
+         // $display("rob ptr 5 marked retired at cycle %d, grad %d", r_cycle, r_graduated[retired_rob_ptr]);
+       //end
+     //if(retired_rob_ptr_two_valid && retired_rob_ptr_two == 'd5)
+       //begin
+         // $display("rob ptr 5 marked retired at cycle %d, grad %d", r_cycle, r_graduated[retired_rob_ptr_two]);
+       //end
 	
 	if(t_wr_store)
 	  begin
@@ -1433,7 +1427,6 @@ module l1d(clk,
 		    
 		    if(drain_ds_complete || r_req2.op == MEM_NOP)
 		      begin
-			 if(r_req2.rob_ptr == 'd5) $display("case a");			 
 			 n_core_mem_rsp.dst_valid = r_req2.dst_valid;
 			 n_core_mem_rsp.has_cause = r_req2.has_cause | r_req2.spans_cacheline;
 			 n_core_mem_rsp_valid = 1'b1;
@@ -1441,14 +1434,12 @@ module l1d(clk,
 		    else if(r_req2.is_store || r_req2.is_atomic)
 		      begin
 			 t_push_miss = 1'b1;
-			 if(r_req2.rob_ptr == 'd5) $display("case b, n_core_mem_rsp.valid = %b", n_core_mem_rsp_valid);			 
 			 if(r_req2.is_store)
 			   begin
 			      n_stall_store = 1'b1;
 			      t_incr_busy = 1'b1;
 			      //ack early
 			      n_core_mem_rsp.dst_valid = 1'b0;
-			      if(n_core_mem_rsp_valid) $stop();
 			      n_core_mem_rsp_valid = 1'b1;
 			   end
 			 if(t_port2_hit_cache)
@@ -1458,7 +1449,6 @@ module l1d(clk,
 		      end // if (r_req2.is_store)
 		    else if(t_port2_hit_cache && (!r_hit_busy_addr2 ) )
 		      begin
-			 if(r_req2.rob_ptr == 'd5) $display("case c, n_core_mem_rsp.dst_valid = %b", n_core_mem_rsp.dst_valid);			 
 			 n_core_mem_rsp.data = t_rsp_data2[`M_WIDTH-1:0];
                          n_core_mem_rsp.dst_valid = t_rsp_dst_valid2;
                          n_cache_hits = r_cache_hits + 'd1;
@@ -1468,7 +1458,6 @@ module l1d(clk,
 		    else
 		      begin
 			 t_push_miss = 1'b1;
-			 if(r_req2.rob_ptr == 'd5) $display("case c");
 			 if(t_port2_hit_cache)
 			   begin
 			      n_cache_hits = r_cache_hits + 'd1;
@@ -1490,7 +1479,6 @@ module l1d(clk,
 			   begin
 			      n_core_mem_rsp.data = t_rsp_data[`M_WIDTH-1:0];
 			      n_core_mem_rsp.dst_valid = t_rsp_dst_valid;
-			      if(n_core_mem_rsp_valid) $stop();
 			      n_core_mem_rsp_valid = 1'b1;
 			      n_core_mem_rsp.has_cause = r_req.spans_cacheline;
 
@@ -1509,13 +1497,13 @@ module l1d(clk,
 			 n_inhibit_write = 1'b1;
 			 if(r_hit_busy_addr && r_is_retry || !r_hit_busy_addr)
 			   begin
-			      n_mem_req_addr = {r_tag_out,r_cache_idx,{`LG_L1D_CL_LEN{1'b0}}};
+			      n_mem_req_addr = {r_tag_out,r_cache_idx,4'd0};
 			      n_mem_req_opcode = MEM_SW;
 			      n_mem_req_store_data = t_data;
 			      n_inhibit_write = 1'b1;
 			      t_miss_idx = r_cache_idx;
 			      t_miss_addr = r_req.addr;
-
+			      
 			      n_lock_cache = 1'b1;
 			      if((rr_cache_idx == r_cache_idx) && rr_last_wr)
 				begin
@@ -1602,11 +1590,11 @@ module l1d(clk,
 `endif
 				 t_pop_mq = 1'b1;
 				 core_store_data_ack = 1'b1;
-				 if(t_mem_head.rob_ptr == 'd5)
-				   begin
-				      $display("ack data queue at cycle %d for fetch data from cycle %d",
-					       r_cycle, t_mem_head.fetch_cycle);
-				   end
+				 //if(t_mem_head.rob_ptr == 'd5)
+				 //begin
+				 // $display("ack data queue at cycle %d for fetch data from cycle %d",
+				 //r_cycle, t_mem_head.fetch_cycle);
+				 // end
 				 n_req = t_mem_head;
 				 n_req.data = core_store_data.data;
 				 t_cache_idx = t_mem_head.addr[IDX_STOP-1:IDX_START];
@@ -1664,8 +1652,7 @@ module l1d(clk,
 		  t_core_mem_req_ack = 1'b1;
 		  t_got_req2 = 1'b1;
 		  
-//`ifdef VERBOSE_L1D
-		  if(core_mem_req.rob_ptr == 'd5)
+`ifdef VERBOSE_L1D
 		    $display("accepting new op %d, pc %x, addr %x for rob ptr %d dst ptr %d dst ptr valid %b at cycle %d fetch_cycle %d mem_q_empty %b", 
 			     core_mem_req.op,
 			     core_mem_req.pc,
@@ -1676,7 +1663,7 @@ module l1d(clk,
 			     core_mem_req.fetch_cycle,
 			     r_cycle,
 			     mem_q_empty);
-//`endif
+`endif
 		  n_last_wr2 = core_mem_req.is_store;
 		  n_last_rd2 = !core_mem_req.is_store;
 		  
