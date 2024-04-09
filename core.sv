@@ -35,8 +35,9 @@ import "DPI-C" function int check_insn_bytes(input longint pc, input int data);
 
 `endif
 
-module core(clk, 
+module core(clk,
 	    reset,
+	    core_state,
 	    restart_complete,
 	    syscall_emu,
 	    took_exc,
@@ -120,6 +121,7 @@ module core(clk,
 	    epc);
    input logic clk;
    input logic reset;
+   output logic [4:0] core_state;
    output logic	restart_complete;
    input logic syscall_emu;
    output logic	took_exc;
@@ -407,6 +409,8 @@ module core(clk,
 			     } state_t;
    
    state_t r_state, n_state;
+   assign core_state = r_state;
+   
    logic 	r_pending_fault, n_pending_fault;
    logic [31:0] r_restart_cycles, n_restart_cycles;
    logic t_divide_ready;

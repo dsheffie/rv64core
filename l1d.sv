@@ -24,6 +24,7 @@ import "DPI-C" function void record_miss(input int pc,
 
 module l1d(clk, 
 	   reset,
+	   l1d_state,
 	   restart_complete,
 	   paging_active,
 	   clear_tlb,
@@ -77,7 +78,8 @@ module l1d(clk,
    localparam L1D_CL_LEN_BITS = 1 << (`LG_L1D_CL_LEN + 3);   
    input logic clk;
    input logic reset;
-   input logic restart_complete;
+   output logic [3:0] l1d_state;
+   input logic 	      restart_complete;
    input logic paging_active;
    input logic clear_tlb;
    output logic	page_walk_req_valid;
@@ -257,7 +259,7 @@ module l1d(clk,
    mem_req_t t_mem_tail, t_mem_head;
    logic 	mem_q_full, mem_q_empty, mem_q_almost_full;
    
-   typedef enum logic [4:0] {INITIALIZE, //0
+   typedef enum logic [3:0] {INITIALIZE, //0
 			     INIT_CACHE, //1
 			     ACTIVE, //2
                              INJECT_RELOAD, //3
@@ -272,6 +274,7 @@ module l1d(clk,
 
    
    state_t r_state, n_state;
+   assign l1d_state = r_state;
    logic 	t_pop_mq;
    logic 	n_did_reload, r_did_reload;
    

@@ -91,6 +91,7 @@ endmodule
 
 module l1i(clk,
 	   reset,
+	   l1i_state,
 	   priv,
 	   paging_active,
 	   clear_tlb,
@@ -141,6 +142,7 @@ module l1i(clk,
 
    input logic clk;
    input logic reset;
+   output logic [3:0] l1i_state;
    input logic paging_active;
    input logic	       clear_tlb;
    input logic [1:0]   priv;
@@ -321,6 +323,7 @@ endfunction
    
    
    state_t n_state, r_state;
+   assign l1i_state = r_state;
    logic 		  r_restart_req, n_restart_req;
    logic 		  r_restart_ack, n_restart_ack;
    logic 		  r_req, n_req;

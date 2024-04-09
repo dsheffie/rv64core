@@ -15,6 +15,9 @@ module
 		   clk, 
 		   reset,
 		   syscall_emu,
+		   core_state,
+		   l1i_state,
+		   l1d_state,
 		   took_exc,
 		   paging_active,
 		   page_table_root,
@@ -70,6 +73,10 @@ module
    input logic clk;
    input logic reset;
    input logic syscall_emu;
+   output logic [4:0] core_state;
+   output logic [3:0] l1i_state;
+   output logic [3:0] l1d_state;
+   
    output logic	took_exc;
    output logic	paging_active;
    output logic	[63:0] page_table_root;
@@ -396,6 +403,7 @@ module
        dcache (
 	       .clk(clk),
 	       .reset(reset),
+	       .l1d_state(l1d_state),
 	       .restart_complete(w_restart_complete),
 	       .paging_active(w_paging_active),
 	       .clear_tlb(w_clear_tlb),
@@ -487,6 +495,7 @@ module
    l1i icache(
 	      .clk(clk),
 	      .reset(reset),
+	      .l1i_state(l1i_state),
 	      .mode64(w_mode64),
 	      .priv(w_priv),
 	      .paging_active(w_paging_active),
@@ -537,6 +546,7 @@ module
 	     .reset(reset),
 	     .restart_complete(w_restart_complete),
 	     .syscall_emu(syscall_emu),
+	     .core_state(core_state),
 	     .took_exc(took_exc),
 	     .priv(w_priv),
 	     .clear_tlb(w_clear_tlb),
@@ -625,6 +635,9 @@ endmodule // core_l1d_l1i
 module core_l1d_l1i(clk, 
 		    reset,
 		    syscall_emu,
+		    core_state,
+		    l1i_state,
+		    l1d_state,
 		    took_exc,
 		    paging_active,
 		    page_table_root,
@@ -680,6 +693,9 @@ module core_l1d_l1i(clk,
    input logic clk;
    input logic reset;
    input logic syscall_emu;
+   output logic [4:0] core_state;
+   output logic [3:0] l1i_state;
+   output logic [3:0] l1d_state;
    output logic	took_exc;
    output logic	paging_active;
    output logic	[63:0] page_table_root;
@@ -761,6 +777,9 @@ module core_l1d_l1i(clk,
 		     .clk(clk),
                      .reset(reset),
 		     .syscall_emu(syscall_emu),
+		     .core_state(core_state),
+		     .l1i_state(l1i_state),
+		     .l1d_state(l1d_state),
 		     .took_exc(took_exc),
 		     .paging_active(paging_active),
 		     .page_table_root(page_table_root),
