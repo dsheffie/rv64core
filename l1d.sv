@@ -873,14 +873,13 @@ module l1d(clk,
    logic r_was_page_fault, n_was_page_fault;
 
 
-`ifdef ENABLE_CYCLE_ACCOUNTING
-   logic [63:0]	r_restart_counter;
+
+   logic [3:0]	r_restart_counter;
    always_ff@(posedge clk)
      begin
 	r_restart_counter <= reset ? 'd0 : 
 			     (restart_complete ? r_restart_counter + 'd1 : r_restart_counter);
      end
-`endif
    
    assign page_walk_req_valid = r_page_walk_req_valid;
    assign page_walk_req_va = r_tlb_addr;
@@ -1259,7 +1258,7 @@ module l1d(clk,
 	  MEM_AMOW:
 	    begin
 	       //return old data
-	       t_rsp_data = {{32{t_shift[31:0][31]}}, t_shift[31:0]};
+	       t_rsp_data = {{32{t_shift[31]}}, t_shift[31:0]};
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
 	       t_store_shift = {96'd0, t_amo32_data} << {r_req.addr[`LG_L1D_CL_LEN-1:0], 3'd0};	       
 	       t_array_data = (t_store_shift & t_store_mask) | ((~t_store_mask) & t_data);

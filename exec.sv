@@ -2625,14 +2625,12 @@ module exec(clk,
    wire w_bad_32b_addr = (&w_agu_addr[3:2]) & (|w_agu_addr[1:0]);
    wire	w_bad_64b_addr = w_agu_addr[3] & (|w_agu_addr[2:0]);
 
-`ifdef ENABLE_CYCLE_ACCOUNTING
-   logic [63:0]	r_restart_counter;
+   logic [3:0] r_restart_counter;
    always_ff@(posedge clk)
      begin
 	r_restart_counter <= reset ? 'd0 : 
 			     (restart_complete ? r_restart_counter + 'd1 : r_restart_counter);
      end
-`endif
    
    always_comb
      begin

@@ -92,8 +92,8 @@ typedef struct packed {
    logic [`M_WIDTH-1:0]        pc;
 `ifdef ENABLE_CYCLE_ACCOUNTING
    logic [63:0] 	    fetch_cycle;
-   logic [63:0]		    restart_id;
-`endif   
+`endif
+   logic [3:0] 		    restart_id;   
 } mem_req_t;
 
 typedef struct packed {
