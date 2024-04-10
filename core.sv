@@ -121,7 +121,7 @@ module core(clk,
 	    epc);
    input logic clk;
    input logic reset;
-   output logic [4:0] core_state;
+   output logic [3:0] core_state;
    output logic	restart_complete;
    input logic syscall_emu;
    output logic	took_exc;
@@ -391,21 +391,21 @@ module core(clk,
    logic 		     t_can_retire_rob_head;
    logic 		     t_arch_fault;
    
-   typedef enum logic [4:0] {
-			     FLUSH_FOR_HALT, //0			     
-			     HALT, //1
-			     ACTIVE, //2
-			     DRAIN, //3
-			     RAT, //4
-			     ALLOC_FOR_SERIALIZE, //6
-			     FLUSH_CACHE, //7
-			     HANDLE_MONITOR, //8
-			     ALLOC_FOR_MONITOR, //9
-			     WAIT_FOR_MONITOR, //10
-			     HALT_WAIT_FOR_RESTART, //11
-			     WAIT_FOR_SERIALIZE_AND_RESTART, //12
-			     ARCH_FAULT,
-			     WRITE_CSRS
+   typedef enum logic [3:0] {
+			     FLUSH_FOR_HALT = 'd0,
+			     HALT = 'd1, 
+			     ACTIVE = 'd2,
+			     DRAIN = 'd3, 
+			     RAT = 'd4, 
+			     ALLOC_FOR_SERIALIZE ='d5,
+			     FLUSH_CACHE = 'd6,
+			     HANDLE_MONITOR = 'd7,
+			     ALLOC_FOR_MONITOR = 'd8,			    
+			     WAIT_FOR_MONITOR = 'd9,
+			     HALT_WAIT_FOR_RESTART = 'd10,
+			     WAIT_FOR_SERIALIZE_AND_RESTART = 'd11,
+			     ARCH_FAULT = 'd12,
+			     WRITE_CSRS = 'd13
 			     } state_t;
    
    state_t r_state, n_state;
@@ -968,7 +968,7 @@ module core(clk,
 	       else if(!t_dq_empty)
 		 begin
 		    //$display("t_uop.serializing_op = %b, rob empty %b, monitor %b", 
-		    //t_uop.serializing_op, t_rob_empty,
+		    ///t_uop.serializing_op, t_rob_empty,
 		    //t_uop.op == MONITOR);
 
 		    if(t_uop.serializing_op && t_rob_empty)

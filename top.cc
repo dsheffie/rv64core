@@ -228,7 +228,7 @@ int check_bad_fetch(long long pc, long long rtl_pa, int insn) {
   uint32_t u = *reinterpret_cast<uint32_t*>(s->mem + pa);
   bool match = u == *reinterpret_cast<uint32_t*>(&insn);
 
-  printf("check : pc %llx, pa %lx, rtl pa %lx, match %d, sim %x, rtl %x\n",
+  printf("check : pc %llx, pa %lx, rtl pa %llx, match %d, sim %x, rtl %x\n",
 	 pc,
 	 pa,
 	 rtl_pa,
@@ -1050,7 +1050,8 @@ int main(int argc, char **argv) {
 
     if(tb->mem_req_valid && (mem_reply_cycle == -1)) {
       ++mem_reqs;
-      mem_reply_cycle = cycle + (tb->mem_req_opcode == 4 ? 1 : 2)*mem_lat;
+      int lat = rand() % 1024;
+      mem_reply_cycle = cycle + (tb->mem_req_opcode == 4 ? 1 : 2)*lat;
       
     }
     

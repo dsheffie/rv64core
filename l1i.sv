@@ -360,7 +360,7 @@ endfunction
    localparam PP = (`M_WIDTH-32);
    localparam SEXT = `M_WIDTH-16;
    insn_fetch_t t_insn, t_insn2, t_insn3, t_insn4;
-   logic [3:0] t_pd, r_pd;
+   logic [3:0] t_pd;
 
    
    logic [63:0] 	  r_cycle;
@@ -897,18 +897,18 @@ endfunction
 	       t_cache_idx = r_miss_pc[IDX_STOP-1:IDX_START];
 	       t_cache_tag = r_miss_pc[(`M_WIDTH-1):IDX_STOP];
 	       n_cache_pc = r_miss_pc;
-	       if(!fq_full)
-		 begin
-		    n_req = 1'b1;
-		    n_state = ACTIVE;
-		 end
-	       else if(n_flush_req)
+	       if(n_flush_req)
 		 begin
 		    n_flush_req = 1'b0;
 		    //n_flush_complete = 1'b1;
 		    t_clear_fq = 1'b1;
 		    n_state = FLUSH_CACHE;
 		    t_cache_idx = 0;		    
+		 end	       
+	       else if(!fq_full)
+		 begin
+		    n_req = 1'b1;
+		    n_state = ACTIVE;
 		 end
 	       else if(n_restart_req)
 		 begin
@@ -1096,7 +1096,6 @@ endfunction
 	     r_pht_update <= 1'b0;
 	     r_pht_update_idx <= 'd0;
 	     r_take_br <= 1'b0;
-	     r_pd <= 'd0;
 	  end
 	else
 	  begin
@@ -1106,7 +1105,6 @@ endfunction
 	     r_pht_update <= branch_pc_valid;
 	     r_pht_update_idx <= t_retire_pht_idx;
 	     r_take_br <= took_branch;
-	     r_pd <= t_pd;
 	  end
      end // always_ff@
 

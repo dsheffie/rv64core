@@ -2400,8 +2400,11 @@ module exec(clk,
 	  RDFAULTEDBRANCH_CSR:
 	    t_rd_csr = 'd0;
 	  RDTIME_CSR:
+`ifdef VERILATOR
 	    t_rd_csr = csr_gettime();
-	  
+`else
+	  t_rd_csr = {20'd0, r_cycle[63:20]};
+`endif
 	  default:
 	    begin
 	       if(t_rd_csr_en)

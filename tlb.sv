@@ -44,7 +44,6 @@ module tlb(clk,
    logic [N-1:0]       r_valid, r_dirty, r_readable, r_writable;
    
    logic [LG_N-1:0]    r_cnt;
-   logic [63:0]	       r_va;
    
    logic [27:0]	       r_va_tags[N-1:0];
    logic [51:0]	       r_pa_data[N-1:0];
@@ -70,7 +69,6 @@ module tlb(clk,
 	writable <= r_writable[w_idx[LG_N-1:0]];
 	readable <= r_readable[w_idx[LG_N-1:0]];
 	dirty <= r_dirty[w_idx[LG_N-1:0]];
-	r_va <= reset ? 64'd0 : va;
 	pa <= active ? {r_pa_data[w_idx[LG_N-1:0]], va[11:0]} : va;
      end
 

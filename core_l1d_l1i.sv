@@ -73,7 +73,7 @@ module
    input logic clk;
    input logic reset;
    input logic syscall_emu;
-   output logic [4:0] core_state;
+   output logic [3:0] core_state;
    output logic [3:0] l1i_state;
    output logic [3:0] l1d_state;
    
@@ -413,6 +413,7 @@ module
 	       .page_walk_rsp_valid(w_l1d_rsp_valid),
 	       .page_walk_rsp_pa(w_phys_addr),
 	       .page_walk_rsp_fault(w_page_fault),
+	       .page_walk_rsp_dirty(w_page_dirty),
 	       .page_walk_rsp_readable(w_page_readable),
 	       .page_walk_rsp_writable(w_page_writable),
 	       
@@ -693,7 +694,7 @@ module core_l1d_l1i(clk,
    input logic clk;
    input logic reset;
    input logic syscall_emu;
-   output logic [4:0] core_state;
+   output logic [3:0] core_state;
    output logic [3:0] l1i_state;
    output logic [3:0] l1d_state;
    output logic	took_exc;
