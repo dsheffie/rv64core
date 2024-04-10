@@ -1050,8 +1050,7 @@ int main(int argc, char **argv) {
 
     if(tb->mem_req_valid && (mem_reply_cycle == -1)) {
       ++mem_reqs;
-      int lat = rand() % 1024;
-      mem_reply_cycle = cycle + (tb->mem_req_opcode == 4 ? 1 : 2)*lat;
+      mem_reply_cycle = cycle + (tb->mem_req_opcode == 4 ? 1 : 2)*mem_lat;
       
     }
     

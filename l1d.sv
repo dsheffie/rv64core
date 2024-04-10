@@ -406,11 +406,11 @@ module l1d(clk,
 	  begin
 	     r_n_inflight <= 'd0;
 	  end
-	else if(core_mem_req_valid && t_core_mem_req_ack && !core_mem_rsp_valid)
+	else if(t_got_req2 && !core_mem_rsp_valid)
 	  begin
 	     r_n_inflight <= r_n_inflight + 'd1;
 	  end
-	else if(!(core_mem_req_valid && t_core_mem_req_ack) && core_mem_rsp_valid)
+	else if(!(t_got_req2) && core_mem_rsp_valid)
 	  begin
 	     r_n_inflight <= r_n_inflight - 'd1;
 	  end
@@ -876,7 +876,7 @@ module l1d(clk,
 	r_tlb_state <= reset ? RUN : n_tlb_state;
 	r_tlb_addr <= n_tlb_addr;
 	r_page_walk_req_valid <= reset ? 1'b0 : n_page_walk_req_valid;
-	r_core_mem_va_req_valid <= reset|restart_complete ? 1'b0 :n_core_mem_va_req_valid;
+	r_core_mem_va_req_valid <= reset ? 'd0 : n_core_mem_va_req_valid;
 	r_was_page_fault <= reset ? 1'b0 : n_was_page_fault;
 	r_core_mem_va_req <= n_core_mem_va_req;
      end
@@ -895,7 +895,7 @@ module l1d(clk,
 
 	  end
  `ifdef ENABLE_CYCLE_ACCOUNTING
-	if(core_mem_req_valid && paging_active && t_core_mem_req_ack && !r_was_page_fault && r_restart_counter != core_mem_req.restart_id)
+	if(t_got_req2 && !r_was_page_fault && r_restart_counter != core_mem_req.restart_id)
 	  begin
 	     $display("cycle %d : current restart id is %d but ingesting %d", r_cycle, r_restart_counter, core_mem_req.restart_id);
 	     $stop();
@@ -915,12 +915,13 @@ module l1d(clk,
 	n_tlb_state = r_tlb_state;
 
 	n_tlb_addr = r_tlb_addr;
-	core_mem_req_valid = r_core_mem_va_req_valid & (r_tlb_state == RUN) & (w_tlb_hit | r_was_page_fault);
+	core_mem_req_valid = r_core_mem_va_req_valid & (r_tlb_state == RUN) & (w_tlb_hit | r_was_page_fault) ;
+	
 	core_mem_req = r_core_mem_va_req;
 	core_mem_req.addr = w_tlb_pa;
 	
 	n_core_mem_va_req = r_core_mem_va_req;
-	n_core_mem_va_req_valid = restart_complete ? 1'b0 : r_core_mem_va_req_valid;
+	n_core_mem_va_req_valid = r_core_mem_va_req_valid;
 	
 	n_page_walk_req_valid = 1'b0;
 	core_mem_va_req_ack = 1'b0;
@@ -1605,8 +1606,12 @@ module l1d(clk,
 		    end
 	       end
 
-	       if(core_mem_req_valid &&
-		  !t_got_miss && 
+	       if(core_mem_req_valid & ( r_restart_counter != core_mem_req.restart_id))
+		 begin
+		    t_core_mem_req_ack = 1'b1;
+		 end
+	       else if(core_mem_req_valid &&
+		  !t_got_miss &&
 		  !(mem_q_almost_full||mem_q_full) && 
 		  !t_got_rd_retry &&
 		  !(r_last_wr2 && (r_cache_idx2 == core_mem_req.addr[IDX_STOP-1:IDX_START]) && !core_mem_req.is_store) && 
