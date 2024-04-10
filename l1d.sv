@@ -151,9 +151,7 @@ module l1d(clk,
    localparam N_MQ_ENTRIES = (1<<`LG_MRQ_ENTRIES);
    
    logic 				  r_got_req, r_last_wr, n_last_wr;
-   logic 				  r_last_rd, n_last_rd;
    logic 				  r_got_req2, r_last_wr2, n_last_wr2;
-   logic 				  r_last_rd2, n_last_rd2;
    
    logic 				  rr_got_req, rr_last_wr;
 
@@ -620,9 +618,7 @@ module l1d(clk,
 	     rr_last_wr <= 1'b0;
 	     r_got_non_mem <= 1'b0;
 	     r_last_wr <= 1'b0;
-	     r_last_rd <= 1'b0;
 	     r_last_wr2 <= 1'b0;
-	     r_last_rd2 <= 1'b0;	     
 	     r_state <= INITIALIZE;
 	     r_mem_req_valid <= 1'b0;
 	     r_mem_req_addr <= 'd0;
@@ -664,9 +660,7 @@ module l1d(clk,
 	     rr_last_wr <= r_last_wr;
 	     r_got_non_mem <= t_got_non_mem;
 	     r_last_wr <= n_last_wr;
-	     r_last_rd <= n_last_rd;
 	     r_last_wr2 <= n_last_wr2;
-	     r_last_rd2 <= n_last_rd2;	     
 	     r_state <= n_state;
 	     r_mem_req_valid <= n_mem_req_valid;
 	     r_mem_req_addr <= n_mem_req_addr;
@@ -936,10 +930,6 @@ module l1d(clk,
 	case(r_tlb_state)
 	  RUN:
 	    begin
-	       //if(r_was_page_fault) 
-		 //begin
-		   // $display("r_core_mem_va_req_valid = %b", r_core_mem_va_req_valid);
-		// end
 	       if(r_core_mem_va_req_valid)
 		 begin
 		    if(r_was_page_fault)
@@ -1317,9 +1307,7 @@ module l1d(clk,
 	
 	t_got_non_mem = 1'b0;
 	n_last_wr = 1'b0;
-	n_last_rd = 1'b0;
 	n_last_wr2 = 1'b0;
-	n_last_rd2 = 1'b0;
 	
 	t_got_miss = 1'b0;
 	t_push_miss = 1'b0;
@@ -1606,7 +1594,6 @@ module l1d(clk,
 			    t_addr = t_mem_head.addr;
 			    t_got_req = 1'b1;
 			    n_is_retry = 1'b1;
-			    n_last_rd = 1'b1;
 			    t_got_rd_retry = 1'b1;
 			    
 			    if(t_mem_head.pc == 64'hffffffff80952c9c)
@@ -1648,7 +1635,6 @@ module l1d(clk,
 			     mem_q_empty);
 `endif
 		  n_last_wr2 = core_mem_req.is_store;
-		  n_last_rd2 = !core_mem_req.is_store;
 		  
 		  n_cache_accesses =  r_cache_accesses + 'd1;
 	       end // if (core_mem_req_valid &&...
