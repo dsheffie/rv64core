@@ -1,15 +1,5 @@
 `include "machine.vh"
 
-module ff(q,d,clk);
-   parameter N = 1;
-   input logic [N-1:0] d;
-   input logic 	       clk;
-   output logic [N-1:0] q;
-   always_ff@(posedge clk)
-     begin
-	q <= d;
-     end // always_ff@ (posedge clk)
-endmodule // dff
 
 module mul(clk,
 	   reset,

@@ -53,6 +53,8 @@ module mmu(clk, reset, page_table_root,
    assign page_fault = r_page_fault;
    assign page_dirty = r_page_dirty;
    assign page_executable = r_page_executable;
+
+   assign mem_req_data = 'd0;
    
    typedef enum	logic [3:0] {
 			     IDLE,
@@ -259,7 +261,7 @@ module mmu(clk, reset, page_table_root,
      begin
 	if(reset)
 	  begin
-	     r_state <= 'd0;
+	     r_state <= IDLE;
 	     r_addr <= 'd0;
 	     r_req <= 1'b0;
 	     r_va <= 'd0;

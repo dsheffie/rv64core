@@ -224,7 +224,17 @@ module exec(clk,
    cause_t      t_cause;
    
    logic	t_wr_csr_en, t_rd_csr_en;
+   logic [63:0] t_rd_csr, t_wr_csr;  
    logic	t_wr_priv;
+
+   logic [63:0]	       r_sstatus, r_sie, r_stvec, r_sscratch;
+   logic [63:0]	       r_sepc, r_stval, r_sip;
+   logic [63:0]	       r_satp, r_mstatus, r_mideleg, r_medeleg;
+   logic [63:0]	       r_mcounteren, r_mie, r_mscratch, r_mepc;
+   logic [63:0]	       r_mtvec, r_mtval, r_misa, r_mip,  r_scounteren;
+   logic [3:0] 	       r_mcause, r_scause;
+   logic [63:0]	       r_pmpaddr0, r_pmpaddr1, r_pmpaddr2, r_pmpaddr3, r_pmpcfg0;
+   
    
    logic 	t_signed_shift;
    logic 	t_left_shift;
@@ -1760,7 +1770,7 @@ module exec(clk,
 	t_pc = int_uop.pc;
 	t_result ='d0;
 	t_has_cause = 1'b0;
-	t_cause = 'd0;
+	t_cause = MISALIGNED_FETCH;
 	t_clear_tlb = 1'b0;
 	t_wr_csr_en = 1'b0;
 	t_rd_csr_en = 1'b0;
@@ -2276,16 +2286,6 @@ module exec(clk,
      end // always_comb
 
 
-   logic [63:0]	       t_rd_csr, t_wr_csr;
-   logic [63:0]	       r_sstatus, r_sie, r_stvec, r_sscratch;
-   logic [63:0]	       r_sepc, r_stval, r_sip;
-   logic [63:0]	       r_satp, r_mstatus, r_mideleg, r_medeleg;
-   logic [63:0]	       r_mcounteren, r_mie, r_mscratch, r_mepc;
-   logic [63:0]	       r_mtvec, r_mtval, r_misa, r_mip,  r_scounteren;
-   
-   logic [3:0]	       r_mcause, r_scause;
-	       
-   logic [63:0]	       r_pmpaddr0, r_pmpaddr1, r_pmpaddr2, r_pmpaddr3, r_pmpcfg0;
 
    wire [15:0]	       w_delegate_shift = (r_medeleg[15:0] >> cause);
    logic	       t_delegate;
@@ -2651,7 +2651,7 @@ module exec(clk,
 	t_mem_tail.unaligned = 1'b0;
 	t_mem_tail.pc = mem_uq.pc;
 	t_mem_tail.has_cause = 1'b0;
-	t_mem_tail.cause = 'd0;
+	t_mem_tail.cause = MISALIGNED_FETCH;
 `ifdef ENABLE_CYCLE_ACCOUNTING
 	t_mem_tail.fetch_cycle = mem_uq.fetch_cycle;
 	t_mem_tail.restart_id = r_restart_counter;
@@ -2931,7 +2931,7 @@ module exec(clk,
 	complete_bundle_2.complete <= t_alu_valid2;
 	complete_bundle_2.faulted <= t_mispred_br2;
 	complete_bundle_2.restart_pc <= t_pc_2;
-	complete_bundle_2.cause <= 'd0;
+	complete_bundle_2.cause <= MISALIGNED_FETCH;
 	complete_bundle_2.has_cause <= 1'b0;
 	complete_bundle_2.take_br <= t_take_br2;
 	complete_bundle_2.data <= t_result2;
@@ -2949,7 +2949,7 @@ module exec(clk,
 	     complete_bundle_1.complete <= 1'b1;
 	     complete_bundle_1.faulted <= 1'b0;
 	     complete_bundle_1.restart_pc <= 'd0;
-	     complete_bundle_1.cause <= 'd0;
+	     complete_bundle_1.cause <= MISALIGNED_FETCH;
 	     complete_bundle_1.has_cause <= 1'b0;	     
 	     complete_bundle_1.take_br <= 1'b0;
 	     complete_bundle_1.data <= t_mul_complete ? t_mul_result : t_div_result;

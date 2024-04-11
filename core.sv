@@ -578,7 +578,7 @@ module core(clk,
 	     r_restart_cycles <= 'd0;
 	     r_machine_clr <= 1'b0;
 	     r_got_restart_ack <= 1'b0;
-	     r_cause <= 'd0;
+	     r_cause <= MISALIGNED_FETCH;
 	     r_tval <= 'd0;
 	     r_pending_fault <= 1'b0;
 	  end
@@ -1384,7 +1384,7 @@ module core(clk,
 	t_rob_tail.is_indirect = t_alloc_uop.op == JALR || t_alloc_uop.op == JR;
 
 	t_rob_tail.has_cause = 1'b0;
-	t_rob_tail.cause = 4'd0;
+	t_rob_tail.cause = MISALIGNED_FETCH;
 	t_rob_tail.take_br = 1'b0;
 	t_rob_tail.is_br = t_alloc_uop.is_br;	
 	t_rob_tail.data= 'd0;
@@ -1402,7 +1402,7 @@ module core(clk,
 	t_rob_next_tail.is_ret = (t_alloc_uop2.op == RET);
 	t_rob_next_tail.is_indirect = t_alloc_uop2.op == JALR || t_alloc_uop2.op == JR;
 	
-	t_rob_next_tail.cause = 4'd0;
+	t_rob_next_tail.cause = MISALIGNED_FETCH;
 	t_rob_next_tail.has_cause = 1'b0;
 	t_rob_next_tail.take_br = 1'b0;
 	t_rob_next_tail.is_br = t_alloc_uop2.is_br;

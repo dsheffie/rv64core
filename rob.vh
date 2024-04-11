@@ -57,7 +57,7 @@ typedef struct packed {
    logic 		       faulted;
    logic [`M_WIDTH-1:0]        restart_pc;
    logic 		       take_br;
-   logic [3:0]		       cause;
+   cause_t		       cause;
    logic		       has_cause;
    logic [`M_WIDTH-1:0]        data;
 } complete_t;
@@ -84,7 +84,7 @@ typedef struct packed {
    logic 	spans_cacheline;
    logic 	unaligned;
    logic	has_cause;
-   logic [3:0]	cause;
+   cause_t 	cause;
    logic [`LG_ROB_ENTRIES-1:0] rob_ptr;
    logic [`LG_PRF_ENTRIES-1:0] dst_ptr;
    logic 		       dst_valid;
@@ -118,7 +118,7 @@ typedef struct packed {
    logic [`LG_ROB_ENTRIES-1:0] rob_ptr;
    logic [`LG_PRF_ENTRIES-1:0] dst_ptr;
    logic 		       dst_valid;
-   logic [3:0]		       cause;
+   cause_t		       cause;
    logic		       has_cause;   
 } mem_rsp_t;
 

@@ -25,6 +25,7 @@ import "DPI-C" function void record_miss(input int pc,
 module l1d(clk, 
 	   reset,
 	   l1d_state,
+	   n_inflight,
 	   restart_complete,
 	   paging_active,
 	   clear_tlb,
@@ -80,6 +81,7 @@ module l1d(clk,
    input logic clk;
    input logic reset;
    output logic [3:0] l1d_state;
+   output logic [3:0] n_inflight;
    input logic 	      restart_complete;
    input logic paging_active;
    input logic clear_tlb;
@@ -225,7 +227,6 @@ module l1d(clk,
    logic 				  r_must_forward, r_must_forward2;
       
    logic 				  n_inhibit_write, r_inhibit_write;
-   logic 				  t_got_non_mem, r_got_non_mem;
 
    logic                                  t_incr_busy,t_force_clear_busy;
    logic 				  n_stall_store, r_stall_store;
@@ -275,6 +276,8 @@ module l1d(clk,
    
    state_t r_state, n_state;
    assign l1d_state = r_state;
+   assign n_inflight = r_n_inflight;
+   
    logic 	t_pop_mq;
    logic 	n_did_reload, r_did_reload;
    
@@ -288,6 +291,12 @@ module l1d(clk,
    logic [63:0] 	       n_cache_accesses, r_cache_accesses;
    logic [63:0] 	       n_cache_hits, r_cache_hits;
    
+   wire w_tlb_hit;
+   wire [63:0] w_tlb_pa;
+
+   logic       core_mem_req_valid, r_core_mem_va_req_valid, n_core_mem_va_req_valid;
+   mem_req_t core_mem_req, r_core_mem_va_req,  n_core_mem_va_req;
+   logic       t_core_mem_req_ack;
    
    logic [31:0] 			 r_cycle;
   
@@ -616,7 +625,6 @@ module l1d(clk,
 	     r_lock_cache <= 1'b0;
 	     
 	     rr_last_wr <= 1'b0;
-	     r_got_non_mem <= 1'b0;
 	     r_last_wr <= 1'b0;
 	     r_last_wr2 <= 1'b0;
 	     r_state <= INITIALIZE;
@@ -658,7 +666,6 @@ module l1d(clk,
 	     r_lock_cache <= n_lock_cache;
 	     
 	     rr_last_wr <= r_last_wr;
-	     r_got_non_mem <= t_got_non_mem;
 	     r_last_wr <= n_last_wr;
 	     r_last_wr2 <= n_last_wr2;
 	     r_state <= n_state;
@@ -833,15 +840,6 @@ module l1d(clk,
    endgenerate
 
    
-   wire w_tlb_hit;
-   wire [63:0] w_tlb_pa;
-
-   logic       core_mem_req_valid, r_core_mem_va_req_valid, n_core_mem_va_req_valid;
-   mem_req_t core_mem_req, r_core_mem_va_req,  n_core_mem_va_req;
-
-   
-   
-   logic       t_core_mem_req_ack;
    
    
    typedef enum	logic [1:0] {
@@ -1306,7 +1304,6 @@ module l1d(clk,
 	t_got_req = 1'b0;
 	t_got_req2 = 1'b0;
 	
-	t_got_non_mem = 1'b0;
 	n_last_wr = 1'b0;
 	n_last_wr2 = 1'b0;
 	
@@ -1778,78 +1775,6 @@ module l1d(clk,
 	endcase // case r_state
      end // always_comb
 
-   always_ff@(negedge clk)
-     begin
-	if(t_push_miss && mem_q_full)
-	begin
-	   $display("attempting to push to a full memory queue");
-	   $stop();
-	end
-	if(t_pop_mq && mem_q_empty)
-	  begin
-	   $display("attempting to pop an empty memory queue");
-	   $stop();
-	  end
-     end
-
-`ifdef VERILATOR
-   logic [31:0] t_stall_reason;
-   always_comb
-     begin
-	t_stall_reason = 'd0;
-	if(core_mem_req_valid && !t_core_mem_req_ack)
-	  begin
-	     if(t_got_miss) 
-	       begin
-		  //$display("miss prevents ack at cycle %d", r_cycle);
-		  t_stall_reason = 'd1;
-	       end
-	     else if(mem_q_almost_full||mem_q_full) 
-	       begin
-		  //$display("full prevents ack at cycle %d", r_cycle);
-		  t_stall_reason = 'd2;
-	       end
-	     else if(t_got_rd_retry)
-	       begin
-		  //$display("retried load prevents ack at cycle %d", r_cycle);
-		  t_stall_reason = 'd4;
-	       end
-	     else if(r_last_wr2 && (r_cache_idx2 == core_mem_req.addr[IDX_STOP-1:IDX_START]) && !core_mem_req.is_store) 
-	       begin
-		  //$display("previous write to the same set prevents ack at cycle %d", r_cycle);
-		  t_stall_reason = 'd5;
-	       end
-	     else if(t_cm_block_stall) 
-	       begin
-		  //$display("retried store prevents ack at cycle %d", r_cycle);
-		  t_stall_reason = 'd6;
-	       end
-	     else if(r_graduated[core_mem_req.rob_ptr] != 2'b00) 
-	       begin
-		  //$display("rob pointer in flight prevents ack at cycle %d", r_cycle);
-		  t_stall_reason = 'd7;		  
-	       end
-	  end // if (core_mem_req_valid && !t_core_mem_req_ack)
-     end // always_comb
-   
-    //always_ff@(negedge clk)
-   //begin
-   //$display("r_cycle %d, r_state = %d", r_cycle, r_state);
-   // end
-   // 	record_l1d(core_mem_req_valid ? 32'd1 : 32'd0,
-   // 		   t_core_mem_req_ack & core_mem_req_valid ? 32'd1 : 32'd0,
-   // 		   t_core_mem_req_ack & core_mem_req_valid & core_mem_req.is_store ? 32'd1 : 32'd0,		   
-   // 		   {{32-N_MQ_ENTRIES{1'b0}},r_hit_busy_addrs},
-   // 		   t_stall_reason);
-
-   // 	if(t_push_miss && (r_req2.is_store == 1'b0))
-   // 	  begin
-   // 	     record_miss(r_req2.pc, 
-   // 			 t_port2_hit_cache ? 32'd1 : 32'd0,
-   // 			 r_hit_busy_addr2 ? 32'd1 : 32'd0);
-   // 	  end // if (t_push_miss && (r_req2.is_store == 1'b0))
-   //   end
-`endif
 
 
 endmodule // l1d

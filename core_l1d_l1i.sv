@@ -18,6 +18,8 @@ module
 		   core_state,
 		   l1i_state,
 		   l1d_state,
+		   n_inflight,
+		   memq_empty,
 		   took_exc,
 		   paging_active,
 		   page_table_root,
@@ -76,6 +78,8 @@ module
    output logic [3:0] core_state;
    output logic [3:0] l1i_state;
    output logic [3:0] l1d_state;
+   output logic       memq_empty;
+   output logic [3:0] n_inflight;
    
    output logic	took_exc;
    output logic	paging_active;
@@ -192,7 +196,6 @@ module
    logic 	r_flush, n_flush;
    logic 	r_flush_l2, n_flush_l2;
    wire 	w_l2_flush_complete;
-   logic 	memq_empty;   
    assign in_flush_mode = r_flush;
 
 
@@ -319,6 +322,29 @@ module
    wire		w_mode64, w_paging_active;
    wire [1:0]	w_priv;
    wire [63:0]	w_page_table_root;
+
+   wire				    w_mmu_req_valid;
+   wire				    w_mmu_req_store;
+   wire [63:0]			    w_mmu_req_addr;
+   wire [63:0]			    w_mmu_req_data;
+   wire [63:0]			    w_mmu_rsp_data;
+   wire				    w_mmu_rsp_valid;
+
+   wire [63:0]			    w_l1d_page_walk_req_va;
+   wire				    w_l1d_page_walk_req_valid;
+
+   wire				    w_page_fault;
+   wire	w_page_executable;
+   wire	w_page_readable;
+   wire	w_page_writable;
+   wire	w_page_dirty;
+   wire	w_l1d_rsp_valid;
+   wire	w_l1i_rsp_valid;
+   wire [63:0] w_phys_addr;
+   wire	       w_restart_complete;
+   
+   logic	drain_ds_complete;
+   logic [(1<<`LG_ROB_ENTRIES)-1:0] dead_rob_mask;
    
    assign page_table_root = w_page_table_root;
    assign paging_active = w_paging_active;
@@ -372,28 +398,7 @@ module
 	       );
    
    
-   wire				    w_mmu_req_valid;
-   wire				    w_mmu_req_store;
-   wire [63:0]			    w_mmu_req_addr;
-   wire [63:0]			    w_mmu_req_data;
-   wire [63:0]			    w_mmu_rsp_data;
-   wire				    w_mmu_rsp_valid;
 
-   wire [63:0]			    w_l1d_page_walk_req_va;
-   wire				    w_l1d_page_walk_req_valid;
-
-   wire				    w_page_fault;
-   wire	w_page_executable;
-   wire	w_page_readable;
-   wire	w_page_writable;
-   wire	w_page_dirty;
-   wire	w_l1d_rsp_valid;
-   wire	w_l1i_rsp_valid;
-   wire [63:0] w_phys_addr;
-   wire	       w_restart_complete;
-   
-   logic	drain_ds_complete;
-   logic [(1<<`LG_ROB_ENTRIES)-1:0] dead_rob_mask;
 //`define PERFECT_L1D
 `ifdef PERFECT_L1D
    perfect_l1d 
@@ -404,6 +409,7 @@ module
 	       .clk(clk),
 	       .reset(reset),
 	       .l1d_state(l1d_state),
+	       .n_inflight(n_inflight),
 	       .restart_complete(w_restart_complete),
 	       .paging_active(w_paging_active),
 	       .clear_tlb(w_clear_tlb),
@@ -636,9 +642,11 @@ endmodule // core_l1d_l1i
 module core_l1d_l1i(clk, 
 		    reset,
 		    syscall_emu,
+		    n_inflight,
 		    core_state,
 		    l1i_state,
 		    l1d_state,
+		    memq_empty,
 		    took_exc,
 		    paging_active,
 		    page_table_root,
@@ -694,9 +702,11 @@ module core_l1d_l1i(clk,
    input logic clk;
    input logic reset;
    input logic syscall_emu;
+   output logic [3:0] n_inflight;
    output logic [3:0] core_state;
    output logic [3:0] l1i_state;
    output logic [3:0] l1d_state;
+   output logic       memq_empty;
    output logic	took_exc;
    output logic	paging_active;
    output logic	[63:0] page_table_root;
@@ -778,6 +788,7 @@ module core_l1d_l1i(clk,
 		     .clk(clk),
                      .reset(reset),
 		     .syscall_emu(syscall_emu),
+		     .n_inflight(n_inflight),
 		     .core_state(core_state),
 		     .l1i_state(l1i_state),
 		     .l1d_state(l1d_state),
