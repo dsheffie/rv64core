@@ -1113,10 +1113,7 @@ module exec(clk,
 
    wire [63:0] w_fe_indirect_target2 = {int_uop2.jmp_imm,int_uop2.imm};
    
-   wire	       w_mispredicted_indirect2_lo = w_indirect_target2[31:0] != w_fe_indirect_target2[31:0];
-   wire	       w_mispredicted_indirect2_hi = w_indirect_target2[63:32] != w_fe_indirect_target2[63:32];
-   
-   wire	       w_mispredicted_indirect2 = w_mispredicted_indirect2_lo | (mode64 &w_mispredicted_indirect2_hi);
+   wire	       w_mispredicted_indirect2 = w_indirect_target2 != w_fe_indirect_target2;
    
    
    always_comb
@@ -1757,9 +1754,7 @@ module exec(clk,
    mwidth_add add2 (.A(t_srcA), .B(int_uop.rvimm), .Y(w_indirect_target));
 
    wire [63:0]	       w_fe_indirect_target = {int_uop.jmp_imm,int_uop.imm};
-   wire		       w_mispredicted_indirect_lo = w_indirect_target[31:0] != w_fe_indirect_target[31:0];
-   wire		       w_mispredicted_indirect_hi = w_indirect_target[63:32] != w_fe_indirect_target[63:32];
-   wire		       w_mispredicted_indirect = (mode64 & w_mispredicted_indirect_hi) | w_mispredicted_indirect_lo;
+   wire		       w_mispredicted_indirect = w_indirect_target != w_fe_indirect_target;
       
    mwidth_add add3 (.A(int_uop.pc), .B('d4), .Y(w_pc4));
 
