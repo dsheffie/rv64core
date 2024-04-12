@@ -399,13 +399,7 @@ module
    
    
 
-//`define PERFECT_L1D
-`ifdef PERFECT_L1D
-   perfect_l1d 
-`else
-     l1d
-`endif
-       dcache (
+     novm_l1d dcache (
 	       .clk(clk),
 	       .reset(reset),
 	       .l1d_state(l1d_state),

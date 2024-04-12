@@ -82,7 +82,7 @@ static const char* l1d_stall_str[8] =
    "inflight rob ptr", //7
 };
 static uint64_t l1d_stall_reasons[8] = {0};
-
+static bool enable_checker = true, use_checkpoint = false;
 static bool pending_fault = false;
 static uint64_t fault_start_cycle = 0;
 
@@ -199,6 +199,8 @@ std::list<store_rec> store_queue;
 std::list<store_rec> atomic_queue;
 
 void wr_log(long long pc, long long addr, long long data, int is_atomic) {
+  if(not(enable_checker))
+    return;
   //  if(is_atomic) {
   //printf("pc %llx, addr %llx, data %llx, atomic %d\n",
   //	   pc, addr, data, is_atomic);
@@ -543,7 +545,6 @@ int main(int argc, char **argv) {
   //std::fesetround(FE_TOWARDZERO);
   namespace po = boost::program_options; 
   // Initialize Verilators variables
-  bool enable_checker = true, use_checkpoint = false;
   std::string sysArgs, pipelog;
   std::string rv32_binary = "dhrystone3";
   std::string log_name = "log.txt";

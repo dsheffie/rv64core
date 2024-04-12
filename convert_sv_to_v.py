@@ -13,7 +13,7 @@ def main():
     for sv in svs:
         r = sv.split('.sv')[0]
         v = r+'.v'
-        cmd = ['sv2v', sv, '--write=verilog/'+v]
+        cmd = ['sv2v', sv, '--write=verilog/'+v, '-D=FPGA64_32']
         outputs.append('verilog/' + v)
         subprocess.run(cmd)
 

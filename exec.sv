@@ -601,11 +601,17 @@ module exec(clk,
      begin
 	if(t_push_two_int)
 	  begin
+	     //if(uq_uop.op == RET) $display("pushing RET with srcA = %x", uq_uop.srcA);
+	     //if(uq_uop_two.op == RET) $display("pushing RET with srcA = %x", uq_uop_two.srcA);
 	     r_uq[r_uq_tail_ptr[`LG_UQ_ENTRIES-1:0]] <= uq_uop;
 	     r_uq[r_uq_next_tail_ptr[`LG_UQ_ENTRIES-1:0]] <= uq_uop_two;	     
 	  end
 	else if(t_push_one_int)
 	  begin
+	     //if(uq_uop.op == RET) $display("pushing RET with srcA = %x, pc %x", 
+	     //uq_uop.is_int ? uq_uop.srcA : uq_uop_two.srcA,
+	     //uq_uop.is_int ? uq_uop.pc : uq_uop_two.pc,
+	     //);
 	     r_uq[r_uq_tail_ptr[`LG_UQ_ENTRIES-1:0]] <= uq_uop.is_int ? uq_uop : uq_uop_two;
 	  end
 	
@@ -1684,6 +1690,7 @@ module exec(clk,
 	r_mdq_next_tail_ptr <= (reset || mem_dq_clr) ? 'd1 : n_mdq_next_tail_ptr;	
      end
 
+   
    always_ff@(posedge clk)
      begin
 	if(reset || ds_done)

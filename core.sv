@@ -745,7 +745,7 @@ module core(clk,
 	else
 	  r_last_cycle <= r_last_cycle + 'd1;
 	
-	if(r_last_cycle >= 'd8192)
+	if(r_last_cycle >= 'd8192 )
 	  begin 
 	     $display("cycle %d : state = %d, alu complete %b, mem complete %b,head_ptr %d, complete %b,  can_retire_rob_head %b, head pc %x, empty %b, full %b, bob full %b", 
 		      r_cycle,
@@ -1265,10 +1265,12 @@ module core(clk,
 	     if(t_alloc && t_uop.dst_valid)
 	       begin
 		  r_alloc_rat[t_uop.dst[4:0]] <= n_prf_entry;
+		  //$display("dest reg %x for pc %x", t_uop.pc, n_prf_entry);
 	       end
 	     if(t_alloc_two &&t_uop2.dst_valid)
 	       begin
 		  r_alloc_rat[t_uop2.dst[4:0]] <= n_prf_entry2;
+		  //$display("dest reg %x for pc %x", t_uop2.pc, n_prf_entry2);
 	       end	     
 	  end
      end // always_ff@ (posedge clk)
@@ -1556,11 +1558,9 @@ module core(clk,
 	       end
 	     if(core_mem_rsp_valid)
 	       begin
-		  //if(core_mem_rsp.rob_ptr == 'd5)
-		   //begin
-		  //$display("rob entry %d, dst ptr %d marked complete by mem port at cycle %d, fetch_cycle %d",
-		  //core_mem_rsp.rob_ptr, core_mem_rsp.dst_ptr, r_cycle, r_rob[core_mem_rsp.rob_ptr].fetch_cycle);
-		  //end
+		  //$display("rob entry %d, dst ptr %x marked complete by mem port at cycle %d, fetch_cycle %d, dst valid %b",
+		  //core_mem_rsp.rob_ptr, core_mem_rsp.dst_ptr, r_cycle, r_rob[core_mem_rsp.rob_ptr].fetch_cycle,
+		  //core_mem_rsp.dst_valid);
 		  r_rob_complete[core_mem_rsp.rob_ptr] <= 1'b1;
 	       end
 
