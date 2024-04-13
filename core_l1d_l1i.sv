@@ -399,7 +399,7 @@ module
    
    
 
-     novm_l1d dcache (
+     l1d dcache (
 	       .clk(clk),
 	       .reset(reset),
 	       .l1d_state(l1d_state),
