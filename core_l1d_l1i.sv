@@ -468,6 +468,7 @@ module
    mmu mmu0(
 	    .clk(clk),
 	    .reset(reset),
+	    .clear_tlb(w_clear_tlb),
 	    .page_table_root(w_page_table_root), 
 	    .l1i_req(w_l1i_page_walk_req_valid), 
 	    .l1i_va(w_l1i_page_walk_req_va), 

@@ -1,4 +1,4 @@
-module mmu(clk, reset, page_table_root, 
+module mmu(clk, reset, clear_tlb, page_table_root, 
 	   l1i_req, l1i_va, l1d_req, l1d_st, l1d_va,
 	   mem_req_valid, mem_req_addr, mem_req_data,  mem_req_store,
 	   mem_rsp_valid, mem_rsp_data,
@@ -6,6 +6,7 @@ module mmu(clk, reset, page_table_root,
 	   phys_addr, l1d_rsp_valid, l1i_rsp_valid);
    input logic clk;
    input logic reset;
+   input logic clear_tlb;
    input logic [63:0] page_table_root;
    input logic l1i_req;
    input logic [63:0] l1i_va;
