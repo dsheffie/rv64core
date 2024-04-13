@@ -2,6 +2,10 @@
 `include "rob.vh"
 `include "uop.vh"
 
+`ifdef VERILATOR
+import "DPI-C" function void wr_log(input longint pc, input longint addr, input longint data, int is_atomic);
+`endif
+
 //`define VERBOSE_L1D 1
 
 module novm_l1d(clk, 
@@ -259,8 +263,8 @@ module novm_l1d(clk,
                              FLUSH_CL, //8
                              FLUSH_CL_WAIT, //9
                              HANDLE_RELOAD, //10
-			     TLB_RELOAD,
-			     TLB_TURNAROUND
+			     TLB_RELOAD, //11
+			     TLB_TURNAROUND 
                              } state_t;
 
    
@@ -894,14 +898,32 @@ module novm_l1d(clk,
 	endcase
      end
 
+   wire        w_store32 = (r_req.op == MEM_SW || r_req.op == MEM_AMOW || r_req.op == MEM_SCW);
+   wire        w_store64 = (r_req.op == MEM_SD || r_req.op == MEM_AMOD || r_req.op == MEM_SCD);
+   
    wire [63:0] w_store_mask = 
 	       r_req.op == MEM_SB ? 64'hff :
 	       r_req.op == MEM_SH ? 64'hffff :
-	       r_req.op == MEM_SW ? 64'hffffffff :
-	       r_req.op == MEM_SD ? 64'hffffffffffffffff :
-	       'd0;
+	       w_store32 ? 64'hffffffff :
+	       w_store64 ? 64'hffffffffffffffff :
+	       'd0;   
+
+   logic [31:0] t_amo32_data;
+   logic [63:0]	t_amo64_data;
 
 
+`ifdef VERILATOR
+   always_ff@(negedge clk)
+     begin
+	if(t_wr_store)
+	  begin
+	     wr_log(r_req.pc,
+		    r_req.addr, 
+		    r_req.op == MEM_AMOD ? t_amo64_data : (r_req.op == MEM_AMOW ? {{32{t_amo32_data[31]}},t_amo32_data} : r_req.data), 
+		    r_req.is_atomic ? 32'd1 : 32'd0);
+	  end
+     end // always_ff@ (negedge clk)
+`endif
    
    always_comb
      begin
@@ -922,6 +944,35 @@ module novm_l1d(clk,
 	t_store_shift = {64'd0, r_req.data} << {r_req.addr[`LG_L1D_CL_LEN-1:0], 3'd0};
 	t_store_mask = {64'd0, w_store_mask} << {r_req.addr[`LG_L1D_CL_LEN-1:0], 3'd0};
 
+	t_amo32_data = 32'hdeadbeef;
+	t_amo64_data = 64'hd0debabefacebeef;
+
+	case(r_req.amo_op)
+	  5'd0: /* amoadd */
+	    begin
+	       t_amo32_data = t_shift[31:0] + r_req.data[31:0];
+	       t_amo64_data = t_shift[63:0] + r_req.data[63:0];
+	       //$display("amo add data %x", r_req.data);
+	    end
+	  5'd1: /* amoswap */
+	    begin
+	       t_amo32_data = r_req.data[31:0];
+	       t_amo64_data = r_req.data[63:0];
+	    end
+	  5'd8: /* amoor */
+	    begin
+	       t_amo32_data = t_shift[31:0] | r_req.data[31:0];
+	       t_amo64_data = t_shift[63:0] | r_req.data[63:0];
+	    end
+	  5'd12:
+	    begin
+	       t_amo32_data = t_shift[31:0] & r_req.data[31:0];
+	       t_amo64_data = t_shift[63:0] & r_req.data[63:0];
+	    end
+	  default:
+	    begin
+	    end
+	endcase // case (r_req.amo_op)
 	
 	case(r_req.op)
 	  MEM_LB:
@@ -979,7 +1030,39 @@ module novm_l1d(clk,
 	    begin
 	       t_array_data = (t_store_shift & t_store_mask) | ((~t_store_mask) & t_data);
 	       t_wr_store = t_hit_cache && (r_is_retry || r_did_reload);
-	    end	  
+	    end
+	  MEM_SCD:
+	    begin
+	       t_rsp_data = 64'd0;
+	       t_array_data = (t_store_shift & t_store_mask) | ((~t_store_mask) & t_data);
+	       t_wr_store = t_hit_cache && (r_is_retry || r_did_reload) & (!r_req.has_cause);
+	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
+	    end
+	  MEM_SCW:
+	    begin
+	       t_rsp_data = 64'd0;
+	       t_array_data = (t_store_shift & t_store_mask) | ((~t_store_mask) & t_data);
+	       t_wr_store = t_hit_cache && (r_is_retry || r_did_reload) & (!r_req.has_cause);
+	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
+	    end
+	  MEM_AMOW:
+	    begin
+	       //return old data
+	       t_rsp_data = {{32{t_shift[31]}}, t_shift[31:0]};
+	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
+	       t_store_shift = {96'd0, t_amo32_data} << {r_req.addr[`LG_L1D_CL_LEN-1:0], 3'd0};	       
+	       t_array_data = (t_store_shift & t_store_mask) | ((~t_store_mask) & t_data);
+	       t_wr_store = t_hit_cache && (r_is_retry || r_did_reload) & (!r_req.has_cause);
+	    end // case: MEM_AMOW
+	  MEM_AMOD:
+	    begin
+	       t_rsp_data = t_shift[63:0];
+	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
+	       t_store_shift = {64'd0, t_amo64_data} << {r_req.addr[`LG_L1D_CL_LEN-1:0], 3'd0};
+	       t_array_data = (t_store_shift & t_store_mask) | ((~t_store_mask) & t_data);
+	       t_wr_store = t_hit_cache && (r_is_retry || r_did_reload) & (!r_req.has_cause);
+	    end
+	  
 	  default:
 	    begin
 	    end
@@ -1011,11 +1094,23 @@ module novm_l1d(clk,
 	     $display("cycle %d : current restart id is %d but ingesting %d", r_cycle, r_restart_counter, core_mem_req.restart_id);
 	     $stop();
 	  end
-	///if(restart_complete)
-	//$display("restart complete at cycle %d", r_cycle);
+	
+	//if((t_got_req2==1'b0) & core_mem_va_req_valid)
+	//begin
+	//$display("can't ingest new op at cycle %d, inflight %d, tlb miss %b", 
+	//r_cycle,
+	//r_rob_inflight[core_mem_va_req.rob_ptr], 
+	//n_pending_tlb_miss);
+	//end
+
      end
-`endif
- 
+`endif //  `ifdef VERILATOR
+
+
+
+   wire w_st_amo_grad = t_mem_head.is_store ? 
+			r_graduated[t_mem_head.rob_ptr] == 2'b10 : 1'b1;	       
+   
    always_comb
      begin
 	t_reload_tlb = 1'b0;
@@ -1101,8 +1196,8 @@ module novm_l1d(clk,
 		     (r_cache_idx == t_mem_head.addr[IDX_STOP-1:IDX_START] );
 	
 	t_cm_block = r_got_req && r_last_wr && 
-		     (r_cache_idx == core_mem_va_req.addr[IDX_STOP-1:IDX_START]) &&
-		     (r_cache_tag == core_mem_va_req.addr[`M_WIDTH-1:IDX_STOP]);
+		     (r_cache_idx == core_mem_va_req.addr[IDX_STOP-1:IDX_START])
+	  /*&& (r_cache_tag == core_mem_va_req.addr[`M_WIDTH-1:IDX_STOP])*/;
 
 
 	t_cm_block_stall = t_cm_block && !(r_did_reload||r_is_retry);//1'b0;
@@ -1139,8 +1234,8 @@ module novm_l1d(clk,
 
 		    if(r_pending_tlb_miss)
 		      begin
-			 $display("replay address %x, mapped to %x, hit %b, rob id %d",
-				  r_tlb_addr, w_tlb_pa, t_port2_hit_cache, r_req2.rob_ptr);			 
+			 //$display("pc %x, replay address %x, mapped to %x, hit %b, rob id %d  cycle %d, cache hit %b",
+			//	  r_req2.pc, r_tlb_addr, w_tlb_pa, t_port2_hit_cache, r_req2.rob_ptr, r_cycle, t_port2_hit_cache );			 
 			 n_pending_tlb_miss = 1'b0;
 		      end
 		    
@@ -1157,9 +1252,13 @@ module novm_l1d(clk,
 		      end
 		    else if(!w_tlb_hit)
 		      begin
-			 $display("missed address %x", r_tlb_addr);
+			 //$display("missed address %x", r_tlb_addr);
 			 n_pending_tlb_miss = 1'b1;
 			 if(r_pending_tlb_miss) $stop();
+		      end
+		    else if(r_req2.is_atomic)
+		      begin
+			 t_push_miss = 1'b1;
 		      end
 		    else if(r_req2.is_store)
 		      begin
@@ -1175,7 +1274,7 @@ module novm_l1d(clk,
 			 n_core_mem_rsp_valid = 1'b1;
 			 n_core_mem_rsp.has_cause = r_req2.spans_cacheline;
 		      end // if (r_req2.is_store)
-		    else if(t_port2_hit_cache && (!r_hit_busy_addr2) )
+		    else if(t_port2_hit_cache && (!r_hit_busy_addr2) & (!r_pending_tlb_miss) )
 		      begin
 `ifdef VERBOSE_L1D
 			 $display("cycle %d port2 hit for pc %x addr %x, data %x, rob %d dst %x dst valid %b", r_cycle, 
@@ -1200,6 +1299,11 @@ module novm_l1d(clk,
 
 	       if(r_got_req)
 		 begin
+`ifdef VERBOSE_L1D
+		       $display("req 1 : cycle %d, rob ptr %d, r_is_retry %b, addr %x, is store %b, r_cache_idx = %d, r_cache_tag = %d, valid %b",
+				r_cycle, r_req.rob_ptr, r_is_retry, r_req.addr, r_req.is_store, r_cache_idx, r_cache_tag, r_valid_out);
+
+`endif
 		    if(r_valid_out && (r_tag_out == r_cache_tag))
 		      begin /* valid cacheline - hit in cache */
 			 if(r_req.is_store)
@@ -1271,16 +1375,16 @@ module novm_l1d(clk,
 			    
 			    if((rr_cache_idx == r_cache_idx) && rr_last_wr)
 			      begin
-				 n_mem_req_addr = {r_tag_out,r_cache_idx,{`LG_L1D_CL_LEN{1'b0}}};
-			    n_lock_cache = 1'b1;
-			    n_mem_req_opcode = MEM_SW;
-			    n_state = WAIT_INJECT_RELOAD;
-			    n_mem_req_valid = 1'b0;
+				 n_mem_req_addr = {r_tag_out,r_cache_idx,4'd0};
+				 n_lock_cache = 1'b1;
+				 n_mem_req_opcode = MEM_SW;
+				 n_state = WAIT_INJECT_RELOAD;
+				 n_mem_req_valid = 1'b0;
 			      end                                                             
 			    else
 			      begin
 				 n_lock_cache = 1'b0;
-				 n_mem_req_addr = {r_req.addr[`M_WIDTH-1:`LG_L1D_CL_LEN], {`LG_L1D_CL_LEN{1'b0}}};
+				 n_mem_req_addr = {r_req.addr[`M_WIDTH-1:`LG_L1D_CL_LEN], 4'd0};
 				 n_mem_req_opcode = MEM_LW;				 
 				 n_state = INJECT_RELOAD;
 				 n_mem_req_valid = 1'b1;
@@ -1298,8 +1402,9 @@ module novm_l1d(clk,
 		    n_page_walk_req_valid = 1'b1;
 		 end
 
+
 	       
-	     if(!mem_q_empty && !t_got_miss && !r_lock_cache)
+	     if(!mem_q_empty && !t_got_miss && !r_lock_cache && !n_pending_tlb_miss)
 	       begin
 		  // $display("t_mem_head.rob_ptr = %d, grad %b, dq ptr %d valid %b, data %x, addr %x, pc %x", 
 		  // 	   t_mem_head.rob_ptr, 
@@ -1313,10 +1418,10 @@ module novm_l1d(clk,
 	  
 		  if(!t_mh_block)
 		    begin
-		       if(t_mem_head.is_store)
+		       if(t_mem_head.is_store || t_mem_head.is_atomic)
 			 begin
 			    
-			    if(r_graduated[t_mem_head.rob_ptr] == 2'b10 && (core_store_data_valid ? (t_mem_head.rob_ptr == core_store_data.rob_ptr) : 1'b0) )
+			    if(w_st_amo_grad && (core_store_data_valid ? (t_mem_head.rob_ptr == core_store_data.rob_ptr) : 1'b0) )
 			      begin
 `ifdef VERBOSE_L1D
 				 $display("firing store for %x with data %x at cycle %d for rob ptr %d", 
@@ -1355,8 +1460,8 @@ module novm_l1d(clk,
 			    n_last_rd = 1'b1;
 			    t_got_rd_retry = 1'b1;
 `ifdef VERBOSE_L1D			    
-			    $display("firing load for %x at cycle %d for rob ptr %d, state = %d", 
-				     t_mem_head.addr, r_cycle, t_mem_head.rob_ptr, r_state);
+			    $display("firing load for %x at cycle %d for rob ptr %d, state = %d, n_state = %d", 
+				     t_mem_head.addr, r_cycle, t_mem_head.rob_ptr, r_state, n_state);
 `endif
 			 end
 		    end
@@ -1368,7 +1473,7 @@ module novm_l1d(clk,
 		  !(mem_q_almost_full||mem_q_full) && 
 		  !t_got_rd_retry &&
 		  !(r_last_wr2 && (r_cache_idx2 == core_mem_va_req.addr[IDX_STOP-1:IDX_START]) && !core_mem_va_req.is_store) &&
-		  !n_pending_tlb_miss &&
+		  !(n_pending_tlb_miss | r_pending_tlb_miss) &&
 		  !t_cm_block_stall &&
 		  (!r_rob_inflight[core_mem_va_req.rob_ptr])
 		  )
@@ -1382,10 +1487,12 @@ module novm_l1d(clk,
 		  t_got_req2 = 1'b1;
 		  t_tlb_xlat = 1'b1;
 		  n_tlb_addr = core_mem_va_req.addr;
-		  
-		  //$display("accepting new op %d, addr %x for rob ptr %d at cycle %d, mem_q_empty %b", 
-		  //core_mem_va_req.op, core_mem_va_req.addr,
-		  //core_mem_va_req.rob_ptr, r_cycle, mem_q_empty);
+
+`ifdef VERBOSE_L1D
+		  $display("accepting new op %d, addr %x for rob ptr %d at cycle %d, mem_q_empty %b", 
+			   core_mem_va_req.op, core_mem_va_req.addr,
+			   core_mem_va_req.rob_ptr, r_cycle, mem_q_empty);
+`endif
 		  
 		  n_last_wr2 = core_mem_va_req.is_store;
 		  n_last_rd2 = !core_mem_va_req.is_store;
@@ -1424,7 +1531,7 @@ module novm_l1d(clk,
 		 begin
 		    n_state = HANDLE_RELOAD;
 		    n_inhibit_write = 1'b0;
-		    if(!(r_req.is_store || r_lock_cache))
+		    if(!(r_req.is_store || r_req.is_atomic || r_lock_cache))
 		      begin
 			 t_ack_ld_early = 1'b1;
 			 n_core_mem_rsp.rob_ptr = r_req.rob_ptr;
@@ -1532,7 +1639,12 @@ module novm_l1d(clk,
 		    n_state = TLB_TURNAROUND;
 		    if(page_walk_rsp_fault)
 		      begin
-			 $stop();
+			 n_req2.op = MEM_NOP;
+			 n_req2.is_store = 1'b0;
+			 n_req2.has_cause = 1'b1;
+			 n_req2.cause = (r_req2.is_store | r_req2.is_atomic) ? 
+					STORE_PAGE_FAULT : LOAD_PAGE_FAULT;
+			 //$stop();
 		      end		    
 		 end
 	    end
@@ -1550,6 +1662,15 @@ module novm_l1d(clk,
 
    always_ff@(negedge clk)
      begin
+	// if(retired_rob_ptr_valid && (retired_rob_ptr == 'd1))
+	//   begin
+	//      $display("port a marking retired at cycle %d", r_cycle);
+	//   end
+	// if(retired_rob_ptr_two_valid && (retired_rob_ptr_two == 'd1) )
+	//   begin
+	//      $display("port b marking retired at cycle %d", r_cycle);
+	//   end
+	
       if(t_push_miss && mem_q_full)
 	begin
 	   $display("attempting to push to a full memory queue");

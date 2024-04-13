@@ -7,8 +7,6 @@
 `ifdef VERILATOR
 import "DPI-C" function longint ld_translate(input longint va);
 import "DPI-C" function void wr_log(input longint pc, input longint addr, input longint data, int is_atomic);
-
-
 import "DPI-C" function void record_l1d(input int req, 
 					input int ack,
 					input int ack_st,
@@ -339,7 +337,14 @@ module l1d(clk,
    logic [1:0] r_graduated [N_ROB_ENTRIES-1:0];
    logic [N_ROB_ENTRIES-1:0] r_rob_inflight;
 
-
+   
+    always_ff@(negedge clk)
+      begin
+	 if(!t_got_req2 & core_mem_req_valid)
+	   begin
+	      $display("can't ingest new op at cycle %d", r_cycle);
+	   end
+      end
    // always_ff@(negedge clk)
    //   begin
    // 	if(retired_rob_ptr_valid & retired_rob_ptr == 'd5)

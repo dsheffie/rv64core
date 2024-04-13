@@ -2696,7 +2696,7 @@ module exec(clk,
 	       t_mem_tail.dst_valid = mem_uq.dst_valid;
 	       t_mem_tail.dst_ptr = mem_uq.dst;
 	       t_mem_tail.spans_cacheline = (w_agu_addr[1:0] != 2'd0);
-	       t_mem_tail.unaligned = |w_agu_addr[1:0];	       
+	       t_mem_tail.unaligned = |w_agu_addr[1:0];
 	    end // case: SW
 	  SCD:
 	    begin
@@ -2705,7 +2705,7 @@ module exec(clk,
 	       t_mem_tail.dst_valid = mem_uq.dst_valid;
 	       t_mem_tail.dst_ptr = mem_uq.dst;
 	       t_mem_tail.spans_cacheline = (w_agu_addr[2:0] != 3'd0);
-	       t_mem_tail.unaligned = |w_agu_addr[2:0];	       
+	       t_mem_tail.unaligned = |w_agu_addr[2:0];
 	    end // case: SW
 	  AMOW:
 	    begin
@@ -2714,7 +2714,7 @@ module exec(clk,
 	       t_mem_tail.dst_valid = mem_uq.dst_valid;
 	       t_mem_tail.dst_ptr = mem_uq.dst;
 	       t_mem_tail.spans_cacheline = (w_agu_addr[1:0] != 2'd0);
-	       t_mem_tail.unaligned = |w_agu_addr[1:0];	       
+	       t_mem_tail.unaligned = |w_agu_addr[1:0];
 	    end // case: SW
 	 AMOD:
 	    begin
