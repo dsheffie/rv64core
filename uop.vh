@@ -43,25 +43,23 @@ typedef enum logic [5:0]
 
 typedef enum logic [6:0] 
   {
-   SRL,
-   SRA,
-   SRLV,
-   SRAV,
-   
-   SLT,
-   SLTU,
-   ADDIU,
-
-   LRW,
-   LRD,
-   SCW,
-   SCD,
-   AMOW,   
-   AMOD,
-   MONITOR,
-   RDCYCLE,
-   RDINSTRET,
-   RDBRANCH,
+   SRL, //0
+   SRA, //1
+   SRLV, //2
+   SRAV, //3
+   SLT, //4
+   SLTU, //5
+   ADDIU, //6
+   LRW, //7
+   LRD, //8
+   SCW, //9
+   SCD, //10
+   AMOW,//11
+   AMOD, //12
+   MONITOR, //13
+   RDCYCLE, //14
+   RDINSTRET, //15
+   RDBRANCH, //16
    RDFAULTEDBRANCH,
    ECALL,
    EBREAK,

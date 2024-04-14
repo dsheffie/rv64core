@@ -334,6 +334,8 @@ static int64_t read_csr(int csr_id, state_t *s, bool &undef) {
       return s->icnt;
     case 0xc01:
       return csr_time;
+    case 0xc03:
+      return 0;      
     case 0xf14:
       return s->mhartid;      
     default:

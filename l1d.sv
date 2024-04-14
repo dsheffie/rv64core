@@ -1316,13 +1316,13 @@ module l1d(clk,
 			      n_core_mem_rsp.dst_valid = t_rsp_dst_valid;
 			      n_core_mem_rsp_valid = 1'b1;
 			      n_core_mem_rsp.has_cause = r_req.spans_cacheline;
-			      
+`ifdef VERBOSE_L1D			      
 			      if(r_did_reload)
 				begin
 				   $display("late ack at cycle %d for load with rob ptr %d, data %x, dst valid %b", 
 					    r_cycle, r_req.rob_ptr, n_core_mem_rsp.data , n_core_mem_rsp.dst_valid );
-				end
-
+			      end
+`endif
 			      
 			   end // else: !if(r_req.is_store)
 		      end // if (r_valid_out && (r_tag_out == r_cache_tag))

@@ -2444,7 +2444,11 @@ module exec(clk,
 	  PMPCFG0:
 	    t_rd_csr = r_pmpcfg0;
 	  RDBRANCH_CSR:
-	    t_rd_csr = {63'd0, w_putchar_fifo_full};
+	    begin
+	       t_rd_csr = {63'd0, w_putchar_fifo_full};
+	       //$display("w_putchar_fifo_full = %b, putchar_fifo_empty = %b, t_rd_csr = %x, int_uop.op = %d", 
+	       //w_putchar_fifo_full, putchar_fifo_empty, t_rd_csr,int_uop.op);
+	    end
 	  RDFAULTEDBRANCH_CSR:
 	    t_rd_csr = 'd0;
 	  RDTIME_CSR:

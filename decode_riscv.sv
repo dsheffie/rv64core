@@ -813,13 +813,13 @@ module decode_riscv(
 					  uop.dst_valid = (rd != 'd0);
 					  uop.serializing_op = 1'b1;
 				       end
-				     else if(csr_id == RDBRANCH_CSR)
-				       begin
-					  uop.op = (rd == 'd0) ? NOP : RDBRANCH;
-					  uop.dst = rd;
-					  uop.dst_valid = (rd != 'd0);
-					  uop.serializing_op = 1'b1;
-				       end
+				     // else if(csr_id == RDBRANCH_CSR)
+				     //   begin
+				     // 	  uop.op = (rd == 'd0) ? NOP : RDBRANCH;
+				     // 	  uop.dst = rd;
+				     // 	  uop.dst_valid = (rd != 'd0);
+				     // 	  uop.serializing_op = 1'b1;
+				     //   end
 				     else if(csr_id == RDFAULTEDBRANCH_CSR)
 				       begin
 					  uop.op = (rd == 'd0) ? NOP : RDFAULTEDBRANCH;
