@@ -25,6 +25,9 @@ import "DPI-C" function void report_exec(input int int_valid,
 
 module exec(clk, 
 	    reset,
+	    putchar_fifo_out,
+	    putchar_fifo_empty,
+	    putchar_fifo_pop,
 	    cause,
 	    epc,
 	    tval,
@@ -72,6 +75,10 @@ module exec(clk,
 	    branch_fault);
    input logic clk;
    input logic reset;
+   output logic [7:0] putchar_fifo_out;
+   output logic       putchar_fifo_empty;
+   input logic 	      putchar_fifo_pop;
+   
    output logic [1:0] priv;
    input	      cause_t cause;
    input logic [63:0] epc;
@@ -2340,7 +2347,46 @@ module exec(clk,
    // 	if(r_priv != n_priv)
    // 	  $display("cycle %d, priv change %d -> %d\n", r_cycle, r_priv, n_priv);
    //   end
+
+
+
+   logic [3:0] r_rd_pc_idx, n_rd_pc_idx;
+   logic [3:0] r_wr_pc_idx, n_wr_pc_idx;
+   logic [7:0] r_pc_buf [7:0];
    
+   
+   always_comb
+     begin
+	n_wr_pc_idx = r_wr_pc_idx;
+	n_rd_pc_idx = r_rd_pc_idx;
+	t_push_putchar = t_wr_csr_en & (RDBRANCH_CSR == int_uop.imm[5:0]);
+	if(t_push_putchar)
+	  begin
+	     n_wr_pc_idx = r_wr_pc_idx + 'd1;
+	  end
+	if(putchar_fifo_pop)
+	  begin
+	     n_rd_pc_idx = r_rd_pc_idx + 'd1;
+	  end
+     end // always_comb
+
+   always_ff@(posedge clk)
+     begin
+	r_wr_pc_idx <= reset ? 'd0 : n_wr_pc_idx;
+	r_rd_pc_idx <= reset ? 'd0 : n_rd_pc_idx;
+     end
+
+   always_ff@(posedge clk)
+     begin
+	if(t_push_putchar)
+	  begin
+	     r_pc_buf[r_wr_pc_idx[2:0]] <= t_wr_csr[7:0];
+	  end
+     end
+   assign putchar_fifo_out = r_pc_buf[r_rd_pc_idx[2:0]];
+   assign putchar_fifo_empty = r_wr_pc_idx == r_rd_pc_idx;
+   wire w_putchar_fifo_full = (r_wr_pc_idx[2:0] == r_rd_pc_idx[2:0]) & (r_wr_pc_idx[3] != r_rd_pc_idx[3]);
+
    always_comb
      begin
 	t_rd_csr = 'd0;
@@ -2398,7 +2444,7 @@ module exec(clk,
 	  PMPCFG0:
 	    t_rd_csr = r_pmpcfg0;
 	  RDBRANCH_CSR:
-	    t_rd_csr = 'd0;
+	    t_rd_csr = {63'd0, w_putchar_fifo_full};
 	  RDFAULTEDBRANCH_CSR:
 	    t_rd_csr = 'd0;
 	  RDTIME_CSR:
@@ -2431,6 +2477,10 @@ module exec(clk,
 	  end
      end // always_ff@ (posedge clk)
 
+
+   logic t_push_putchar;
+   
+   
    
    always_ff@(posedge clk)
      begin
@@ -2549,24 +2599,28 @@ module exec(clk,
 		 r_pmpaddr3 <= t_wr_csr;
 	       PMPCFG0:
 		 r_pmpcfg0 <= t_wr_csr;
-`ifdef VERILATOR
 	       RDBRANCH_CSR:
-		 csr_putchar(t_wr_csr[7:0]);
+		 begin
+		    //csr_putchar(t_wr_csr[7:0]);
+		 end
+`ifdef VERILATOR
 	       RDFAULTEDBRANCH_CSR:
 		 begin
 		    term_sim();
 		 end
-`endif
+`endif	       	       
 	       default:
 		 begin
 		    $display("write csr implement %d for pc %x opcode %d", 
 			     int_uop.imm[5:0], int_uop.pc, int_uop.op);
 		    $stop();
 		 end
+
 	     endcase // case (int_uop.imm[4:0])
 	  end // if (t_wr_csr_en)
      end // always_ff@ (posedge clk)
-   
+
+
 
    
    wire [`M_WIDTH-1:0] w_agu_addr;

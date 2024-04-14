@@ -37,6 +37,9 @@ import "DPI-C" function int check_insn_bytes(input longint pc, input int data);
 
 module core(clk,
 	    reset,
+	    putchar_fifo_out,
+	    putchar_fifo_empty,
+	    putchar_fifo_pop,
 	    core_state,
 	    restart_complete,
 	    syscall_emu,
@@ -121,6 +124,9 @@ module core(clk,
 	    epc);
    input logic clk;
    input logic reset;
+   output logic [7:0] putchar_fifo_out;
+   output logic       putchar_fifo_empty;
+   input logic 	      putchar_fifo_pop;
    output logic [3:0] core_state;
    output logic	restart_complete;
    input logic syscall_emu;
@@ -1997,6 +2003,9 @@ module core(clk,
    exec e (
 	   .clk(clk), 
 	   .reset(reset),
+	   .putchar_fifo_out(putchar_fifo_out),
+	   .putchar_fifo_empty(putchar_fifo_empty),
+	   .putchar_fifo_pop(putchar_fifo_pop),
 	   .priv(priv),
 	   .paging_active(paging_active),
 	   .page_table_root(page_table_root),

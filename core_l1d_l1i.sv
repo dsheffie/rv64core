@@ -20,6 +20,9 @@ module
 		   l1d_state,
 		   n_inflight,
 		   memq_empty,
+		   putchar_fifo_out,
+		   putchar_fifo_empty,
+		   putchar_fifo_pop,
 		   took_exc,
 		   paging_active,
 		   page_table_root,
@@ -28,23 +31,22 @@ module
 		   resume,
 		   resume_pc,
 		   ready_for_resume,
-		   
-		       mem_req_valid, 
-		       mem_req_addr, 
-		       mem_req_store_data,
-		       mem_req_opcode,
-		       mem_rsp_valid,
-		       mem_rsp_load_data,
-		       alloc_valid,
-		       alloc_two_valid,
-		       iq_one_valid,
-		       iq_none_valid,
-		       in_branch_recovery,
-		       retire_reg_ptr,
-		       retire_reg_data,
-		       retire_reg_valid,
-		       retire_reg_two_ptr,
-		       retire_reg_two_data,
+		   mem_req_valid, 
+		   mem_req_addr, 
+		   mem_req_store_data,
+		   mem_req_opcode,
+		   mem_rsp_valid,
+		   mem_rsp_load_data,
+		   alloc_valid,
+		   alloc_two_valid,
+		   iq_one_valid,
+		   iq_none_valid,
+		   in_branch_recovery,
+		   retire_reg_ptr,
+		   retire_reg_data,
+		   retire_reg_valid,
+		   retire_reg_two_ptr,
+		   retire_reg_two_data,
 		       retire_reg_two_valid,
 		       retire_valid,
 		       retire_two_valid,
@@ -79,6 +81,10 @@ module
    output logic [3:0] l1i_state;
    output logic [3:0] l1d_state;
    output logic       memq_empty;
+   output logic [7:0] putchar_fifo_out;
+   output logic       putchar_fifo_empty;
+   input logic 	      putchar_fifo_pop;
+   
    output logic [3:0] n_inflight;
    
    output logic	took_exc;
@@ -546,6 +552,9 @@ module
    core cpu (
 	     .clk(clk),
 	     .reset(reset),
+	     .putchar_fifo_out(putchar_fifo_out),
+	     .putchar_fifo_empty(putchar_fifo_empty),
+	     .putchar_fifo_pop(putchar_fifo_pop),
 	     .restart_complete(w_restart_complete),
 	     .syscall_emu(syscall_emu),
 	     .core_state(core_state),
@@ -642,6 +651,9 @@ module core_l1d_l1i(clk,
 		    l1i_state,
 		    l1d_state,
 		    memq_empty,
+		    putchar_fifo_out,
+		    putchar_fifo_empty,
+		    putchar_fifo_pop,
 		    took_exc,
 		    paging_active,
 		    page_table_root,
@@ -702,6 +714,10 @@ module core_l1d_l1i(clk,
    output logic [3:0] l1i_state;
    output logic [3:0] l1d_state;
    output logic       memq_empty;
+   output logic [7:0] putchar_fifo_out;
+   output logic       putchar_fifo_empty;
+   input logic 	      putchar_fifo_pop;
+   
    output logic	took_exc;
    output logic	paging_active;
    output logic	[63:0] page_table_root;
@@ -787,6 +803,9 @@ module core_l1d_l1i(clk,
 		     .core_state(core_state),
 		     .l1i_state(l1i_state),
 		     .l1d_state(l1d_state),
+		     .putchar_fifo_out(putchar_fifo_out),
+		     .putchar_fifo_empty(putchar_fifo_empty),
+		     .putchar_fifo_pop(putchar_fifo_pop),
 		     .took_exc(took_exc),
 		     .paging_active(paging_active),
 		     .page_table_root(page_table_root),

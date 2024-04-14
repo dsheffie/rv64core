@@ -626,6 +626,7 @@ int main(int argc, char **argv) {
   uint64_t mismatches = 0, n_stores = 0, n_loads = 0;
   uint64_t n_branches = 0, n_mispredicts = 0, n_checks = 0, n_flush_cycles = 0;
   bool got_mem_req = false, got_mem_rsp = false, got_monitor = false, incorrect = false;
+  bool got_putchar = false;
   bool was_in_flush_mode = false;
 #ifdef USE_SDL
   if(use_fb) {
@@ -678,6 +679,12 @@ int main(int argc, char **argv) {
     //std::cout << "got to host " << std::hex << to_host << std::dec << ", flush = " << static_cast<int>(tb->in_flush_mode) << "\n";
 
     page_table_root = tb->page_table_root;
+
+    if(not(tb->putchar_fifo_empty)) {
+      std::cout << tb->putchar_fifo_out;
+      got_putchar = true;
+      tb->putchar_fifo_pop = 1;
+    }
     
     if(tb->got_monitor) {
       uint32_t to_host = mem_r32(s, globals::tohost_addr);
@@ -1105,6 +1112,10 @@ int main(int argc, char **argv) {
     if(got_monitor) {
       tb->monitor_ack = 0;
       got_monitor = false;
+    }
+    if(got_putchar) {
+      tb->putchar_fifo_pop = 0;
+      got_putchar = false;
     }
     ++cycle;
   }
