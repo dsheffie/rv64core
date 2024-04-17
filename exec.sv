@@ -233,6 +233,8 @@ module exec(clk,
    logic	t_wr_csr_en, t_rd_csr_en;
    logic [63:0] t_rd_csr, t_wr_csr;  
    logic	t_wr_priv;
+   logic [1:0] 	t_priv;
+   
 
    logic [63:0]	       r_sstatus, r_sie, r_stvec, r_sscratch;
    logic [63:0]	       r_sepc, r_stval, r_sip;
@@ -1784,6 +1786,7 @@ module exec(clk,
 	t_wr_csr_en = 1'b0;
 	t_rd_csr_en = 1'b0;
 	t_wr_priv = 1'b0;
+	t_priv = 2'd0;
 	t_wr_csr = 64'd0;
 	t_wr_int_prf = 1'b0;
 	t_take_br = 1'b0;
@@ -2179,12 +2182,23 @@ module exec(clk,
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
+	  SRET:
+	    begin
+	       t_rd_csr_en = 1'b1;
+	       t_wr_csr_en = r_start_int;
+	       t_wr_csr = t_rd_csr;
+	       t_wr_priv = r_start_int;
+	       t_priv = {1'b0, r_mstatus[8]};	       
+	       t_pc = r_sepc;
+	       t_alu_valid = 1'b1;
+	    end
 	  MRET:
 	    begin
 	       t_rd_csr_en = 1'b1;
 	       t_wr_csr_en = r_start_int;
 	       t_wr_csr = t_rd_csr;
 	       t_wr_priv = r_start_int;
+	       t_priv = r_mstatus[12:11];
 	       t_pc = r_mepc;
 	       t_alu_valid = 1'b1;
 	    end
@@ -2326,7 +2340,7 @@ module exec(clk,
 	  end
 	else if(t_wr_priv)
 	  begin
-	     n_priv = r_mstatus[12:11];
+	     n_priv = t_priv;
 	  end	
      end
 	      

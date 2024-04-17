@@ -754,7 +754,10 @@ module decode_riscv(
 		 end
 	       else if((insn[31:20] == 12'h102) && insn[19:7] == 'd0)
 		 begin
-		    uop.op = II; //SRET
+		    uop.op = SRET;
+		    uop.serializing_op = 1'b1;
+		    uop.must_restart = 1'b1;
+		    uop.imm = {10'd0, MSTATUS};			     
 		 end
 	       else if((insn[31:20] == 12'h202) && insn[19:7] == 'd0)
 		 begin

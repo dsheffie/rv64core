@@ -64,6 +64,7 @@ typedef enum logic [6:0]
    ECALL,
    EBREAK,
    MRET,
+   SRET,
    CSRRW,
    CSRRS,
    CSRRC,
