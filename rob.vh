@@ -19,7 +19,8 @@ typedef enum logic [3:0] {
    MACHINE_ECALL = 'd11,
    FETCH_PAGE_FAULT = 'd12,
    LOAD_PAGE_FAULT = 'd13,
-   STORE_PAGE_FAULT = 'd14			  
+/* note - 14 is reserved */			  
+   STORE_PAGE_FAULT = 'd15			  
 } cause_t;
 
 
