@@ -1007,12 +1007,6 @@ void execRiscv(state_t *s) {
       if(fault) {
 	except_cause = CAUSE_STORE_PAGE_FAULT;
 	tval = ea;
-	std::cout << "ea = " << std::hex << ea << std::dec << " causes page fault\n";
-	std::cout << "pa = " << std::hex << pa << std::dec << "\n";
-	std::cout << "pc = " << std::hex << s->pc << std::dec << "\n";
-	dump_calls();
-	//std::cout << "icnt = " << s->icnt << "\n";
-	abort();
 	goto handle_exception;
       }
       
