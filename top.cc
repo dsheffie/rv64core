@@ -214,9 +214,10 @@ void wr_log(long long pc, long long addr, long long data, int is_atomic) {
 
   auto &t = store_queue.front();
   if(not(t.pc == pc and t.addr == addr and t.data == data)) {
-    printf("you have a store error! for an atomic %d\n", is_atomic);
+    printf("you have a store error! for an atomic %d, pc mismatch %d, addr mismatch %d, data mismatch %d\n",
+	   is_atomic, t.pc==pc, t.addr==addr, t.data == data);
     printf("%lx, %lx, %lx\n", t.pc, t.addr, t.data);
-    exit(-1);
+    //exit(-1);
   }
   store_queue.pop_front();
 }

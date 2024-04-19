@@ -198,7 +198,7 @@ module l1i(clk,
    localparam L1I_CL_LEN_BITS = 1 << (`LG_L1D_CL_LEN + 3);
    localparam LG_WORDS_PER_CL = `LG_L1D_CL_LEN - 2;
    localparam WORDS_PER_CL = 1<<LG_WORDS_PER_CL;
-   localparam N_TAG_BITS = `M_WIDTH - `LG_L1I_NUM_SETS - `LG_L1D_CL_LEN;
+   localparam N_TAG_BITS = `MAX_VA - `LG_L1I_NUM_SETS - `LG_L1D_CL_LEN;
    localparam IDX_START = `LG_L1D_CL_LEN;
    localparam IDX_STOP  = `LG_L1D_CL_LEN + `LG_L1I_NUM_SETS;
    localparam WORD_START = 2;
@@ -600,7 +600,7 @@ endfunction
 	t_next_spec_rs_tos = r_spec_rs_tos+'d1;
 	n_restart_req = restart_valid | r_restart_req;
 	
-	t_tag_match = r_tag_out == w_tlb_pc[`M_WIDTH-1:IDX_STOP];
+	t_tag_match = r_tag_out == w_tlb_pc[`MAX_VA-1:IDX_STOP];
 	
 	t_miss = r_req && !(r_valid_out && t_tag_match);
 	t_hit = r_req && (r_valid_out && t_tag_match);
@@ -703,7 +703,7 @@ endfunction
 	  ACTIVE:
 	    begin
 	       t_cache_idx = r_pc[IDX_STOP-1:IDX_START];
-	       t_cache_tag = r_pc[(`M_WIDTH-1):IDX_STOP];
+	       t_cache_tag = r_pc[(`MAX_VA-1):IDX_STOP];
 	       /* accessed with this address */
 	       n_cache_pc = r_pc;
 	       n_req = 1'b1;
@@ -798,7 +798,7 @@ endfunction
 			      t_push_insn4 = 1'b1;
 			      t_cache_idx = r_cache_idx + 'd1;
 			      n_cache_pc = r_cache_pc + 'd16;
-			      t_cache_tag = n_cache_pc[(`M_WIDTH-1):IDX_STOP];
+			      t_cache_tag = n_cache_pc[(`MAX_VA-1):IDX_STOP];
 			      n_pc = r_cache_pc + 'd20;
 			   end
 			 else if(t_first_branch == 'd3 && !fq_full3)
@@ -806,7 +806,7 @@ endfunction
 			      t_push_insn3 = 1'b1;
 			      n_cache_pc = r_cache_pc + 'd12;
 			      n_pc = r_cache_pc + 'd16;
-			      t_cache_tag = n_cache_pc[(`M_WIDTH-1):IDX_STOP];
+			      t_cache_tag = n_cache_pc[(`MAX_VA-1):IDX_STOP];
 			      if(t_insn_idx != 0)
 				begin
 				   t_cache_idx = r_cache_idx + 'd1;
@@ -820,7 +820,7 @@ endfunction
 			      n_pc = r_cache_pc + 'd8;
 			      //guaranteed to end-up on another cacheline
 			      n_cache_pc = r_cache_pc + 'd8;
-			      t_cache_tag = n_cache_pc[(`M_WIDTH-1):IDX_STOP];
+			      t_cache_tag = n_cache_pc[(`MAX_VA-1):IDX_STOP];
 			      n_pc = r_cache_pc + 'd12;
 			      if(t_insn_idx == 2)
 				begin
@@ -856,7 +856,7 @@ endfunction
 	  RELOAD_TURNAROUND:
 	    begin
 	       t_cache_idx = r_miss_pc[IDX_STOP-1:IDX_START];
-	       t_cache_tag = r_miss_pc[(`M_WIDTH-1):IDX_STOP];
+	       t_cache_tag = r_miss_pc[(`MAX_VA-1):IDX_STOP];
 	       if(n_flush_req)
 		 begin
 		    n_flush_req = 1'b0;
@@ -895,7 +895,7 @@ endfunction
 	  WAIT_FOR_NOT_FULL:
 	    begin
 	       t_cache_idx = r_miss_pc[IDX_STOP-1:IDX_START];
-	       t_cache_tag = r_miss_pc[(`M_WIDTH-1):IDX_STOP];
+	       t_cache_tag = r_miss_pc[(`MAX_VA-1):IDX_STOP];
 	       n_cache_pc = r_miss_pc;
 	       if(n_flush_req)
 		 begin
@@ -949,7 +949,7 @@ endfunction
 	    begin
 	       n_cache_pc = r_miss_pc;
 	       t_cache_idx = r_miss_pc[IDX_STOP-1:IDX_START];
-	       t_cache_tag = r_miss_pc[(`M_WIDTH-1):IDX_STOP];
+	       t_cache_tag = r_miss_pc[(`MAX_VA-1):IDX_STOP];
 	       n_state = ACTIVE;
 	       n_req = 1'b1;
 	    end
@@ -1180,7 +1180,7 @@ endfunction
 	   .clk(clk),
 	   .rd_addr(t_cache_idx),
 	   .wr_addr(r_mem_req_addr[IDX_STOP-1:IDX_START]),
-	   .wr_data(r_mem_req_addr[`M_WIDTH-1:IDX_STOP]),
+	   .wr_data(r_mem_req_addr[`MAX_VA-1:IDX_STOP]),
 	   .wr_en(mem_rsp_valid),
 	   .rd_data(r_tag_out)
 	   );
