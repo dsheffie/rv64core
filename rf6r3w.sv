@@ -1,3 +1,5 @@
+`include "machine.vh"
+
 module rf6r3w(clk,
 	      rdptr0,rdptr1,rdptr2,rdptr3,rdptr4,rdptr5,
 	      wrptr0,wrptr1,wrptr2,
@@ -45,46 +47,28 @@ module rf6r3w(clk,
    // 	  end
    //   end
 
-`ifdef XILINX_FPGA
-   integer 		    i;
-   initial
-     begin
-        for (i=0; i<DEPTH; i=i+1)
-          r_ram[i] = 0;
-     end
-   always_ff@(posedge clk)
-     begin
-      rd0 <= r_ram[rdptr0];
-      rd1 <= r_ram[rdptr1];
-      rd2 <= r_ram[rdptr2];
-      rd3 <= r_ram[rdptr3];
-      rd4 <= r_ram[rdptr4];
-      rd5 <= r_ram[rdptr5];
-      if (wen0 & (wrptr0 != 'd0))
-        r_ram[wrptr0] <= wr0;
-      if (wen1 & (wrptr1 != 'd0))
-        r_ram[wrptr1] <= wr1;
-      if (wen2 & (wrptr2 != 'd0))
-        r_ram[wrptr2] <= wr2;
-     end // always_ff@ (posedge clk)
-`else
+
    always_ff@(posedge clk)
      begin
 	rd0 <= rdptr0=='d0 ? 'd0 : r_ram[rdptr0];
 	rd1 <= rdptr1=='d0 ? 'd0 : r_ram[rdptr1];
 	rd2 <= rdptr2=='d0 ? 'd0 : r_ram[rdptr2];
 	rd3 <= rdptr3=='d0 ? 'd0 : r_ram[rdptr3];
-	rd4 <= rdptr4=='d0 ? 'd0 : r_ram[rdptr4];
-	rd5 <= rdptr5=='d0 ? 'd0 : r_ram[rdptr5];	
 	if(wen0)
 	  r_ram[wrptr0] <= wr0;
 	if(wen1)
 	  r_ram[wrptr1] <= wr1;
+`ifdef SECOND_EXEC_PORT
 	if(wen2)
-	  r_ram[wrptr2] <= wr2;	
+	  r_ram[wrptr2] <= wr2;
+	rd4 <= rdptr4=='d0 ? 'd0 : r_ram[rdptr4];
+	rd5 <= rdptr5=='d0 ? 'd0 : r_ram[rdptr5];	
+`endif
      end // always_ff@ (posedge clk)   
+
+`ifndef SECOND_EXEC_PORT
+   assign rd4 = 'd0;
+   assign rd5 = 'd0;
 `endif
    
-
-
 endmodule

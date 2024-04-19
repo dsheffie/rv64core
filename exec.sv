@@ -1059,7 +1059,9 @@ module exec(clk,
 	t_alu_sched_full2 = (&r_alu_sched_valid2);
 	
 	t_pop_uq = !(t_flash_clear | t_uq_empty | t_alu_sched_full);
+`ifdef SECOND_EXEC_PORT
 	t_pop_uq2 = t_uq_next_empty ? 1'b0 : (t_pop_uq & uq2.is_cheap_int & (!t_alu_sched_full2));
+`endif
      end // always_comb
 
 
@@ -1145,7 +1147,7 @@ module exec(clk,
 	t_result2 = 'd0;
 	t_wr_int_prf2 = 1'b0;
 	t_zero_shift_upper2 = 1'b0;
-	
+`ifdef SECOND_EXEC_PORT	
 	case(int_uop2.op)
 	  BNE:
 	    begin
@@ -1432,7 +1434,8 @@ module exec(clk,
 	  default:
 	    begin
 	    end
-	endcase
+	endcase // case (int_uop2.op)
+`endif
      end
 
    
