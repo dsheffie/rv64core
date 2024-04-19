@@ -2257,7 +2257,7 @@ module exec(clk,
 	    begin
 	       t_rd_csr_en = 1'b1;
 	       t_wr_csr_en = r_start_int;
-	       t_wr_csr = t_rd_csr;
+	       t_wr_csr = {59'd0, int_uop.imm[10:6]};
 	       t_result = t_rd_csr;
 	       t_wr_int_prf = int_uop.dst_valid;
 	       t_alu_valid = 1'b1;
