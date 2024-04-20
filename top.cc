@@ -213,10 +213,13 @@ void wr_log(long long pc, long long addr, long long data, int is_atomic) {
   assert(not(store_queue.empty()));
 
   auto &t = store_queue.front();
+  if(globals::log) {
+    printf("check store : sim pc %lx, rtl pc %llx %lx, %lx\n", t.pc, pc, t.addr, t.data);
+  }
   if(not(t.pc == pc and t.addr == addr and t.data == data)) {
     printf("you have a store error! for an atomic %d, pc mismatch %d, addr mismatch %d, data mismatch %d\n",
 	   is_atomic, t.pc==pc, t.addr==addr, t.data == data);
-    printf("%lx, %lx, %lx\n", t.pc, t.addr, t.data);
+    printf("sim pc %lx, rtl pc %llx %lx, %lx\n", t.pc, pc, t.addr, t.data);
     //exit(-1);
   }
   store_queue.pop_front();
@@ -553,7 +556,7 @@ int main(int argc, char **argv) {
   std::string branch_name = "branch_info.txt";
   bool use_fb = false;
   uint64_t heartbeat = 1UL<<36, start_trace_at = ~0UL;
-  uint64_t max_cycle = 0, max_icnt = 0, mem_lat = 2;
+  uint64_t max_cycle = 0, max_icnt = 0, mem_lat = 1;
   uint64_t last_store_addr = 0, last_load_addr = 0, last_addr = 0;
   int misses_inflight = 0;
   std::map<uint64_t, uint64_t> pushout_histo;
@@ -778,7 +781,7 @@ int main(int argc, char **argv) {
       last_retired_pc = tb->retire_pc;
 
       if(insns_retired >= start_trace_at) {
-	trace_retirement = true;
+	globals::log = trace_retirement = true;
       }
 
       if(((insns_retired % (1<<20)) == 0)) {
@@ -1010,13 +1013,17 @@ int main(int argc, char **argv) {
     ++last_retire;
     if(last_retire > (1U<<15) && not(tb->in_flush_mode)) {
       std::cout << "in flush mode = " << static_cast<int>(tb->in_flush_mode) << "\n";
-      std::cerr << "no retire in " << last_retire << " cycles, last retired "
+      std::cout << "no retire in " << last_retire << " cycles, last retired "
     		<< std::hex
     		<< last_retired_pc + 0
     		<< std::dec
     		<< " "
     		<< getAsmString(get_insn(last_retired_pc+0, s), last_retired_pc+0)
     		<< "\n";
+      std::cout << "l1d  state = " << static_cast<int>(tb->l1d_state) << "\n";
+      std::cout << "l1i  state = " << static_cast<int>(tb->l1i_state) << "\n";
+      std::cout << "l2   state = " << static_cast<int>(tb->l2_state) << "\n";
+      std::cout << "core state = " << static_cast<int>(tb->core_state) << "\n";
       break;
     }
     if(tb->got_break) {

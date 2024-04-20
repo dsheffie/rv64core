@@ -2,7 +2,7 @@
 
 module l2(clk,
 	  reset,
-
+	  l2_state,
 	  l1d_req,
 	  l1i_req,
 
@@ -27,6 +27,11 @@ module l2(clk,
 	  //l2 -> l1
 	  l1_mem_load_data,
 
+	  //l2 probe l1
+	  l2_probe_addr,
+	  l2_probe_val,
+	  l2_probe_ack,
+	  
 	  //l2 -> mem
 	  mem_req_valid, 
 	  mem_req_addr, 
@@ -38,13 +43,13 @@ module l2(clk,
 	  mem_rsp_load_data,
 	  
 	  //page walker signals
-	   mmu_req_valid, 
-	   mmu_req_addr, 
-	   mmu_req_data,  
-	   mmu_req_store,
-	   mmu_rsp_valid,
-	   mmu_rsp_data,	   
-
+	  mmu_req_valid, 
+	  mmu_req_addr, 
+	  mmu_req_data,  
+	  mmu_req_store,
+	  mmu_rsp_valid,
+	  mmu_rsp_data,	   
+	  
 	  cache_hits,
 	  cache_accesses
 	  
@@ -52,6 +57,8 @@ module l2(clk,
 
    input logic clk;
    input logic reset;
+   output logic [3:0] l2_state;
+   
    input logic l1d_req;
    input logic l1i_req;
    input logic [(`M_WIDTH-1):0] l1d_addr;
@@ -69,6 +76,11 @@ module l2(clk,
 
    output logic l1_mem_req_ack;
    input logic [(1 << (`LG_L1D_CL_LEN+3)) - 1 :0] l1_mem_req_store_data;
+
+   output logic 				  l2_probe_val;
+   output logic [(`M_WIDTH-1):0] 		  l2_probe_addr;
+   input logic 					  l2_probe_ack;
+   
    output logic [(1 << (`LG_L1D_CL_LEN+3)) - 1 :0] l1_mem_load_data;
    
    output logic mem_req_valid;
@@ -156,6 +168,8 @@ module l2(clk,
 				     } state_t;
 
    state_t n_state, r_state;
+   assign l2_state = r_state;
+   
    logic 		n_flush_complete, r_flush_complete;
    logic 		r_flush_req, n_flush_req;
    logic [(1 << (`LG_L2_CL_LEN+3)) - 1:0] r_mem_req_store_data, n_mem_req_store_data;
@@ -333,19 +347,82 @@ module l2(clk,
 	endcase
      end // always_comb
 
+   logic t_probe_mmu_req_valid;
+   logic [(`M_WIDTH-1):0] r_l2_probe_addr, n_l2_probe_addr;
+   logic 		  n_l2_probe_val, r_l2_probe_val;
+   typedef enum logic  {PROBE_IDLE, PROBE_WAIT } probe_state_t;
 
+   assign l2_probe_val = r_l2_probe_val;
+   assign l2_probe_addr = r_l2_probe_addr;
+
+   logic [63:0] r_cycle;
+   always_ff@(posedge clk)
+     begin
+	r_cycle <= reset ? 'd0 : (r_cycle + 'd1);
+     end
+  
+   
+   probe_state_t n_pstate, r_pstate;
+   always_comb
+     begin
+	n_pstate = r_pstate;
+	t_probe_mmu_req_valid = 1'b0;
+	n_l2_probe_val = 1'b0;
+	n_l2_probe_addr = r_l2_probe_addr;
+	case(r_pstate)
+	  PROBE_IDLE:
+	    begin
+	       if(mmu_req_valid)
+		 begin
+		    //$display("got probe req at cycle %d", r_cycle);
+		    n_pstate = PROBE_WAIT;
+		    n_l2_probe_val = 1'b1;
+		    n_l2_probe_addr = mmu_req_addr;
+		 end
+	    end
+	  PROBE_WAIT:
+	    begin
+	       if(l2_probe_ack)
+		 begin
+		    //$display("got probe ack at cycle %d", r_cycle);
+		    n_pstate = PROBE_IDLE;
+		    t_probe_mmu_req_valid = 1'b1;
+		 end
+	    end
+	  default:
+	    begin
+	    end
+	endcase // case (r_pstate)
+     end // always_comb
+      
+   
+   always_ff@(posedge clk)
+     begin
+	if(reset)
+	  begin
+	     r_pstate <= PROBE_IDLE;
+	     r_l2_probe_val <= 1'b0;
+	     r_l2_probe_addr <= 'd0;
+	  end
+	else
+	  begin
+	     r_pstate <= n_pstate;
+	     r_l2_probe_val <= n_l2_probe_val;
+	     r_l2_probe_addr <= n_l2_probe_addr;
+	  end
+     end
 
    wire w_l1i_req = r_l1i_req | l1i_req;
    wire w_l1d_req = r_l1d_req | l1d_req;
-   wire	w_mmu_req = r_mmu_req | mmu_req_valid;
-
+   wire	w_mmu_req = r_mmu_req | t_probe_mmu_req_valid;
+   
    
    always_comb
      begin
 	n_last_gnt = r_last_gnt;
 	n_l1i_req = r_l1i_req | l1i_req;
 	n_l1d_req = r_l1d_req | l1d_req;
-	n_mmu_req = r_mmu_req | mmu_req_valid;
+	n_mmu_req = r_mmu_req | t_probe_mmu_req_valid;
 	n_req = r_req;
 	n_mmu_rsp_data = r_mmu_rsp_data;
 	n_mmu_rsp_valid = 1'b0;

@@ -18,6 +18,7 @@ module
 		   core_state,
 		   l1i_state,
 		   l1d_state,
+		   l2_state,		   
 		   n_inflight,
 		   memq_empty,
 		   putchar_fifo_out,
@@ -80,6 +81,8 @@ module
    output logic [3:0] core_state;
    output logic [3:0] l1i_state;
    output logic [3:0] l1d_state;
+   output logic [3:0] l2_state;
+   
    output logic       memq_empty;
    output logic [7:0] putchar_fifo_out;
    output logic       putchar_fifo_empty;
@@ -335,7 +338,8 @@ module
    wire [63:0]			    w_mmu_req_data;
    wire [63:0]			    w_mmu_rsp_data;
    wire				    w_mmu_rsp_valid;
-
+   wire 			    w_mmu_gnt_l1i, w_mmu_gnt_l1d;
+   
    wire [63:0]			    w_l1d_page_walk_req_va;
    wire				    w_l1d_page_walk_req_valid;
 
@@ -356,11 +360,19 @@ module
    assign paging_active = w_paging_active;
    
    wire		w_clear_tlb;
+
+   wire 	w_l2_probe_val, w_l2_probe_ack;
+   wire [(`M_WIDTH-1):0] w_l2_probe_addr;
+
    
    l2 l2cache (
 	       .clk(clk),
 	       .reset(reset),
-
+	       .l2_state(l2_state),
+	       .l2_probe_val(w_l2_probe_val),
+	       .l2_probe_addr(w_l2_probe_addr),
+	       .l2_probe_ack(w_l2_probe_ack),
+	       
 	       .l1d_req(l1d_mem_req_valid),
 	       .l1i_req(l1i_mem_req_valid),
 	       .l1d_addr(l1d_mem_req_addr),
@@ -379,7 +391,6 @@ module
 	       
 	       .l1_mem_req_ack(w_l1_mem_req_ack),
 	       .l1_mem_req_store_data(l1d_mem_req_store_data),
-	       
 	       .l1_mem_load_data(w_l1_mem_load_data),
 	       
 	       .mem_req_valid(mem_req_valid),
@@ -408,6 +419,9 @@ module
      l1d dcache (
 	       .clk(clk),
 	       .reset(reset),
+	       .l2_probe_val(w_l2_probe_val),
+	       .l2_probe_addr(w_l2_probe_addr),
+	       .l2_probe_ack(w_l2_probe_ack),		 
 	       .l1d_state(l1d_state),
 	       .n_inflight(n_inflight),
 	       .restart_complete(w_restart_complete),
@@ -415,7 +429,7 @@ module
 	       .clear_tlb(w_clear_tlb),
 	       .page_walk_req_va(w_l1d_page_walk_req_va),
 	       .page_walk_req_valid(w_l1d_page_walk_req_valid),
-	       
+	       .page_walk_rsp_gnt(w_mmu_gnt_l1d),
 	       .page_walk_rsp_valid(w_l1d_rsp_valid),
 	       .page_walk_rsp_pa(w_phys_addr),
 	       .page_walk_rsp_fault(w_page_fault),
@@ -494,8 +508,9 @@ module
 	    .page_writable(w_page_writable),
 	    .page_fault(w_page_fault),
 	    .l1d_rsp_valid(w_l1d_rsp_valid),
-	    .l1i_rsp_valid(w_l1i_rsp_valid)
-	    
+	    .l1i_rsp_valid(w_l1i_rsp_valid),
+	    .l1i_gnt(w_mmu_gnt_l1i),
+	    .l1d_gnt(w_mmu_gnt_l1d)
 	    );
    
    

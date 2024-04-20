@@ -3,68 +3,79 @@
 `include "uop.vh"
 
 `ifdef VERILATOR
-import "DPI-C" function void wr_log(input longint pc, input longint addr, input longint data, int is_atomic);
+import "DPI-C" function void wr_log(input longint pc, 
+				    input longint addr, 
+				    input longint data, 
+				    int 	  is_atomic);
 `endif
 
 //`define VERBOSE_L1D 1
 
 module l1d(clk, 
 	   reset,
-		l1d_state,
-  		n_inflight,
-		restart_complete,
-		paging_active,
-		clear_tlb,
-		page_walk_req_valid,
-		page_walk_req_va,
-		page_walk_rsp_valid,
-		page_walk_rsp_pa,
-		page_walk_rsp_fault,
-		page_walk_rsp_dirty,		
-		page_walk_rsp_readable,
-		page_walk_rsp_writable,	   
-		head_of_rob_ptr,
-		head_of_rob_ptr_valid,
-		retired_rob_ptr_valid,
-		retired_rob_ptr_two_valid,
-		retired_rob_ptr,
-		retired_rob_ptr_two,
-		restart_valid,
-		memq_empty,
-		drain_ds_complete,
-		dead_rob_mask,
-		flush_req,
-		flush_complete,
-		flush_cl_req,
-		flush_cl_addr,
-		//inputs from core
-		core_mem_va_req_valid,
-		core_mem_va_req,
-		//store data
-		core_store_data_valid,
-		core_store_data,
-		core_store_data_ack,
-		//outputs to core
-		core_mem_va_req_ack,
-		core_mem_rsp,
-		core_mem_rsp_valid,
-		//output to the memory system
-		mem_req_valid, 
-		mem_req_addr, 
-		mem_req_store_data, 
-		mem_req_opcode,
-		//reply from memory system
-		mem_rsp_valid,
-		mem_rsp_load_data,
-		cache_accesses,
-		cache_hits
-		);
+	   l2_probe_addr,
+	   l2_probe_val,
+	   l2_probe_ack,	   
+	   l1d_state,
+  	   n_inflight,
+	   restart_complete,
+	   paging_active,
+	   clear_tlb,
+	   page_walk_req_valid,
+	   page_walk_req_va,
+	   page_walk_rsp_gnt,
+	   page_walk_rsp_valid,
+	   page_walk_rsp_pa,
+	   page_walk_rsp_fault,
+	   page_walk_rsp_dirty,		
+	   page_walk_rsp_readable,
+	   page_walk_rsp_writable,	   
+	   head_of_rob_ptr,
+	   head_of_rob_ptr_valid,
+	   retired_rob_ptr_valid,
+	   retired_rob_ptr_two_valid,
+	   retired_rob_ptr,
+	   retired_rob_ptr_two,
+	   restart_valid,
+	   memq_empty,
+	   drain_ds_complete,
+	   dead_rob_mask,
+	   flush_req,
+	   flush_complete,
+	   flush_cl_req,
+	   flush_cl_addr,
+	   //inputs from core
+	   core_mem_va_req_valid,
+	   core_mem_va_req,
+	   //store data
+	   core_store_data_valid,
+	   core_store_data,
+	   core_store_data_ack,
+	   //outputs to core
+	   core_mem_va_req_ack,
+	   core_mem_rsp,
+	   core_mem_rsp_valid,
+	   //output to the memory system
+	   mem_req_valid, 
+	   mem_req_addr, 
+	   mem_req_store_data, 
+	   mem_req_opcode,
+	   //reply from memory system
+	   mem_rsp_valid,
+	   mem_rsp_load_data,
+	   cache_accesses,
+	   cache_hits
+	   );
 
    localparam L1D_NUM_SETS = 1 << `LG_L1D_NUM_SETS;
    localparam L1D_CL_LEN = 1 << `LG_L1D_CL_LEN;
    localparam L1D_CL_LEN_BITS = 1 << (`LG_L1D_CL_LEN + 3);   
    input logic clk;
    input logic reset;
+   input logic l2_probe_val;
+   input logic [(`M_WIDTH-1):0] l2_probe_addr;
+   output logic 		l2_probe_ack;
+   
    output logic [3:0] l1d_state;
    output logic [3:0] n_inflight;
    input logic 	      restart_complete;
@@ -72,6 +83,7 @@ module l1d(clk,
    input logic clear_tlb;
    output logic	page_walk_req_valid;
    output logic [63:0] page_walk_req_va;
+   input logic 	       page_walk_rsp_gnt;
    input logic	       page_walk_rsp_valid;
    input logic [63:0]  page_walk_rsp_pa;
    input logic	       page_walk_rsp_fault;
@@ -145,6 +157,9 @@ module l1d(clk,
    logic 				  rr_got_req, rr_last_wr, rr_is_retry, rr_did_reload;
 
    logic 				  r_lock_cache, n_lock_cache;
+
+   logic 				  n_l2_probe_ack, r_l2_probe_ack;
+   assign l2_probe_ack = r_l2_probe_ack;
    
    logic [`LG_MRQ_ENTRIES:0] 		  r_n_inflight;   
    assign n_inflight = r_n_inflight;
@@ -261,10 +276,10 @@ module l1d(clk,
                              FLUSH_CACHE_WAIT, //6
 			     FLUSH_CACHE_LAST_WAIT, //7
                              FLUSH_CL, //8
-                             FLUSH_CL_WAIT, //9
+                             FLUSH_CL_WAIT, //9			     
                              HANDLE_RELOAD, //10
 			     TLB_RELOAD, //11
-			     TLB_TURNAROUND 
+			     TLB_TURNAROUND //12
                              } state_t;
 
    
@@ -288,6 +303,8 @@ module l1d(clk,
    logic [63:0] r_tlb_addr, n_tlb_addr;
    logic 	t_reload_tlb;
    logic	n_page_walk_req_valid, r_page_walk_req_valid;
+   logic 	r_page_walk_gnt, n_page_walk_gnt;
+   logic 	n_flush_was_active, r_flush_was_active;
    
    logic [63:0] 	       r_store_stalls, n_store_stalls;
    
@@ -565,7 +582,10 @@ module l1d(clk,
      begin
 	if(reset)
 	  begin
-	     r_page_walk_req_valid <= 1'b0;	     
+	     r_l2_probe_ack <= 1'b0;
+	     r_page_walk_req_valid <= 1'b0;
+	     r_page_walk_gnt <= 1'b0;
+	     r_flush_was_active <= 1'b0;
 	     r_pending_tlb_miss <= 1'b0;
 	     r_tlb_addr <= 'd0;
 	     r_ack_ld_early <= 1'b0;
@@ -614,7 +634,10 @@ module l1d(clk,
 	  end
 	else
 	  begin
+	     r_l2_probe_ack <= n_l2_probe_ack;
 	     r_page_walk_req_valid <= n_page_walk_req_valid;
+	     r_page_walk_gnt <= n_page_walk_gnt;
+	     r_flush_was_active <= n_flush_was_active;
 	     r_pending_tlb_miss <= n_pending_tlb_miss;
 	     r_tlb_addr <= n_tlb_addr;
 	     r_ack_ld_early <= t_ack_ld_early;
@@ -701,7 +724,13 @@ module l1d(clk,
    	if(t_wr_array)
    	  begin
    	     $display("cycle %d : WRITING set %d WITH data %x, addr %x, op %d ptr %d, retry %b", 
-   		      r_cycle, r_cache_idx, t_array_data, r_req.addr, r_req.op, r_req.rob_ptr, r_is_retry);
+   		      r_cycle, 
+		      r_cache_idx, 
+		      t_array_data,
+		      r_req.addr, 
+		      r_req.op,
+		      r_req.rob_ptr, 
+		      r_is_retry);
    	  end	
      end // always_ff@ (negedge clk)
    
@@ -709,8 +738,12 @@ module l1d(clk,
      begin
    	if(mem_rsp_valid)
    	  begin
-   	     $display("cycle %d : CACHERELOAD from addr %x -> set %d data %x", 
-   		      r_cycle, r_mem_req_addr, r_mem_req_addr[IDX_STOP-1:IDX_START], t_array_wr_data);
+   	     $display("cycle %d : CACHERELOAD from addr %x -> set %d data %x, r_state %d", 
+   		      r_cycle, 
+		      r_mem_req_addr, 
+		      r_mem_req_addr[IDX_STOP-1:IDX_START], 
+		      t_array_wr_data, 
+		      r_state);
    	  end
 
      end
@@ -1089,6 +1122,7 @@ module l1d(clk,
 
    always_ff@(negedge clk)
      begin
+	//$display("cycle %d, state %d", r_cycle, r_state);
 	if(t_got_req2 && r_restart_counter != core_mem_req.restart_id)
 	  begin
 	     $display("cycle %d : current restart id is %d but ingesting %d", r_cycle, r_restart_counter, core_mem_req.restart_id);
@@ -1113,6 +1147,9 @@ module l1d(clk,
    
    always_comb
      begin
+	n_flush_was_active = r_flush_was_active;
+	n_page_walk_gnt = r_page_walk_gnt | page_walk_rsp_gnt;
+	n_l2_probe_ack = 1'b0;
 	t_reload_tlb = 1'b0;
 	n_page_walk_req_valid = 1'b0;
 	n_tlb_addr = r_tlb_addr;
@@ -1171,9 +1208,9 @@ module l1d(clk,
 	n_cache_hits = r_cache_hits;
 	
 	n_store_stalls = r_store_stalls;
-	
+
 	n_flush_req = r_flush_req | flush_req;
-	n_flush_cl_req = r_flush_cl_req | flush_cl_req;
+	n_flush_cl_req = r_flush_cl_req |l2_probe_val;
 	n_flush_complete = 1'b0;
 	t_addr = 'd0;
 	
@@ -1234,20 +1271,20 @@ module l1d(clk,
 
 		    if(r_pending_tlb_miss)
 		      begin
-			 //$display("pc %x, replay address %x, mapped to %x, hit %b, rob id %d  cycle %d, cache hit %b",
-			//	  r_req2.pc, r_tlb_addr, w_tlb_pa, t_port2_hit_cache, r_req2.rob_ptr, r_cycle, t_port2_hit_cache );			 
+`ifdef VERBOSE_L1D
+			 $display("pc %x, replay address %x, mapped to %x, hit %b, rob id %d  cycle %d, cache hit %b",
+				  r_req2.pc, r_tlb_addr, w_tlb_pa, t_port2_hit_cache, r_req2.rob_ptr, r_cycle, t_port2_hit_cache );
+`endif
 			 n_pending_tlb_miss = 1'b0;
 		      end
 		    
-		    //if(r_req2.op == MEM_NOP)
-		    //begin
-		    //$display("mem nop! - bad %b", r_req2.spans_cacheline);
-		    //end
+		    
 		    
 		    if(drain_ds_complete || r_req2.op == MEM_NOP)
 		      begin
 			 n_core_mem_rsp.dst_valid = r_req2.dst_valid;
-			 n_core_mem_rsp.has_cause = r_req2.spans_cacheline;
+			 n_core_mem_rsp.has_cause = r_req2.has_cause;
+			 n_core_mem_rsp.cause = r_req2.cause;
 			 n_core_mem_rsp_valid = 1'b1;
 		      end
 		    else if(!w_tlb_hit)
@@ -1272,7 +1309,7 @@ module l1d(clk,
 			      n_cache_hits = r_cache_hits + 'd1;
 			   end
 			 n_core_mem_rsp_valid = 1'b1;
-			 n_core_mem_rsp.has_cause = r_req2.spans_cacheline;
+			 n_core_mem_rsp.has_cause = r_req2.spans_cacheline;			 
 		      end // if (r_req2.is_store)
 		    else if(t_port2_hit_cache && (!r_hit_busy_addr2) & (!r_pending_tlb_miss) )
 		      begin
@@ -1358,10 +1395,6 @@ module l1d(clk,
 		  else
 		    begin
 		       
-`ifdef VERBOSE_L1D
-		       $display("at cycle %d : cache invalid miss for rob ptr %d, r_is_retry %b, addr %x, is store %b, r_cache_idx = %d, r_cache_tag = %d, valid %b",
-				r_cycle, r_req.rob_ptr, r_is_retry, r_req.addr, r_req.is_store, r_cache_idx, r_cache_tag, r_valid_out);
-`endif
 
 		       t_got_miss = 1'b1;
 		       n_inhibit_write = 1'b0;	
@@ -1389,7 +1422,24 @@ module l1d(clk,
 				 n_state = INJECT_RELOAD;
 				 n_mem_req_valid = 1'b1;
 			      end
-			 end // if (!t_stall_for_busy)
+			 end // if (r_hit_busy_addr && r_is_retry || !r_hit_busy_addr || r_lock_cache)
+		       else
+			 begin
+			    $stop();
+			 end
+`ifdef VERBOSE_L1D
+		       $display("at cycle %d : cache invalid miss for rob ptr %d, r_is_retry %b, addr %x, is store %b, r_cache_idx = %d, r_cache_tag = %d, valid %b, n_state %d",
+				r_cycle, 
+				r_req.rob_ptr, 
+				r_is_retry, 
+				r_req.addr, 
+				r_req.is_store, 
+				r_cache_idx, 
+				r_cache_tag, 
+				r_valid_out,
+				n_state);
+`endif
+		       
 		    end // else: !if(r_valid_out && r_dirty_out && (r_tag_out != r_cache_tag)...
 		 end // if (r_got_req)
 	       else if(n_pending_tlb_miss)
@@ -1399,6 +1449,7 @@ module l1d(clk,
 			 $stop();
 		      end
 		    n_state = TLB_RELOAD;
+		    n_page_walk_gnt = 1'b0;
 		    n_page_walk_req_valid = 1'b1;
 		 end
 
@@ -1423,10 +1474,11 @@ module l1d(clk,
 			    
 			    if(w_st_amo_grad && (core_store_data_valid ? (t_mem_head.rob_ptr == core_store_data.rob_ptr) : 1'b0) )
 			      begin
-`ifdef VERBOSE_L1D
-				 $display("firing store for %x with data %x at cycle %d for rob ptr %d", 
-					  t_mem_head.addr, t_mem_head.data, r_cycle, t_mem_head.rob_ptr);
-`endif
+//`ifdef VERBOSE_L1D
+				 if(t_mem_head.pc == 64'hffffffff80602aa4)
+				   $display("firing store for %x with data %x at cycle %d for rob ptr %d", 
+					    t_mem_head.addr, t_mem_head.data, r_cycle, t_mem_head.rob_ptr);
+//`endif
 				 t_pop_mq = 1'b1;
 				 core_store_data_ack = 1'b1;
 				 n_req = t_mem_head;
@@ -1489,8 +1541,10 @@ module l1d(clk,
 		  n_tlb_addr = core_mem_va_req.addr;
 
 `ifdef VERBOSE_L1D
-		  $display("accepting new op %d, addr %x for rob ptr %d at cycle %d, mem_q_empty %b", 
-			   core_mem_va_req.op, core_mem_va_req.addr,
+		  $display("accepting new op %d, pc %x addr %x for rob ptr %d at cycle %d, mem_q_empty %b", 
+			   core_mem_va_req.op,
+			   core_mem_va_req.pc,
+			   core_mem_va_req.addr,
 			   core_mem_va_req.rob_ptr, r_cycle, mem_q_empty);
 `endif
 		  
@@ -1501,6 +1555,7 @@ module l1d(clk,
 	       end // if (core_mem_va_req_valid &&...
 	       else if(r_flush_req && mem_q_empty && !(r_got_req && r_last_wr))
 		 begin
+		    if(n_state != r_state) $stop();
 		    n_state = FLUSH_CACHE;
 		    if(!mem_q_empty) $stop();
 		    if(r_got_req && r_last_wr) $stop();
@@ -1509,13 +1564,16 @@ module l1d(clk,
 		    t_cache_idx = 'd0;
 		    n_flush_req = 1'b0;
 		 end
-	       else if(r_flush_cl_req && mem_q_empty && !(r_got_req && r_last_wr))
+	       else if(r_flush_cl_req && mem_q_empty && !(r_got_req && r_last_wr)
+		       && !(n_page_walk_req_valid | t_got_miss))
 		 begin
+		    //$display("t_got_miss = %b, n_state = %d", t_got_miss, n_state);
+		    if(n_state != r_state) $stop();		    
 		    if(!mem_q_empty) $stop();
 		    if(r_got_req && r_last_wr) $stop();
-		    t_cache_idx = flush_cl_addr[IDX_STOP-1:IDX_START];
-		    //$display("flush addr %x, maps to cl %d at cycle", flush_cl_addr, t_cache_idx, r_cycle);
+		    t_cache_idx = l2_probe_addr[IDX_STOP-1:IDX_START];
 		    n_flush_cl_req = 1'b0;
+		    n_flush_was_active = 1'b1;
 		    n_state = FLUSH_CL;
 		 end
 	    end // case: ACTIVE
@@ -1540,9 +1598,10 @@ module l1d(clk,
 			 n_core_mem_rsp.has_cause = r_req.spans_cacheline;
 			 n_core_mem_rsp_valid = 1'b1;
 			 n_core_mem_rsp.dst_valid = r_req.dst_valid & n_core_mem_rsp_valid;
-			 //
-			 //$display("early ack at cycle %d for load with rob ptr %d, data %x, dst valid %b, addr %x, r_lock_cache = %b",
-			 //r_cycle, r_req.rob_ptr, n_core_mem_rsp.data , n_core_mem_rsp.dst_valid, r_req.addr, r_lock_cache );
+`ifdef VERBOSE_L1D
+			 $display("early ack at cycle %d for load with rob ptr %d, data %x, dst valid %b, addr %x, r_lock_cache = %b",
+				  r_cycle, r_req.rob_ptr, n_core_mem_rsp.data , n_core_mem_rsp.dst_valid, r_req.addr, r_lock_cache );
+`endif
 		      end
 		 end
 	    end
@@ -1560,27 +1619,29 @@ module l1d(clk,
 	    begin
 	       if(r_dirty_out)
 		 begin
-		    n_mem_req_addr = {r_tag_out,r_cache_idx,{`LG_L1D_CL_LEN{1'b0}}};
-	       n_mem_req_opcode = MEM_SW;
-	       n_mem_req_store_data = t_data;
-	       n_state = FLUSH_CL_WAIT;
-	       n_inhibit_write = 1'b1;
+		    n_mem_req_addr = {r_tag_out,r_cache_idx,4'd0};
+		    n_mem_req_opcode = MEM_SW;
+		    n_mem_req_store_data = t_data;
+		    n_state = FLUSH_CL_WAIT;
+		    n_inhibit_write = 1'b1;
 	            n_mem_req_valid = 1'b1;	       
 		 end
 	       else
 		 begin
-		    n_state = ACTIVE;
+		    n_state = r_flush_was_active ? ACTIVE : TLB_RELOAD;
+		    n_flush_was_active = 1'b0;
 		    t_mark_invalid = 1'b1;
-		    n_flush_complete = 1'b1;
+		    n_l2_probe_ack = 1'b1;
 		 end
 	    end // case: FLUSH_CL
 	  FLUSH_CL_WAIT:
 	    begin
 	       	if(mem_rsp_valid)
 		  begin
-		     n_state = ACTIVE;
+		     n_state = n_flush_was_active ? ACTIVE : TLB_RELOAD;
+		     n_flush_was_active = 1'b0;
 		     n_inhibit_write = 1'b0;
-		     n_flush_complete = 1'b1;
+		     n_l2_probe_ack = 1'b1;
 		  end	       
 	    end
 	  FLUSH_CACHE:
@@ -1602,13 +1663,13 @@ module l1d(clk,
 		 end
 	       else
 		 begin
-		    n_mem_req_addr = {r_tag_out,r_cache_idx,{`LG_L1D_CL_LEN{1'b0}}};
-	       n_mem_req_opcode = MEM_SW;
-	       n_mem_req_store_data = t_data;
-	       n_state = (r_cache_idx == (L1D_NUM_SETS-1)) ? FLUSH_CACHE_LAST_WAIT : FLUSH_CACHE_WAIT;
-	       n_inhibit_write = 1'b1;
-	       n_mem_req_valid = 1'b1;
-	    end // else: !if(r_valid_out && !r_dirty_out)
+		    n_mem_req_addr = {r_tag_out,r_cache_idx,4'd0};
+		    n_mem_req_opcode = MEM_SW;
+		    n_mem_req_store_data = t_data;
+		    n_state = (r_cache_idx == (L1D_NUM_SETS-1)) ? FLUSH_CACHE_LAST_WAIT : FLUSH_CACHE_WAIT;
+		    n_inhibit_write = 1'b1;
+		    n_mem_req_valid = 1'b1;
+		 end // else: !if(r_valid_out && !r_dirty_out)
 	    end // case: FLUSH_CACHE
 	  FLUSH_CACHE_LAST_WAIT:
 	    begin
@@ -1646,10 +1707,18 @@ module l1d(clk,
 					STORE_PAGE_FAULT : LOAD_PAGE_FAULT;
 			 //$stop();
 		      end		    
+		 end // if (page_walk_rsp_valid)
+	       else if(n_flush_cl_req)
+		 begin
+		    n_state = FLUSH_CL;
+		    n_flush_cl_req = 1'b0;
+		    t_cache_idx = l2_probe_addr[IDX_STOP-1:IDX_START];
+		    n_flush_was_active = 1'b0;
 		 end
 	    end
 	  TLB_TURNAROUND:
 	    begin
+	       n_page_walk_gnt = 1'b0;
 	       n_state = ACTIVE;
 	       t_replay_req2 = 1'b1;
 	       t_tlb_xlat = 1'b1;

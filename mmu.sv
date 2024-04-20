@@ -3,7 +3,8 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 	   mem_req_valid, mem_req_addr, mem_req_data,  mem_req_store,
 	   mem_rsp_valid, mem_rsp_data,
 	   page_fault, page_dirty, page_executable, page_readable, page_writable,
-	   phys_addr, l1d_rsp_valid, l1i_rsp_valid);
+	   phys_addr, l1d_rsp_valid, l1i_rsp_valid,
+	   l1i_gnt, l1d_gnt);
    input logic clk;
    input logic reset;
    input logic clear_tlb;
@@ -33,6 +34,9 @@ module mmu(clk, reset, clear_tlb, page_table_root,
    output logic	       l1d_rsp_valid;
    output logic	       l1i_rsp_valid;
 
+   output logic        l1i_gnt;
+   output logic        l1d_gnt;
+   
       
    logic [63:0]	       n_addr, r_addr;
    logic [63:0]	       n_va, r_va, r_pa, n_pa;
@@ -71,7 +75,12 @@ module mmu(clk, reset, clear_tlb, page_table_root,
    state_t r_state, n_state;
    logic	n_l1i_req, r_l1i_req;
    logic	n_l1d_req, r_l1d_req;
+   logic 	n_gnt_l1i, r_gnt_l1i;
+   logic 	n_gnt_l1d, r_gnt_l1d;
 
+   assign l1i_gnt = r_gnt_l1i;
+   assign l1d_gnt = r_gnt_l1d;
+   
    wire		w_lo_va = (&r_va[63:39]) & (r_va[39] == r_va[38]);
    wire		w_hi_va = (&(~r_va[63:39])) & (r_va[39] == r_va[38]);
    wire		w_bad_va = (w_lo_va | w_hi_va) == 1'b0;
@@ -100,6 +109,8 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 	n_do_l1i = r_do_l1i;
 	n_do_l1d = r_do_l1d;
 	n_hit_lvl = r_hit_lvl;
+	n_gnt_l1i = 1'b0;
+	n_gnt_l1d = 1'b0;
 	
 	case(r_state)
 	  IDLE:
@@ -109,24 +120,33 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 		    n_state = LOAD0;
 		    n_va = l1i_va;
 		    n_l1i_req = 1'b0;
-		    //$display("starting translation for %x, page_table_root %x", l1i_va, page_table_root);
+`ifdef VERBOSE_MMU
+		    $display("starting translation for l1i %x", l1i_va);
+`endif
 		    n_do_l1i = 1'b1;
 		    n_do_l1d = 1'b0;
+		    n_gnt_l1i = 1'b1;
 		 end
 	       else if(n_l1d_req)
 		 begin
 		    n_state = LOAD0;
 		    n_va = l1d_va;
 		    n_l1d_req = 1'b0;
-		    //$display("starting translation for %x", l1d_va);
+`ifdef VERBOSE_MMU
+		    $display("starting translation for l1d %x", l1d_va);
+`endif
 		    n_do_l1i = 1'b0;
 		    n_do_l1d = 1'b1;
+		    n_gnt_l1d = 1'b1;
 		 end
 	    end
 	  LOAD0:
 	    begin
 	       n_addr = page_table_root + {52'd0, r_va[38:30], 3'd0};
-	       //$display("r_va = %x, r_va[38:30] = %d, addr %x", r_va, r_va[38:30], n_addr);
+`ifdef VERBOSE_MMU	       
+	       $display("r_va = %x, r_va[38:30] = %d, addr %x l1i %b, l1d %b", 
+			r_va, r_va[38:30], n_addr, r_do_l1i, r_do_l1d);
+`endif
 	       if(w_bad_va)
 		 begin
 		    n_state = IDLE;
@@ -198,6 +218,7 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 	  LOAD2:
 	    begin
 	       n_addr = {8'd0, r_addr[53:10], 12'd0} + {52'd0, r_va[20:12], 3'd0};
+	       //$display("walker level 2 generates address %x", n_addr);
 	       n_req = 1'b1;
 	       n_state = WAIT2;
 	    end
@@ -277,6 +298,8 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 	     r_do_l1i <= 1'b0;
 	     r_do_l1d <= 1'b0;
 	     r_hit_lvl <= 2'd0;
+	     r_gnt_l1i <= 1'b0;
+	     r_gnt_l1d <= 1'b0;
 	  end
 	else
 	  begin
@@ -295,8 +318,9 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 	     r_do_l1i <= n_do_l1i;
 	     r_do_l1d <= n_do_l1d;
 	     r_hit_lvl <= n_hit_lvl;
+	     r_gnt_l1i <= n_gnt_l1i;
+	     r_gnt_l1d <= n_gnt_l1d;	     
 	  end
      end
-   
-   
-endmodule
+endmodule // mmu
+
