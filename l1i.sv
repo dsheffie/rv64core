@@ -1110,7 +1110,7 @@ endfunction
 
 
    
-  tlb itlb(
+   tlb #(.LG_N(3)) itlb(
 	   .clk(clk), 
 	   .reset(reset),
 	   .clear(clear_tlb),

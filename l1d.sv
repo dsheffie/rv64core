@@ -150,6 +150,8 @@ module l1d(clk,
    localparam N_MQ_ENTRIES = (1<<`LG_MRQ_ENTRIES);
    
    logic 				  r_got_req, r_last_wr, n_last_wr;
+   logic 				  r_wr_array;
+   
    logic 				  r_last_rd, n_last_rd;
    logic 				  r_got_req2, r_last_wr2, n_last_wr2;
    logic 				  r_last_rd2, n_last_rd2;
@@ -206,7 +208,6 @@ module l1d(clk,
    logic 				  t_mark_invalid;
    logic 				  t_wr_array;
    logic				  t_wr_store;
-   logic				  t_silent_store;   
    logic 				  t_hit_cache;
    logic 				  t_rsp_dst_valid;
    logic [63:0] 			  t_rsp_data;
@@ -610,8 +611,8 @@ module l1d(clk,
 	     r_lock_cache <= 1'b0;
 	     rr_is_retry <= 1'b0;
 	     rr_did_reload <= 1'b0;
-	     
 	     rr_last_wr <= 1'b0;
+	     r_wr_array <= 1'b0;
 	     r_got_non_mem <= 1'b0;
 	     r_last_wr <= 1'b0;
 	     r_last_rd <= 1'b0;
@@ -666,6 +667,7 @@ module l1d(clk,
 	     rr_did_reload <= r_did_reload;
 	     
 	     rr_last_wr <= r_last_wr;
+	     r_wr_array <= t_wr_array;
 	     r_got_non_mem <= t_got_non_mem;
 	     r_last_wr <= n_last_wr;
 	     r_last_rd <= n_last_rd;
@@ -723,31 +725,66 @@ module l1d(clk,
      begin
    	if(t_wr_array)
    	  begin
-   	     $display("cycle %d : WRITING set %d WITH data %x, addr %x, op %d ptr %d, retry %b", 
+   	     $display("cycle %d : WRITING set %d WITH data %x, addr %x, op %d ptr %d, retry %b, dirty addr %x, dirty value %b, dirty en %b", 
    		      r_cycle, 
 		      r_cache_idx, 
 		      t_array_data,
 		      r_req.addr, 
 		      r_req.op,
 		      r_req.rob_ptr, 
-		      r_is_retry);
+		      r_is_retry,
+		      t_dirty_wr_addr,
+		      t_dirty_value,
+		      t_write_dirty_en);
    	  end	
      end // always_ff@ (negedge clk)
-   
-   always_comb
-     begin
-   	if(mem_rsp_valid)
-   	  begin
-   	     $display("cycle %d : CACHERELOAD from addr %x -> set %d data %x, r_state %d", 
-   		      r_cycle, 
-		      r_mem_req_addr, 
-		      r_mem_req_addr[IDX_STOP-1:IDX_START], 
-		      t_array_wr_data, 
-		      r_state);
-   	  end
-
-     end
 `endif
+   always_ff@(negedge clk)
+     begin
+   	if(/*r_cycle > 'd554562370*/0)
+	  begin
+	     if(r_state == FLUSH_CL)
+	       begin
+		  $display("flush line %d at cycle %d for addr %x, was dirty %b, r_last_wr = %b, rr_last_wr = %b",
+			   r_cache_idx, r_cycle, {r_tag_out,r_cache_idx,4'd0}, r_dirty_out, r_last_wr, rr_last_wr);
+	       end
+   	     if(t_wr_array)
+   	       begin
+   		  $display("cycle %d : WRITING set %d WITH data %x, addr %x, op %d ptr %d, retry %b, dirty addr %x, dirty value %b, dirty en %b, %b %b %b", 
+   			   r_cycle, 
+			   r_cache_idx, 
+			   t_array_data,
+			   r_req.addr, 
+			   r_req.op,
+			   r_req.rob_ptr, 
+			   r_is_retry,
+			   t_dirty_wr_addr,
+			   t_dirty_value,
+			   t_write_dirty_en,
+			   n_last_wr,
+			   r_last_wr,
+			   rr_last_wr);
+   	       end	
+	     
+	     if( mem_rsp_valid && r_mem_req_addr[IDX_STOP-1:IDX_START] == 'd0)
+   	       begin
+   		  $display("cycle %d : CACHERELOAD from addr %x -> set %d data %x, r_state %d", 
+   			   r_cycle, 
+			   r_mem_req_addr, 
+			   r_mem_req_addr[IDX_STOP-1:IDX_START], 
+			   t_array_wr_data, 
+			   r_state);
+   	       end
+	     if(r_state != INJECT_RELOAD && n_state == INJECT_RELOAD &&
+		n_mem_req_addr[IDX_STOP-1:IDX_START] == 'd0)
+	       begin
+		  $display("cycle %d : inject reload to set 0, for addr %x, store %d, data %x",
+			   r_cycle, n_mem_req_addr, n_mem_req_opcode, t_data);
+	       end
+	     
+	  end // if (...
+     end // always_ff@ (negedge clk)
+
 
    
  ram2r1w #(.WIDTH(N_TAG_BITS), .LG_DEPTH(`LG_L1D_NUM_SETS)) dc_tag
@@ -856,7 +893,7 @@ module l1d(clk,
 
 
 
-    tlb dtlb(
+   tlb #(.LG_N(4)) dtlb(
     	    .clk(clk), 
     	    .reset(reset),
     	    .clear(clear_tlb),
@@ -954,6 +991,10 @@ module l1d(clk,
 		    r_req.addr, 
 		    r_req.op == MEM_AMOD ? t_amo64_data : (r_req.op == MEM_AMOW ? {{32{t_amo32_data[31]}},t_amo32_data} : r_req.data), 
 		    r_req.is_atomic ? 32'd1 : 32'd0);
+	     // if(r_req.is_atomic)
+	     //   $display("firing atomic for pc %x addr %x with data %x t_shift %x, at cycle %d for rob ptr %d, r_cache_idx %d", 
+	     // 		r_req.pc, r_req.addr, r_req.data, t_shift, r_cycle, r_req.rob_ptr, r_cache_idx);
+	     
 	  end
      end // always_ff@ (negedge clk)
 `endif
@@ -1100,8 +1141,7 @@ module l1d(clk,
 	    begin
 	    end
 	endcase // case r_req.op
-	//t_silent_store = (t_array_data == t_data);
-	t_wr_array = t_wr_store & !t_silent_store;
+	t_wr_array = t_wr_store;
      end
 
 
@@ -1369,7 +1409,7 @@ module l1d(clk,
 			 n_inhibit_write = 1'b1;
 			 if(r_hit_busy_addr && r_is_retry || !r_hit_busy_addr)
 			   begin
-			      n_mem_req_addr = {r_tag_out,r_cache_idx,{`LG_L1D_CL_LEN{1'b0}}};
+			      n_mem_req_addr = {r_tag_out,r_cache_idx,4'd0};
 			      n_mem_req_opcode = MEM_SW;
 			      n_mem_req_store_data = t_data;
 			      n_inhibit_write = 1'b1;
@@ -1474,10 +1514,7 @@ module l1d(clk,
 			    
 			    if(w_st_amo_grad && (core_store_data_valid ? (t_mem_head.rob_ptr == core_store_data.rob_ptr) : 1'b0) )
 			      begin
-//`ifdef VERBOSE_L1D
-				 if(t_mem_head.pc == 64'hffffffff80602aa4)
-				   $display("firing store for %x with data %x at cycle %d for rob ptr %d", 
-					    t_mem_head.addr, t_mem_head.data, r_cycle, t_mem_head.rob_ptr);
+				 //`ifdef VERBOSE_L1D
 //`endif
 				 t_pop_mq = 1'b1;
 				 core_store_data_ack = 1'b1;
@@ -1565,7 +1602,7 @@ module l1d(clk,
 		    n_flush_req = 1'b0;
 		 end
 	       else if(r_flush_cl_req && mem_q_empty && !(r_got_req && r_last_wr)
-		       && !(n_page_walk_req_valid | t_got_miss))
+		       && !(n_page_walk_req_valid | t_got_miss | r_wr_array))
 		 begin
 		    //$display("t_got_miss = %b, n_state = %d", t_got_miss, n_state);
 		    if(n_state != r_state) $stop();		    

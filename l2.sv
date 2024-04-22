@@ -530,7 +530,6 @@ module l2(clk,
 		      end
 		    else if((!w_l1i_req) & w_l1d_req)
 		      begin
-			 //$display("accepting d-side, addr = %x, store=%b", l1d_addr, l1d_opcode == MEM_SW);
 			 n_last_gnt = 1'b1;
 			 t_idx = l1d_addr[LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN];			 
 			 n_tag = l1d_addr[(`M_WIDTH-1):LG_L2_LINES+`LG_L2_CL_LEN];
@@ -563,7 +562,7 @@ module l2(clk,
 			   end
 			 else
 			   begin
-			      //$display("accepting d-side, addr = %x, store=%b", l1d_addr, l1d_opcode == MEM_SW);			      
+			      //$display("accepting d-side, addr = %x, store=%b", l1d_addr, l1d_opcode == MEM_SW);
 			      n_last_gnt = 1'b1;
 			      t_idx = l1d_addr[LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN];			 			      			      
 			      n_tag = l1d_addr[(`M_WIDTH-1):LG_L2_LINES+`LG_L2_CL_LEN];
