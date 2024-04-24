@@ -1524,7 +1524,21 @@ module exec(clk,
    
    always_ff@(negedge clk)
      begin
-
+	//if((int_uop.pc == 64'hffffffff80231c0c) & r_start_int)
+	//begin
+	// $display("cycle %d %d for pc %x, read %x, writing %x", 
+	//	      r_cycle, int_uop.op, int_uop.pc, t_rd_csr, t_wr_csr);
+	//end
+	if((int_uop.pc == 64'hffffffff80305340) & r_start_int)
+	  begin
+	     $display("cycle %d %d for pc %x, read %x, writing %x, imm %x, ~imm %x, and %x", 
+		      r_cycle, int_uop.op, int_uop.pc, t_rd_csr, t_wr_csr, int_uop.imm[10:6], ~int_uop.imm[10:6], t_rd_csr[4:0] & (~int_uop.imm[10:6]));
+	  end
+	//if(t_wr_csr_en && int_uop.imm[5:0] == SSTATUS)
+	//begin
+	//$display("%x writes %x to sstatus at cycle %d",
+	//int_uop.pc, t_wr_csr, r_cycle);
+	//end
 	//if((int_uop.op == SRLIW) & r_start_int)
 	//begin
 	//$display("portA pc %x src A = %x, imm = %x, result %x", 
@@ -2280,7 +2294,7 @@ module exec(clk,
 	    begin
 	       t_rd_csr_en = 1'b1;
 	       t_wr_csr_en = (int_uop.imm[10:6] != 'd0)&r_start_int;
-	       t_wr_csr = t_rd_csr & {59'd0, ~int_uop.imm[10:6]};
+	       t_wr_csr = t_rd_csr & (~{59'd0, int_uop.imm[10:6]});
 	       t_result = t_rd_csr;
 	       t_wr_int_prf = int_uop.dst_valid;
 	       t_alu_valid = 1'b1;

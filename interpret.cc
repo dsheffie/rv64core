@@ -355,9 +355,11 @@ static void write_csr(int csr_id, state_t *s, int64_t v, bool &undef) {
   csr_t c(v);
   switch(csr_id)
     {
-    case 0x100:
+    case 0x100: {
+      printf("checker writes %lx to sstatus at pc %lx\n", v, s->pc);
       s->sstatus = v;
       break;
+    }
     case 0x104:
       s->sie = v;
       break;

@@ -1238,6 +1238,7 @@ module l1d(clk,
 	n_core_mem_rsp_valid = 1'b0;
 	
 	n_core_mem_rsp.data = r_req.addr;
+	n_core_mem_rsp.addr = r_req.addr;
 	n_core_mem_rsp.rob_ptr = r_req.rob_ptr;
 	n_core_mem_rsp.dst_ptr = r_req.dst_ptr;
 	n_core_mem_rsp.dst_valid = 1'b0;
@@ -1325,6 +1326,7 @@ module l1d(clk,
 			 n_core_mem_rsp.dst_valid = r_req2.dst_valid;
 			 n_core_mem_rsp.has_cause = r_req2.has_cause;
 			 n_core_mem_rsp.cause = r_req2.cause;
+			 n_core_mem_rsp.addr = r_req2.addr;
 			 n_core_mem_rsp_valid = 1'b1;
 		      end
 		    else if(!w_tlb_hit)
