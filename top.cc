@@ -596,11 +596,7 @@ int main(int argc, char **argv) {
 
   std::map<uint32_t, uint64_t> mispredicts;
 
-  uint64_t hist = 0, spec_hist = 0;
-  static const int TBL_SIZE = (1<<24);
-  static const int BTB_SIZE = (1<<6);
-  
-  
+    
   uint64_t inflight[32] = {0};
   uint64_t *insns_delivered = new uint64_t[max_insns_per_cycle_hist_sz];
   memset(insns_delivered, 0, sizeof(uint64_t)*max_insns_per_cycle_hist_sz);

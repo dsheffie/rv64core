@@ -1,9 +1,12 @@
+`include "rob.vh"
+
 module mmu(clk, reset, clear_tlb, page_table_root, 
 	   l1i_req, l1i_va, l1d_req, l1d_st, l1d_va,
 	   mem_req_valid, mem_req_addr, mem_req_data,  mem_req_store,
 	   mem_rsp_valid, mem_rsp_data,
-	   page_fault, page_dirty, page_executable, page_readable, page_writable,
-	   phys_addr, l1d_rsp_valid, l1i_rsp_valid,
+	   page_walk_rsp,
+	   l1d_rsp_valid, 
+	   l1i_rsp_valid,
 	   l1i_gnt, l1d_gnt);
    input logic clk;
    input logic reset;
@@ -23,14 +26,7 @@ module mmu(clk, reset, clear_tlb, page_table_root,
    input logic	       mem_rsp_valid;
    input logic [63:0]  mem_rsp_data;
 
-   output logic	       page_fault;
-   output logic	       page_dirty;
-   output logic	       page_executable;
-   output logic	       page_readable;
-   output logic	       page_writable;
-   
-   
-   output logic [63:0] phys_addr;
+   output 	       page_walk_rsp_t page_walk_rsp;
    output logic	       l1d_rsp_valid;
    output logic	       l1i_rsp_valid;
 
@@ -48,16 +44,27 @@ module mmu(clk, reset, clear_tlb, page_table_root,
    logic	       r_do_l1d, n_do_l1d;
    logic [1:0]	       n_hit_lvl, r_hit_lvl;
    logic	       r_page_dirty, n_page_dirty;
+   logic 	       r_page_read, n_page_read;
+   logic 	       r_page_write, n_page_write;
+   logic 	       r_page_user, n_page_user;
+   
    logic	       n_page_executable, r_page_executable;
    
    assign mem_req_valid = r_req;
    assign mem_req_addr = r_addr;
    assign l1d_rsp_valid = r_l1d_rsp_valid;
    assign l1i_rsp_valid = r_l1i_rsp_valid;
-   assign phys_addr = r_pa;
-   assign page_fault = r_page_fault;
-   assign page_dirty = r_page_dirty;
-   assign page_executable = r_page_executable;
+
+   always_comb
+     begin
+	page_walk_rsp.paddr = r_pa;
+	page_walk_rsp.fault = r_page_fault;
+	page_walk_rsp.dirty = r_page_dirty;
+	page_walk_rsp.readable = r_page_read;
+	page_walk_rsp.writable = r_page_write;
+	page_walk_rsp.executable = r_page_executable;
+	page_walk_rsp.user = r_page_user;
+     end
 
    assign mem_req_data = 'd0;
    
@@ -105,7 +112,10 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 	n_page_fault = 1'b0;
 	n_page_dirty = 1'b0;
 	n_page_executable = 1'b0;
-			    
+	n_page_write = 1'b0;
+	n_page_read = 1'b0;
+	n_page_user = 1'b0;
+	
 	n_do_l1i = r_do_l1i;
 	n_do_l1d = r_do_l1d;
 	n_hit_lvl = r_hit_lvl;
@@ -261,7 +271,11 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 	       n_l1i_rsp_valid = r_do_l1i;
 	       n_l1d_rsp_valid = r_do_l1d;
 	       n_page_dirty = r_addr[7];
-	       n_page_executable = r_addr[2];
+	       
+	       n_page_read = r_addr[1];
+	       n_page_write = r_addr[2];
+	       n_page_executable = r_addr[3];	       
+	       n_page_user = r_addr[4];
 	       
 	       if(r_addr[6] == 1'b0)
 		 begin
@@ -295,6 +309,9 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 	     r_page_fault <= 1'b0;
 	     r_page_dirty <= 1'b0;
 	     r_page_executable <= 1'b0;
+	     r_page_read <= 1'b0;
+	     r_page_write <= 1'b0;
+	     r_page_user <= 1'b0;
 	     r_do_l1i <= 1'b0;
 	     r_do_l1d <= 1'b0;
 	     r_hit_lvl <= 2'd0;
@@ -315,6 +332,9 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 	     r_page_fault <= n_page_fault;
 	     r_page_dirty <= n_page_dirty;
 	     r_page_executable <= n_page_executable;
+	     r_page_read <= n_page_read;
+	     r_page_write <= n_page_write;
+	     r_page_user <= n_page_user;
 	     r_do_l1i <= n_do_l1i;
 	     r_do_l1d <= n_do_l1d;
 	     r_hit_lvl <= n_hit_lvl;

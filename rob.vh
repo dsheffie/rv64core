@@ -128,6 +128,15 @@ typedef struct packed {
    logic [`LG_ROB_ENTRIES-1:0] rob_ptr;
 } bob_entry_t;
 
+typedef struct packed {
+   logic       fault;
+   logic       dirty;
+   logic       readable;
+   logic       writable;
+   logic       executable;
+   logic       user;
+   logic [63:0] paddr;
+} page_walk_rsp_t;
 
 
 `endif

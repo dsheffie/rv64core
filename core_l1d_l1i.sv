@@ -344,13 +344,11 @@ module
    wire				    w_l1d_page_walk_req_valid;
 
    wire				    w_page_fault;
-   wire	w_page_executable;
-   wire	w_page_readable;
-   wire	w_page_writable;
-   wire	w_page_dirty;
    wire	w_l1d_rsp_valid;
    wire	w_l1i_rsp_valid;
-   wire [63:0] w_phys_addr;
+
+   page_walk_rsp_t page_walk_rsp;
+   
    wire	       w_restart_complete;
    
    logic	drain_ds_complete;
@@ -431,12 +429,9 @@ module
 	       .page_walk_req_valid(w_l1d_page_walk_req_valid),
 	       .page_walk_rsp_gnt(w_mmu_gnt_l1d),
 	       .page_walk_rsp_valid(w_l1d_rsp_valid),
-	       .page_walk_rsp_pa(w_phys_addr),
-	       .page_walk_rsp_fault(w_page_fault),
-	       .page_walk_rsp_dirty(w_page_dirty),
-	       .page_walk_rsp_readable(w_page_readable),
-	       .page_walk_rsp_writable(w_page_writable),
-	       
+	       .page_walk_rsp(page_walk_rsp),
+		 
+		 
 	       .head_of_rob_ptr_valid(head_of_rob_ptr_valid),
 	       .head_of_rob_ptr(head_of_rob_ptr),
 	       .retired_rob_ptr_valid(retired_rob_ptr_valid),
@@ -501,12 +496,9 @@ module
 	    .mem_req_store(w_mmu_req_store),
 	    .mem_rsp_valid(w_mmu_rsp_valid),
 	    .mem_rsp_data(w_mmu_rsp_data),
-	    .phys_addr(w_phys_addr),
-	    .page_dirty(w_page_dirty),
-	    .page_executable(w_page_executable),
-	    .page_readable(w_page_readable),
-	    .page_writable(w_page_writable),
-	    .page_fault(w_page_fault),
+
+	    .page_walk_rsp(page_walk_rsp),
+	    
 	    .l1d_rsp_valid(w_l1d_rsp_valid),
 	    .l1i_rsp_valid(w_l1i_rsp_valid),
 	    .l1i_gnt(w_mmu_gnt_l1i),
@@ -527,9 +519,8 @@ module
 	      .page_walk_req_va(w_l1i_page_walk_req_va),
 	      .page_walk_req_valid(w_l1i_page_walk_req_valid),
 	      .page_walk_rsp_valid(w_l1i_rsp_valid),
-	      .page_walk_rsp_pa(w_phys_addr),
-	      .page_walk_rsp_fault(w_page_fault),
-	      .page_walk_rsp_executable(w_page_executable),
+	      .page_walk_rsp(page_walk_rsp),
+
 	      
 	      .flush_req(flush_req_l1i),
 	      .flush_complete(l1i_flush_complete),

@@ -356,7 +356,6 @@ static void write_csr(int csr_id, state_t *s, int64_t v, bool &undef) {
   switch(csr_id)
     {
     case 0x100: {
-      printf("checker writes %lx to sstatus at pc %lx\n", v, s->pc);
       s->sstatus = v;
       break;
     }
@@ -544,7 +543,7 @@ void execRiscv(state_t *s) {
     abort();
   }
 
-  
+
   if(globals::log) {
     std::cout << std::hex << s->pc << std::dec
 	      << " : " << getAsmString(inst, s->pc)

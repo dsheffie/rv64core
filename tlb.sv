@@ -1,3 +1,5 @@
+`include "rob.vh"
+
 module tlb(clk,
 	   reset,
 	   clear,
@@ -9,12 +11,10 @@ module tlb(clk,
 	   dirty,
 	   readable,
 	   writable,
-	   replace,
-	   replace_dirty,
-	   replace_readable,	   
-	   replace_writable,
+	   user,
 	   replace_va,
-	   replace_pa);
+	   replace,
+	   page_walk_rsp);
    
    input logic clk;
    input logic reset;
@@ -28,20 +28,17 @@ module tlb(clk,
    output logic	       dirty;
    output logic	       readable;
    output logic	       writable;
-   
-   input logic	       replace;
-   input logic	       replace_dirty;
-   input logic	       replace_readable;
-   input logic	       replace_writable;
+   output logic        user;
    input logic [63:0]  replace_va;
-   input logic [63:0]  replace_pa;
+   input logic	       replace;
+   input 	       page_walk_rsp_t page_walk_rsp;
    
    /* bits 39 down to 12 */
 
    parameter	       LG_N = 2;
    localparam	       N = 1<<LG_N;
 
-   logic [N-1:0]       r_valid, r_dirty, r_readable, r_writable;
+   logic [N-1:0]       r_valid, r_dirty, r_readable, r_writable, r_executable, r_user;
    
    logic [LG_N-1:0]    r_cnt;
    
@@ -88,11 +85,13 @@ module tlb(clk,
      begin
 	if(replace)
 	  begin
-	     r_dirty[r_cnt] <= replace_dirty;
-	     r_readable[r_cnt] <= replace_readable;
-	     r_writable[r_cnt] <= replace_writable;
+	     r_dirty[r_cnt] <= page_walk_rsp.dirty;
+	     r_readable[r_cnt] <= page_walk_rsp.readable;
+	     r_writable[r_cnt] <= page_walk_rsp.writable;
+	     r_executable[r_cnt] <= page_walk_rsp.executable;
+	     r_user[r_cnt] <= page_walk_rsp.user;
 	     r_va_tags[r_cnt] <= replace_va[39:12];
-	     r_pa_data[r_cnt] <= replace_pa[63:12];
+	     r_pa_data[r_cnt] <= page_walk_rsp.paddr[63:12];
 	  end
      end // always_ff@ (posedge clk)
    

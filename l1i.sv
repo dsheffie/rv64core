@@ -99,9 +99,7 @@ module l1i(clk,
 	   page_walk_req_va,
 	   page_walk_req_valid,
 	   page_walk_rsp_valid,
-	   page_walk_rsp_pa,
-	   page_walk_rsp_fault,
-	   page_walk_rsp_executable,
+	   page_walk_rsp,
 	   flush_req,
 	   flush_complete,
 	   restart_pc,
@@ -153,9 +151,8 @@ module l1i(clk,
    output logic		    page_walk_req_valid;
    
    input logic		    page_walk_rsp_valid;
-   input logic [63:0]	    page_walk_rsp_pa;
-   input logic		    page_walk_rsp_fault;
-   input logic		    page_walk_rsp_executable;
+   input 		    page_walk_rsp_t 	    page_walk_rsp;
+
    
    input logic 	      flush_req;
    output logic       flush_complete;
@@ -925,8 +922,8 @@ endfunction
 	    begin
 	       if(page_walk_rsp_valid)
 	          begin
-	             n_page_fault = page_walk_rsp_fault;
-	             t_reload_tlb = page_walk_rsp_fault==1'b0;
+	             n_page_fault = page_walk_rsp.fault;
+	             t_reload_tlb = page_walk_rsp.fault==1'b0;
 		     n_state = TLB_MISS_TURNAROUND;
 		     //$display("mmu returns for %x, page fault %b at cycle %d", 
 		     //	      r_miss_pc, page_walk_rsp_fault, r_cycle);
@@ -1122,12 +1119,10 @@ endfunction
 	   .dirty(),
 	   .readable(),
 	   .writable(),
-	   .replace(t_reload_tlb),
-	   .replace_dirty(1'b0),
-	   .replace_readable(1'b0),
-	   .replace_writable(1'b0),
-	   .replace_va(r_miss_pc),
-	   .replace_pa(page_walk_rsp_pa)
+	   .user(),
+           .replace_va(r_miss_pc),			
+	   .replace(t_reload_tlb),			
+	   .page_walk_rsp(page_walk_rsp)
 	   );
    
    

@@ -24,12 +24,8 @@ module l1d(clk,
 	   page_walk_req_valid,
 	   page_walk_req_va,
 	   page_walk_rsp_gnt,
-	   page_walk_rsp_valid,
-	   page_walk_rsp_pa,
-	   page_walk_rsp_fault,
-	   page_walk_rsp_dirty,		
-	   page_walk_rsp_readable,
-	   page_walk_rsp_writable,	   
+	   page_walk_rsp_valid,	   
+	   page_walk_rsp,
 	   head_of_rob_ptr,
 	   head_of_rob_ptr_valid,
 	   retired_rob_ptr_valid,
@@ -84,12 +80,15 @@ module l1d(clk,
    output logic	page_walk_req_valid;
    output logic [63:0] page_walk_req_va;
    input logic 	       page_walk_rsp_gnt;
-   input logic	       page_walk_rsp_valid;
-   input logic [63:0]  page_walk_rsp_pa;
-   input logic	       page_walk_rsp_fault;
-   input logic	       page_walk_rsp_dirty;   
-   input logic	       page_walk_rsp_readable;
-   input logic	       page_walk_rsp_writable;
+   input logic 	       page_walk_rsp_valid;
+   input 	       page_walk_rsp_t page_walk_rsp;
+   
+   //input logic	       page_walk_rsp_valid;
+   //input logic [63:0]  page_walk_rsp_pa;
+   //input logic	       page_walk_rsp_fault;
+   //input logic	       page_walk_rsp_dirty;   
+   //input logic	       page_walk_rsp_readable;
+   //input logic	       page_walk_rsp_writable;
    
    input logic [`LG_ROB_ENTRIES-1:0] head_of_rob_ptr;
    input logic 			     head_of_rob_ptr_valid;
@@ -299,7 +298,12 @@ module l1d(clk,
    logic [63:0] 	       n_cache_accesses, r_cache_accesses;
    logic [63:0] 	       n_cache_hits, r_cache_hits;
 
-   wire w_tlb_hit;
+   wire 		       w_tlb_hit, w_tlb_dirty, w_tlb_writable, w_tlb_readable, 
+			       w_tlb_user;
+
+
+   
+   
    wire [63:0] w_tlb_pa;
    logic [63:0] r_tlb_addr, n_tlb_addr;
    logic 	t_reload_tlb;
@@ -902,15 +906,13 @@ module l1d(clk,
 	    .va(n_tlb_addr),
 	    .pa(w_tlb_pa),
 	    .hit(w_tlb_hit),
-	    .dirty(),
-	    .readable(),
-	    .writable(),
+	    .dirty(w_tlb_dirty),
+	    .readable(w_tlb_readable),
+	    .writable(w_tlb_writable),
+	    .user(w_tlb_user),
+            .replace_va(r_tlb_addr),
 	    .replace(t_reload_tlb),
-	    .replace_dirty(page_walk_rsp_dirty),
-	    .replace_readable(page_walk_rsp_readable),
-	    .replace_writable(page_walk_rsp_writable),
-	    .replace_va(r_tlb_addr),
-	    .replace_pa(page_walk_rsp_pa)
+	    .page_walk_rsp(page_walk_rsp)
 	    );
 
    
@@ -1184,7 +1186,10 @@ module l1d(clk,
 
    wire w_st_amo_grad = t_mem_head.is_store ? 
 			r_graduated[t_mem_head.rob_ptr] == 2'b10 : 1'b1;	       
-   
+
+   wire w_tlb_st_exc = w_tlb_hit & paging_active & (r_req2.is_store | r_req2.is_atomic) & 
+	!w_tlb_writable;
+	
    always_comb
      begin
 	n_flush_was_active = r_flush_was_active;
@@ -1320,6 +1325,17 @@ module l1d(clk,
 		      end
 		    
 		    
+		    if(r_req2.pc == 64'h10920)
+		      begin
+			 $display("pc %x, op %d, addr %x, tlb addr %x, has_cause %b",
+				  r_req2.pc, 
+				  r_req2.op,
+				  r_req2.addr,
+				  w_tlb_pa,
+				  r_req2.has_cause);
+		      end
+
+		    
 		    
 		    if(drain_ds_complete || r_req2.op == MEM_NOP)
 		      begin
@@ -1334,6 +1350,16 @@ module l1d(clk,
 			 //$display("missed address %x", r_tlb_addr);
 			 n_pending_tlb_miss = 1'b1;
 			 if(r_pending_tlb_miss) $stop();
+		      end
+		    else if(w_tlb_st_exc)
+		      begin
+			 $display("store exception for pc %x, addr %x", 
+				  r_req2.pc, r_req2.addr);
+			 n_core_mem_rsp.dst_valid = r_req2.dst_valid;
+			 n_core_mem_rsp.has_cause = 1'b1;
+			 n_core_mem_rsp.cause = STORE_PAGE_FAULT;
+			 n_core_mem_rsp.addr = r_req2.addr;
+			 n_core_mem_rsp_valid = 1'b1;			 
 		      end
 		    else if(r_req2.is_atomic)
 		      begin
@@ -1735,10 +1761,11 @@ module l1d(clk,
 	    begin
 	       if(page_walk_rsp_valid)
 		 begin
-		    t_reload_tlb = page_walk_rsp_fault==1'b0;
+		    t_reload_tlb = page_walk_rsp.fault==1'b0;
 		    n_state = TLB_TURNAROUND;
-		    if(page_walk_rsp_fault)
+		    if(page_walk_rsp.fault)
 		      begin
+			 //$display("taking page fault for pc %x", r_req2.pc);
 			 n_req2.op = MEM_NOP;
 			 n_req2.is_store = 1'b0;
 			 n_req2.has_cause = 1'b1;
