@@ -2555,8 +2555,8 @@ module exec(clk,
 	  begin
 	     if(t_delegate)
 	       begin
-		  //$display("delegate cause %x, tval %x, epc %x",
-		  //cause, tval, epc);
+		  $display("delegate cause %x, tval %x, epc %x",
+			   cause, tval, epc);
 		  r_scause <= cause;
 		  r_stval <= tval;
 		  r_sepc <= epc;

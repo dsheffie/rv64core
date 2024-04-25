@@ -457,9 +457,8 @@ static void write_csr(int csr_id, state_t *s, int64_t v, bool &undef) {
 
 void execRiscv(state_t *s) {
   uint8_t *mem = s->mem;
-  int fetch_fault = 0, except_cause = -1, tval = 0;
-  uint64_t tohost = 0;
-  uint64_t phys_pc = 0;
+  int fetch_fault = 0, except_cause = -1;
+  uint64_t tval = 0, tohost = 0,phys_pc = 0;
   uint32_t inst = 0, opcode = 0, rd = 0, lop = 0;
   int64_t irq = 0;
   riscv_t m(0);
