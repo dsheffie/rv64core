@@ -2359,6 +2359,12 @@ module exec(clk,
 	  begin
 	     n_priv = t_priv;
 	  end	
+     end // always_comb
+
+   always_ff@(negedge clk)
+     begin
+	if(update_csr_exc | t_wr_priv)
+	  $display("n_priv = %d at cycle %d", n_priv, r_cycle);
      end
 	      
    always_ff@(posedge clk)

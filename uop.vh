@@ -72,7 +72,6 @@ typedef enum logic [6:0]
    CSRRSI,
    CSRRCI,   
    SFENCEVMA,
-   //known used in riscv design
    MUL,
    MULH,
    MULHU,

@@ -411,7 +411,8 @@ module core(clk,
 			     HALT_WAIT_FOR_RESTART = 'd10,
 			     WAIT_FOR_SERIALIZE_AND_RESTART = 'd11,
 			     ARCH_FAULT = 'd12,
-			     WRITE_CSRS = 'd13
+			     WRITE_CSRS = 'd13,
+			     WAIT_FOR_CSR_WRITE = 'd14
 			     } state_t;
    
    state_t r_state, n_state;
@@ -751,7 +752,7 @@ module core(clk,
 	else
 	  r_last_cycle <= r_last_cycle + 'd1;
 	
-	if(r_last_cycle >= 'd8192 )
+	if(r_cycle >= 'd140304820 )
 	  begin 
 	     $display("cycle %d : state = %d, alu complete %b, mem complete %b,head_ptr %d, complete %b,  can_retire_rob_head %b, head pc %x, empty %b, full %b, bob full %b", 
 		      r_cycle,
@@ -1209,10 +1210,14 @@ module core(clk,
 	       //w_exc_pc, page_table_root);
 	       if(w_exc_pc == r_epc)
 		 $stop();
+	       n_state = WAIT_FOR_CSR_WRITE;
+	    end // case: WRITE_CSRS
+	  WAIT_FOR_CSR_WRITE:
+	    begin
 	       n_restart_pc = w_exc_pc;
 	       n_restart_valid = 1'b1;	       
 	       n_state = DRAIN;
-	    end // case: WRITE_CSRS
+	    end
 	  default:
 	    begin
 	    end
@@ -1990,7 +1995,14 @@ module core(clk,
 	.uop(t_dec_uop2)
 	);
    
-
+   always_ff@(negedge clk)
+     begin
+	if(t_push_dq_one && t_dec_uop.pc == 64'h80000004)
+	  $display("pc %x, op code %d", t_dec_uop.pc, t_dec_uop.op);
+	if(t_push_dq_two && t_dec_uop2.pc == 64'h80000004)
+	  $display("pc %x, op code %d", t_dec_uop2.pc, t_dec_uop2.op);	
+	
+     end
    
    logic t_push_1, t_push_2;
    

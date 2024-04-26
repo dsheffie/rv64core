@@ -519,65 +519,6 @@ endfunction
 	
      end
 
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if(t_push_insn & paging_active)
-   // 	  begin
-   // 	     if(check_bad_fetch(t_insn.pc, w_tlb_pc, t_insn.insn_bytes) == 32'b1)
-   // 	       begin
-
-   // 		  $stop();
-   // 	       end
-   // 	  end
-   // 	if(t_push_insn2 & paging_active)
-   // 	  begin
-   // 	     if(check_bad_fetch(t_insn2.pc, w_tlb_pc, t_insn2.insn_bytes) == 32'b1)
-   // 	       begin
-   // 		  $stop();
-   // 	       end
-   // 	  end
-   // 	if(t_push_insn3 & paging_active)
-   // 	  begin
-   // 	     if(check_bad_fetch(t_insn3.pc, w_tlb_pc, t_insn3.insn_bytes) == 32'b1)
-   // 	       begin
-   // 		  $stop();
-   // 	       end
-   // 	  end
-   // 	if(t_push_insn4 & paging_active)
-   // 	  begin
-   // 	     if(check_bad_fetch(t_insn4.pc, w_tlb_pc, t_insn4.insn_bytes) == 32'b1)
-   // 	       begin
-   // 		  $display("rtl pa = %x, cycle = %d, insn = %x", {w_tlb_pc[63:12], r_cache_pc[11:0]} + 64'd12, r_cycle,t_insn4.insn_bytes );
-   // 		  $stop();
-   // 	       end
-   // 	  end			
-   //   end
-   
-   // logic [63:0] r_tlb_hits, r_tlb_accesses;
-   // always_ff@(posedge clk)
-   //   begin
-   // 	if(reset)
-   // 	  begin
-   // 	     r_tlb_hits <= 'd0;
-   // 	     r_tlb_accesses <= 'd0;
-   // 	  end
-   // 	else
-   // 	  begin
-   // 	     if(r_req && paging_active)
-   // 	       begin
-   // 		  r_tlb_accesses <=  r_tlb_accesses  + 'd1;
-   // 	       end
-   // 	     if(r_req && paging_active & w_tlb_hit)
-   // 	       begin
-   // 		  r_tlb_hits <= r_tlb_hits + 'd1;
-   // 	       end
-   // 	  end // else: !if(reset)
-   //   end // always_ff@ (posedge clk)
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if(&r_cycle[19:0]) $display("tlb hits %d, accesses %d\n", r_tlb_hits, r_tlb_accesses);
-   //   end
-   
    always_comb
      begin
 	n_page_fault = r_page_fault;
@@ -1285,6 +1226,15 @@ endfunction
 	     n_arch_gbl_hist = {r_arch_gbl_hist[`GBL_HIST_LEN-2:0], took_branch};
 	  end
      end
+
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if(n_restart_ack)
+   // 	  begin
+   // 	     $display("restart pc %x, paging enabled %b",
+   // 		      n_pc, paging_active);
+   // 	  end
+   //   end
    
    
    always_ff@(posedge clk)
