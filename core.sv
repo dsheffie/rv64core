@@ -893,25 +893,17 @@ module core(clk,
 	unique case (r_state)
 	  ACTIVE:
 	    begin
-	       if(r_extern_irq && !t_rob_empty)
+	       if(t_can_retire_rob_head)
 		 begin
-		    n_state = DRAIN;
-		    n_restart_pc = t_rob_head.pc;
-		    n_machine_clr = 1'b1;
-		    n_ds_done = 1'b1;
-		    t_clr_extern_irq = 1'b1;
-		    n_restart_valid = 1'b1;
-		 end
-	       else if(t_can_retire_rob_head)
-		 begin
-		    if(t_rob_head.faulted)
+		    if(t_rob_head.faulted | r_extern_irq)
 		      begin
-			 if(t_arch_fault)
+			 if(t_arch_fault | r_extern_irq)
 			   begin
 			      n_state = ARCH_FAULT;
 			      n_cause = t_rob_head.cause;
 			      n_epc = t_rob_head.pc;
 			      n_tval = 'd0;
+			      t_clr_extern_irq = r_extern_irq;
 			   end
 			 else
 			   begin

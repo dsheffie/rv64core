@@ -289,7 +289,7 @@ static int64_t read_csr(int csr_id, state_t *s, bool &undef) {
     case 0x100:
       return s->sstatus;
     case 0x104:
-      return s->sie;
+      return s->mie & s->mideleg;
     case 0x105:
       return s->stvec;
     case 0x140:
@@ -301,7 +301,7 @@ static int64_t read_csr(int csr_id, state_t *s, bool &undef) {
     case 0x143:
       return s->stval;
     case 0x144:
-      return s->sip;
+      return s->mip & s->mideleg;
     case 0x180:
       return s->satp;
     case 0x300:
@@ -360,7 +360,7 @@ static void write_csr(int csr_id, state_t *s, int64_t v, bool &undef) {
       break;
     }
     case 0x104:
-      s->sie = v;
+      s->mie = (s->mie & ~(s->mideleg)) | (v & s->mideleg);
       break;
     case 0x105:
       s->stvec = v;
@@ -381,7 +381,7 @@ static void write_csr(int csr_id, state_t *s, int64_t v, bool &undef) {
       s->stvec = v;
       break;
     case 0x144:
-      s->sip = v;
+      s->mip = (s->mip & ~(s->mideleg)) | (v & s->mideleg);      
       break;
     case 0x180:
       if(c.satp.mode == 8 &&
@@ -1030,6 +1030,9 @@ void execRiscv(state_t *s) {
 
       int sz = 1<<(m.s.sel);
       int64_t pa = s->translate(ea, fault, sz, true);
+      if(ea == 0xffffffff81355000UL) {
+	printf("store to %lx at pc %lx with value %lx\n", pa, s->pc, s->gpr[m.s.rs2]);
+      }
       if(fault) {
 	except_cause = CAUSE_STORE_PAGE_FAULT;
 	tval = ea;

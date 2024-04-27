@@ -236,8 +236,8 @@ module exec(clk,
    logic [1:0] 	t_priv;
    
 
-   logic [63:0]	       r_sstatus, r_sie, r_stvec, r_sscratch;
-   logic [63:0]	       r_sepc, r_stval, r_sip;
+   logic [63:0]	       r_sstatus, r_stvec, r_sscratch;
+   logic [63:0]	       r_sepc, r_stval;
    logic [63:0]	       r_satp, r_mstatus, r_mideleg, r_medeleg;
    logic [63:0]	       r_mcounteren, r_mie, r_mscratch, r_mepc;
    logic [63:0]	       r_mtvec, r_mtval, r_misa, r_mip,  r_scounteren;
@@ -2361,12 +2361,6 @@ module exec(clk,
 	  end	
      end // always_comb
 
-   always_ff@(negedge clk)
-     begin
-	if(update_csr_exc | t_wr_priv)
-	  $display("n_priv = %d at cycle %d", n_priv, r_cycle);
-     end
-	      
    always_ff@(posedge clk)
      begin
 	if(reset)
@@ -2431,7 +2425,7 @@ module exec(clk,
 	  SSTATUS:
 	    t_rd_csr = r_sstatus;
 	  SIE:
-	    t_rd_csr = r_sie;
+	    t_rd_csr = r_mie & r_mideleg;
 	  STVEC:
 	    t_rd_csr = r_stvec;
 	  SSCRATCH:
@@ -2445,7 +2439,7 @@ module exec(clk,
 	  STVAL:
 	    t_rd_csr = r_stval;
 	  SIP:
-	    t_rd_csr = r_sip;
+	    t_rd_csr = r_mip & r_mideleg;
 	  SATP:
 	    t_rd_csr = r_satp;
 	  MSTATUS:
@@ -2529,9 +2523,7 @@ module exec(clk,
 	  begin
 	     r_sstatus <= 'd0;
 	     r_scounteren <= 'd0;
-	     r_sie <= 'd0;
 	     r_satp <= 'd0;
-	     r_sip <= 'd0;
 	     r_stval <= 'd0;
 	     r_scause <= 'd0;
 	     r_sepc <= 'd0;
@@ -2580,7 +2572,7 @@ module exec(clk,
 	       SSTATUS:
 		 r_sstatus <= t_wr_csr;
 	       SIE:
-		 r_sie <= t_wr_csr;
+		 r_mie <= (r_mie & ~(r_mideleg)) | (t_wr_csr & r_mideleg);	       
 	       STVEC:
 		 r_stvec <= t_wr_csr;
 	       SSCRATCH:
@@ -2592,7 +2584,7 @@ module exec(clk,
 	       SCOUNTEREN:
 		 r_scounteren <= t_wr_csr;
 	       SIP:
-		 r_sip <= t_wr_csr;
+		 r_mip <= (r_mip & ~(r_mideleg)) | (t_wr_csr & r_mideleg);
 	       SATP:
 		 begin
 		    if((t_wr_csr[63:60] == 4'h8) && (t_wr_csr[59:44] == 'd0))

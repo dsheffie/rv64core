@@ -742,54 +742,17 @@ module l1d(clk,
 		      t_write_dirty_en);
    	  end	
      end // always_ff@ (negedge clk)
-`endif
+
    always_ff@(negedge clk)
      begin
-   	if(/*r_cycle > 'd554562370*/0)
+	if(r_state == FLUSH_CL)
 	  begin
-	     if(r_state == FLUSH_CL)
-	       begin
-		  $display("flush line %d at cycle %d for addr %x, was dirty %b, r_last_wr = %b, rr_last_wr = %b",
-			   r_cache_idx, r_cycle, {r_tag_out,r_cache_idx,4'd0}, r_dirty_out, r_last_wr, rr_last_wr);
-	       end
-   	     if(t_wr_array)
-   	       begin
-   		  $display("cycle %d : WRITING set %d WITH data %x, addr %x, op %d ptr %d, retry %b, dirty addr %x, dirty value %b, dirty en %b, %b %b %b", 
-   			   r_cycle, 
-			   r_cache_idx, 
-			   t_array_data,
-			   r_req.addr, 
-			   r_req.op,
-			   r_req.rob_ptr, 
-			   r_is_retry,
-			   t_dirty_wr_addr,
-			   t_dirty_value,
-			   t_write_dirty_en,
-			   n_last_wr,
-			   r_last_wr,
-			   rr_last_wr);
-   	       end	
-	     
-	     if( mem_rsp_valid && r_mem_req_addr[IDX_STOP-1:IDX_START] == 'd0)
-   	       begin
-   		  $display("cycle %d : CACHERELOAD from addr %x -> set %d data %x, r_state %d", 
-   			   r_cycle, 
-			   r_mem_req_addr, 
-			   r_mem_req_addr[IDX_STOP-1:IDX_START], 
-			   t_array_wr_data, 
-			   r_state);
-   	       end
-	     if(r_state != INJECT_RELOAD && n_state == INJECT_RELOAD &&
-		n_mem_req_addr[IDX_STOP-1:IDX_START] == 'd0)
-	       begin
-		  $display("cycle %d : inject reload to set 0, for addr %x, store %d, data %x",
-			   r_cycle, n_mem_req_addr, n_mem_req_opcode, t_data);
-	       end
-	     
-	  end // if (...
+	     $display("flush line %d at cycle %d for addr %x, was dirty %b, r_last_wr = %b, rr_last_wr = %b",
+		      r_cache_idx, r_cycle, {r_tag_out,r_cache_idx,4'd0}, r_dirty_out, r_last_wr, rr_last_wr);
+	  end
      end // always_ff@ (negedge clk)
 
-
+`endif
    
  ram2r1w #(.WIDTH(N_TAG_BITS), .LG_DEPTH(`LG_L1D_NUM_SETS)) dc_tag
      (
@@ -993,10 +956,12 @@ module l1d(clk,
 		    r_req.addr, 
 		    r_req.op == MEM_AMOD ? t_amo64_data : (r_req.op == MEM_AMOW ? {{32{t_amo32_data[31]}},t_amo32_data} : r_req.data), 
 		    r_req.is_atomic ? 32'd1 : 32'd0);
-	     // if(r_req.is_atomic)
-	     //   $display("firing atomic for pc %x addr %x with data %x t_shift %x, at cycle %d for rob ptr %d, r_cache_idx %d", 
-	     // 		r_req.pc, r_req.addr, r_req.data, t_shift, r_cycle, r_req.rob_ptr, r_cache_idx);
+`ifdef VERBOSE_L1D			    
 	     
+	      if(r_req.is_atomic)
+	        $display("firing atomic for pc %x addr %x with data %x t_shift %x, at cycle %d for rob ptr %d, r_cache_idx %d", 
+	     		 r_req.pc, r_req.addr, r_req.data, t_shift, r_cycle, r_req.rob_ptr, r_cache_idx);
+`endif	     
 	  end
      end // always_ff@ (negedge clk)
 `endif
@@ -1324,19 +1289,6 @@ module l1d(clk,
 			 n_pending_tlb_miss = 1'b0;
 		      end
 		    
-		    
-		    if(r_req2.pc == 64'h10920)
-		      begin
-			 $display("pc %x, op %d, addr %x, tlb addr %x, has_cause %b",
-				  r_req2.pc, 
-				  r_req2.op,
-				  r_req2.addr,
-				  w_tlb_pa,
-				  r_req2.has_cause);
-		      end
-
-		    
-		    
 		    if(drain_ds_complete || r_req2.op == MEM_NOP)
 		      begin
 			 n_core_mem_rsp.dst_valid = r_req2.dst_valid;
@@ -1610,7 +1562,9 @@ module l1d(clk,
 			   core_mem_va_req.op,
 			   core_mem_va_req.pc,
 			   core_mem_va_req.addr,
-			   core_mem_va_req.rob_ptr, r_cycle, mem_q_empty);
+			   core_mem_va_req.rob_ptr,
+			   r_cycle,
+			   mem_q_empty);
 `endif
 		  
 		  n_last_wr2 = core_mem_va_req.is_store;
@@ -1630,7 +1584,7 @@ module l1d(clk,
 		    n_flush_req = 1'b0;
 		 end
 	       else if(r_flush_cl_req && mem_q_empty && !(r_got_req && r_last_wr)
-		       && !(n_page_walk_req_valid | t_got_miss | r_wr_array))
+		       && !(n_page_walk_req_valid | t_got_miss | r_wr_array | t_wr_array))
 		 begin
 		    //$display("t_got_miss = %b, n_state = %d", t_got_miss, n_state);
 		    if(n_state != r_state) $stop();		    
@@ -1681,24 +1635,22 @@ module l1d(clk,
 	       n_state = ACTIVE;
 	    end
 	  FLUSH_CL:
-	    begin
-	       if(r_dirty_out)
-		 begin
-		    n_mem_req_addr = {r_tag_out,r_cache_idx,4'd0};
-		    n_mem_req_opcode = MEM_SW;
-		    n_mem_req_store_data = t_data;
+	    if(r_dirty_out)
+	      begin
+		 n_mem_req_addr = {r_tag_out,r_cache_idx,4'd0};
+		 n_mem_req_opcode = MEM_SW;
+		 n_mem_req_store_data = t_data;
 		    n_state = FLUSH_CL_WAIT;
-		    n_inhibit_write = 1'b1;
-	            n_mem_req_valid = 1'b1;	       
-		 end
-	       else
-		 begin
-		    n_state = r_flush_was_active ? ACTIVE : TLB_RELOAD;
-		    n_flush_was_active = 1'b0;
-		    t_mark_invalid = 1'b1;
-		    n_l2_probe_ack = 1'b1;
-		 end
-	    end // case: FLUSH_CL
+		 n_inhibit_write = 1'b1;
+		 n_mem_req_valid = 1'b1;	       
+	      end
+	    else
+	      begin
+		 n_state = r_flush_was_active ? ACTIVE : TLB_RELOAD;
+		 n_flush_was_active = 1'b0;
+		 t_mark_invalid = 1'b1;
+		 n_l2_probe_ack = 1'b1;
+	      end // else: !if(r_dirty_out)
 	  FLUSH_CL_WAIT:
 	    begin
 	       	if(mem_rsp_valid)

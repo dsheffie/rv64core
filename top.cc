@@ -201,11 +201,14 @@ std::list<store_rec> atomic_queue;
 void wr_log(long long pc, long long addr, long long data, int is_atomic) {
   if(not(enable_checker))
     return;
-  //  if(is_atomic) {
-  //printf("pc %llx, addr %llx, data %llx, atomic %d\n",
-  //	   pc, addr, data, is_atomic);
-  //}
+  
+  if(addr == 0xffffffff81355000UL) {
+    printf("pc %llx, addr %llx, data %llx, atomic %d\n",
+	   pc, addr, data, is_atomic);
+  }
 
+
+  
   if(is_atomic) {
     atomic_queue.emplace_back(pc, addr, data);
     return;
