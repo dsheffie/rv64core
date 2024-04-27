@@ -1154,7 +1154,9 @@ module l1d(clk,
 
    wire w_tlb_st_exc = w_tlb_hit & paging_active & (r_req2.is_store | r_req2.is_atomic) & 
 	!w_tlb_writable;
-	
+
+   wire w_flush_hit = (r_tag_out == l2_probe_addr[`M_WIDTH-1:IDX_STOP]) & r_valid_out;
+   
    always_comb
      begin
 	n_flush_was_active = r_flush_was_active;
@@ -1635,12 +1637,12 @@ module l1d(clk,
 	       n_state = ACTIVE;
 	    end
 	  FLUSH_CL:
-	    if(r_dirty_out)
+	    if(r_dirty_out & w_flush_hit)
 	      begin
 		 n_mem_req_addr = {r_tag_out,r_cache_idx,4'd0};
 		 n_mem_req_opcode = MEM_SW;
 		 n_mem_req_store_data = t_data;
-		    n_state = FLUSH_CL_WAIT;
+		 n_state = FLUSH_CL_WAIT;
 		 n_inhibit_write = 1'b1;
 		 n_mem_req_valid = 1'b1;	       
 	      end
@@ -1648,7 +1650,7 @@ module l1d(clk,
 	      begin
 		 n_state = r_flush_was_active ? ACTIVE : TLB_RELOAD;
 		 n_flush_was_active = 1'b0;
-		 t_mark_invalid = 1'b1;
+		 t_mark_invalid = w_flush_hit;		 
 		 n_l2_probe_ack = 1'b1;
 	      end // else: !if(r_dirty_out)
 	  FLUSH_CL_WAIT:

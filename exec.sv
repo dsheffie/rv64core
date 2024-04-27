@@ -2514,7 +2514,14 @@ module exec(clk,
 
 
    logic t_push_putchar;
-   
+
+   always_ff@(negedge clk)
+     begin
+	if(t_wr_csr_en & (int_uop.imm[5:0] == MIE))
+	  begin
+	     $display("pc %x : mie %x", int_uop.pc, t_wr_csr);
+	  end
+     end
    
    
    always_ff@(posedge clk)
