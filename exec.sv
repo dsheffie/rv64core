@@ -31,6 +31,7 @@ module exec(clk,
 	    cause,
 	    epc,
 	    tval,
+	    irq,
 	    exc_pc,
 	    update_csr_exc,
 	    priv,
@@ -83,6 +84,7 @@ module exec(clk,
    input	      cause_t cause;
    input logic [63:0] epc;
    input logic [63:0] tval;
+   input logic 	      irq;
 
    output logic [63:0] exc_pc;
    input logic	       update_csr_exc;
@@ -241,7 +243,7 @@ module exec(clk,
    logic [63:0]	       r_satp, r_mstatus, r_mideleg, r_medeleg;
    logic [63:0]	       r_mcounteren, r_mie, r_mscratch, r_mepc;
    logic [63:0]	       r_mtvec, r_mtval, r_misa, r_mip,  r_scounteren;
-   logic [3:0] 	       r_mcause, r_scause;
+   logic [63:0]        r_mcause, r_scause;
    logic [63:0]	       r_pmpaddr0, r_pmpaddr1, r_pmpaddr2, r_pmpaddr3, r_pmpcfg0;
    
    
@@ -2433,7 +2435,7 @@ module exec(clk,
 	  SEPC:
 	    t_rd_csr = r_sepc;
 	  SCAUSE:
-	    t_rd_csr = {60'd0, r_scause};
+	    t_rd_csr = r_scause;
 	  SCOUNTEREN:
 	    t_rd_csr = r_scounteren;
 	  STVAL:
@@ -2445,7 +2447,7 @@ module exec(clk,
 	  MSTATUS:
 	    t_rd_csr = r_mstatus;
 	  MCAUSE:
-	    t_rd_csr = {60'd0, r_mcause};
+	    t_rd_csr = r_mcause;
 	  MCOUNTEREN:
 	    t_rd_csr = r_mcounteren;
 	  MISA:
@@ -2562,13 +2564,13 @@ module exec(clk,
 	       begin
 		  $display("delegate cause %x, tval %x, epc %x",
 			   cause, tval, epc);
-		  r_scause <= cause;
+		  r_scause <= {irq, 59'd0, cause};
 		  r_stval <= tval;
 		  r_sepc <= epc;
 	       end
 	     else
 	       begin
-		  r_mcause <= cause;
+		  r_mcause <= {irq, 59'd0, cause};
 		  r_mtval <= tval;
 		  r_mepc <= epc;
 	       end
@@ -2620,7 +2622,7 @@ module exec(clk,
 	       MIP:
 		 r_mip <= t_wr_csr;
 	       MCAUSE:
-		 r_mcause <= t_wr_csr[3:0];
+		 r_mcause <= t_wr_csr;
 	       MEDELEG:
 		 r_medeleg <= t_wr_csr;
 	       MIDELEG:

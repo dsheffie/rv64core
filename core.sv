@@ -420,6 +420,8 @@ module core(clk,
    
    logic 	r_pending_fault, n_pending_fault;
    logic [31:0] r_restart_cycles, n_restart_cycles;
+   logic 	r_irq, n_irq;
+   
    logic t_divide_ready;
    
    
@@ -582,6 +584,7 @@ module core(clk,
 	  begin
 	     r_mode64 <= 1'b1;	     
 	     r_state <= FLUSH_FOR_HALT;
+	     r_irq <= 1'b0;
 	     r_restart_cycles <= 'd0;
 	     r_machine_clr <= 1'b0;
 	     r_got_restart_ack <= 1'b0;
@@ -593,6 +596,7 @@ module core(clk,
 	  begin
 	     r_mode64 <= n_mode64;
 	     r_state <= n_state;
+	     r_irq <= n_irq;
 	     r_restart_cycles <= n_restart_cycles;
 	     r_machine_clr <= n_machine_clr;
 	     r_got_restart_ack <= n_got_restart_ack;
@@ -830,6 +834,8 @@ module core(clk,
 	t_clr_rob = 1'b0;
 	t_clr_dq = 1'b0;
 	n_state = r_state;
+	n_irq = r_irq;
+	
 	n_restart_cycles = r_restart_cycles + 'd1;
 	n_restart_pc = r_restart_pc;
 	n_restart_src_pc = r_restart_src_pc;
@@ -903,7 +909,8 @@ module core(clk,
 			      n_cause = t_rob_head.cause;
 			      n_epc = t_rob_head.pc;
 			      n_tval = 'd0;
-			      t_clr_extern_irq = r_extern_irq;
+			      n_irq = r_extern_irq;
+			      t_clr_extern_irq = r_extern_irq;			      
 			   end
 			 else
 			   begin
@@ -1180,8 +1187,8 @@ module core(clk,
 		     // $display("t_rob_head.cause = %d, ", t_rob_head.cause);
 		   end
 	       endcase // case (t_rob_head.cause)
-	       $display("took fault for %x with cause %d at cycle %d, priv %d, tval %x", 
-			t_rob_head.pc, t_rob_head.cause, r_cycle, priv, n_tval);
+	       $display("took fault for %x with cause %d at cycle %d, priv %d, tval %x, irq %b", 
+			t_rob_head.pc, t_rob_head.cause, r_cycle, priv, n_tval, r_irq);
 	       
 	       t_bump_rob_head = 1'b1;
 	       if(syscall_emu)
@@ -1207,7 +1214,8 @@ module core(clk,
 	  WAIT_FOR_CSR_WRITE:
 	    begin
 	       n_restart_pc = w_exc_pc;
-	       n_restart_valid = 1'b1;	       
+	       n_restart_valid = 1'b1;
+	       n_irq = 1'b0;
 	       n_state = DRAIN;
 	    end
 	  default:
@@ -2018,6 +2026,7 @@ module core(clk,
 	   .cause(r_cause),
 	   .epc(r_epc),
 	   .tval(r_tval),
+	   .irq(r_irq),
 	   .exc_pc(w_exc_pc),
 	   .clear_tlb(clear_tlb),
 	   .mode64(r_mode64),
