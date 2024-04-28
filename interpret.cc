@@ -463,11 +463,12 @@ void execRiscv(state_t *s) {
   int64_t irq = 0;
   riscv_t m(0);
   s->took_exception = false;
-  //irq = take_interrupt(s);
-  //if(irq) {
-  //except_cause = CAUSE_INTERRUPT | irq;
-  // goto handle_exception;
-  // }
+
+  irq = take_interrupt(s);
+  if(irq) {
+    except_cause = CAUSE_INTERRUPT | irq;
+    goto handle_exception;
+  }
   
 
   phys_pc = s->translate(s->pc, fetch_fault, 4, false, true);
