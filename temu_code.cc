@@ -27,29 +27,30 @@
 int64_t take_interrupt(state_t *s) {
   int64_t pending_irq_bitvec = s->mip & s->mie;
   int64_t enabled_ints = 0;  
-  if(pending_irq_bitvec == 0) {
-    return 0;
-  }
   switch(s->priv)
     {
     case priv_machine:
-      if (s->mstatus & MSTATUS_MIE)
+      if (s->mstatus & MSTATUS_MIE) {
 	enabled_ints = ~s->mideleg;
-	break;
+      }
+      break;
     case priv_supervisor:
       enabled_ints = ~s->mideleg;
-      if (s->mstatus & MSTATUS_SIE)
+      if (s->mstatus & MSTATUS_SIE) {
 	enabled_ints |= s->mideleg;
+      }
       break;
-      default:
+    default:
     case priv_user:
-      enabled_ints = -1;
+      enabled_ints = -1L;
       break;
     }
-  if(enabled_ints != 0) {
+  pending_irq_bitvec &= enabled_ints;
+  
+  if(pending_irq_bitvec != 0) {
     for(int32_t p = 31; p >= 0; p--) {
-      if((enabled_ints >> p) & 1) {
-	return(1L << p) ;
+      if((pending_irq_bitvec >> p) & 1) {
+	return p;
       }
     }
   }
