@@ -32,6 +32,10 @@ module exec(clk,
 	    epc,
 	    tval,
 	    irq,
+	    mie,
+	    mip,
+	    mideleg,
+	    mstatus,
 	    exc_pc,
 	    update_csr_exc,
 	    priv,
@@ -85,7 +89,11 @@ module exec(clk,
    input logic [63:0] epc;
    input logic [63:0] tval;
    input logic 	      irq;
-
+   output logic [63:0] mip;
+   output logic [63:0] mie;
+   output logic [63:0] mideleg;
+   output logic [63:0] mstatus;
+   
    output logic [63:0] exc_pc;
    input logic	       update_csr_exc;
    output logic [63:0] page_table_root;
@@ -245,7 +253,11 @@ module exec(clk,
    logic [63:0]	       r_mtvec, r_mtval, r_misa, r_mip,  r_scounteren;
    logic [63:0]        r_mcause, r_scause;
    logic [63:0]	       r_pmpaddr0, r_pmpaddr1, r_pmpaddr2, r_pmpaddr3, r_pmpcfg0;
-   
+
+   assign mie = r_mie;
+   assign mip = r_mip;
+   assign mideleg = r_mideleg;
+   assign mstatus = r_mstatus;
    
    logic 	t_signed_shift;
    logic 	t_left_shift;

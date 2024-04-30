@@ -421,6 +421,33 @@ module core(clk,
    logic 	r_pending_fault, n_pending_fault;
    logic [31:0] r_restart_cycles, n_restart_cycles;
    logic 	r_irq, n_irq;
+   wire [1:0] 	w_priv;
+   assign priv = w_priv;
+
+   
+   wire [63:0] 	w_mip, w_mie, w_mideleg, w_mstatus;
+   wire [63:0] 	w_pending_irq = w_mip & w_mie;
+
+   wire 	w_mstatus_mie = w_mstatus[3];
+   wire 	w_mstatus_sie = w_mstatus[1];
+   
+   wire [63:0] 	w_en_m_irqs = w_mstatus_mie ? (~w_mideleg) : 64'd0;
+   wire [63:0] 	w_en_s_irqs = (~w_mideleg) | (w_mstatus_sie ? w_mideleg : 64'd0);
+   
+   wire [63:0] 	w_enabled_irqs = ((w_priv == 2'd3) ? w_en_m_irqs : ((w_priv == 2'd1) ? w_en_s_irqs : (~(64'd0) ))) & w_pending_irq;
+   
+   wire [5:0] 	w_irq_id;
+   find_first_set#(5) irq_ffs(.in(w_enabled_irqs[31:0]),
+			      .y(w_irq_id));
+   
+   always_ff@(negedge clk)
+     begin
+	if(w_enabled_irqs != 64'd0 && r_state == ACTIVE)
+	  begin
+	     $display("w_irq_id = %d, r_priv %d, mie %b sie %b", w_irq_id, w_priv, w_mstatus_mie, w_mstatus_sie);
+	     $stop();
+	  end
+     end
    
    logic t_divide_ready;
    
@@ -2019,7 +2046,7 @@ module core(clk,
 	   .putchar_fifo_out(putchar_fifo_out),
 	   .putchar_fifo_empty(putchar_fifo_empty),
 	   .putchar_fifo_pop(putchar_fifo_pop),
-	   .priv(priv),
+	   .priv(w_priv),
 	   .paging_active(paging_active),
 	   .page_table_root(page_table_root),
 	   .update_csr_exc(r_update_csr_exc),
@@ -2027,6 +2054,10 @@ module core(clk,
 	   .epc(r_epc),
 	   .tval(r_tval),
 	   .irq(r_irq),
+	   .mip(w_mip),
+	   .mie(w_mie),
+	   .mideleg(w_mideleg),
+	   .mstatus(w_mstatus),
 	   .exc_pc(w_exc_pc),
 	   .clear_tlb(clear_tlb),
 	   .mode64(r_mode64),
