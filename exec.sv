@@ -2576,13 +2576,13 @@ module exec(clk,
 	       begin
 		  $display("delegate cause %x, tval %x, epc %x",
 			   cause, tval, epc);
-		  r_scause <= {irq, 59'd0, cause};
+		  r_scause <= {irq, 58'd0, cause};
 		  r_stval <= tval;
 		  r_sepc <= epc;
 	       end
 	     else
 	       begin
-		  r_mcause <= {irq, 59'd0, cause};
+		  r_mcause <= {irq, 58'd0, cause};
 		  r_mtval <= tval;
 		  r_mepc <= epc;
 	       end

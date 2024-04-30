@@ -4,7 +4,7 @@
 `include "machine.vh"
 
 
-typedef enum logic [3:0] {
+typedef enum logic [4:0] {
    MISALIGNED_FETCH = 'd0,
    FAULT_FETCH = 'd1,
    ILLEGAL_INSTRUCTION = 'd2,			  

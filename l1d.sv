@@ -1215,7 +1215,7 @@ module l1d(clk,
 	n_core_mem_rsp.dst_ptr = r_req.dst_ptr;
 	n_core_mem_rsp.dst_valid = 1'b0;
 	n_core_mem_rsp.has_cause = 1'b0;
-	n_core_mem_rsp.cause = 4'd0;
+	n_core_mem_rsp.cause = MISALIGNED_FETCH;
 	
 	n_cache_accesses = r_cache_accesses;
 	n_cache_hits = r_cache_hits;

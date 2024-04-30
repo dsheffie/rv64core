@@ -49,7 +49,6 @@ module core(clk,
 	    paging_active,
 	    page_table_root,
 	    mode64,
-	    extern_irq,
 	    head_of_rob_ptr_valid,
 	    head_of_rob_ptr,
 	    resume,
@@ -137,7 +136,6 @@ module core(clk,
    output logic [63:0] page_table_root;
    
    output logic	mode64;
-   input logic extern_irq;
    output logic head_of_rob_ptr_valid;
    output logic [`LG_ROB_ENTRIES-1:0] head_of_rob_ptr;
    input logic resume;
@@ -435,6 +433,8 @@ module core(clk,
    wire [63:0] 	w_en_s_irqs = (~w_mideleg) | (w_mstatus_sie ? w_mideleg : 64'd0);
    
    wire [63:0] 	w_enabled_irqs = ((w_priv == 2'd3) ? w_en_m_irqs : ((w_priv == 2'd1) ? w_en_s_irqs : (~(64'd0) ))) & w_pending_irq;
+   wire 	w_any_irq = |w_enabled_irqs[31:0];
+   
    
    wire [5:0] 	w_irq_id;
    find_first_set#(5) irq_ffs(.in(w_enabled_irqs[31:0]),
@@ -820,31 +820,10 @@ module core(clk,
    logic t_restart_complete;
    assign restart_complete = t_restart_complete;
    
-   logic t_clr_extern_irq;
-   logic r_extern_irq;
-   always_ff@(posedge clk)
-     begin
-	if(reset)
-	  begin
-	     r_extern_irq <= 1'b0;
-	  end
-	else
-	  begin
-	     if(t_clr_extern_irq)
-	       begin
-		  r_extern_irq <= 1'b0;
-	       end 
-	     else if(extern_irq)
-	       begin
-		  r_extern_irq <= 1'b1;
-	       end
-	  end // else: !if(reset)
-     end // always_ff@ (posedge clk)
 
    always_comb
      begin
 	n_mode64 = r_mode64;
-	t_clr_extern_irq = 1'b0;
 	t_restart_complete = 1'b0;
 	n_cause = r_cause;
 	n_epc = r_epc;
@@ -928,16 +907,15 @@ module core(clk,
 	    begin
 	       if(t_can_retire_rob_head)
 		 begin
-		    if(t_rob_head.faulted | r_extern_irq)
+		    if(t_rob_head.faulted | w_any_irq)
 		      begin
-			 if(t_arch_fault | r_extern_irq)
+			 if(t_arch_fault | w_any_irq)
 			   begin
 			      n_state = ARCH_FAULT;
-			      n_cause = t_rob_head.cause;
+			      n_cause = w_any_irq ? w_irq_id[4:0] : t_rob_head.cause;
 			      n_epc = t_rob_head.pc;
 			      n_tval = 'd0;
-			      n_irq = r_extern_irq;
-			      t_clr_extern_irq = r_extern_irq;			      
+			      n_irq = w_any_irq;
 			   end
 			 else
 			   begin

@@ -570,7 +570,6 @@ module
 	     .paging_active(w_paging_active),
 	     .page_table_root(w_page_table_root),
 	     .mode64(w_mode64),
-	     .extern_irq(extern_irq),
 	     .resume(resume),
 	     .memq_empty(memq_empty),
 	     .drain_ds_complete(drain_ds_complete),
