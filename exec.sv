@@ -39,6 +39,7 @@ module exec(clk,
 	    exc_pc,
 	    update_csr_exc,
 	    priv,
+	    priv_update,
 	    page_table_root,
 	    paging_active,
 	    clear_tlb,
@@ -85,6 +86,7 @@ module exec(clk,
    input logic 	      putchar_fifo_pop;
    
    output logic [1:0] priv;
+   output logic       priv_update;
    input	      cause_t cause;
    input logic [63:0] epc;
    input logic [63:0] tval;
@@ -2350,9 +2352,9 @@ module exec(clk,
    always_comb
      begin
 	t_delegate = 1'b0;
-	if(r_priv[1]  == 1'b0)
+	if(r_priv[1]  ==  1'b0)
 	  begin
-	     t_delegate = w_delegate_shift[0];
+	     t_delegate = irq ? r_medeleg[63] : w_delegate_shift[0];
 	  end
 	exc_pc = t_delegate ? r_stvec : r_mtvec;
      end
@@ -2362,6 +2364,22 @@ module exec(clk,
 	r_clear_tlb <= reset ? 1'b0 : t_clear_tlb;
      end
 
+   logic r_priv_update0, r_priv_update;
+   assign priv_update = r_priv_update;
+   always_ff@(posedge clk)
+     begin
+	if(reset)
+	  begin
+	     r_priv_update0 <= 1'b0;
+	     r_priv_update <= 1'b0;
+	  end
+	else
+	  begin
+	     r_priv_update0 <= update_csr_exc|t_wr_priv;
+	     r_priv_update <= r_priv_update0;
+	  end
+     end
+   
    always_comb
      begin
 	n_priv = r_priv;
@@ -2387,13 +2405,19 @@ module exec(clk,
 	  end
      end // always_ff@ (posedge clk)
 
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if(r_priv != n_priv)
-   // 	  $display("cycle %d, priv change %d -> %d\n", r_cycle, r_priv, n_priv);
-   //   end
-
-
+   always_ff@(negedge clk)
+     begin
+	if(r_priv != n_priv)
+	  begin
+	     $display("cycle %d, priv change %d -> %d, update_csr_exc %b, wr_priv %b\n", 
+		      r_cycle, r_priv, n_priv, update_csr_exc, t_wr_priv);
+	  end
+	if(r_start_int && int_uop.op == MRET)
+	  begin
+	     $display("MRET to %x from %x at cycle %d",
+		      r_mepc, int_uop.pc, r_cycle);
+	  end
+     end
 
    logic [3:0] r_rd_pc_idx, n_rd_pc_idx;
    logic [3:0] r_wr_pc_idx, n_wr_pc_idx;
@@ -2535,8 +2559,13 @@ module exec(clk,
 	  begin
 	     $display("pc %x : mie %x", int_uop.pc, t_wr_csr);
 	  end
-     end
-   
+	if(t_wr_csr_en & (int_uop.imm[5:0] == MIP))
+	  begin
+	     $display("pc %x : mip %x", int_uop.pc, t_wr_csr);
+	  end	
+     end // always_ff@ (negedge clk)
+
+
    
    always_ff@(posedge clk)
      begin
@@ -2572,6 +2601,7 @@ module exec(clk,
 	  end // if (reset)
 	else if(update_csr_exc)
 	  begin
+	     $display("trapping, delegate = %b, epc = %x", t_delegate, epc);
 	     if(t_delegate)
 	       begin
 		  $display("delegate cause %x, tval %x, epc %x",
@@ -2672,6 +2702,10 @@ module exec(clk,
 
 	     endcase // case (int_uop.imm[4:0])
 	  end // if (t_wr_csr_en)
+	else if(1'b1)
+	  begin
+	     r_mip <= 64'd128;
+	  end
      end // always_ff@ (posedge clk)
 
 

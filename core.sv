@@ -5,6 +5,7 @@
 `ifdef VERILATOR
 import "DPI-C" function void record_faults(input int n_faults);
 import "DPI-C" function void record_branches(input int n_branches);
+import "DPI-C" function void start_log(input int startlog);
 
 
 import "DPI-C" function void record_alloc(input int rob_full,
@@ -420,6 +421,7 @@ module core(clk,
    logic [31:0] r_restart_cycles, n_restart_cycles;
    logic 	r_irq, n_irq;
    wire [1:0] 	w_priv;
+   wire 	w_priv_update;
    assign priv = w_priv;
 
    
@@ -432,8 +434,12 @@ module core(clk,
    wire [63:0] 	w_en_m_irqs = w_mstatus_mie ? (~w_mideleg) : 64'd0;
    wire [63:0] 	w_en_s_irqs = (~w_mideleg) | (w_mstatus_sie ? w_mideleg : 64'd0);
    
-   wire [63:0] 	w_enabled_irqs = ((w_priv == 2'd3) ? w_en_m_irqs : ((w_priv == 2'd1) ? w_en_s_irqs : (~(64'd0) ))) & w_pending_irq;
-   wire 	w_any_irq = |w_enabled_irqs[31:0];
+   wire [63:0] 	w_enabled_irqs = (
+				  (w_priv == 2'd3) ? w_en_m_irqs : 
+				  (w_priv == 2'd1 ? w_en_s_irqs : (~(64'd0) ))
+				  ) & w_pending_irq;
+   
+   wire 	w_any_irq = (|w_enabled_irqs[31:0]) & (|w_pending_irq[31:0]);
    
    
    wire [5:0] 	w_irq_id;
@@ -442,10 +448,12 @@ module core(clk,
    
    always_ff@(negedge clk)
      begin
-	if(w_enabled_irqs != 64'd0 && r_state == ACTIVE)
+	if(w_any_irq && r_state == ACTIVE)
 	  begin
-	     $display("w_irq_id = %d, r_priv %d, mie %b sie %b", w_irq_id, w_priv, w_mstatus_mie, w_mstatus_sie);
-	     $stop();
+	     $display(">>>> w_irq_id = %d, r_priv %d, mie %b sie %b pending %b, cycle %d", 
+		      w_irq_id, w_priv, w_mstatus_mie, w_mstatus_sie, 
+		      w_enabled_irqs[31:0],
+		      r_cycle);
 	  end
      end
    
@@ -916,6 +924,9 @@ module core(clk,
 			      n_epc = t_rob_head.pc;
 			      n_tval = 'd0;
 			      n_irq = w_any_irq;
+`ifdef VERILATOR
+			      start_log(w_any_irq ? 32'd1 : 32'd0);
+`endif
 			   end
 			 else
 			   begin
@@ -1192,8 +1203,8 @@ module core(clk,
 		     // $display("t_rob_head.cause = %d, ", t_rob_head.cause);
 		   end
 	       endcase // case (t_rob_head.cause)
-	       $display("took fault for %x with cause %d at cycle %d, priv %d, tval %x, irq %b", 
-			t_rob_head.pc, t_rob_head.cause, r_cycle, priv, n_tval, r_irq);
+	       $display("took fault for %x with cause %d at cycle %d, priv %d, tval %x, irq %b, epc %x", 
+			t_rob_head.pc, t_rob_head.cause, r_cycle, priv, n_tval, r_irq, r_epc);
 	       
 	       t_bump_rob_head = 1'b1;
 	       if(syscall_emu)
@@ -1218,10 +1229,15 @@ module core(clk,
 	    end // case: WRITE_CSRS
 	  WAIT_FOR_CSR_WRITE:
 	    begin
-	       n_restart_pc = w_exc_pc;
-	       n_restart_valid = 1'b1;
-	       n_irq = 1'b0;
-	       n_state = DRAIN;
+	       if(w_priv_update)
+		 begin
+		    n_restart_pc = w_exc_pc;
+		    n_restart_valid = 1'b1;
+		    n_irq = 1'b0;
+		    n_state = DRAIN;
+		    $display("restarting cycle %d, paging %b, priv %d", 
+			     r_cycle, paging_active, w_priv);
+		 end
 	    end
 	  default:
 	    begin
@@ -2025,6 +2041,7 @@ module core(clk,
 	   .putchar_fifo_empty(putchar_fifo_empty),
 	   .putchar_fifo_pop(putchar_fifo_pop),
 	   .priv(w_priv),
+	   .priv_update(w_priv_update),
 	   .paging_active(paging_active),
 	   .page_table_root(page_table_root),
 	   .update_csr_exc(r_update_csr_exc),

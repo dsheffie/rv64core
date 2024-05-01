@@ -198,6 +198,10 @@ uint64_t page_table_root = ~0UL;
 std::list<store_rec> store_queue;
 std::list<store_rec> atomic_queue;
 
+void start_log(int l) {
+  trace_retirement |= (l!=0);
+}
+
 void wr_log(long long pc, long long addr, long long data, int is_atomic) {
   if(not(enable_checker))
     return;

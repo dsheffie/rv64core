@@ -671,8 +671,8 @@ endfunction
 		 begin
 		    if(!fq_full)
 		      begin
-			 //$display("taking page fault for pc %x at cycle %d, paging_active %b", 
-			 //r_cache_pc, r_cycle, paging_active);
+			 $display("taking page fault for pc %x at cycle %d, paging_active %b", 
+				  r_cache_pc, r_cycle, paging_active);
 			 n_page_fault = 1'b0;
 			 t_push_insn = 1'b1;
 		      end
