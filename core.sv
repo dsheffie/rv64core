@@ -409,9 +409,10 @@ module core(clk,
 			     WAIT_FOR_MONITOR = 'd9,
 			     HALT_WAIT_FOR_RESTART = 'd10,
 			     WAIT_FOR_SERIALIZE_AND_RESTART = 'd11,
-			     ARCH_FAULT = 'd12,
-			     WRITE_CSRS = 'd13,
-			     WAIT_FOR_CSR_WRITE = 'd14
+			     WAIT_FOR_ACK = 'd12,
+			     ARCH_FAULT = 'd13,
+			     WRITE_CSRS = 'd14,
+			     WAIT_FOR_CSR_WRITE = 'd15
 			     } state_t;
    
    state_t r_state, n_state;
@@ -780,18 +781,12 @@ module core(clk,
      end
 `endif
    
-//`define DUMP_ROB
+`define DUMP_ROB
 `ifdef DUMP_ROB
-   logic [15:0] r_last_cycle;
-   
    always_ff@(negedge clk)
      begin
-	if(retire_valid || retire_two_valid)
-	  r_last_cycle <= 'd0;
-	else
-	  r_last_cycle <= r_last_cycle + 'd1;
-	
-	if(r_cycle >= 'd140304820 )
+
+	if(r_cycle >= 'd343052237 )
 	  begin 
 	     $display("cycle %d : state = %d, alu complete %b, mem complete %b,head_ptr %d, complete %b,  can_retire_rob_head %b, head pc %x, empty %b, full %b, bob full %b", 
 		      r_cycle,
@@ -894,9 +889,9 @@ module core(clk,
 	  begin
 	     n_got_restart_ack = 1'b0;
 	  end
-	else if(!r_got_restart_ack)
+	else if(!r_got_restart_ack & restart_ack)
 	  begin
-	     n_got_restart_ack = restart_ack;
+	     n_got_restart_ack = 1;
 	  end	
 	
 	t_can_retire_rob_head = t_rob_head_complete && !t_rob_empty;
@@ -908,7 +903,7 @@ module core(clk,
 			       (t_complete_valid_2 ? t_complete_bundle_2.faulted : 1'b0);
 	  end
 	
-	t_arch_fault = t_rob_head.faulted & t_rob_head.has_cause;
+	t_arch_fault = (t_rob_head.faulted & t_rob_head.has_cause) | w_any_irq;
 	
 	unique case (r_state)
 	  ACTIVE:
@@ -917,16 +912,19 @@ module core(clk,
 		 begin
 		    if(t_rob_head.faulted | w_any_irq)
 		      begin
-			 if(t_arch_fault | w_any_irq)
+			 if(t_arch_fault)
 			   begin
 			      n_state = ARCH_FAULT;
 			      n_cause = w_any_irq ? w_irq_id[4:0] : t_rob_head.cause;
 			      n_epc = t_rob_head.pc;
+			      $display("n_epc = %x, t_rob_head.pc = %x, t_arch_fault = %b, w_any_irq = %b, cycle %d", 
+				       n_epc, t_rob_head.pc, t_arch_fault, w_any_irq, r_cycle);
+ 
 			      n_tval = 'd0;
 			      n_irq = w_any_irq;
-`ifdef VERILATOR
-			      start_log(w_any_irq ? 32'd1 : 32'd0);
-`endif
+//`ifdef VERILATOR
+//			      start_log(w_any_irq ? 32'd1 : 32'd0);
+//`endif
 			   end
 			 else
 			   begin
@@ -978,14 +976,14 @@ module core(clk,
 		      end // if (!t_dq_empty)
 		    t_retire = t_rob_head_complete & !t_arch_fault;
 		    t_retire_two = !t_rob_next_empty
-		    		   && !t_rob_head.faulted
+		    		   && !t_arch_fault
 		    		   && !t_rob_next_head.faulted 				    
 		    		   && t_rob_head_complete
 		    		   && t_rob_next_head_complete				    
 				   && !t_rob_head.is_br
 				   && !t_rob_next_head.is_ret
 				   && !t_rob_next_head.is_call;
-		    
+
 		 end // if (t_can_retire_rob_head)
 	       else if(!t_dq_empty)
 		 begin
@@ -1061,24 +1059,30 @@ module core(clk,
 	       t_alloc = !t_rob_full && !t_uq_full 
 			 && (r_prf_free != 'd0) 
 			   && !t_dq_empty;
-	       n_state = t_alloc ? WAIT_FOR_SERIALIZE_AND_RESTART : ALLOC_FOR_SERIALIZE;
+	       if(t_alloc)
+		 begin
+		    n_state = WAIT_FOR_SERIALIZE_AND_RESTART;
+		 end
 	    end
 	  WAIT_FOR_SERIALIZE_AND_RESTART:
 	    begin
 	       if(t_rob_head_complete)
 		 begin
-		    t_clr_dq = 1'b1;
+		    //$display("target pc %x, src pc %x", t_rob_head.target_pc, t_rob_head.pc);
 		    n_restart_pc = t_rob_head.target_pc;
 		    n_restart_src_pc = t_rob_head.pc;
 		    n_restart_src_is_indirect = 1'b0;
 		    n_restart_valid = 1'b1;
-		    n_pending_fault = 1'b0;		    
-		    if(n_got_restart_ack)
-		      begin
-			 //$display("RESTART PIPELINE AT %d, pc %x", 
-			 //r_cycle, n_restart_pc);
-			 n_state = ACTIVE;			 
-		      end
+		    n_pending_fault = 1'b0;
+		    n_state = WAIT_FOR_ACK;
+		 end
+	    end // case: WAIT_FOR_SERIALIZE_AND_RESTART
+	  WAIT_FOR_ACK:
+	    begin
+	       t_clr_dq = 1'b1;
+	       if(n_got_restart_ack)
+		 begin
+		    n_state = ACTIVE;			 
 		 end
 	    end
 	  FLUSH_CACHE:
@@ -1203,8 +1207,8 @@ module core(clk,
 		     // $display("t_rob_head.cause = %d, ", t_rob_head.cause);
 		   end
 	       endcase // case (t_rob_head.cause)
-	       $display("took fault for %x with cause %d at cycle %d, priv %d, tval %x, irq %b, epc %x", 
-			t_rob_head.pc, t_rob_head.cause, r_cycle, priv, n_tval, r_irq, r_epc);
+	       $display("took fault for %x with cause %d at cycle %d, priv %d, tval %x, irq %b, epc %x, cycle %d", 
+			t_rob_head.pc, t_rob_head.cause, r_cycle, priv, n_tval, r_irq, r_epc, r_cycle);
 	       
 	       t_bump_rob_head = 1'b1;
 	       if(syscall_emu)
@@ -1233,10 +1237,11 @@ module core(clk,
 		 begin
 		    n_restart_pc = w_exc_pc;
 		    n_restart_valid = 1'b1;
+		    if(n_got_restart_ack) $stop();
 		    n_irq = 1'b0;
 		    n_state = DRAIN;
-		    $display("restarting cycle %d, paging %b, priv %d", 
-			     r_cycle, paging_active, w_priv);
+		    $display("restarting cycle %d, paging %b, priv %d, new pc %x", 
+			     r_cycle, paging_active, w_priv, w_exc_pc);
 		 end
 	    end
 	  default:
@@ -1426,6 +1431,7 @@ module core(clk,
 	t_rob_tail.pht_idx = t_alloc_uop.pht_idx;
 
 	t_rob_next_tail.faulted  = 1'b0;
+	
 	t_rob_next_tail.valid_dst  = 1'b0;
 	t_rob_next_tail.ldst  = 'd0;
 	t_rob_next_tail.pdst  = 'd0;

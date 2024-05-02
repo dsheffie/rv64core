@@ -1498,7 +1498,6 @@ void execRiscv(state_t *s) {
  handle_exception: {
     s->took_exception = true;
     bool delegate = false;
-    printf("CHECKER: exception at %lx, cause %d\n", s->pc, except_cause);
     if(s->priv == priv_user || s->priv == priv_supervisor) {
       if(except_cause & CAUSE_INTERRUPT) {
 	assert(false);
@@ -1508,7 +1507,7 @@ void execRiscv(state_t *s) {
 	
       }
     }
-    
+    auto oldpc = s->pc;
     if(delegate) {
       s->scause = except_cause & 0x7fffffff;
       s->sepc = s->pc;
@@ -1533,6 +1532,7 @@ void execRiscv(state_t *s) {
       set_priv(s, priv_machine);
       s->pc = s->mtvec;      
     }
+    printf("CHECKER: exception at %lx, cause %d, new pc %lx\n", oldpc, except_cause, s->pc);
     //printf("after exception, new pc will be %lx\n", s->pc);
   }
   return;

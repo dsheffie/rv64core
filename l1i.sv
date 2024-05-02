@@ -384,7 +384,7 @@ endfunction
    assign page_walk_req_va = r_miss_pc;
    
    
-   wire [`M_WIDTH-1:0] w_restart_pc = in_32b_mode ? { {(`M_WIDTH-32){1'b0}}, restart_pc[31:0]} : restart_pc;
+   wire [`M_WIDTH-1:0] w_restart_pc = restart_pc;
    
    always_comb
      begin
@@ -480,8 +480,8 @@ endfunction
 	else if(t_push_insn4)
 	  begin
 	     //$display("push4 cycle = %d, r_valid_out =%b, r_tag_out =%d, r_cache_tag = %d, r_cache_pc = %x", r_cycle, r_valid_out,r_tag_out,r_cache_tag,r_cache_pc);
-	     //$display("t_insn.pc = %x,  bytes = %x, t_clear_fq=%b,hit=%b", t_insn.pc,t_insn.data,t_clear_fq,t_hit);	     
-	     //$display("t_insn2.pc = %x, bytes = %x", t_insn2.pc,t_insn2.data);
+	     //$display("t_insn.pc = %x,  t_clear_fq=%b,hit=%b", t_insn.pc,t_clear_fq,t_hit);	     
+	     //$display("t_insn2.pc = %x", t_insn2.pc);
 	     //$display("t_insn3.pc = %x", t_insn3.pc);
 	     //$display("t_insn4.pc = %x", t_insn4.pc);	     	     	     
 	     r_fq[r_fq_tail_ptr[`LG_FQ_ENTRIES-1:0]] <= t_insn;
@@ -508,7 +508,7 @@ endfunction
      begin
 	if(restart_valid && restart_src_is_indirect)
 	  begin
-	     r_btb[restart_src_pc[(`LG_BTB_SZ+1):2]] <= w_restart_pc;
+	     r_btb[restart_src_pc[(`LG_BTB_SZ+1):2]] <= restart_pc;
 	  end	
      end // always_ff@ (posedge clk)
 
@@ -634,6 +634,7 @@ endfunction
 		    n_restart_ack = 1'b1;
 		    n_restart_req = 1'b0;
 		    n_pc = w_restart_pc;
+		    //$display("restart ack, pc %x at cycle %d", n_pc, r_cycle);
 		    n_state = ACTIVE;
 		    t_clear_fq = 1'b1;
 		 end
@@ -662,6 +663,7 @@ endfunction
 		    n_restart_ack = 1'b1;
 		    n_restart_req = 1'b0;
 		    n_pc = w_restart_pc;
+		    //$display("restart ack, pc %x at cycle %d", n_pc, r_cycle);		    
 		    n_req = 1'b0;
 		    n_state = ACTIVE;
 		    t_clear_fq = 1'b1;
@@ -671,8 +673,8 @@ endfunction
 		 begin
 		    if(!fq_full)
 		      begin
-			 $display("taking page fault for pc %x at cycle %d, paging_active %b", 
-				  r_cache_pc, r_cycle, paging_active);
+			 //$display("taking page fault for pc %x at cycle %d, paging_active %b", 
+			 //r_cache_pc, r_cycle, paging_active);
 			 n_page_fault = 1'b0;
 			 t_push_insn = 1'b1;
 		      end
@@ -807,6 +809,7 @@ endfunction
 		    n_restart_ack = 1'b1;
 		    n_restart_req = 1'b0;
 		    n_pc = w_restart_pc;
+		    //$display("restart ack, pc %x at cycle %d", n_pc, r_cycle);		    
 		    n_req = 1'b0;
 		    n_state = ACTIVE;
 		    t_clear_fq = 1'b1;
@@ -853,6 +856,7 @@ endfunction
 		    n_restart_ack = 1'b1;
 		    n_restart_req = 1'b0;
 		    n_pc = w_restart_pc;
+		    //$display("restart ack, pc %x at cycle %d", n_pc, r_cycle);
 		    n_req = 1'b0;
 		    n_state = ACTIVE;
 		    t_clear_fq = 1'b1;
@@ -1227,14 +1231,14 @@ endfunction
 	  end
      end
 
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if(n_restart_ack)
-   // 	  begin
-   // 	     $display("restart pc %x, paging enabled %b",
-   // 		      n_pc, paging_active);
-   // 	  end
-   //   end
+    // always_ff@(negedge clk)
+    //   begin
+    // 	if(n_restart_ack)
+    // 	  begin
+    // 	     $display("restart pc %x, paging enabled %b, r_state = %d, n_state = %d", 
+    // 		      n_pc, paging_active, r_state, n_state);
+    // 	  end
+    //   end
    
    
    always_ff@(posedge clk)

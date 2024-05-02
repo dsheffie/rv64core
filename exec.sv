@@ -2702,10 +2702,10 @@ module exec(clk,
 
 	     endcase // case (int_uop.imm[4:0])
 	  end // if (t_wr_csr_en)
-	else if(1'b1)
-	  begin
-	     r_mip <= 64'd128;
-	  end
+	//else if(1'b1)
+	  //begin
+	    // r_mip <= 64'd128;
+	 // end
      end // always_ff@ (posedge clk)
 
 
