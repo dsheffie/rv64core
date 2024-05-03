@@ -78,7 +78,7 @@ module
    input logic clk;
    input logic reset;
    input logic syscall_emu;
-   output logic [3:0] core_state;
+   output logic [4:0] core_state;
    output logic [3:0] l1i_state;
    output logic [3:0] l1d_state;
    output logic [3:0] l2_state;
@@ -715,7 +715,7 @@ module core_l1d_l1i(clk,
    input logic reset;
    input logic syscall_emu;
    output logic [3:0] n_inflight;
-   output logic [3:0] core_state;
+   output logic [4:0] core_state;
    output logic [3:0] l1i_state;
    output logic [3:0] l1d_state;
    output logic       memq_empty;

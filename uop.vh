@@ -135,6 +135,7 @@ typedef enum logic [6:0]
    SLLW,
    SRLW,
    FETCH_PF,
+   IRQ,
    II //illegal instruction
    } opcode_t;
 

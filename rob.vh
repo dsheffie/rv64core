@@ -30,6 +30,7 @@ typedef struct packed {
    cause_t     cause;
    logic       is_ret;
    logic       is_call;
+   logic       is_irq;
    logic       valid_dst;
    logic [4:0] ldst;
 

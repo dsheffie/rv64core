@@ -83,6 +83,7 @@ module decode_riscv(
 		    mode64,
 		    insn,
 		    page_fault,
+		    irq,
 		    pc, 
 		    insn_pred, 
 		    pht_idx, 
@@ -96,6 +97,7 @@ module decode_riscv(
    input logic mode64;
    input logic [31:0] insn;
    input logic	      page_fault;
+   input logic 	      irq;
    input logic [`M_WIDTH-1:0] pc;
    input logic 	      insn_pred;
    input logic [`LG_PHT_SZ-1:0] pht_idx;
@@ -106,7 +108,7 @@ module decode_riscv(
    input logic			syscall_emu;
    output 	uop_t uop;
 
-   wire [6:0] 	opcode = page_fault ? 'd0 : insn[6:0];
+   wire [6:0] 	opcode = page_fault|irq ? 'd0 : insn[6:0];
    
    localparam ZP = (`LG_PRF_ENTRIES-5);
    wire [`LG_PRF_ENTRIES-1:0] rd = {{ZP{1'b0}},insn[11:7]};
@@ -154,7 +156,7 @@ module decode_riscv(
 	csr_id = decode_csr(insn[31:20]);
 	rd_is_link = (rd == 'd1) || (rd == 'd5);
 	rs1_is_link = (rs1 == 'd1) || (rs1 == 'd5);
-	uop.op = page_fault ? FETCH_PF : II;
+	uop.op = page_fault ? FETCH_PF : (irq ? IRQ : II);
 	uop.srcA = 'd0;
 	uop.srcB = 'd0;
 	uop.dst = 'd0;

@@ -871,7 +871,7 @@ endfunction
 	             t_reload_tlb = page_walk_rsp.fault==1'b0;
 		     n_state = TLB_MISS_TURNAROUND;
 		     //$display("mmu returns for %x, page fault %b at cycle %d", 
-		     //	      r_miss_pc, page_walk_rsp_fault, r_cycle);
+		     //r_miss_pc, n_page_fault, r_cycle);
 		     //if(t_page_walk_pa != page_walk_rsp_pa)
 		     //begin
 		     //$display("va %x : local %x vs mmu %x", r_miss_pc, t_page_walk_pa, page_walk_rsp_pa);

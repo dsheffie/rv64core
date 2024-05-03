@@ -827,23 +827,6 @@ module exec(clk,
      begin
 	r_start_int2 <= reset ? 1'b0 : ((t_alu_entry_rdy2 != 'd0) & !ds_done);
      end
-
-   // always@(negedge clk)
-   //   begin
-   // 	if(r_start_int)
-   // 	  $display("cycle %d : starting %x on port 0, %x, %x -> %x", 
-   // 		   r_cycle, int_uop.pc, t_srcA, t_srcB, t_result);
-   // 	if(r_start_int2)
-   // 	  begin
-   // 	     $display("cycle %d : starting %x on port 1, %x, %x -> %x", 
-   // 		      r_cycle, int_uop2.pc, t_srcA_2, t_srcB_2, t_result2);
-   // 	     //if(int_uop2.pc == 'h80011b5c)
-   // 	       //begin
-   // 	     //$display("Src ptr A %d", int_uop2.srcA);
-   // 	     //$stop();
-   // 	     //end
-   // 	  end
-   //   end
    
    always_comb
      begin
@@ -1540,16 +1523,6 @@ module exec(clk,
    
    always_ff@(negedge clk)
      begin
-	//if((int_uop.pc == 64'hffffffff80231c0c) & r_start_int)
-	//begin
-	// $display("cycle %d %d for pc %x, read %x, writing %x", 
-	//	      r_cycle, int_uop.op, int_uop.pc, t_rd_csr, t_wr_csr);
-	//end
-	if((int_uop.pc == 64'hffffffff80305340) & r_start_int)
-	  begin
-	     $display("cycle %d %d for pc %x, read %x, writing %x, imm %x, ~imm %x, and %x", 
-		      r_cycle, int_uop.op, int_uop.pc, t_rd_csr, t_wr_csr, int_uop.imm[10:6], ~int_uop.imm[10:6], t_rd_csr[4:0] & (~int_uop.imm[10:6]));
-	  end
 	//if(t_wr_csr_en && int_uop.imm[5:0] == SSTATUS)
 	//begin
 	//$display("%x writes %x to sstatus at cycle %d",
@@ -1599,16 +1572,6 @@ module exec(clk,
 		      int_uop.pc, r_cycle);
 	     $stop();
 	  end
-	//if(t_start_div64)
-	//begin
-	//$display("divider starts at cycle %d, will complete at %d",
-	//r_cycle, r_cycle+`DIV64_LAT);
-	//end
-	//if(t_div_complete)
-	//begin
-	//$display("divide finished at cycle %d", r_cycle);
-	//end
-	//$display("cycle %d : %b", r_cycle, r_wb_bitvec);
      end
    
 	       
@@ -2538,6 +2501,11 @@ module exec(clk,
      end // always_comb
 
    logic r_satp_armed;
+   logic n_paging_active;
+   always_comb
+     begin
+	n_paging_active = r_satp_armed & (!r_priv[1]);
+     end
    always_ff@(posedge clk)
      begin
 	if(reset)
@@ -2546,9 +2514,15 @@ module exec(clk,
 	  end
 	else
 	  begin
-	     r_paging_active <= r_satp_armed & (!r_priv[1]);
+	     r_paging_active <= n_paging_active;
 	  end
      end // always_ff@ (posedge clk)
+
+   always_ff@(negedge clk)
+     begin
+	if(r_paging_active != n_paging_active)
+	  $display("paging switch to %b from %b at %d", n_paging_active, r_paging_active, r_cycle);
+     end
 
 
    logic t_push_putchar;
@@ -2702,10 +2676,10 @@ module exec(clk,
 
 	     endcase // case (int_uop.imm[4:0])
 	  end // if (t_wr_csr_en)
-	//else if(1'b1)
-	  //begin
-	    // r_mip <= 64'd128;
-	 // end
+	else if(1'b1)
+	begin
+	   r_mip <= 64'd128;
+	end
      end // always_ff@ (posedge clk)
 
 

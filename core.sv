@@ -127,7 +127,7 @@ module core(clk,
    output logic [7:0] putchar_fifo_out;
    output logic       putchar_fifo_empty;
    input logic 	      putchar_fifo_pop;
-   output logic [3:0] core_state;
+   output logic [4:0] core_state;
    output logic	restart_complete;
    input logic syscall_emu;
    output logic	took_exc;
@@ -396,7 +396,7 @@ module core(clk,
    logic 		     t_can_retire_rob_head;
    logic 		     t_arch_fault;
    
-   typedef enum logic [3:0] {
+   typedef enum logic [4:0] {
 			     FLUSH_FOR_HALT = 'd0,
 			     HALT = 'd1, 
 			     ACTIVE = 'd2,
@@ -410,9 +410,10 @@ module core(clk,
 			     HALT_WAIT_FOR_RESTART = 'd10,
 			     WAIT_FOR_SERIALIZE_AND_RESTART = 'd11,
 			     WAIT_FOR_ACK = 'd12,
-			     ARCH_FAULT = 'd13,
-			     WRITE_CSRS = 'd14,
-			     WAIT_FOR_CSR_WRITE = 'd15
+			     MONITOR_WAIT_FOR_ACK = 'd13,
+			     ARCH_FAULT = 'd14,
+			     WRITE_CSRS = 'd15,
+			     WAIT_FOR_CSR_WRITE = 'd16
 			     } state_t;
    
    state_t r_state, n_state;
@@ -689,7 +690,7 @@ module core(clk,
 	     retire_two_pc <= t_rob_next_head.pc;
 	     retired_ret <= t_rob_head.is_ret && t_retire;
 	     retired_call <= t_rob_head.is_call && t_retire;
-
+	     
 	     retired_rob_ptr_valid <= t_retire;
 	     
 	     retired_rob_ptr_two_valid <= t_retire_two;
@@ -781,7 +782,7 @@ module core(clk,
      end
 `endif
    
-`define DUMP_ROB
+//`define DUMP_ROB
 `ifdef DUMP_ROB
    always_ff@(negedge clk)
      begin
@@ -863,8 +864,8 @@ module core(clk,
 	t_enough_next_iprfs = !((t_uop2.dst_valid) && t_gpr_ffs2_full);
 
 	
-	t_fold_uop = (t_uop.op == NOP || t_uop.op == II || t_uop.op == FETCH_PF || t_uop.op == J );
-	t_fold_uop2 = (t_uop2.op == NOP || t_uop2.op == II || t_uop2.op == FETCH_PF || t_uop2.op == J);
+	t_fold_uop = (t_uop.op == NOP || t_uop.op == II || t_uop.op == FETCH_PF || t_uop.op == IRQ || t_uop.op == J );
+	t_fold_uop2 = (t_uop2.op == NOP || t_uop2.op == II || t_uop2.op == FETCH_PF || t_uop2.op == IRQ || t_uop2.op == J);
 
 	n_ds_done = r_ds_done;
 	n_flush_req_l1d = 1'b0;
@@ -903,25 +904,26 @@ module core(clk,
 			       (t_complete_valid_2 ? t_complete_bundle_2.faulted : 1'b0);
 	  end
 	
-	t_arch_fault = (t_rob_head.faulted & t_rob_head.has_cause) | w_any_irq;
+	t_arch_fault = (t_rob_head.faulted & t_rob_head.has_cause);
 	
 	unique case (r_state)
 	  ACTIVE:
 	    begin
 	       if(t_can_retire_rob_head)
 		 begin
-		    if(t_rob_head.faulted | w_any_irq)
+		    if(t_rob_head.faulted)
 		      begin
 			 if(t_arch_fault)
 			   begin
 			      n_state = ARCH_FAULT;
-			      n_cause = w_any_irq ? w_irq_id[4:0] : t_rob_head.cause;
+			      n_cause = t_rob_head.cause;
 			      n_epc = t_rob_head.pc;
 			      $display("n_epc = %x, t_rob_head.pc = %x, t_arch_fault = %b, w_any_irq = %b, cycle %d", 
 				       n_epc, t_rob_head.pc, t_arch_fault, w_any_irq, r_cycle);
  
 			      n_tval = 'd0;
-			      n_irq = w_any_irq;
+			      n_irq = t_rob_head.is_irq;
+			      
 //`ifdef VERILATOR
 //			      start_log(w_any_irq ? 32'd1 : 32'd0);
 //`endif
@@ -1068,7 +1070,7 @@ module core(clk,
 	    begin
 	       if(t_rob_head_complete)
 		 begin
-		    //$display("target pc %x, src pc %x", t_rob_head.target_pc, t_rob_head.pc);
+		    //$display("target pc %x, src pc %x at cycle %d", t_rob_head.target_pc, t_rob_head.pc, r_cycle);
 		    n_restart_pc = t_rob_head.target_pc;
 		    n_restart_src_pc = t_rob_head.pc;
 		    n_restart_src_is_indirect = 1'b0;
@@ -1084,6 +1086,15 @@ module core(clk,
 		 begin
 		    n_state = ACTIVE;			 
 		 end
+	    end
+	  MONITOR_WAIT_FOR_ACK:
+	    begin
+	       t_clr_dq = 1'b1;
+	       if(n_got_restart_ack)
+		 begin
+		    t_retire = 1'b1;
+		    n_state = ACTIVE;
+		 end	       
 	    end
 	  FLUSH_CACHE:
 	    begin
@@ -1118,17 +1129,12 @@ module core(clk,
 	    begin
 	       if(t_rob_head_complete)
 		 begin
-		    t_clr_dq = 1'b1;
 		    n_restart_pc = t_rob_head.pc + 'd4;
 		    n_restart_src_pc = t_rob_head.pc;
 		    n_restart_src_is_indirect = 1'b0;
 		    n_restart_valid = 1'b1;
 		    n_pending_fault = 1'b0;
-		    if(n_got_restart_ack)
-		      begin
-			 t_retire = 1'b1;
-			 n_state = ACTIVE;
-		      end
+		    n_state = MONITOR_WAIT_FOR_ACK;
 		 end
 	    end // case: WAIT_FOR_MONITOR
 	  FLUSH_FOR_HALT:
@@ -1422,7 +1428,8 @@ module core(clk,
 	t_rob_tail.is_call = t_alloc_uop.op == JAL || t_alloc_uop.op == JALR;
 	t_rob_tail.is_ret = (t_alloc_uop.op == RET);
 	t_rob_tail.is_indirect = t_alloc_uop.op == JALR || t_alloc_uop.op == JR;
-
+	t_rob_tail.is_irq = t_alloc_uop.op == IRQ;
+	
 	t_rob_tail.has_cause = 1'b0;
 	t_rob_tail.cause = MISALIGNED_FETCH;
 	t_rob_tail.take_br = 1'b0;
@@ -1442,6 +1449,7 @@ module core(clk,
 	t_rob_next_tail.is_call = t_alloc_uop2.op == JAL || t_alloc_uop2.op == JALR;
 	t_rob_next_tail.is_ret = (t_alloc_uop2.op == RET);
 	t_rob_next_tail.is_indirect = t_alloc_uop2.op == JALR || t_alloc_uop2.op == JR;
+	t_rob_next_tail.is_irq = t_alloc_uop2.op == IRQ;
 	
 	t_rob_next_tail.cause = MISALIGNED_FETCH;
 	t_rob_next_tail.has_cause = 1'b0;
@@ -1484,6 +1492,12 @@ module core(clk,
                       t_rob_tail.faulted = 1'b1;
                       t_rob_tail.has_cause = 1'b1;
                       t_rob_tail.cause = FETCH_PAGE_FAULT;
+		    end
+		  else if(t_uop.op == IRQ)
+		    begin
+                      t_rob_tail.faulted = 1'b1;
+                      t_rob_tail.has_cause = 1'b1;
+                      t_rob_tail.cause = w_irq_id[4:0];
 		    end
 		  else if(t_uop.op == J)
 		    begin
@@ -1533,6 +1547,12 @@ module core(clk,
                       t_rob_next_tail.faulted = 1'b1;
                       t_rob_next_tail.has_cause = 1'b1;
                       t_rob_next_tail.cause = FETCH_PAGE_FAULT;
+		    end
+		  else if(t_uop2.op == IRQ)
+		    begin
+                      t_rob_next_tail.faulted = 1'b1;
+                      t_rob_next_tail.has_cause = 1'b1;
+                      t_rob_next_tail.cause = w_irq_id[4:0];
 		    end
 		  else if(t_uop2.op == J)
 		    begin
@@ -1995,6 +2015,7 @@ module core(clk,
       .mode64(r_mode64),
       .insn(insn.insn_bytes),
       .page_fault(insn.page_fault),
+      .irq(w_any_irq),
       .pc(insn.pc), 
       .insn_pred(insn.pred), 
       .pht_idx(insn.pht_idx),
@@ -2010,7 +2031,8 @@ module core(clk,
      (	
 	.mode64(r_mode64),
 	.insn(insn_two.insn_bytes),
-	.page_fault(insn_two.page_fault), 
+	.page_fault(insn_two.page_fault),
+	.irq(w_any_irq),	
 	.pc(insn_two.pc), 
 	.insn_pred(insn_two.pred), 
 	.pht_idx(insn_two.pht_idx),
