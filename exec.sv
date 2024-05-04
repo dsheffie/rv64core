@@ -2530,12 +2530,21 @@ module exec(clk,
 
    wire [1:0] w_mpp = r_mstatus[12:11];
    wire	      w_mpie = r_mstatus[7];
+   wire	      w_spie = r_mstatus[5];
+   
    
    wire [3:0] w_mret_mstatus_b30 = 
 	      w_mpp == 2'd0 ? {r_mstatus[3:1], w_mpie} :
 	      w_mpp == 2'd1 ? {r_mstatus[3:2], w_mpie, r_mstatus[0]} :
 	      w_mpp == 2'd2 ? {r_mstatus[3], w_mpie, r_mstatus[1:0]} :
 	      {w_mpie, r_mstatus[2:0]};
+
+   wire [3:0] w_sret_mstatus_b30 = 
+	      w_mpp == 2'd0 ? {r_mstatus[3:1], w_spie} :
+	      w_mpp == 2'd1 ? {r_mstatus[3:2], w_spie, r_mstatus[0]} :
+	      w_mpp == 2'd2 ? {r_mstatus[3], w_spie, r_mstatus[1:0]} :
+	      {w_spie, r_mstatus[2:0]};
+
 	      
    wire [63:0] w_mret_mstatus = {r_mstatus[63:13],
 				 2'd0,
@@ -2543,6 +2552,14 @@ module exec(clk,
 				 1'b1, /*mpie*/
 				 r_mstatus[6:4],
 				 w_mret_mstatus_b30
+				 };
+
+   wire [63:0] w_sret_mstatus = {r_mstatus[63:9],
+				 1'd0, /* spp */
+				 r_mstatus[7:6],
+				 1'b1, /*spie*/
+				 r_mstatus[4],
+				 w_sret_mstatus_b30
 				 };
 
    wire w_ie = 
@@ -2693,7 +2710,7 @@ module exec(clk,
 		      end
 		    else if(int_uop.op == SRET)
 		      begin
-			 $stop();
+			 r_mstatus <= w_sret_mstatus;
 		      end
 		    else
 		      begin
