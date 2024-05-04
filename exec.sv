@@ -2529,6 +2529,7 @@ module exec(clk,
    logic t_push_putchar;
 
    wire [1:0] w_mpp = r_mstatus[12:11];
+   wire	      w_spp = r_mstatus[8];
    wire	      w_mpie = r_mstatus[7];
    wire	      w_spie = r_mstatus[5];
    
@@ -2539,11 +2540,8 @@ module exec(clk,
 	      w_mpp == 2'd2 ? {r_mstatus[3], w_mpie, r_mstatus[1:0]} :
 	      {w_mpie, r_mstatus[2:0]};
 
-   wire [3:0] w_sret_mstatus_b30 = 
-	      w_mpp == 2'd0 ? {r_mstatus[3:1], w_spie} :
-	      w_mpp == 2'd1 ? {r_mstatus[3:2], w_spie, r_mstatus[0]} :
-	      w_mpp == 2'd2 ? {r_mstatus[3], w_spie, r_mstatus[1:0]} :
-	      {w_spie, r_mstatus[2:0]};
+   wire [1:0] w_sret_mstatus_b10 = 
+	      w_spp ? {w_spie, r_mstatus[0]} : {r_mstatus[1], w_spie};
 
 	      
    wire [63:0] w_mret_mstatus = {r_mstatus[63:13],
@@ -2558,8 +2556,8 @@ module exec(clk,
 				 1'd0, /* spp */
 				 r_mstatus[7:6],
 				 1'b1, /*spie*/
-				 r_mstatus[4],
-				 w_sret_mstatus_b30
+				 r_mstatus[4:2],
+				 w_sret_mstatus_b10
 				 };
 
    wire w_ie = 
