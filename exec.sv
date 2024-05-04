@@ -2528,18 +2528,6 @@ module exec(clk,
 
    logic t_push_putchar;
 
-   always_ff@(negedge clk)
-     begin
-	if(t_wr_csr_en & (int_uop.imm[5:0] == MIE))
-	  begin
-	     $display("pc %x : mie %x", int_uop.pc, t_wr_csr);
-	  end
-	if(t_wr_csr_en & (int_uop.imm[5:0] == MIP))
-	  begin
-	     $display("pc %x : mip %x", int_uop.pc, t_wr_csr);
-	  end	
-     end // always_ff@ (negedge clk)
-
    wire [1:0] w_mpp = r_mstatus[12:11];
    wire	      w_mpie = r_mstatus[7];
    
@@ -2574,23 +2562,35 @@ module exec(clk,
 
    wire [63:0] w_exc_mstatus = {r_mstatus[63:13],
 				/* mpp */ r_priv,
-				r_mstatus[10:9],
-				/* mpie */ w_ie,
-				r_mstatus[7:4],
+				r_mstatus[10:8],
+				/* mpie */ w_ie, //bit 7
+				r_mstatus[6:4],
 				1'b0, /* mie */
 				r_mstatus[2:0]
 				};
 
    
-   
-   
-    always_ff@(negedge clk)
+   logic [63:0]	r_foo;
+   always_ff@(posedge clk)
      begin
+	r_foo <= reset ? 'd0 : r_mstatus;
+     end
+    always_ff@(negedge clk)
+      begin
+	 if(r_foo != r_mstatus)
+	   begin
+	      $display(">>>>at cycle %d, mstatus %x to %x", r_cycle, r_foo, r_mstatus);
+	   end
 	if(r_start_int && int_uop.op == MRET)
 	  begin
-	     $display("MRET to %x from %x at cycle %d, mstatus %x",
-		      r_mepc, int_uop.pc, r_cycle, w_mret_mstatus);
+	     $display("MRET to %x from %x at cycle %d, mstatus %x old %x",
+		      r_mepc, int_uop.pc, r_cycle, w_mret_mstatus, r_mstatus);
 	  end
+	//if(r_start_int && int_uop.op == SRET)
+	//begin
+	//   $display("SRET to %x from %x at cycle %d, mstatus %x",
+	//	      r_mepc, int_uop.pc, r_cycle, w_mret_mstatus);
+	//end	
      end
   
    

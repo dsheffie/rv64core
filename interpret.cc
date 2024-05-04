@@ -1526,6 +1526,7 @@ void execRiscv(state_t *s) {
       s->pc = s->stvec;
     }
     else {
+      auto old = s->mstatus;
       s->mcause = except_cause & 0x7fffffff;
       s->mepc = s->pc;
       s->mtval = tval;
@@ -1535,7 +1536,9 @@ void execRiscv(state_t *s) {
 	(s->priv << MSTATUS_MPP_SHIFT);
       s->mstatus &= ~MSTATUS_MIE;
       set_priv(s, priv_machine);
-      s->pc = s->mtvec;      
+      s->pc = s->mtvec;
+      //printf("new mstatus %lx, old %lx\n", s->mstatus, old);
+      //exit(-1);
     }
     printf("CHECKER: exception at %lx, cause %d, new pc %lx\n",
 	   oldpc, except_cause, s->pc);
