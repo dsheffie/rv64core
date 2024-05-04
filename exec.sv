@@ -243,19 +243,19 @@ module exec(clk,
    cause_t      t_cause;
    
    logic	t_wr_csr_en, t_rd_csr_en;
-   logic [63:0] t_rd_csr, t_wr_csr;  
+   logic [63:0] t_rd_csr, t_wr_csr;
    logic	t_wr_priv;
    logic [1:0] 	t_priv;
    
 
-   logic [63:0]	       r_sstatus, r_stvec, r_sscratch;
-   logic [63:0]	       r_sepc, r_stval;
-   logic [63:0]	       r_satp, r_mstatus, r_mideleg, r_medeleg;
-   logic [63:0]	       r_mcounteren, r_mie, r_mscratch, r_mepc;
-   logic [63:0]	       r_mtvec, r_mtval, r_misa, r_mip,  r_scounteren;
-   logic [63:0]        r_mcause, r_scause;
-   logic [63:0]	       r_pmpaddr0, r_pmpaddr1, r_pmpaddr2, r_pmpaddr3, r_pmpcfg0;
-
+   logic [63:0]	r_stvec, r_sscratch;
+   logic [63:0]	r_sepc, r_stval;
+   logic [63:0]	r_satp, r_mstatus, r_mideleg, r_medeleg;
+   logic [63:0]	r_mcounteren, r_mie, r_mscratch, r_mepc;
+   logic [63:0]	r_mtvec, r_mtval, r_misa, r_mip,  r_scounteren;
+   logic [63:0]	r_mcause, r_scause;
+   logic [63:0]	r_pmpaddr0, r_pmpaddr1, r_pmpaddr2, r_pmpaddr3, r_pmpcfg0;
+   
    assign mie = r_mie;
    assign mip = r_mip;
    assign mideleg = r_mideleg;
@@ -1523,11 +1523,16 @@ module exec(clk,
    
    always_ff@(negedge clk)
      begin
-	//if(t_wr_csr_en && int_uop.imm[5:0] == SSTATUS)
-	//begin
-	//$display("%x writes %x to sstatus at cycle %d",
-	//int_uop.pc, t_wr_csr, r_cycle);
-	//end
+	if(t_wr_csr_en && int_uop.imm[5:0] == SSTATUS)
+	begin
+	   $display(">> %x writes %x to sstatus old %x at cycle %d",
+		    int_uop.pc, t_wr_csr, r_mstatus, r_cycle);
+	end
+	if(t_wr_csr_en && int_uop.imm[5:0] == MSTATUS)
+	begin
+	   $display(">> %x writes %x to mstatus old %x at cycle %d",
+		    int_uop.pc, t_wr_csr, r_mstatus, r_cycle);
+	end	
 	//if((int_uop.op == SRLIW) & r_start_int)
 	//begin
 	//$display("portA pc %x src A = %x, imm = %x, result %x", 
@@ -2375,12 +2380,8 @@ module exec(clk,
 	     $display("cycle %d, priv change %d -> %d, update_csr_exc %b, wr_priv %b\n", 
 		      r_cycle, r_priv, n_priv, update_csr_exc, t_wr_priv);
 	  end
-	if(r_start_int && int_uop.op == MRET)
-	  begin
-	     $display("MRET to %x from %x at cycle %d",
-		      r_mepc, int_uop.pc, r_cycle);
-	  end
      end
+   
 
    logic [3:0] r_rd_pc_idx, n_rd_pc_idx;
    logic [3:0] r_wr_pc_idx, n_wr_pc_idx;
@@ -2424,7 +2425,7 @@ module exec(clk,
 	t_rd_csr = 'd0;
 	case(int_uop.imm[5:0])
 	  SSTATUS:
-	    t_rd_csr = r_sstatus;
+	    t_rd_csr = r_mstatus & 64'h3000de133;
 	  SIE:
 	    t_rd_csr = r_mie & r_mideleg;
 	  STVEC:
@@ -2539,13 +2540,36 @@ module exec(clk,
 	  end	
      end // always_ff@ (negedge clk)
 
-
+   wire [1:0] w_mpp = r_mstatus[12:11];
+   wire	      w_mpie = r_mstatus[7];
+   
+   wire [3:0] w_mret_mstatus_b30 = 
+	      w_mpp == 2'd0 ? {r_mstatus[3:1], w_mpie} :
+	      w_mpp == 2'd1 ? {r_mstatus[3:2], w_mpie, r_mstatus[0]} :
+	      w_mpp == 2'd2 ? {r_mstatus[3], w_mpie, r_mstatus[1:0]} :
+	      {w_mpie, r_mstatus[2:0]};
+	      
+   wire [63:0] w_mret_mstatus = {r_mstatus[63:13],
+				 2'd0,
+				 r_mstatus[10:8],
+				 1'b1, /*mpie*/
+				 r_mstatus[6:4],
+				 w_mret_mstatus_b30
+				 };
+    always_ff@(negedge clk)
+     begin
+	if(r_start_int && int_uop.op == MRET)
+	  begin
+	     $display("MRET to %x from %x at cycle %d, mstatus %x",
+		      r_mepc, int_uop.pc, r_cycle, w_mret_mstatus);
+	  end
+     end
+  
    
    always_ff@(posedge clk)
      begin
 	if(reset)
 	  begin
-	     r_sstatus <= 'd0;
 	     r_scounteren <= 'd0;
 	     r_satp <= 'd0;
 	     r_stval <= 'd0;
@@ -2595,7 +2619,9 @@ module exec(clk,
 	  begin
 	     case(int_uop.imm[5:0])
 	       SSTATUS:
-		 r_sstatus <= t_wr_csr;
+		 begin
+		    r_mstatus <= (t_wr_csr & 64'h3000de133) | (r_mstatus & (~(64'h3000de133)));
+		 end
 	       SIE:
 		 r_mie <= (r_mie & ~(r_mideleg)) | (t_wr_csr & r_mideleg);	       
 	       STVEC:
@@ -2608,6 +2634,10 @@ module exec(clk,
 		 r_sepc <= t_wr_csr;
 	       SCOUNTEREN:
 		 r_scounteren <= t_wr_csr;
+	       SCAUSE:
+		 r_scause <= t_wr_csr;
+	       STVAL:
+		 r_stval <= t_wr_csr;
 	       SIP:
 		 r_mip <= (r_mip & ~(r_mideleg)) | (t_wr_csr & r_mideleg);
 	       SATP:
@@ -2625,7 +2655,20 @@ module exec(clk,
 		 end
 	       MSTATUS:
 		 begin
-		    r_mstatus <= (t_wr_csr & 64'he79bb) | (r_mstatus & 64'hfffffffffff18644);
+		    if(int_uop.op == MRET)
+		      begin
+			 //mpp : bits 12:11
+			 //mpie : bit 7
+			 r_mstatus <= w_mret_mstatus;
+		      end
+		    else if(int_uop.op == SRET)
+		      begin
+			 $stop();
+		      end
+		    else
+		      begin
+			 r_mstatus <= (t_wr_csr & 64'he79bb) | (r_mstatus & 64'hfffffffffff18644);
+		      end
 		 end
 	       MCOUNTEREN:
 		 r_mcounteren <= t_wr_csr;
@@ -2676,10 +2719,10 @@ module exec(clk,
 
 	     endcase // case (int_uop.imm[4:0])
 	  end // if (t_wr_csr_en)
-	else if(1'b1)
-	begin
-	   r_mip <= 64'd128;
-	end
+	// else if(1'b1)
+	// begin
+	//    r_mip <= 64'd128;
+	// end
      end // always_ff@ (posedge clk)
 
 

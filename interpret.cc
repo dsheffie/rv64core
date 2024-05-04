@@ -262,9 +262,10 @@ static void set_priv(state_t *s, int priv) {
 static void set_mstatus(state_t *s, int64_t v) {
   int64_t mask = MSTATUS_MASK;
   s->mstatus = (s->mstatus & ~mask) | (v & mask);
-  csr_t c(v);
+  //csr_t c(s->mstatus);
   //std::cout << c.mstatus << "\n";
-  //std::cout << "write mstatus = " << std::hex << s->mstatus << std::dec << "\n";  
+  //std::cout << "write mstatus = " << std::hex << s->mstatus << " @ " << s->pc << std::dec << "\n";
+  
 }
     
 
@@ -287,7 +288,7 @@ static int64_t read_csr(int csr_id, state_t *s, bool &undef) {
   switch(csr_id)
     {
     case 0x100:
-      return s->sstatus;
+      return s->mstatus & 0x3000de133UL;
     case 0x104:
       return s->mie & s->mideleg;
     case 0x105:
@@ -355,10 +356,10 @@ static void write_csr(int csr_id, state_t *s, int64_t v, bool &undef) {
   csr_t c(v);
   switch(csr_id)
     {
-    case 0x100: {
-      s->sstatus = v;
+    case 0x100:
+      printf("%lx writes %lx, old %lx\n", s->pc, v, s->mstatus);
+      s->mstatus = (v & 0x3000de133UL) | ((s->mstatus & (~0x3000de133UL)));
       break;
-    }
     case 0x104:
       s->mie = (s->mie & ~(s->mideleg)) | (v & s->mideleg);
       break;
@@ -1373,11 +1374,15 @@ void execRiscv(state_t *s) {
 	int mpp = (s->mstatus >> MSTATUS_MPP_SHIFT) & 3;
 	/* set the IE state to previous IE state */
 	int mpie = (s->mstatus >> MSTATUS_MPIE_SHIFT) & 1;
+	printf("mpp = %d, mpie = %d\n", mpp, mpie);
+	int64_t old = s->mstatus;
 	s->mstatus = (s->mstatus & ~(1 << mpp)) |(mpie << mpp);
 	/* set MPIE to 1 */
 	s->mstatus |= MSTATUS_MPIE;
 	/* set MPP to U */
 	s->mstatus &= ~MSTATUS_MPP;
+	printf("mret mstatus %lx, old %lx\n", s->mstatus, old);
+	//exit(-1);
 	set_priv(s, mpp);
 	s->pc = s->mepc;
 	break;

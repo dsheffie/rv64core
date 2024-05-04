@@ -84,7 +84,6 @@ struct state_t{
   int64_t mcause;
   int64_t mepc;
   int64_t mtval;
-  int64_t sstatus;
   int64_t sscratch;
   int64_t scause;
   int64_t stvec;

@@ -96,55 +96,6 @@ typedef enum logic [3:0] {
    MEM_AMOD = 4'd15			  			  
 } mem_op_t;
 
-/* MIPS R10000 exception ordering 
-* Cold Reset (highest priority)
-* Soft Reset
-* Nonmaskable Interrupt (NMI)‡
-* Cache error –– Instruction cache*
-* Cache error –– Data cache*
-* Cache error –– Secondary cache*
-* Cache error –– System interface*
-* Address error –– Instruction fetch
-* TLB refill –– Instruction fetch
-* TLB invalid –– Instruction fetch
-* Bus error –– Instruction fetch
-* Integer overflow, 
-* Trap, 
-* System Call,
-* Breakpoint, 
-* Reserved Instruction, 
-* Coprocessor Unusable
-* Floating-Point Exception
-* Address error –– Data access
-* TLB refill –– Data access
-* TLB invalid –– Data access
-* TLB modified –– Data write
-* Watch
-* Bus error –– Data access
-* Interrupt (lowest priority)
-*/
-
-typedef enum logic [4:0] {
- NO_ERROR = 5'd0,			   
- IC_ERROR = 5'd1,
- DC_ERROR = 5'd2,
- IA_ERROR = 5'd3, /* instruction address error */
- ITLB_REFILL_ERROR = 5'd4,
- ITLB_INVALID_ERROR = 5'd5,
- INSN_BUS_ERROR = 5'd6,
- INT_OVERFLOW = 5'd7,
- RESERVED_INSN = 5'd8,
- COPROC_UNUSABLE = 5'd9,
- FP_EXCEPTION = 5'd10,
- DA_ERROR = 5'd11, /* data address error */
- DTLB_REFILL_ERROR = 5'd12,
- DTLB_INVALID_ERROR = 5'd13,
- DTLB_MODIFIED_ERROR = 5'd14,
- DATA_BUS_ERROR	= 5'd15,
- BR_MISPREDICT = 5'd16			  
-} exception_t;
-
-
 function logic [31:0] bswap32(logic [31:0] in);
    return in;
 endfunction
