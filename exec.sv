@@ -1523,16 +1523,16 @@ module exec(clk,
    
    always_ff@(negedge clk)
      begin
-	if(t_wr_csr_en && int_uop.imm[5:0] == SSTATUS)
-	begin
-	   $display(">> %x writes %x to sstatus old %x at cycle %d",
-		    int_uop.pc, t_wr_csr, r_mstatus, r_cycle);
-	end
-	if(t_wr_csr_en && int_uop.imm[5:0] == MSTATUS)
-	begin
-	   $display(">> %x writes %x to mstatus old %x at cycle %d",
-		    int_uop.pc, t_wr_csr, r_mstatus, r_cycle);
-	end	
+	//if(t_wr_csr_en && int_uop.imm[5:0] == SSTATUS)
+	//begin
+	//$display(">> %x writes %x to sstatus old %x at cycle %d",
+	//int_uop.pc, t_wr_csr, r_mstatus, r_cycle);
+	//end
+	//if(t_wr_csr_en && int_uop.imm[5:0] == MSTATUS)
+	//begin
+	// $display(">> %x writes %x to mstatus old %x at cycle %d",
+	//int_uop.pc, t_wr_csr, r_mstatus, r_cycle);
+	//end	
 	//if((int_uop.op == SRLIW) & r_start_int)
 	//begin
 	//$display("portA pc %x src A = %x, imm = %x, result %x", 
@@ -2199,7 +2199,7 @@ module exec(clk,
 	       t_wr_csr_en = r_start_int;
 	       t_wr_csr = t_rd_csr;
 	       t_wr_priv = r_start_int;
-	       t_priv = r_mstatus[12:11];
+	       t_priv = w_mpp;
 	       t_pc = r_mepc;
 	       t_alu_valid = 1'b1;
 	    end
@@ -2556,6 +2556,34 @@ module exec(clk,
 				 r_mstatus[6:4],
 				 w_mret_mstatus_b30
 				 };
+
+   wire w_ie = 
+	r_priv == 2'd0 ? r_mstatus[0] :
+	r_priv == 2'd1 ? r_mstatus[1] :
+	r_priv == 2'd2 ? r_mstatus[2] :
+	r_mstatus[3];
+   
+   wire [63:0] w_exc_del_mstatus = {r_mstatus[63:9],
+				    /* spp */ r_priv[0],
+				    r_mstatus[7:6],
+				    /* spie */ w_ie,
+				    r_mstatus[4:2],
+				    /* sie */ 1'b0,
+				    r_mstatus[0]
+				    };
+
+   wire [63:0] w_exc_mstatus = {r_mstatus[63:13],
+				/* mpp */ r_priv,
+				r_mstatus[10:9],
+				/* mpie */ w_ie,
+				r_mstatus[7:4],
+				1'b0, /* mie */
+				r_mstatus[2:0]
+				};
+
+   
+   
+   
     always_ff@(negedge clk)
      begin
 	if(r_start_int && int_uop.op == MRET)
@@ -2602,17 +2630,19 @@ module exec(clk,
 	     $display("trapping, delegate = %b, epc = %x", t_delegate, epc);
 	     if(t_delegate)
 	       begin
-		  $display("delegate cause %x, tval %x, epc %x",
-			   cause, tval, epc);
+		  $display("delegate cause %x, tval %x, epc %x, mstatus %x",
+			   cause, tval, epc, w_exc_del_mstatus);
 		  r_scause <= {irq, 58'd0, cause};
 		  r_stval <= tval;
 		  r_sepc <= epc;
+		  r_mstatus <= w_exc_del_mstatus;
 	       end
 	     else
 	       begin
 		  r_mcause <= {irq, 58'd0, cause};
 		  r_mtval <= tval;
 		  r_mepc <= epc;
+		  r_mstatus <= w_exc_mstatus;
 	       end
 	  end
 	else if(t_wr_csr_en)

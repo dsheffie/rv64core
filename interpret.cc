@@ -357,7 +357,7 @@ static void write_csr(int csr_id, state_t *s, int64_t v, bool &undef) {
   switch(csr_id)
     {
     case 0x100:
-      printf("%lx writes %lx, old %lx\n", s->pc, v, s->mstatus);
+      //printf("%lx writes %lx, old %lx\n", s->pc, v, s->mstatus);
       s->mstatus = (v & 0x3000de133UL) | ((s->mstatus & (~0x3000de133UL)));
       break;
     case 0x104:
@@ -1537,7 +1537,9 @@ void execRiscv(state_t *s) {
       set_priv(s, priv_machine);
       s->pc = s->mtvec;      
     }
-    printf("CHECKER: exception at %lx, cause %d, new pc %lx\n", oldpc, except_cause, s->pc);
+    printf("CHECKER: exception at %lx, cause %d, new pc %lx\n",
+	   oldpc, except_cause, s->pc);
+    //exit(-1);
     //printf("after exception, new pc will be %lx\n", s->pc);
   }
   return;
