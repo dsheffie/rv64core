@@ -2665,7 +2665,7 @@ module exec(clk,
 	     case(int_uop.imm[5:0])
 	       SSTATUS:
 		 begin
-		    r_mstatus <= (t_wr_csr & 64'h3000de133) | (r_mstatus & (~(64'h3000de133)));
+		    r_mstatus <= (t_wr_csr & 64'hde133) | (r_mstatus & (~(64'hde133)));
 		 end
 	       SIE:
 		 r_mie <= (r_mie & ~(r_mideleg)) | (t_wr_csr & r_mideleg);	       

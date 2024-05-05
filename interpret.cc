@@ -358,7 +358,7 @@ static void write_csr(int csr_id, state_t *s, int64_t v, bool &undef) {
     {
     case 0x100:
       //printf("%lx writes %lx, old %lx\n", s->pc, v, s->mstatus);
-      s->mstatus = (v & 0x3000de133UL) | ((s->mstatus & (~0x3000de133UL)));
+      s->mstatus = (v & 0x000de133UL) | ((s->mstatus & (~0x000de133UL)));
       break;
     case 0x104:
       s->mie = (s->mie & ~(s->mideleg)) | (v & s->mideleg);
