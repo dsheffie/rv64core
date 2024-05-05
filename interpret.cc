@@ -826,7 +826,29 @@ void execRiscv(state_t *s) {
 	    }
 	    break;
 	  }	    
+	  case 0x1c8: {/* amomaxu.w */
+	    pa = s->translate(s->gpr[m.a.rs1], page_fault, 4, true);
+	    assert(!page_fault);
+	    uint32_t x = s->load32(pa);
+	    uint32_t mm = *reinterpret_cast<uint32_t*>(&s->gpr[m.a.rs2]);
+	    s->store32(pa, std::max(x,mm));
+	    assert(not(atomic_queue.empty()));
+	    auto &t = atomic_queue.front();
+	    if(not(t.pc == s->pc and t.addr == pa and t.data == std::max(mm,x))) {
+	      printf("you have an atomic error\n");
+	      printf("rtl %lx, %lx, %lx\n", t.pc, t.addr, t.data);
+	      printf("sim %lx, %lx, %lx\n", s->pc, pa, std::max(mm,x));
+	      exit(-1);
+	    }
+	    atomic_queue.pop_front();
+	    
+	    if(m.a.rd != 0) {
+	      s->sext_xlen(x, m.a.rd);
+	    }
+	    break;
+	  }	    
 
+	    
 	    
 	  default:
 	    std::cout << "m.a.hiop " << m.a.hiop << "\n";
@@ -950,6 +972,29 @@ void execRiscv(state_t *s) {
 	    }
 	    break;
 	  }
+	  case 0x1c: {/* amomaxu.d */
+	    pa = s->translate(s->gpr[m.a.rs1], page_fault, 8, true);
+	    assert(!page_fault);
+	    uint64_t x = s->load64(pa);
+	    uint64_t mm = *reinterpret_cast<uint64_t*>(&s->gpr[m.a.rs2]);
+	    
+	    assert(not(atomic_queue.empty()));
+	    auto &t = atomic_queue.front();
+	    if(not(t.pc == s->pc and t.addr == pa and t.data == std::max(mm,x))) {
+	      printf("you have an atomic error\n");
+	      printf("rtl %lx, %lx, %lx\n", t.pc, t.addr, t.data);
+	      printf("sim %lx, %lx, %lx\n", s->pc, pa, std::max(mm,x));
+	      exit(-1);
+	    }
+	    atomic_queue.pop_front();
+	    
+	    s->store64(pa,  std::max(mm, x));
+	    if(m.a.rd != 0) {
+	      s->gpr[m.a.rd] = x;
+	    }
+	    break;
+	  }
+	    
 	  default:
 	    std::cout << "m.a.hiop " << std::hex << m.a.hiop << std::dec <<  "\n";
 	    goto report_unimplemented;

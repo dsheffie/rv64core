@@ -2592,10 +2592,6 @@ module exec(clk,
      end
     always_ff@(negedge clk)
       begin
-	 if(r_foo != r_mstatus)
-	   begin
-	      $display(">>>>at cycle %d, mstatus %x to %x", r_cycle, r_foo, r_mstatus);
-	   end
 	if(r_start_int && int_uop.op == MRET)
 	  begin
 	     $display("MRET to %x from %x at cycle %d, mstatus %x old %x",

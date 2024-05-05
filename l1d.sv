@@ -1010,6 +1010,12 @@ module l1d(clk,
 	       t_amo32_data = t_shift[31:0] & r_req.data[31:0];
 	       t_amo64_data = t_shift[63:0] & r_req.data[63:0];
 	    end
+	  5'd28:
+	    begin
+	       t_amo32_data = t_shift[31:0] < r_req.data[31:0] ? r_req.data[31:0] : t_shift[31:0];
+	       t_amo64_data = t_shift[63:0] < r_req.data[63:0] ? r_req.data[63:0] : t_shift[63:0];
+	    end
+	  
 	  default:
 	    begin
 	    end
