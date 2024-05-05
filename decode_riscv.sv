@@ -410,7 +410,12 @@ module decode_riscv(
 			begin /* amoand */
 			   uop.op = insn[14:12]==3'd2 ? AMOW : AMOD;
 			   uop.srcB_valid = 1'b1;			   
-			end		      		      
+			end
+		      5'd28:
+			begin /* amomaxu */
+			   uop.op = insn[14:12]==3'd2 ? AMOW : AMOD;
+			   uop.srcB_valid = 1'b1;			   
+			end
 		      default:
 			begin
 			end

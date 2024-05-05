@@ -826,7 +826,7 @@ void execRiscv(state_t *s) {
 	    }
 	    break;
 	  }	    
-	  case 0x1c8: {/* amomaxu.w */
+	  case 0x1c: {/* amomaxu.w */
 	    pa = s->translate(s->gpr[m.a.rs1], page_fault, 4, true);
 	    assert(!page_fault);
 	    uint32_t x = s->load32(pa);
