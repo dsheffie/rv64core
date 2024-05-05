@@ -13,6 +13,7 @@ import "DPI-C" function void wr_log(input longint pc,
 
 module l1d(clk, 
 	   reset,
+	   priv,
 	   l2_probe_addr,
 	   l2_probe_val,
 	   l2_probe_ack,	   
@@ -68,6 +69,7 @@ module l1d(clk,
    localparam L1D_CL_LEN_BITS = 1 << (`LG_L1D_CL_LEN + 3);   
    input logic clk;
    input logic reset;
+   input logic [1:0] priv;
    input logic l2_probe_val;
    input logic [(`M_WIDTH-1):0] l2_probe_addr;
    output logic 		l2_probe_ack;
@@ -1307,7 +1309,8 @@ module l1d(clk,
 		      end
 		    else if(!w_tlb_hit)
 		      begin
-			 //$display("missed address %x", r_tlb_addr);
+			 if(priv == 2'd0)
+			   $display("missed address %x", r_tlb_addr);
 			 n_pending_tlb_miss = 1'b1;
 			 if(r_pending_tlb_miss) $stop();
 		      end
