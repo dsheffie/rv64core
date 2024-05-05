@@ -2044,14 +2044,6 @@ module core(clk,
 	.uop(t_dec_uop2)
 	);
    
-   always_ff@(negedge clk)
-     begin
-	if(t_push_dq_one && t_dec_uop.pc == 64'h80000004)
-	  $display("pc %x, op code %d", t_dec_uop.pc, t_dec_uop.op);
-	if(t_push_dq_two && t_dec_uop2.pc == 64'h80000004)
-	  $display("pc %x, op code %d", t_dec_uop2.pc, t_dec_uop2.op);	
-	
-     end
    
    logic t_push_1, t_push_2;
    
