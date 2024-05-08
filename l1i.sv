@@ -1052,9 +1052,10 @@ endfunction
 
 
    
-   tlb #(.LG_N(3)) itlb(
+   tlb #(.LG_N(3), .ISIDE(0)) itlb(
 	   .clk(clk), 
 	   .reset(reset),
+	   .priv(priv),
 	   .clear(clear_tlb),
 	   .active(paging_active),
 	   .req(n_req),

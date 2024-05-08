@@ -75,8 +75,6 @@
 
 `define LG_BTB_SZ 7
 
-`define LG_TLB_ENTRIES 2
-
 typedef enum logic [3:0] {
    MEM_LB  = 4'd0,
    MEM_LBU = 4'd1,

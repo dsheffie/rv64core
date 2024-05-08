@@ -862,9 +862,10 @@ module l1d(clk,
 
 
 
-   tlb #(.LG_N(4)) dtlb(
+   tlb #(.LG_N(5)) dtlb(
     	    .clk(clk), 
     	    .reset(reset),
+	    .priv(priv),
     	    .clear(clear_tlb),
     	    .active(paging_active),
     	    .req(t_tlb_xlat),
@@ -1309,8 +1310,6 @@ module l1d(clk,
 		      end
 		    else if(!w_tlb_hit)
 		      begin
-			 if(priv == 2'd0)
-			   $display("missed address %x", r_tlb_addr);
 			 n_pending_tlb_miss = 1'b1;
 			 if(r_pending_tlb_miss) $stop();
 		      end
