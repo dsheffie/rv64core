@@ -64,11 +64,7 @@ module tlb(clk,
      end
    always_comb
      begin
-	n_lfsr = r_lfsr;
-	if(replace)
-	  begin
-	     n_lfsr = {r_lfsr[6:0], r_lfsr[7] ^ r_lfsr[5] ^ r_lfsr[4] ^ r_lfsr[3]};
-	  end
+	n_lfsr = {r_lfsr[6:0], r_lfsr[7] ^ r_lfsr[5] ^ r_lfsr[4] ^ r_lfsr[3]};
      end
    
    
