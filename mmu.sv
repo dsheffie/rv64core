@@ -7,7 +7,14 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 	   page_walk_rsp,
 	   l1d_rsp_valid, 
 	   l1i_rsp_valid,
-	   l1i_gnt, l1d_gnt);
+	   l1i_gnt, 
+	   l1d_gnt,
+	   mem_mark_valid,
+	   mem_mark_accessed,
+	   mem_mark_dirty,
+	   mem_mark_addr,
+	   mem_mark_rsp_valid
+	   );
    input logic clk;
    input logic reset;
    input logic clear_tlb;
@@ -23,6 +30,13 @@ module mmu(clk, reset, clear_tlb, page_table_root,
    output logic [63:0] mem_req_data;   
    output logic	       mem_req_store;
 
+   
+   output logic	       mem_mark_valid;
+   output logic	       mem_mark_accessed;
+   output logic	       mem_mark_dirty;
+   output logic [63:0] mem_mark_addr;
+   input logic	       mem_mark_rsp_valid;
+      
    input logic	       mem_rsp_valid;
    input logic [63:0]  mem_rsp_data;
 
@@ -35,6 +49,7 @@ module mmu(clk, reset, clear_tlb, page_table_root,
    
       
    logic [63:0]	       n_addr, r_addr;
+   logic [63:0]	       n_last_addr, r_last_addr;
    logic [63:0]	       n_va, r_va, r_pa, n_pa;
    logic	       r_req, n_req;
    logic	       n_page_fault, r_page_fault;
@@ -49,12 +64,21 @@ module mmu(clk, reset, clear_tlb, page_table_root,
    logic 	       r_page_user, n_page_user;
    
    logic	       n_page_executable, r_page_executable;
+
+   logic	       r_mem_mark_valid, n_mem_mark_valid;
+   logic	       r_mem_mark_accessed, n_mem_mark_accessed;
    
    assign mem_req_valid = r_req;
    assign mem_req_addr = r_addr;
    assign l1d_rsp_valid = r_l1d_rsp_valid;
    assign l1i_rsp_valid = r_l1i_rsp_valid;
 
+   	     
+   assign mem_mark_addr = r_last_addr;
+   assign mem_mark_valid = r_mem_mark_valid;
+   assign mem_mark_accessed = r_mem_mark_accessed;
+   assign mem_mark_dirty = 1'b0;
+   
    always_comb
      begin
 	page_walk_rsp.paddr = r_pa;
@@ -64,6 +88,7 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 	page_walk_rsp.writable = r_page_write;
 	page_walk_rsp.executable = r_page_executable;
 	page_walk_rsp.user = r_page_user;
+	page_walk_rsp.pgsize = r_hit_lvl;
      end
 
    assign mem_req_data = 'd0;
@@ -76,7 +101,9 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 			     WAIT1,			     
 			     LOAD2,
 			     WAIT2,
-			     WALK_DONE
+			     WALK_DONE,
+			     MARK_ACCESS,
+			     MARK_DIRTY
 			     } state_t;
    
    state_t r_state, n_state;
@@ -105,6 +132,10 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 	n_l1d_rsp_valid = 1'b0;
 	n_l1i_rsp_valid = 1'b0;
 	n_addr = r_addr;
+	n_last_addr = r_last_addr;
+	n_mem_mark_accessed = 1'b0;
+	n_mem_mark_valid = 1'b0;
+	
 	n_req = 1'b0;
 	n_va = r_va;
 	n_pa = r_pa;
@@ -176,6 +207,7 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 		 begin
 		    //$display("walker level 0 got %x, cycle %d", mem_rsp_data, r_cycle);
 		    n_addr = mem_rsp_data;
+		    n_last_addr = r_addr;
 		    if(mem_rsp_data[0] == 1'b0)
 		      begin
 			 n_state = IDLE;
@@ -206,6 +238,7 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 	       if(mem_rsp_valid)
 		 begin
 		    n_addr = mem_rsp_data;
+		    n_last_addr = r_addr;
 		    //$display("walker level 1 got %x", mem_rsp_data);
 		    if(mem_rsp_data[0] == 1'b0)
 		      begin
@@ -238,6 +271,7 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 		 begin
 		    //$display("walker level 2 got %x",  mem_rsp_data);
 		    n_addr = mem_rsp_data;
+		    n_last_addr = r_addr;
 		    if(mem_rsp_data[0] == 1'b0)
 		      begin
 			 n_state = IDLE;
@@ -279,9 +313,18 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 	       
 	       if(r_addr[6] == 1'b0)
 		 begin
-		    $stop();
+		    n_mem_mark_valid = 1'b1;
+		    n_mem_mark_accessed = 1'b1;
+		    n_state = MARK_ACCESS;
 		 end
 	       else
+		 begin
+		    n_state = IDLE;
+		 end
+	    end // case: WALK_DONE
+	  MARK_ACCESS:
+	    begin
+	       if(mem_mark_rsp_valid)
 		 begin
 		    n_state = IDLE;
 		 end
@@ -299,6 +342,8 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 	  begin
 	     r_state <= IDLE;
 	     r_addr <= 'd0;
+	     r_mem_mark_valid <= 1'b0;
+	     r_last_addr <= 'd0;
 	     r_req <= 1'b0;
 	     r_va <= 'd0;
 	     r_pa <= 'd0;
@@ -320,8 +365,10 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 	  end
 	else
 	  begin
-	     r_state <= n_state;
+	     r_state <= n_state;	     
 	     r_addr <= n_addr;
+	     r_mem_mark_valid <= n_mem_mark_valid;
+	     r_last_addr <= n_last_addr;
 	     r_req <= n_req;
 	     r_va <= n_va;
 	     r_pa <= n_pa;

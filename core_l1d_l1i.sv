@@ -338,7 +338,8 @@ module
    wire [63:0]			    w_mmu_req_data;
    wire [63:0]			    w_mmu_rsp_data;
    wire				    w_mmu_rsp_valid;
-   wire 			    w_mmu_gnt_l1i, w_mmu_gnt_l1d;
+   wire 			    w_mmu_gnt_l1i, 
+				    w_mmu_gnt_l1d;
    
    wire [63:0]			    w_l1d_page_walk_req_va;
    wire				    w_l1d_page_walk_req_valid;
@@ -347,6 +348,11 @@ module
    wire	w_l1d_rsp_valid;
    wire	w_l1i_rsp_valid;
 
+   wire	w_mem_mark_valid, w_mem_mark_accessed, w_mem_mark_dirty;
+   wire [63:0] w_mem_mark_addr;
+   wire	       w_mem_mark_rsp_valid;
+   
+   
    page_walk_rsp_t page_walk_rsp;
    
    wire	       w_restart_complete;
@@ -406,6 +412,11 @@ module
 	       .mmu_rsp_valid(w_mmu_rsp_valid),
 	       .mmu_rsp_data(w_mmu_rsp_data),
 
+	       .mem_mark_valid(w_mem_mark_valid),
+	       .mem_mark_accessed(w_mem_mark_accessed),
+	       .mem_mark_dirty(w_mem_mark_dirty),
+	       .mem_mark_addr(w_mem_mark_addr),
+	       .mem_mark_rsp_valid(w_mem_mark_rsp_valid),
 	       
 	       .cache_accesses(l2_cache_accesses),
 	       .cache_hits(l2_cache_hits)
@@ -503,7 +514,14 @@ module
 	    .l1d_rsp_valid(w_l1d_rsp_valid),
 	    .l1i_rsp_valid(w_l1i_rsp_valid),
 	    .l1i_gnt(w_mmu_gnt_l1i),
-	    .l1d_gnt(w_mmu_gnt_l1d)
+	    .l1d_gnt(w_mmu_gnt_l1d),
+	    
+	    .mem_mark_valid(w_mem_mark_valid),
+	    .mem_mark_accessed(w_mem_mark_accessed),
+	    .mem_mark_dirty(w_mem_mark_dirty),
+	    .mem_mark_addr(w_mem_mark_addr),
+	    .mem_mark_rsp_valid(w_mem_mark_rsp_valid)
+	    
 	    );
    
    

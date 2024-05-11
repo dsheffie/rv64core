@@ -1,4 +1,6 @@
 #include "top.hh"
+#include <signal.h>
+#include <setjmp.h>
 
 #ifdef USE_SDL
 #include <SDL2/SDL.h>
@@ -6,6 +8,8 @@
 
 #define BRANCH_DEBUG 1
 #define CACHE_STATS 1
+
+static jmp_buf jenv;
 
 bool globals::syscall_emu = true;
 uint32_t globals::tohost_addr = 0;
@@ -551,6 +555,20 @@ static int buildArgcArgv(const char *filename, const char *sysArgs, char ***argv
 }
 
 
+static void catchUnixSignal(int sig) {
+  switch(sig)
+    {
+    case SIGINT:
+      std::cerr << KRED << "\ncaught SIGINT!\n" << KNRM;
+      s->brk = 1;
+      longjmp(jenv, 1);
+      break;
+    default:
+      break;
+    }
+
+}
+
 int main(int argc, char **argv) {
   static_assert(sizeof(itype) == 4, "itype must be 4 bytes");
   //std::fesetround(FE_TOWARDZERO);
@@ -672,8 +690,12 @@ int main(int argc, char **argv) {
   }
   
   s->pc = ss->pc;
+  signal(SIGINT, catchUnixSignal);
   
   double t0 = timestamp();
+  if(setjmp(jenv) > 0) {
+    goto sim_done;
+  }
   while(!Verilated::gotFinish() && (cycle < max_cycle) && (insns_retired < max_icnt)) {
     contextp->timeInc(1);  // 1 timeprecision periodd passes...    
 
@@ -1014,7 +1036,7 @@ int main(int argc, char **argv) {
     was_in_flush_mode = tb->in_flush_mode;
     
     ++last_retire;
-    if(last_retire > (1U<<15) && not(tb->in_flush_mode)) {
+    if(last_retire > (1U<<20) && not(tb->in_flush_mode)) {
       std::cout << "in flush mode = " << static_cast<int>(tb->in_flush_mode) << "\n";
       std::cout << "no retire in " << last_retire << " cycles, last retired "
     		<< std::hex
@@ -1130,6 +1152,7 @@ int main(int argc, char **argv) {
     }
     ++cycle;
   }
+ sim_done:
   tb->final();
   t0 = timestamp() - t0;
 

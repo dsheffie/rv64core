@@ -69,7 +69,7 @@
 
 `define LG_L1I_NUM_SETS 8
 
-`define LG_L2_NUM_SETS 10
+`define LG_L2_NUM_SETS 14
 
 `define M_WIDTH (1 << `LG_M_WIDTH)
 

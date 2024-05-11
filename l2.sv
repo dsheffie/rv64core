@@ -49,6 +49,12 @@ module l2(clk,
 	  mmu_req_store,
 	  mmu_rsp_valid,
 	  mmu_rsp_data,	   
+
+	  mem_mark_valid,
+	  mem_mark_accessed,
+	  mem_mark_dirty,
+	  mem_mark_addr,
+	  mem_mark_rsp_valid,	  
 	  
 	  cache_hits,
 	  cache_accesses
@@ -100,10 +106,17 @@ module l2(clk,
 
    logic [63:0] r_mmu_rsp_data, n_mmu_rsp_data;
    logic	r_mmu_rsp_valid, n_mmu_rsp_valid;
-
+   logic	n_mem_mark_rsp_valid, r_mem_mark_rsp_valid;
+   
    assign mmu_rsp_valid = r_mmu_rsp_valid;
    assign mmu_rsp_data = r_mmu_rsp_data;
+   assign mem_mark_rsp_valid = r_mem_mark_rsp_valid;
    
+   input logic	mem_mark_valid;
+   input logic	       mem_mark_accessed;
+   input logic	       mem_mark_dirty;
+   input logic [63:0] mem_mark_addr;
+   output logic	      mem_mark_rsp_valid;
    
    output logic [63:0] cache_hits;
    output logic [63:0] cache_accesses;
@@ -153,7 +166,7 @@ module l2(clk,
    flush_state_t n_flush_state, r_flush_state;
    
    
-   typedef enum 	logic [3:0] {
+   typedef enum 	logic [4:0] {
 				     INITIALIZE,
 				     IDLE,
 				     CHECK_VALID_AND_TAG,
@@ -164,11 +177,12 @@ module l2(clk,
 				     WAIT_STORE_IDLE,
 				     FLUSH_STORE,
 				     FLUSH_WAIT,
-				     FLUSH_TRIAGE
+				     FLUSH_TRIAGE,
+				     UPDATE_PTE
 				     } state_t;
 
    state_t n_state, r_state;
-   assign l2_state = r_state;
+   assign l2_state = 4'd0;
    
    logic 		n_flush_complete, r_flush_complete;
    logic 		r_flush_req, n_flush_req;
@@ -211,14 +225,17 @@ module l2(clk,
 
    wire 		w_hit = w_valid ? (r_tag == w_tag) : 1'b0;
    wire 		w_need_wb = w_valid ? w_dirty : 1'b0;
-
-   logic 		r_mmu_req, n_mmu_req;
+   
+   logic		n_mmu_mark_req, r_mmu_mark_req;
+   logic		r_mmu_req, n_mmu_req;
    logic		r_l1d_req, n_l1d_req;
    logic 		r_l1i_req, n_l1i_req;
    logic 		r_last_gnt, n_last_gnt;
    logic 		n_req, r_req;
    logic		r_mmu_addr3, n_mmu_addr3;
    logic		n_mmu, r_mmu;
+   logic		n_mark_pte, r_mark_pte;
+   
    
       
    always_ff@(posedge clk)
@@ -227,8 +244,10 @@ module l2(clk,
 	  begin
 	     r_mmu_addr3 <= 1'b0;
 	     r_mmu <= 1'b0;
+	     r_mark_pte <= 1'b0;
 	     r_mmu_rsp_data <= 'd0;
 	     r_mmu_rsp_valid <= 1'b0;
+	     r_mem_mark_rsp_valid <= 1'b0;
 	     r_state <= INITIALIZE;
 	     r_flush_state <= WAIT_FOR_FLUSH;
 	     r_flush_complete <= 1'b0;
@@ -253,6 +272,7 @@ module l2(clk,
 	     r_l1d_req <= 1'b0;
 	     r_l1i_req <= 1'b0;
 	     r_mmu_req <= 1'b0;
+	     r_mmu_mark_req <= 1'b0;	     
 	     r_last_gnt <= 1'b0;
 	     r_req <= 1'b0;
 	     r_last_l1i_addr <= 'd0;
@@ -262,8 +282,10 @@ module l2(clk,
 	  begin
 	     r_mmu_addr3 <= n_mmu_addr3;
 	     r_mmu <= n_mmu;
+	     r_mark_pte <= n_mark_pte;
 	     r_mmu_rsp_data <= n_mmu_rsp_data;
 	     r_mmu_rsp_valid <= n_mmu_rsp_valid;
+	     r_mem_mark_rsp_valid <= n_mem_mark_rsp_valid;
 	     r_state <= n_state;
 	     r_flush_state <= n_flush_state;
 	     r_flush_complete <= n_flush_complete;
@@ -287,7 +309,8 @@ module l2(clk,
 	     r_cache_accesses <= n_cache_accesses;
 	     r_l1d_req <= n_l1d_req;
 	     r_l1i_req <= n_l1i_req;
-	     r_mmu_req <= n_mmu_req;	     
+	     r_mmu_req <= n_mmu_req;
+	     r_mmu_mark_req <= n_mmu_mark_req;
 	     r_last_gnt <= n_last_gnt;
 	     r_req <= n_req;
 	     r_last_l1i_addr <= n_last_l1i_addr;
@@ -415,7 +438,7 @@ module l2(clk,
    wire w_l1i_req = r_l1i_req | l1i_req;
    wire w_l1d_req = r_l1d_req | l1d_req;
    wire	w_mmu_req = r_mmu_req | t_probe_mmu_req_valid;
-   
+   wire w_mem_mark_valid = mem_mark_valid | r_mmu_mark_req;
    
    always_comb
      begin
@@ -423,11 +446,14 @@ module l2(clk,
 	n_l1i_req = r_l1i_req | l1i_req;
 	n_l1d_req = r_l1d_req | l1d_req;
 	n_mmu_req = r_mmu_req | t_probe_mmu_req_valid;
+	n_mmu_mark_req = mem_mark_valid | r_mmu_mark_req;
+	n_mem_mark_rsp_valid = 1'b0;
 	n_req = r_req;
 	n_mmu_rsp_data = r_mmu_rsp_data;
 	n_mmu_rsp_valid = 1'b0;
 	n_mmu_addr3 = r_mmu_addr3;
 	n_mmu = r_mmu;
+	n_mark_pte = r_mark_pte;
 	
 	n_state = r_state;
 	n_flush_complete = 1'b0;
@@ -500,6 +526,19 @@ module l2(clk,
 		 begin
 		    t_idx = 'd0;
 		    n_state = FLUSH_WAIT;
+		 end
+	       else if(w_mem_mark_valid)
+		 begin
+		    //$display("pte address %x, cycle %d", mem_mark_addr, r_cycle);
+		    n_mmu_mark_req = 1'b0;
+		    n_mmu_addr3 = mem_mark_addr[3];		    
+		    t_idx = mem_mark_addr[LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN];			 
+		    n_tag = mem_mark_addr[(`M_WIDTH-1):LG_L2_LINES+`LG_L2_CL_LEN];
+		    n_addr = {mem_mark_addr[(`M_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
+		    n_saveaddr = {mem_mark_addr[(`M_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
+		    n_opcode = MEM_LW;
+		    n_mark_pte = 1'b1;
+		    n_state = CHECK_VALID_AND_TAG;
 		 end
 	       else if(w_mmu_req)
 		 begin
@@ -584,7 +623,7 @@ module l2(clk,
 		    n_cache_accesses = r_cache_accesses + 64'd1;
 		    n_cache_hits = r_cache_hits + 64'd1;
 		 end
-	    end
+	    end // case: IDLE
 	  CHECK_VALID_AND_TAG:
 	    begin
 	       //load hit
@@ -593,23 +632,35 @@ module l2(clk,
 		    n_reload = 1'b0;
 		    if(r_opcode == 4'd4)
 		      begin			 
-			 n_rsp_data = w_d0;
-			 n_state = IDLE;
+			 n_rsp_data = w_d0;			 
 			 if(r_mmu)
 			   begin
 			      n_mmu_rsp_data = r_mmu_addr3 ? w_d0[127:64] : w_d0[63:0];
 			      n_mmu_rsp_valid = 1'b1;
-			      //$display("l2 : mmu returns %x for addr %x", n_mmu_rsp_data, r_addr);
 			      n_mmu_req = 1'b0;
 			      n_mmu = 1'b0;
+			      n_state = IDLE;			      
+			   end
+			 else if(r_mark_pte)
+			   begin
+			      n_state = WAIT_STORE_IDLE;
+			      t_d0 = r_mmu_addr3 ? {(w_d0[127:64] | 64'd64), w_d0[63:0]} :
+			           {w_d0[127:64], (w_d0[63:0] | 64'd64)};
+			      t_wr_dirty = 1'b1;
+			      t_dirty = 1'b1;
+			      t_wr_d0 = 1'b1;
+			      n_mark_pte = 1'b0;
+			      n_mem_mark_rsp_valid = 1'b1;
 			   end
 			 else if(r_last_gnt == 1'b0)
 			   begin
 			      n_l1i_rsp_valid  = 1'b1;
+			      n_state = IDLE;
 			   end
 			 else
 			   begin
 			      n_l1d_rsp_valid  = 1'b1;
+			      n_state = IDLE;
 			   end
 			 //$display("cycle %d : ack'd for address %x, n_l1i_req = %b, n_l1d_req = %b, n_l1i_rsp_valid =%b, n_l1d_rsp_valid = %b", 
 			 //r_cycle, r_addr, n_l1i_req, n_l1d_req, n_l1i_rsp_valid,n_l1d_rsp_valid);			 
