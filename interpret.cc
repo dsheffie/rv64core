@@ -222,6 +222,8 @@ uint64_t state_t::translate(uint64_t ea, int &fault, int sz, bool store, bool fe
   
   if(r.sv39.a == 0) {
     r.sv39.a = 1;
+    printf("simulator marking page at %lx accessed\n", a);
+	   
     *reinterpret_cast<uint64_t*>(mem + a) = r.r;
   }
   if((r.sv39.d == 0) && store) {
@@ -1410,6 +1412,9 @@ void execRiscv(state_t *s) {
 	set_priv(s, spp);
 	s->pc = s->sepc;
 	break;
+      }
+      else if(bits19to7z and (csr_id == 0x105)) {  /* wfi */
+	s->pc += 4;
       }
       else if(bits19to7z and (csr_id == 0x202)) {  /* hret */
 	assert(false);
