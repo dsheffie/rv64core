@@ -766,6 +766,10 @@ module decode_riscv(
 		    uop.must_restart = 1'b1;
 		    uop.imm = {10'd0, MSTATUS};			     
 		 end
+	       else if((insn[31:20] == 12'h105) && insn[19:7] == 'd0)
+		 begin /* WFI - treat as nop */
+		    uop.op = NOP;
+		 end	       
 	       else if((insn[31:20] == 12'h202) && insn[19:7] == 'd0)
 		 begin
 		    uop.op = II; //HRET
