@@ -1555,7 +1555,8 @@ void execRiscv(state_t *s) {
     bool delegate = false;
     if(s->priv == priv_user || s->priv == priv_supervisor) {
       if(except_cause & CAUSE_INTERRUPT) {
-	assert(false);
+	uint32_t cc = (except_cause & 0x7fffffffUL);
+	delegate = ((s->mideleg) >> cc) & 1;	
       }
       else {
 	delegate = (s->medeleg >> except_cause) & 1;

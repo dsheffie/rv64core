@@ -2311,7 +2311,6 @@ module exec(clk,
 
 
 
-   wire [15:0]	       w_delegate_shift = (r_medeleg[15:0] >> cause);
    logic	       t_delegate;
 
    assign page_table_root = {8'd0, r_satp[43:0], 12'd0};
@@ -2322,7 +2321,7 @@ module exec(clk,
 	t_delegate = 1'b0;
 	if(r_priv[1]  ==  1'b0)
 	  begin
-	     t_delegate = irq ? r_medeleg[63] : w_delegate_shift[0];
+	     t_delegate = irq ? r_mideleg[31:0][cause] : r_medeleg[15:0][cause[3:0]];
 	  end
 	exc_pc = t_delegate ? r_stvec : r_mtvec;
      end
@@ -2760,10 +2759,10 @@ module exec(clk,
 
 	     endcase // case (int_uop.imm[4:0])
 	  end // if (t_wr_csr_en)
-	// else if(1'b1)
-	// begin
-	//    r_mip <= 64'd128;
-	// end
+	 // else if(1'b1)
+	 // begin
+	 //    r_mip <= 64'd128;
+	 // end
      end // always_ff@ (posedge clk)
 
 

@@ -1627,11 +1627,11 @@ module l1d(clk,
 			 n_core_mem_rsp.has_cause = r_req.spans_cacheline;
 			 n_core_mem_rsp_valid = 1'b1;
 			 n_core_mem_rsp.dst_valid = r_req.dst_valid & n_core_mem_rsp_valid;
-//`ifdef VERBOSE_L1D
+`ifdef VERBOSE_L1D
 			 if(priv == 2'd0)
 			   $display("early ack at cycle %d for load with rob ptr %d, data %x, dst valid %b, addr %x, line %d, r_lock_cache = %b",
 				    r_cycle, r_req.rob_ptr, n_core_mem_rsp.data , n_core_mem_rsp.dst_valid, r_req.addr, r_req.addr[11:4], r_lock_cache );
-//`endif
+`endif
 		      end
 		 end
 	    end
