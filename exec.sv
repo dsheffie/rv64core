@@ -2315,13 +2315,17 @@ module exec(clk,
 
    assign page_table_root = {8'd0, r_satp[43:0], 12'd0};
    
+   wire [31:0]	       w_mideleg =	       r_mideleg[31:0];
+   wire [15:0]	       w_medeleg = r_medeleg[15:0];
+   
+   
    
    always_comb
      begin
 	t_delegate = 1'b0;
 	if(r_priv[1]  ==  1'b0)
 	  begin
-	     t_delegate = irq ? r_mideleg[31:0][cause] : r_medeleg[15:0][cause[3:0]];
+	     t_delegate = irq ? w_mideleg[cause] : w_medeleg[cause[3:0]];
 	  end
 	exc_pc = t_delegate ? r_stvec : r_mtvec;
      end
