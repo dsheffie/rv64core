@@ -648,6 +648,23 @@ module exec(clk,
      end // always_ff@ (posedge clk)
    
    logic [63:0]        r_cycle, r_retired_insns, r_branches, r_branch_faults;
+   wire [63:0]	       w_time = r_cycle;
+   
+   logic [63:0]	       r_mtimecmp;
+   wire		       w_mtip = r_cycle >= r_mtimecmp;
+		       
+   always_ff@(posedge clk)
+     begin
+	if(reset)
+	  begin
+	     r_mtimecmp <= 64'd0;
+	  end
+	else if(mtimecmp_val)
+	  begin
+	     r_mtimecmp <= mtimecmp;
+	  end
+     end // always_ff@ (posedge clk)
+
    always_ff@(posedge clk)
      begin
 	r_cycle <= reset ? 'd0 : r_cycle + 'd1;
@@ -2496,7 +2513,7 @@ module exec(clk,
 `ifdef VERILATOR
 	    t_rd_csr = csr_gettime();
 `else
-	  t_rd_csr = {20'd0, r_cycle[63:20]};
+	  t_rd_csr = w_time;
 `endif
 	  default:
 	    begin
@@ -2726,7 +2743,9 @@ module exec(clk,
 	       MTVEC:
 		 r_mtvec <= t_wr_csr;
 	       MIE:
-		 r_mie <= t_wr_csr;
+		 begin
+		    r_mie <= t_wr_csr;
+		 end
 	       MIP:
 		 r_mip <= t_wr_csr;
 	       MCAUSE:
@@ -2768,13 +2787,23 @@ module exec(clk,
 
 	     endcase // case (int_uop.imm[4:0])
 	  end // if (t_wr_csr_en)
+	else if(mtimecmp_val)
+	  begin
+	     r_mip <= {r_mip[63:8], 1'b0, r_mip[6:0]};
+	  end
+	else if(w_mtip)
+	  begin
+	     if(r_mip[7] == 1'b0)
+	       begin
+		  $display("setting timer irq pending at cycle %d", r_cycle);
+	       end
+	     r_mip <= {r_mip[63:8], 1'b1, r_mip[6:0]};
+	  end
 	 // else if(1'b1)
 	 // begin
 	 //    r_mip <= 64'd128;
 	 // end
      end // always_ff@ (posedge clk)
-
-
 
    
    wire [`M_WIDTH-1:0] w_agu_addr;

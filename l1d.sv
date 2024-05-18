@@ -967,7 +967,7 @@ module l1d(clk,
 	else
 	  begin
 	     r_mtimecmp_val <= t_wr_store && r_req.addr == `MTIMECMP_ADDR;
-	     r_mtimecmp <= t_data[63:0];
+	     r_mtimecmp <= r_req.data;
 	  end
      end // always_ff@ (posedge clk)
    
