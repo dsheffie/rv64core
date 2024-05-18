@@ -75,6 +75,8 @@
 
 `define LG_BTB_SZ 7
 
+`define MTIMECMP_ADDR (64'h2004000)
+
 typedef enum logic [3:0] {
    MEM_LB  = 4'd0,
    MEM_LBU = 4'd1,

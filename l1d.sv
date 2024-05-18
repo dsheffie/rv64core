@@ -60,6 +60,8 @@ module l1d(clk,
 	   //reply from memory system
 	   mem_rsp_valid,
 	   mem_rsp_load_data,
+	   mtimecmp,
+	   mtimecmp_val,
 	   cache_accesses,
 	   cache_hits
 	   );
@@ -128,8 +130,9 @@ module l1d(clk,
    input logic 				  mem_rsp_valid;
    input logic [L1D_CL_LEN_BITS-1:0] 	  mem_rsp_load_data;
 
-   
-   
+   output logic [63:0]			  mtimecmp;
+   output logic				  mtimecmp_val;
+      
    output logic [63:0] 			 cache_accesses;
    output logic [63:0] 			 cache_hits;
    
@@ -949,7 +952,25 @@ module l1d(clk,
    logic [31:0] t_amo32_data;
    logic [63:0]	t_amo64_data;
 
-
+   logic [63:0]	r_mtimecmp;
+   logic	r_mtimecmp_val;
+   assign mtimecmp = r_mtimecmp;
+   assign mtimecmp_val = r_mtimecmp_val;
+   
+   always_ff@(posedge clk)
+     begin
+	if(reset)
+	  begin
+	     r_mtimecmp <= 64'd0;
+	     r_mtimecmp_val <= 1'b0;
+	  end
+	else
+	  begin
+	     r_mtimecmp_val <= t_wr_store && r_req.addr == `MTIMECMP_ADDR;
+	     r_mtimecmp <= t_data[63:0];
+	  end
+     end // always_ff@ (posedge clk)
+   
 `ifdef VERILATOR
    always_ff@(negedge clk)
      begin

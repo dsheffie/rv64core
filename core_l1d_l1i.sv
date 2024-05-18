@@ -193,6 +193,10 @@ module
    logic 				  core_store_data_valid;
    logic 				  core_store_data_ack;
    
+
+   wire [63:0]				  w_mtimecmp;
+   wire					  w_mtimecmp_val;
+   
    
    typedef enum logic [2:0] {
 			     FLUSH_IDLE = 'd0,
@@ -476,7 +480,10 @@ module
 	       
 	       .mem_rsp_valid(l1d_mem_rsp_valid),
 	       .mem_rsp_load_data(w_l1_mem_load_data),
-	       
+
+	        .mtimecmp(w_mtimecmp),
+		.mtimecmp_val(w_mtimecmp_val),
+		 
 	       .cache_accesses(l1d_cache_accesses),
 	       .cache_hits(l1d_cache_hits)
 	       );
@@ -654,6 +661,8 @@ module
 	     .retired_rob_ptr(retired_rob_ptr),
 	     .retired_rob_ptr_two(retired_rob_ptr_two),
 	     .monitor_ack(monitor_ack),
+	     .mtimecmp(w_mtimecmp),
+	     .mtimecmp_val(w_mtimecmp_val),	     
 	     .got_break(got_break),
 	     .got_ud(got_ud),
 	     .got_bad_addr(got_bad_addr),

@@ -116,6 +116,8 @@ module core(clk,
 	    retired_rob_ptr,
 	    retired_rob_ptr_two,
 	    monitor_ack,
+	    mtimecmp,
+	    mtimecmp_val,
 	    got_break,
 	    got_ud,
 	    got_bad_addr,
@@ -223,6 +225,10 @@ module core(clk,
    
    input logic 			      monitor_ack;
    output logic			      rob_empty;
+
+   input logic [63:0]		      mtimecmp;
+   input logic			      mtimecmp_val;
+   
    
    output logic 			  got_break;
    output logic 			  got_ud;
@@ -2110,6 +2116,8 @@ module core(clk,
 	   .mem_rsp_dst_ptr(core_mem_rsp.dst_ptr),
 	   .mem_rsp_dst_valid(core_mem_rsp.dst_valid),
 	   .mem_rsp_load_data(core_mem_rsp.data),
+	   .mtimecmp(mtimecmp),
+	   .mtimecmp_val(mtimecmp_val),	     	   
 	   .branch_valid(r_branch_valid),
 	   .branch_fault(r_branch_fault)
 	   );

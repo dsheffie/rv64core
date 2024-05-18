@@ -386,12 +386,15 @@ module l2(clk,
   
    
    probe_state_t n_pstate, r_pstate;
+   logic n_l2_probe_mmu, r_l2_probe_mmu;
+   
    always_comb
      begin
 	n_pstate = r_pstate;
 	t_probe_mmu_req_valid = 1'b0;
 	n_l2_probe_val = 1'b0;
 	n_l2_probe_addr = r_l2_probe_addr;
+	n_l2_probe_mmu = r_l2_probe_mmu;
 	case(r_pstate)
 	  PROBE_IDLE:
 	    begin
@@ -401,6 +404,7 @@ module l2(clk,
 		    n_pstate = PROBE_WAIT;
 		    n_l2_probe_val = 1'b1;
 		    n_l2_probe_addr = mmu_req_addr;
+		    n_l2_probe_mmu = 1'b1;
 		 end
 	    end
 	  PROBE_WAIT:
@@ -409,7 +413,8 @@ module l2(clk,
 		 begin
 		    //$display("got probe ack at cycle %d", r_cycle);
 		    n_pstate = PROBE_IDLE;
-		    t_probe_mmu_req_valid = 1'b1;
+		    t_probe_mmu_req_valid = r_l2_probe_mmu;
+		    n_l2_probe_mmu = 1'b0;
 		 end
 	    end
 	  default:
@@ -426,12 +431,14 @@ module l2(clk,
 	     r_pstate <= PROBE_IDLE;
 	     r_l2_probe_val <= 1'b0;
 	     r_l2_probe_addr <= 'd0;
+	     r_l2_probe_mmu <= 1'b0;
 	  end
 	else
 	  begin
 	     r_pstate <= n_pstate;
 	     r_l2_probe_val <= n_l2_probe_val;
 	     r_l2_probe_addr <= n_l2_probe_addr;
+	     r_l2_probe_mmu <= n_l2_probe_mmu;
 	  end
      end
 

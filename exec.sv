@@ -77,6 +77,8 @@ module exec(clk,
 	    mem_rsp_dst_ptr,
 	    mem_rsp_dst_valid,
 	    mem_rsp_load_data,
+	    mtimecmp,
+	    mtimecmp_val,	    
 	    branch_valid,
 	    branch_fault);
    input logic clk;
@@ -150,6 +152,9 @@ module exec(clk,
    input logic 			     mem_rsp_dst_valid;
    input logic [`M_WIDTH-1:0] 	     mem_rsp_load_data;
 
+   input logic [63:0]		      mtimecmp;
+   input logic			      mtimecmp_val;
+   
    input logic 			     branch_valid;
    input logic 			     branch_fault;
    
