@@ -454,16 +454,16 @@ module core(clk,
    find_first_set#(5) irq_ffs(.in(w_enabled_irqs[31:0]),
 			      .y(w_irq_id));
    
-   always_ff@(negedge clk)
-     begin
-	if(w_any_irq && r_state == ACTIVE)
-	  begin
-	     $display(">>>> w_irq_id = %d, r_priv %d, mie %b sie %b pending %b, cycle %d", 
-		      w_irq_id, w_priv, w_mstatus_mie, w_mstatus_sie, 
-		      w_enabled_irqs[31:0],
-		      r_cycle);
-	  end
-     end
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if(w_any_irq && r_state == ACTIVE)
+   // 	  begin
+   // 	     $display(">>>> w_irq_id = %d, r_priv %d, mie %b sie %b pending %b, cycle %d", 
+   // 		      w_irq_id, w_priv, w_mstatus_mie, w_mstatus_sie, 
+   // 		      w_enabled_irqs[31:0],
+   // 		      r_cycle);
+   // 	  end
+   //   end
    
    logic t_divide_ready;
    
@@ -924,8 +924,8 @@ module core(clk,
 			      n_state = ARCH_FAULT;
 			      n_cause = t_rob_head.cause;
 			      n_epc = t_rob_head.pc;
-			      $display("n_epc = %x, t_rob_head.pc = %x, t_arch_fault = %b, w_any_irq = %b, cycle %d", 
-				       n_epc, t_rob_head.pc, t_arch_fault, w_any_irq, r_cycle);
+			      //$display("n_epc = %x, t_rob_head.pc = %x, t_arch_fault = %b, w_any_irq = %b, cycle %d", 
+			      //n_epc, t_rob_head.pc, t_arch_fault, w_any_irq, r_cycle);
  
 			      n_tval = 'd0;
 			      n_irq = t_rob_head.is_irq;
@@ -1219,8 +1219,9 @@ module core(clk,
 		     // $display("t_rob_head.cause = %d, ", t_rob_head.cause);
 		   end
 	       endcase // case (t_rob_head.cause)
-	       $display("took fault for %x with cause %d at cycle %d, priv %d, tval %x, irq %b, epc %x, cycle %d", 
-			t_rob_head.pc, t_rob_head.cause, r_cycle, priv, n_tval, r_irq, r_epc, r_cycle);
+	       
+	       //$display("took fault for %x with cause %d at cycle %d, priv %d, tval %x, irq %b, epc %x, cycle %d", 
+	       //t_rob_head.pc, t_rob_head.cause, r_cycle, priv, n_tval, r_irq, r_epc, r_cycle);
 	       
 	       t_bump_rob_head = 1'b1;
 	       if(syscall_emu)
@@ -1252,8 +1253,8 @@ module core(clk,
 		    if(n_got_restart_ack) $stop();
 		    n_irq = 1'b0;
 		    n_state = DRAIN;
-		    $display("restarting cycle %d, paging %b, priv %d, new pc %x", 
-			     r_cycle, paging_active, w_priv, w_exc_pc);
+		    //$display("restarting cycle %d, paging %b, priv %d, new pc %x", 
+		    //r_cycle, paging_active, w_priv, w_exc_pc);
 		 end
 	    end
 	  default:

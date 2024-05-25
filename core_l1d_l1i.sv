@@ -316,6 +316,8 @@ module
    
    logic 				  l1d_mem_req_ack;
    logic 				  l1d_mem_req_valid;
+   logic				  l1d_mem_req_uc;
+   
    logic [(`M_WIDTH-1):0] 		  l1d_mem_req_addr;
    logic [L1D_CL_LEN_BITS-1:0] 		  l1d_mem_req_store_data;
    logic [3:0] 				  l1d_mem_req_opcode;
@@ -382,6 +384,7 @@ module
 	       .l2_probe_ack(w_l2_probe_ack),
 	       
 	       .l1d_req(l1d_mem_req_valid),
+	       .l1d_uc(l1d_mem_req_uc),
 	       .l1i_req(l1i_mem_req_valid),
 	       .l1d_addr(l1d_mem_req_addr),
 	       .l1i_addr(l1i_mem_req_addr),
@@ -474,6 +477,7 @@ module
 	       .core_mem_rsp(core_mem_rsp),
 
 	       .mem_req_valid(l1d_mem_req_valid),
+		 .mem_req_uc(l1d_mem_req_uc),
 	       .mem_req_addr(l1d_mem_req_addr),
 	       .mem_req_store_data(l1d_mem_req_store_data),
 	       .mem_req_opcode(l1d_mem_req_opcode),

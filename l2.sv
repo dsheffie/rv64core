@@ -5,7 +5,8 @@ module l2(clk,
 	  l2_state,
 	  l1d_req,
 	  l1i_req,
-
+	  l1d_uc,
+	  
 	  l1d_addr,
 	  l1i_addr,
 	  l1d_opcode,
@@ -67,6 +68,7 @@ module l2(clk,
    
    input logic l1d_req;
    input logic l1i_req;
+   input logic l1d_uc;
    input logic [(`M_WIDTH-1):0] l1d_addr;
    input logic [(`M_WIDTH-1):0] l1i_addr;   
    input logic [3:0] 		l1d_opcode;
@@ -576,6 +578,7 @@ module l2(clk,
 		      end
 		    else if((!w_l1i_req) & w_l1d_req)
 		      begin
+			 //$display("accepting d-side, addr = %x, store=%b", l1d_addr, l1d_opcode == MEM_SW);
 			 n_last_gnt = 1'b1;
 			 t_idx = l1d_addr[LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN];			 
 			 n_tag = l1d_addr[(`M_WIDTH-1):LG_L2_LINES+`LG_L2_CL_LEN];
@@ -584,7 +587,15 @@ module l2(clk,
 			 n_saveaddr = {l1d_addr[(`M_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
 			 n_store_data = l1_mem_req_store_data;
 			 n_opcode = l1d_opcode;
-			 n_l1d_req = 1'b0;			 
+			 n_l1d_req = 1'b0;
+			 
+			 if(!(l1d_opcode == MEM_SW || l1d_opcode == MEM_LW))
+			   begin
+			      $display("opcode is %d", l1d_opcode);
+			      $stop();
+			   end
+			 
+			 
 			 if(l1d_opcode == MEM_SW)
 			   begin
 			      n_l1d_rsp_valid = 1'b1;
@@ -617,7 +628,11 @@ module l2(clk,
 			      n_saveaddr = {l1d_addr[(`M_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
 			      n_store_data = l1_mem_req_store_data;
 			      n_opcode = l1d_opcode;
-			      n_l1d_req = 1'b0;			 			      
+			      n_l1d_req = 1'b0;
+
+			      if(!(l1d_opcode == MEM_SW || l1d_opcode == MEM_LW))
+				$stop();	
+			      
 			      if(l1d_opcode == MEM_SW)
 				begin
 				   n_l1d_rsp_valid = 1'b1;

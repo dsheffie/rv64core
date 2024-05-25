@@ -122,7 +122,20 @@ module mmu(clk, reset, clear_tlb, page_table_root,
    logic [63:0]	r_cycle;
    
    always_ff@(posedge clk)
-     r_cycle <= reset ? 64'd0 : (r_cycle + 64'd1);
+     begin
+	r_cycle <= reset ? 64'd0 : (r_cycle + 64'd1);
+	if(r_state == IDLE)
+	  begin
+	     if(n_l1i_req & l1i_va[38:12] == 'd0)
+	       begin
+		  $display("translating zero page for iside");
+	       end
+	     if(n_l1d_req & l1d_va[38:12] == 'd0)
+	       begin
+		  $display("translating zero page for dside");
+	       end
+	  end
+     end
 	      
 	     
    always_comb

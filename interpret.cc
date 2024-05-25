@@ -1107,7 +1107,9 @@ void execRiscv(state_t *s) {
 	}
 
       //printf("%lx, %lx, %lx\n", s->pc, pa, s->gpr[m.s.rs2]);
-      store_queue.emplace_back(s->pc, pa, s->gpr[m.s.rs2]);
+      if(not(pa >= UC_START_ADDR and pa < UC_END_ADDR and false)) {
+	store_queue.emplace_back(s->pc, pa, s->gpr[m.s.rs2]);
+      }
       s->pc += 4;
       break;
     }

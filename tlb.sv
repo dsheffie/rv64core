@@ -98,14 +98,14 @@ module tlb(clk,
 	r_cycle <= reset ? 'd0 : (r_cycle + 'd1);
      end
    
-   always@(negedge clk)
-     begin
-	if(active & req & ((|w_hits) == 1'b1) && (r_pgsize[w_idx[LG_N-1:0]] == 2'd0))
-	  begin
-	     $display("tlb hit for addr %x at cycle %d, translated to %x", 
-		      va, r_cycle, w_pa_sel);
-	  end
-     end
+   //always@(negedge clk)
+     //begin
+   //if(active & req & ((|w_hits) == 1'b1) && (r_pgsize[w_idx[LG_N-1:0]] == 2'd0))
+   //begin
+   //$display("tlb hit for addr %x at cycle %d, translated to %x", 
+   //va, r_cycle, w_pa_sel);
+   //end
+   //end
 
    always_ff@(posedge clk)
      begin   

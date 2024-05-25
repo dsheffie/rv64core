@@ -2398,14 +2398,14 @@ module exec(clk,
 	  end
      end // always_ff@ (posedge clk)
 
-   always_ff@(negedge clk)
-     begin
-	if(r_priv != n_priv)
-	  begin
-	     $display("cycle %d, priv change %d -> %d, update_csr_exc %b, wr_priv %b\n", 
-		      r_cycle, r_priv, n_priv, update_csr_exc, t_wr_priv);
-	  end
-     end
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if(r_priv != n_priv)
+   // 	  begin
+   // 	     $display("cycle %d, priv change %d -> %d, update_csr_exc %b, wr_priv %b\n", 
+   // 		      r_cycle, r_priv, n_priv, update_csr_exc, t_wr_priv);
+   // 	  end
+   //   end
    
 
    logic [3:0] r_rd_pc_idx, n_rd_pc_idx;
@@ -2544,11 +2544,11 @@ module exec(clk,
 	  end
      end // always_ff@ (posedge clk)
 
-   always_ff@(negedge clk)
-     begin
-	if(r_paging_active != n_paging_active)
-	  $display("paging switch to %b from %b at %d", n_paging_active, r_paging_active, r_cycle);
-     end
+   //always_ff@(negedge clk)
+   //begin
+   //if(r_paging_active != n_paging_active)
+   //	  $display("paging switch to %b from %b at %d", n_paging_active, r_paging_active, r_cycle);
+   //end
 
 
    logic t_push_putchar;
@@ -2615,19 +2615,19 @@ module exec(clk,
      begin
 	r_foo <= reset ? 'd0 : r_mstatus;
      end
-    always_ff@(negedge clk)
-      begin
-	if(r_start_int && int_uop.op == MRET)
-	  begin
-	     $display("MRET to %x from %x at cycle %d, mstatus %x old %x",
-		      r_mepc, int_uop.pc, r_cycle, w_mret_mstatus, r_mstatus);
-	  end
-	//if(r_start_int && int_uop.op == SRET)
-	//begin
-	//   $display("SRET to %x from %x at cycle %d, mstatus %x",
-	//	      r_mepc, int_uop.pc, r_cycle, w_mret_mstatus);
-	//end	
-     end
+   //always_ff@(negedge clk)
+   //begin
+   //if(r_start_int && int_uop.op == MRET)
+   ///	  begin
+   //$display("MRET to %x from %x at cycle %d, mstatus %x old %x",
+   //		      r_mepc, int_uop.pc, r_cycle, w_mret_mstatus, r_mstatus);
+   //end
+   //if(r_start_int && int_uop.op == SRET)
+   //begin
+   //   $display("SRET to %x from %x at cycle %d, mstatus %x",
+   //	      r_mepc, int_uop.pc, r_cycle, w_mret_mstatus);
+   //end	
+   //end
   
    
    always_ff@(posedge clk)
@@ -2663,11 +2663,11 @@ module exec(clk,
 	  end // if (reset)
 	else if(update_csr_exc)
 	  begin
-	     $display("trapping, delegate = %b, epc = %x", t_delegate, epc);
+	     //$display("trapping, delegate = %b, epc = %x", t_delegate, epc);
 	     if(t_delegate)
 	       begin
-		  $display("delegate cause %x, tval %x, epc %x, mstatus %x",
-			   cause, tval, epc, w_exc_del_mstatus);
+		  //$display("delegate cause %x, tval %x, epc %x, mstatus %x",
+		  //cause, tval, epc, w_exc_del_mstatus);
 		  r_scause <= {irq, 58'd0, cause};
 		  r_stval <= tval;
 		  r_sepc <= epc;
@@ -2793,10 +2793,10 @@ module exec(clk,
 	  end
 	else if(w_mtip)
 	  begin
-	     if(r_mip[7] == 1'b0)
-	       begin
-		  $display("setting timer irq pending at cycle %d", r_cycle);
-	       end
+	     //if(r_mip[7] == 1'b0)
+	     //begin
+	     //$display("setting timer irq pending at cycle %d", r_cycle);
+	     //end
 	     r_mip <= {r_mip[63:8], 1'b1, r_mip[6:0]};
 	  end
 	 // else if(1'b1)
@@ -2891,6 +2891,8 @@ module exec(clk,
 	t_mem_tail.pc = mem_uq.pc;
 	t_mem_tail.has_cause = 1'b0;
 	t_mem_tail.cause = MISALIGNED_FETCH;
+	t_mem_tail.uncachable = 1'b0;
+	
 `ifdef ENABLE_CYCLE_ACCOUNTING
 	t_mem_tail.fetch_cycle = mem_uq.fetch_cycle;
 	t_mem_tail.restart_id = r_restart_counter;
@@ -3141,13 +3143,6 @@ module exec(clk,
 	   
 	   );
    
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if(mem_rsp_dst_valid)
-   // 	  begin
-   // 	     $display("mem writeback value %x", mem_rsp_load_data);
-   // 	  end
-   //   end
 
    
    always_ff@(posedge clk)
