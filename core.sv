@@ -453,9 +453,19 @@ module core(clk,
    wire [5:0] 	w_irq_id;
    find_first_set#(5) irq_ffs(.in(w_enabled_irqs[31:0]),
 			      .y(w_irq_id));
-   
+
+   // logic [63:0]	r_last_timer, rc;
    // always_ff@(negedge clk)
    //   begin
+   // 	if(mtimecmp_val) rc <= mtimecmp;
+   // 	if(r_state == ARCH_FAULT & r_irq & (t_rob_head.cause == 'd5))
+   // 	  begin
+   // 	     r_last_timer <= r_cycle;
+   // 	     $display("last timer irq was %d cycles ago, rc %d", 
+   // 		      r_cycle - r_last_timer, rc);
+   // 	  end
+   //   end
+   
    // 	if(w_any_irq && r_state == ACTIVE)
    // 	  begin
    // 	     $display(">>>> w_irq_id = %d, r_priv %d, mie %b sie %b pending %b, cycle %d", 
@@ -1219,9 +1229,12 @@ module core(clk,
 		     // $display("t_rob_head.cause = %d, ", t_rob_head.cause);
 		   end
 	       endcase // case (t_rob_head.cause)
-	       
+
+	       //if(r_irq)
+	       //begin
 	       //$display("took fault for %x with cause %d at cycle %d, priv %d, tval %x, irq %b, epc %x, cycle %d", 
 	       //t_rob_head.pc, t_rob_head.cause, r_cycle, priv, n_tval, r_irq, r_epc, r_cycle);
+	       //end
 	       
 	       t_bump_rob_head = 1'b1;
 	       if(syscall_emu)

@@ -3,7 +3,7 @@
 
 `ifdef VERILATOR
 import "DPI-C" function void csr_putchar(input byte x);
-import "DPI-C" function longint csr_gettime();
+import "DPI-C" function void csr_puttime(input longint mtime);
 import "DPI-C" function void term_sim();
 
 import "DPI-C" function void report_exec(input int int_valid, 
@@ -652,7 +652,14 @@ module exec(clk,
    
    logic [63:0]	       r_mtimecmp;
    wire		       w_mtip = r_cycle >= r_mtimecmp;
-		       
+
+`ifdef VERILATOR
+   always_ff@(posedge clk)
+     begin
+	csr_puttime(w_time);
+     end
+`endif
+   
    always_ff@(posedge clk)
      begin
 	if(reset)
@@ -661,6 +668,7 @@ module exec(clk,
 	  end
 	else if(mtimecmp_val)
 	  begin
+	     //$display("setting timecmp to %d", mtimecmp);
 	     r_mtimecmp <= mtimecmp;
 	  end
      end // always_ff@ (posedge clk)
@@ -2510,11 +2518,7 @@ module exec(clk,
 	  RDFAULTEDBRANCH_CSR:
 	    t_rd_csr = 'd0;
 	  RDTIME_CSR:
-`ifdef VERILATOR
-	    t_rd_csr = csr_gettime();
-`else
-	  t_rd_csr = w_time;
-`endif
+	    t_rd_csr = w_time;
 	  default:
 	    begin
 	       if(t_rd_csr_en)

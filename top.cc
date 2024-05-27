@@ -74,6 +74,8 @@ static std::map<int,uint64_t> fault_distribution;
 static std::map<int,uint64_t> branch_distribution;
 static std::map<int,uint64_t> fault_to_restart_distribution;
 
+static std::map<uint64_t, uint64_t> supervisor_histo;
+
 static const char* l1d_stall_str[8] =
   {
    "no stall", //0
@@ -263,8 +265,8 @@ long long ld_translate(long long va) {
 
 uint64_t csr_time = 0;
 
-long long csr_gettime() {
-  return csr_time;
+void csr_puttime(long long t) {
+  csr_time = t;
 }
 
 bool kernel_panicd = false;
@@ -777,6 +779,15 @@ int main(int argc, char **argv) {
       cycles_in_faulted++;
     }
 
+    if(tb->retire_valid and ((tb->retire_pc >> 63) & 1)) {
+      supervisor_histo[tb->retire_pc]++;
+    }
+    
+    if(tb->retire_two_valid and ((tb->retire_two_pc >> 63) & 1)) {
+      supervisor_histo[tb->retire_two_pc]++;
+    }
+
+    
     /* virtual addresses */
     if(globals::syscall_emu) {
       if(tb->rob_empty) {
@@ -809,10 +820,6 @@ int main(int argc, char **argv) {
 	globals::log = trace_retirement = true;
       }
 
-      if(((insns_retired % (1<<20)) == 0)) {
-	++csr_time;
-      }
-      
       if(((insns_retired % heartbeat) == 0) or trace_retirement ) {
 
 	std::cout << "port a "
@@ -1401,6 +1408,9 @@ int main(int argc, char **argv) {
 	    << " insns per second\n";
 
 
+
+  dump_histo("supervisor.txt", supervisor_histo);
+  
   munmap(s->mem, 1UL<<32);
   munmap(ss->mem, 1UL<<32);
   delete s;

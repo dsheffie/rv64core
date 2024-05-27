@@ -207,6 +207,21 @@ static inline void dump_histo(const std::string &fname,
   out.close();
 }
 
+template<typename X, typename Y>
+static inline void dump_histo(const std::string &fname,
+			      const std::map<X,Y> &histo) {
+  std::vector<std::pair<Y,X>> sorted_by_cnt;
+  for(auto &p : histo) {
+    sorted_by_cnt.emplace_back(p.second, p.first);
+  }
+  std::ofstream out(fname);
+  std::sort(sorted_by_cnt.begin(), sorted_by_cnt.end());
+  for(auto it = sorted_by_cnt.rbegin(), E = sorted_by_cnt.rend(); it != E; ++it) {
+    out << std::hex << it->second << "," << std::dec << it->first << "\n";
+  }
+  out.close();
+}
+
 static inline uint32_t to_uint32(float f) {
   return *reinterpret_cast<uint32_t*>(&f);
 }

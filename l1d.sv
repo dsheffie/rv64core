@@ -990,6 +990,15 @@ module l1d(clk,
 	     r_mtimecmp <= r_req.data;
 	  end
      end // always_ff@ (posedge clk)
+
+   //always_ff@(negedge clk)
+   //begin
+   //if(t_wr_store && r_req.addr == `MTIMECMP_ADDR)
+   //begin
+   //$display("pc %x sets mtimecmp to %d at cycle %d", r_req.pc, r_req.data, r_cycle);
+   //end
+   //end
+	     
    
 `ifdef VERILATOR
    always_ff@(negedge clk)
@@ -1209,7 +1218,7 @@ module l1d(clk,
    wire w_flush_hit = (r_tag_out == l2_probe_addr[`M_WIDTH-1:IDX_STOP]) & r_valid_out;
 
    wire	w_uncachable = (w_tlb_pa >= `UC_START) && 
-	(w_tlb_pa < `UC_END) && 1'b0;
+	(w_tlb_pa < `UC_END);
    
    always_comb
      begin
