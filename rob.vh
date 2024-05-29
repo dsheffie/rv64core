@@ -28,6 +28,7 @@ typedef struct packed {
    logic       faulted;
    logic       has_cause;
    cause_t     cause;
+   logic       mark_page_dirty;   
    logic       is_ret;
    logic       is_call;
    logic       is_irq;
@@ -122,7 +123,8 @@ typedef struct packed {
    logic [`LG_PRF_ENTRIES-1:0] dst_ptr;
    logic 		       dst_valid;
    cause_t		       cause;
-   logic		       has_cause;   
+   logic		       has_cause;
+   logic		       mark_page_dirty;
 } mem_rsp_t;
 
 typedef struct packed {

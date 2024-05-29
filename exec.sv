@@ -654,9 +654,12 @@ module exec(clk,
    wire		       w_mtip = r_cycle >= r_mtimecmp;
 
 `ifdef VERILATOR
-   always_ff@(posedge clk)
+   always_ff@(negedge clk)
      begin
-	csr_puttime(w_time);
+	if(t_rd_csr_en && (int_uop.imm[5:0] == RDTIME_CSR))
+	  begin
+	     csr_puttime(w_time);
+	  end
      end
 `endif
    

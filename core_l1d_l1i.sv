@@ -501,6 +501,10 @@ module
    logic [63:0]			    t_l1i_pa;
 
 
+   wire				    w_core_mark_dirty_valid;
+   wire [63:0]			    w_core_mark_dirty_addr;
+   wire				    w_core_mark_dirty_rsp_valid;
+	    
       
    
    mmu mmu0(
@@ -526,13 +530,16 @@ module
 	    .l1i_rsp_valid(w_l1i_rsp_valid),
 	    .l1i_gnt(w_mmu_gnt_l1i),
 	    .l1d_gnt(w_mmu_gnt_l1d),
+
+	    .core_mark_dirty_valid(w_core_mark_dirty_valid),
+	    .core_mark_dirty_addr(w_core_mark_dirty_addr),
+	    .core_mark_dirty_rsp_valid(w_core_mark_dirty_rsp_valid),
 	    
 	    .mem_mark_valid(w_mem_mark_valid),
 	    .mem_mark_accessed(w_mem_mark_accessed),
 	    .mem_mark_dirty(w_mem_mark_dirty),
 	    .mem_mark_addr(w_mem_mark_addr),
 	    .mem_mark_rsp_valid(w_mem_mark_rsp_valid)
-	    
 	    );
    
    
@@ -672,7 +679,10 @@ module
 	     .got_bad_addr(got_bad_addr),
 	     .got_monitor(got_monitor),
 	     .inflight(inflight),
-	     .epc(epc)
+	     .epc(epc),
+	     .core_mark_dirty_valid(w_core_mark_dirty_valid),
+	     .core_mark_dirty_addr(w_core_mark_dirty_addr),
+	     .core_mark_dirty_rsp_valid(w_core_mark_dirty_rsp_valid)
 	     );
    
 

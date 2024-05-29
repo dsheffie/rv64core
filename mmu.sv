@@ -9,6 +9,9 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 	   l1i_rsp_valid,
 	   l1i_gnt, 
 	   l1d_gnt,
+	   core_mark_dirty_valid,
+	   core_mark_dirty_addr,
+	   core_mark_dirty_rsp_valid,
 	   mem_mark_valid,
 	   mem_mark_accessed,
 	   mem_mark_dirty,
@@ -47,6 +50,10 @@ module mmu(clk, reset, clear_tlb, page_table_root,
    output logic        l1i_gnt;
    output logic        l1d_gnt;
    
+   input logic	       core_mark_dirty_valid;
+   input logic [63:0]  core_mark_dirty_addr;
+   output logic	       core_mark_dirty_rsp_valid;
+
       
    logic [63:0]	       n_addr, r_addr;
    logic [63:0]	       n_last_addr, r_last_addr;
@@ -57,6 +64,8 @@ module mmu(clk, reset, clear_tlb, page_table_root,
    logic	       n_l1i_rsp_valid, r_l1i_rsp_valid;
    logic	       r_do_l1i, n_do_l1i;
    logic	       r_do_l1d, n_do_l1d;
+   logic	       r_do_dirty, n_do_dirty;
+   
    logic [1:0]	       n_hit_lvl, r_hit_lvl;
    logic	       r_page_dirty, n_page_dirty;
    logic 	       r_page_read, n_page_read;
@@ -67,6 +76,10 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 
    logic	       r_mem_mark_valid, n_mem_mark_valid;
    logic	       r_mem_mark_accessed, n_mem_mark_accessed;
+   logic	       r_mem_mark_dirty, n_mem_mark_dirty;
+   
+   logic	       r_core_mark_dirty_rsp_valid, n_core_mark_dirty_rsp_valid;
+
    
    assign mem_req_valid = r_req;
    assign mem_req_addr = r_addr;
@@ -77,7 +90,10 @@ module mmu(clk, reset, clear_tlb, page_table_root,
    assign mem_mark_addr = r_last_addr;
    assign mem_mark_valid = r_mem_mark_valid;
    assign mem_mark_accessed = r_mem_mark_accessed;
-   assign mem_mark_dirty = 1'b0;
+   assign mem_mark_dirty = r_mem_mark_dirty;
+
+
+   assign core_mark_dirty_rsp_valid = r_core_mark_dirty_rsp_valid;
    
    always_comb
      begin
@@ -109,6 +125,7 @@ module mmu(clk, reset, clear_tlb, page_table_root,
    state_t r_state, n_state;
    logic	n_l1i_req, r_l1i_req;
    logic	n_l1d_req, r_l1d_req;
+   logic	n_dirty_req, r_dirty_req;
    logic 	n_gnt_l1i, r_gnt_l1i;
    logic 	n_gnt_l1d, r_gnt_l1d;
 
@@ -142,12 +159,15 @@ module mmu(clk, reset, clear_tlb, page_table_root,
      begin
 	n_l1i_req = r_l1i_req | l1i_req;
 	n_l1d_req = r_l1d_req | l1d_req;
+	n_dirty_req = r_dirty_req | core_mark_dirty_valid;
+	
 	n_l1d_rsp_valid = 1'b0;
 	n_l1i_rsp_valid = 1'b0;
 	n_addr = r_addr;
 	n_last_addr = r_last_addr;
 	n_mem_mark_accessed = 1'b0;
 	n_mem_mark_valid = 1'b0;
+	n_mem_mark_dirty = 1'b0;
 	
 	n_req = 1'b0;
 	n_va = r_va;
@@ -162,9 +182,14 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 	
 	n_do_l1i = r_do_l1i;
 	n_do_l1d = r_do_l1d;
+	n_do_dirty = r_do_dirty;
 	n_hit_lvl = r_hit_lvl;
 	n_gnt_l1i = 1'b0;
 	n_gnt_l1d = 1'b0;
+
+	n_core_mark_dirty_rsp_valid = 1'b0;
+
+	
 	
 	case(r_state)
 	  IDLE:
@@ -192,6 +217,14 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 		    n_do_l1i = 1'b0;
 		    n_do_l1d = 1'b1;
 		    n_gnt_l1d = 1'b1;
+		 end // if (n_l1d_req)
+	       else if(n_dirty_req)
+		 begin
+		    n_do_dirty = 1'b1;
+		    n_dirty_req = 1'b0;
+		    n_state = LOAD0;
+		    n_va = core_mark_dirty_addr;
+		    $display("starting dirty walk for %x", core_mark_dirty_addr);
 		 end
 	    end
 	  LOAD0:
@@ -323,8 +356,16 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 	       n_page_write = r_addr[2];
 	       n_page_executable = r_addr[3];	       
 	       n_page_user = r_addr[4];
+
+	       if(r_do_dirty && r_addr[7]) $stop();
 	       
-	       if(r_addr[6] == 1'b0)
+	       if(r_addr[7] == 1'b0 && r_do_dirty)
+		 begin
+		    n_mem_mark_valid = 1'b1;
+		    n_mem_mark_dirty = 1'b1;
+		    n_state = MARK_ACCESS;
+		 end
+	       else if(r_addr[6] == 1'b0)
 		 begin
 		    n_mem_mark_valid = 1'b1;
 		    n_mem_mark_accessed = 1'b1;
@@ -340,6 +381,7 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 	       if(mem_mark_rsp_valid)
 		 begin
 		    n_state = IDLE;
+		    n_core_mark_dirty_rsp_valid = r_do_dirty;
 		 end
 	    end
 	  default:
@@ -356,12 +398,15 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 	     r_state <= IDLE;
 	     r_addr <= 'd0;
 	     r_mem_mark_valid <= 1'b0;
+	     r_mem_mark_accessed <= 1'b0;
+	     r_mem_mark_dirty <= 1'b0;
 	     r_last_addr <= 'd0;
 	     r_req <= 1'b0;
 	     r_va <= 'd0;
 	     r_pa <= 'd0;
 	     r_l1i_req <= 1'b0;
 	     r_l1d_req <= 1'b0;
+	     r_dirty_req <= 1'b0;
 	     r_l1i_rsp_valid <= 1'b0;
 	     r_l1d_rsp_valid <= 1'b0;
 	     r_page_fault <= 1'b0;
@@ -372,21 +417,26 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 	     r_page_user <= 1'b0;
 	     r_do_l1i <= 1'b0;
 	     r_do_l1d <= 1'b0;
+	     r_do_dirty <= 1'b0;
 	     r_hit_lvl <= 2'd0;
 	     r_gnt_l1i <= 1'b0;
 	     r_gnt_l1d <= 1'b0;
+	     r_core_mark_dirty_rsp_valid <= 1'b0;
 	  end
 	else
 	  begin
 	     r_state <= n_state;	     
 	     r_addr <= n_addr;
 	     r_mem_mark_valid <= n_mem_mark_valid;
+	     r_mem_mark_accessed <= n_mem_mark_accessed;
+	     r_mem_mark_dirty <= n_mem_mark_dirty;	     
 	     r_last_addr <= n_last_addr;
 	     r_req <= n_req;
 	     r_va <= n_va;
 	     r_pa <= n_pa;
 	     r_l1i_req <= n_l1i_req;
 	     r_l1d_req <= n_l1d_req;
+	     r_dirty_req <= n_dirty_req;
 	     r_l1i_rsp_valid <= n_l1i_rsp_valid;
 	     r_l1d_rsp_valid <= n_l1d_rsp_valid;
 	     r_page_fault <= n_page_fault;
@@ -397,9 +447,11 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 	     r_page_user <= n_page_user;
 	     r_do_l1i <= n_do_l1i;
 	     r_do_l1d <= n_do_l1d;
+	     r_do_dirty <= n_do_dirty;
 	     r_hit_lvl <= n_hit_lvl;
 	     r_gnt_l1i <= n_gnt_l1i;
-	     r_gnt_l1d <= n_gnt_l1d;	     
+	     r_gnt_l1d <= n_gnt_l1d;
+	     r_core_mark_dirty_rsp_valid <= n_core_mark_dirty_rsp_valid;
 	  end
      end
 endmodule // mmu

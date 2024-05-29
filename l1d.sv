@@ -249,6 +249,7 @@ module l1d(clk,
    logic 				  r_q_priority, n_q_priority;
    
    logic 				  n_core_mem_rsp_valid, r_core_mem_rsp_valid;
+   
    mem_rsp_t n_core_mem_rsp, r_core_mem_rsp;
       
    mem_req_t n_req, r_req, t_req;
@@ -1215,6 +1216,8 @@ module l1d(clk,
    wire w_tlb_st_exc = w_tlb_hit & paging_active & (r_req2.is_store | r_req2.is_atomic) & 
 	!w_tlb_writable;
 
+   wire	w_tlb_st_not_dirty = w_tlb_hit & paging_active & (r_req2.is_store | r_req2.is_atomic) & w_tlb_writable & !w_tlb_dirty;   
+
    wire w_flush_hit = (r_tag_out == l2_probe_addr[`M_WIDTH-1:IDX_STOP]) & r_valid_out;
 
    wire	w_uncachable = (w_tlb_pa >= `UC_START) && 
@@ -1279,6 +1282,7 @@ module l1d(clk,
 	n_core_mem_rsp.dst_ptr = r_req.dst_ptr;
 	n_core_mem_rsp.dst_valid = 1'b0;
 	n_core_mem_rsp.has_cause = 1'b0;
+	n_core_mem_rsp.mark_page_dirty = 1'b0;
 	n_core_mem_rsp.cause = MISALIGNED_FETCH;
 	
 	n_cache_accesses = r_cache_accesses;
@@ -1399,7 +1403,9 @@ module l1d(clk,
 			      n_cache_hits = r_cache_hits + 'd1;
 			   end
 			 n_core_mem_rsp_valid = 1'b1;
-			 n_core_mem_rsp.has_cause = r_req2.spans_cacheline;			 
+			 n_core_mem_rsp.has_cause = r_req2.spans_cacheline;
+			 n_core_mem_rsp.mark_page_dirty = w_tlb_st_not_dirty;
+			 n_core_mem_rsp.addr = r_req2.addr;
 		      end // if (r_req2.is_store)
 		    else if(t_port2_hit_cache && (!r_hit_busy_addr2) & (!r_pending_tlb_miss) )
 		      begin
@@ -1571,7 +1577,6 @@ module l1d(clk,
 		  if(!t_mh_block)
 		    begin
 		       //if(t_mem_head.uncachable) $display("uncachable op");
-		       
 		       if(t_mem_head.is_store || t_mem_head.is_atomic)
 			 begin
 			    if(w_st_amo_grad && (core_store_data_valid ? (t_mem_head.rob_ptr == core_store_data.rob_ptr) : 1'b0) )

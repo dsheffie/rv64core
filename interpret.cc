@@ -222,12 +222,13 @@ uint64_t state_t::translate(uint64_t ea, int &fault, int sz, bool store, bool fe
   
   if(r.sv39.a == 0) {
     r.sv39.a = 1;
-    printf("simulator marking page at %lx accessed\n", a);
+    //printf("simulator marking page at %lx accessed for pc %lx\n", a, s->pc);
 	   
     *reinterpret_cast<uint64_t*>(mem + a) = r.r;
   }
   if((r.sv39.d == 0) && store) {
     r.sv39.d = 1;
+    printf("simulator marking page at %lx dirty for pc %lx\n", ea, pc);
     *reinterpret_cast<uint64_t*>(mem + a) = r.r;    
   }
   int64_t m = ((1L << mask_bits) - 1);

@@ -19,6 +19,7 @@ module tlb(clk,
    
    input logic clk;
    input logic reset;
+   
    input logic [1:0] priv;
    input logic clear;
    input logic active;

@@ -170,8 +170,14 @@ void load_elf(const char* fn, state_t *ms) {
   }
   munmap(buf, s.st_size);
 
-  globals::tohost_addr = globals::symtab.at("tohost");
-  globals::fromhost_addr = globals::symtab.at("fromhost");
+  auto it0 = globals::symtab.find("tohost");
+  auto it1 = globals::symtab.find("fromhost");
+  if(it0 != globals::symtab.end()) {
+    globals::tohost_addr = it0->second;
+  }
+  if(it1 != globals::symtab.end()) {
+    globals::fromhost_addr = it1->second;
+  }
 
 #define WRITE_WORD(EA,WORD) { *reinterpret_cast<uint32_t*>(mem + EA) = WORD; }
 
