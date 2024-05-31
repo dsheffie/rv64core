@@ -18,7 +18,8 @@ module
 		   core_state,
 		   l1i_state,
 		   l1d_state,
-		   l2_state,		   
+		   l2_state,
+		   mmu_state,
 		   n_inflight,
 		   memq_empty,
 		   putchar_fifo_out,
@@ -82,6 +83,7 @@ module
    output logic [3:0] l1i_state;
    output logic [3:0] l1d_state;
    output logic [3:0] l2_state;
+   output logic [3:0] mmu_state;
    
    output logic       memq_empty;
    output logic [7:0] putchar_fifo_out;
@@ -457,7 +459,6 @@ module
 	       .retired_rob_ptr_two_valid(retired_rob_ptr_two_valid),
 	       .retired_rob_ptr(retired_rob_ptr),
 	       .retired_rob_ptr_two(retired_rob_ptr_two),
-	       .restart_valid(restart_valid),
 	       .memq_empty(memq_empty),
 	       .drain_ds_complete(drain_ds_complete),
 	       .dead_rob_mask(dead_rob_mask),
@@ -539,7 +540,8 @@ module
 	    .mem_mark_accessed(w_mem_mark_accessed),
 	    .mem_mark_dirty(w_mem_mark_dirty),
 	    .mem_mark_addr(w_mem_mark_addr),
-	    .mem_mark_rsp_valid(w_mem_mark_rsp_valid)
+	    .mem_mark_rsp_valid(w_mem_mark_rsp_valid),
+	    .mmu_state(mmu_state)
 	    );
    
    

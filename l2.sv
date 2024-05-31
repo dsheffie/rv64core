@@ -229,6 +229,9 @@ module l2(clk,
    wire 		w_need_wb = w_valid ? w_dirty : 1'b0;
    
    logic		n_mmu_mark_req, r_mmu_mark_req;
+   logic		n_mmu_mark_dirty, r_mmu_mark_dirty;
+   logic		n_mmu_mark_accessed, r_mmu_mark_accessed;
+   
    logic		r_mmu_req, n_mmu_req;
    logic		r_l1d_req, n_l1d_req;
    logic 		r_l1i_req, n_l1i_req;
@@ -279,6 +282,8 @@ module l2(clk,
 	     r_req <= 1'b0;
 	     r_last_l1i_addr <= 'd0;
 	     r_last_l1d_addr <= 'd0;
+	     r_mmu_mark_dirty <= 1'b0;
+	     r_mmu_mark_accessed <= 1'b0;
 	  end
 	else
 	  begin
@@ -316,7 +321,9 @@ module l2(clk,
 	     r_last_gnt <= n_last_gnt;
 	     r_req <= n_req;
 	     r_last_l1i_addr <= n_last_l1i_addr;
-	     r_last_l1d_addr <= n_last_l1d_addr;	     
+	     r_last_l1d_addr <= n_last_l1d_addr;
+	     r_mmu_mark_dirty <= n_mmu_mark_dirty;
+	     r_mmu_mark_accessed <= n_mmu_mark_accessed;
 	  end
      end // always_ff@ (posedge clk)
 
@@ -402,7 +409,7 @@ module l2(clk,
 	    begin
 	       if(mmu_req_valid)
 		 begin
-		    //$display("got probe req at cycle %d", r_cycle);
+		    //$display("got probe req at cycle %d for addr %x", r_cycle, mmu_req_addr);
 		    n_pstate = PROBE_WAIT;
 		    n_l2_probe_val = 1'b1;
 		    n_l2_probe_addr = mmu_req_addr;
@@ -504,6 +511,9 @@ module l2(clk,
 	t_gnt_l1i = 1'b0;
 	t_gnt_l1d = 1'b0;
 	
+	n_mmu_mark_dirty = r_mmu_mark_dirty;
+	n_mmu_mark_accessed = r_mmu_mark_accessed;
+	
 	case(r_state)
 	  INITIALIZE:
 	    begin
@@ -538,8 +548,9 @@ module l2(clk,
 		 end
 	       else if(w_mem_mark_valid)
 		 begin
-		    //$display("pte address %x, cycle %d", mem_mark_addr, r_cycle);
 		    n_mmu_mark_req = 1'b0;
+		    n_mmu_mark_dirty = mem_mark_dirty;
+		    n_mmu_mark_accessed = mem_mark_accessed;
 		    n_mmu_addr3 = mem_mark_addr[3];		    
 		    t_idx = mem_mark_addr[LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN];			 
 		    n_tag = mem_mark_addr[(`M_WIDTH-1):LG_L2_LINES+`LG_L2_CL_LEN];
@@ -666,8 +677,12 @@ module l2(clk,
 			 else if(r_mark_pte)
 			   begin
 			      n_state = WAIT_STORE_IDLE;
-			      t_d0 = r_mmu_addr3 ? {(w_d0[127:64] | 64'd64), w_d0[63:0]} :
-			           {w_d0[127:64], (w_d0[63:0] | 64'd64)};
+			      //$display("mark dirty %b, mark accessed %b", r_mmu_mark_dirty, r_mmu_mark_accessed);
+			      n_mmu_mark_dirty = 1'b0;
+			      n_mmu_mark_accessed = 1'b0;
+			      t_d0 = r_mmu_addr3 ? 
+				     {w_d0[127:72], r_mmu_mark_dirty|w_d0[71], r_mmu_mark_accessed|w_d0[70], w_d0[69:0]} :
+			             {w_d0[127:8], r_mmu_mark_dirty|w_d0[7], r_mmu_mark_accessed|w_d0[6], w_d0[5:0]};
 			      t_wr_dirty = 1'b1;
 			      t_dirty = 1'b1;
 			      t_wr_d0 = 1'b1;

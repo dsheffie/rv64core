@@ -16,7 +16,8 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 	   mem_mark_accessed,
 	   mem_mark_dirty,
 	   mem_mark_addr,
-	   mem_mark_rsp_valid
+	   mem_mark_rsp_valid,
+	   mmu_state
 	   );
    input logic clk;
    input logic reset;
@@ -53,7 +54,8 @@ module mmu(clk, reset, clear_tlb, page_table_root,
    input logic	       core_mark_dirty_valid;
    input logic [63:0]  core_mark_dirty_addr;
    output logic	       core_mark_dirty_rsp_valid;
-
+   output logic [3:0]  mmu_state;
+   
       
    logic [63:0]	       n_addr, r_addr;
    logic [63:0]	       n_last_addr, r_last_addr;
@@ -129,6 +131,7 @@ module mmu(clk, reset, clear_tlb, page_table_root,
    logic 	n_gnt_l1i, r_gnt_l1i;
    logic 	n_gnt_l1d, r_gnt_l1d;
 
+   assign mmu_state = r_state;
    assign l1i_gnt = r_gnt_l1i;
    assign l1d_gnt = r_gnt_l1d;
    
@@ -204,6 +207,7 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 `endif
 		    n_do_l1i = 1'b1;
 		    n_do_l1d = 1'b0;
+		    n_do_dirty = 1'b0;
 		    n_gnt_l1i = 1'b1;
 		 end
 	       else if(n_l1d_req)
@@ -216,23 +220,28 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 `endif
 		    n_do_l1i = 1'b0;
 		    n_do_l1d = 1'b1;
+		    n_do_dirty = 1'b0;
 		    n_gnt_l1d = 1'b1;
 		 end // if (n_l1d_req)
 	       else if(n_dirty_req)
 		 begin
-		    n_do_dirty = 1'b1;
+		    n_do_l1i = 1'b0;
+		    n_do_l1d = 1'b0;
 		    n_dirty_req = 1'b0;
+		    n_do_dirty = 1'b1;
 		    n_state = LOAD0;
 		    n_va = core_mark_dirty_addr;
+`ifdef VERBOSE_MMU
 		    $display("starting dirty walk for %x", core_mark_dirty_addr);
+`endif
 		 end
 	    end
 	  LOAD0:
 	    begin
 	       n_addr = page_table_root + {52'd0, r_va[38:30], 3'd0};
-`ifdef VERBOSE_MMU	       
-	       $display("r_va = %x, r_va[38:30] = %d, addr %x l1i %b, l1d %b", 
-			r_va, r_va[38:30], n_addr, r_do_l1i, r_do_l1d);
+`ifdef VERBOSE_MMU
+		 $display("r_va = %x, r_va[38:30] = %d, addr %x l1i %b, l1d %b", 
+			  r_va, r_va[38:30], n_addr, r_do_l1i, r_do_l1d);
 `endif
 	       if(w_bad_va)
 		 begin
@@ -357,13 +366,20 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 	       n_page_executable = r_addr[3];	       
 	       n_page_user = r_addr[4];
 
-	       if(r_do_dirty && r_addr[7]) $stop();
 	       
-	       if(r_addr[7] == 1'b0 && r_do_dirty)
+	       if(r_do_dirty)
 		 begin
-		    n_mem_mark_valid = 1'b1;
-		    n_mem_mark_dirty = 1'b1;
-		    n_state = MARK_ACCESS;
+		    if(r_addr[7] == 1'b0)
+		      begin
+			 n_mem_mark_valid = 1'b1;
+			 n_mem_mark_dirty = 1'b1;
+			 n_state = MARK_ACCESS;
+		      end
+		    else
+		      begin
+			 n_core_mark_dirty_rsp_valid = 1'b1;
+			 n_state = IDLE;
+		      end
 		 end
 	       else if(r_addr[6] == 1'b0)
 		 begin

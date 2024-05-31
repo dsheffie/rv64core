@@ -1055,6 +1055,7 @@ int main(int argc, char **argv) {
       std::cout << "l1d  state = " << static_cast<int>(tb->l1d_state) << "\n";
       std::cout << "l1i  state = " << static_cast<int>(tb->l1i_state) << "\n";
       std::cout << "l2   state = " << static_cast<int>(tb->l2_state) << "\n";
+      std::cout << "mmu  state = " << static_cast<int>(tb->mmu_state) << "\n";      
       std::cout << "core state = " << static_cast<int>(tb->core_state) << "\n";
       break;
     }

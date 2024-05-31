@@ -270,7 +270,8 @@ module core(clk,
    logic 				  r_got_restart_ack, n_got_restart_ack;
 
    wire [63:0]				  w_exc_pc;
-      
+   wire					  w_exec_clear_tlb;
+   
    rob_entry_t r_rob[N_ROB_ENTRIES-1:0];   
    bob_entry_t r_bob[N_BOB_ENTRIES-1:0];
    logic [63:0] r_rob_addr[N_ROB_ENTRIES-1:0];
@@ -407,9 +408,11 @@ module core(clk,
    logic		     n_mmu_mark_dirty, r_mmu_mark_dirty;
 
    logic [63:0]		     r_dirty_addr;
+   logic		     n_clear_tlb, r_clear_tlb;
    
    assign core_mark_dirty_valid = r_mmu_mark_dirty;
    assign core_mark_dirty_addr = r_dirty_addr;
+   assign clear_tlb = w_exec_clear_tlb | r_clear_tlb;
    
    logic 		     t_can_retire_rob_head;
    logic 		     t_arch_fault;
@@ -569,8 +572,6 @@ module core(clk,
    logic [31:0] r_clear_cnt;
    always_ff@(posedge clk)
      begin
-	if(r_mmu_mark_dirty) $display("dirty addr %x", r_dirty_addr);
-	
 	if(reset)
 	  begin
 	     r_clear_cnt <= 'd0;
@@ -617,6 +618,7 @@ module core(clk,
 	     drain_ds_complete <= 1'b0;	     
 	     r_ds_done <= 1'b0;
 	     r_mmu_mark_dirty <= 1'b0;
+	     r_clear_tlb <= 1'b0;
 	  end
 	else
 	  begin
@@ -650,6 +652,7 @@ module core(clk,
 	     drain_ds_complete <= r_ds_done;	     
 	     r_ds_done <= n_ds_done;
 	     r_mmu_mark_dirty <= n_mmu_mark_dirty;
+	     r_clear_tlb <= n_clear_tlb;
 	  end
      end // always_ff@ (posedge clk)
 
@@ -920,6 +923,7 @@ module core(clk,
 	n_ready_for_resume = 1'b0;
 	n_update_csr_exc = 1'b0;
 	n_mmu_mark_dirty = 1'b0;
+	n_clear_tlb = 1'b0;
 	
 	n_l1i_flush_complete = r_l1i_flush_complete || l1i_flush_complete;
 	n_l1d_flush_complete = r_l1d_flush_complete || l1d_flush_complete;
@@ -984,9 +988,10 @@ module core(clk,
 		      end // if (t_rob_head.faulted)
 		    else if(t_rob_head.mark_page_dirty)
 		      begin
-			 $display("retiring dirty page mark insn, pc %x, target %x, addr %x, entry %d", 
-				  t_rob_head.pc, t_rob_head.target_pc, w_rob_head_addr, r_rob_head_ptr[`LG_ROB_ENTRIES-1:0]);
+			 //$display("retiring dirty page mark insn, pc %x, target %x, addr %x, entry %d", 
+			 //t_rob_head.pc, t_rob_head.target_pc, w_rob_head_addr, r_rob_head_ptr[`LG_ROB_ENTRIES-1:0]);
 			 n_state = WAIT_FOR_MMU;
+			 n_ds_done = 1'b1;
 			 n_restart_pc = t_rob_head.target_pc;
 			 n_mmu_mark_dirty = 1'b1;
 		      end
@@ -1307,7 +1312,7 @@ module core(clk,
 	    begin
 	       if(core_mark_dirty_rsp_valid)
 		 begin
-		    $display("got restart message for dirty");
+		    n_clear_tlb = 1'b1;
 		    n_restart_valid = 1'b1;
 		    n_state = DRAIN;
 		 end
@@ -1704,11 +1709,6 @@ module core(clk,
 	if(core_mem_rsp_valid)
 	  begin
 	     r_rob_addr[core_mem_rsp.rob_ptr] <= core_mem_rsp.addr;
-	     if(core_mem_rsp.mark_page_dirty)
-	       begin
-		  $display("dirty >> writing address %x to entry %d", core_mem_rsp.addr, core_mem_rsp.rob_ptr);
-	       end
-	     
 	  end
      end
    
@@ -2143,7 +2143,7 @@ module core(clk,
 	   .mideleg(w_mideleg),
 	   .mstatus(w_mstatus),
 	   .exc_pc(w_exc_pc),
-	   .clear_tlb(clear_tlb),
+	   .clear_tlb(w_exec_clear_tlb),
 	   .mode64(r_mode64),
 	   .retire(t_retire),
 	   .retire_two(t_retire_two),

@@ -33,7 +33,6 @@ module l1d(clk,
 	   retired_rob_ptr_two_valid,
 	   retired_rob_ptr,
 	   retired_rob_ptr_two,
-	   restart_valid,
 	   memq_empty,
 	   drain_ds_complete,
 	   dead_rob_mask,
@@ -101,7 +100,6 @@ module l1d(clk,
    input logic retired_rob_ptr_two_valid;
    input logic [`LG_ROB_ENTRIES-1:0] retired_rob_ptr;
    input logic [`LG_ROB_ENTRIES-1:0] retired_rob_ptr_two;
-   input logic 			     restart_valid;
    output logic			     memq_empty;
    input logic 			     drain_ds_complete;
    input logic [(1<<`LG_ROB_ENTRIES)-1:0] dead_rob_mask;
@@ -335,9 +333,13 @@ module l1d(clk,
    assign mem_req_valid = r_mem_req_valid;
    assign mem_req_uc = r_mem_req_uc;
 
-   assign core_mem_rsp_valid = n_core_mem_rsp_valid;
-   assign core_mem_rsp = n_core_mem_rsp;
-   
+`ifdef FOUR_CYCLE_L1D
+   assign core_mem_rsp_valid = r_core_mem_rsp_valid;
+   assign core_mem_rsp = r_core_mem_rsp;
+`else
+   assign core_mem_rsp_valid = r_core_mem_rsp_valid;
+   assign core_mem_rsp = r_core_mem_rsp;
+`endif
    assign cache_accesses = r_cache_accesses;
    assign cache_hits = r_cache_hits;
    
@@ -373,7 +375,7 @@ module l1d(clk,
 
    always_ff@(posedge clk)
      begin
-	if(reset /*|| restart_valid*/)
+	if(reset)
 	  begin
 	     for(integer i = 0; i < N_ROB_ENTRIES; i = i+1)
 	       begin
@@ -1220,8 +1222,7 @@ module l1d(clk,
 
    wire w_flush_hit = (r_tag_out == l2_probe_addr[`M_WIDTH-1:IDX_STOP]) & r_valid_out;
 
-   wire	w_uncachable = (w_tlb_pa >= `UC_START) && 
-	(w_tlb_pa < `UC_END);
+   wire	w_uncachable = (w_tlb_pa >= `UC_START) && (w_tlb_pa < `UC_END) && 1'b0;
    
    always_comb
      begin
@@ -1866,6 +1867,10 @@ module l1d(clk,
 
    always_ff@(negedge clk)
      begin
+	// if(r_flush_cl_req)
+	//   begin
+	//      $display("pending flush request at cycle %d, memq empty %b", r_cycle, mem_q_empty);
+	//   end
 	if((r_state == UC_LOAD || r_state == UC_STORE) && mem_rsp_valid && t_write_dirty_en) 
 	  begin
 	     $stop();
