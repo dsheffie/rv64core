@@ -33,7 +33,8 @@ static state_t *ss = nullptr;
 static uint64_t insns_retired = 0, insns_allocated = 0;
 static uint64_t cycles_in_faulted = 0, fetch_stalls = 0;
 
-static uint64_t pipestart = 0, pipeend = ~(0UL);
+static uint64_t pipestart = 0, pipeend = ~(0UL), pipeip = 0, pipeipcnt = 0;
+
 
 static boost::dynamic_bitset<> touched_lines(1UL<<28);
 
@@ -493,8 +494,21 @@ void record_retirement(long long pc,
   last_retire_cycle = retire_cycle;
   last_retire_pc = pc;
   
+  if((pl != nullptr) and (pipeip != 0)) {
+    if(pc ==  pipeip) {
+      --pipeipcnt;
+      //printf("hit token ip, count %lu\n", pipeipcnt);      
+      if(pipeipcnt == 0) {
+	pipestart = record_insns_retired;
+	pipeend = record_insns_retired + 4096;
+	printf("trace %lx hit enough times : starts at %lu, will end at %lu\n", pipeip, pipestart, pipeend);
+	pipeip = 0;
+      }
+    }
+  }
   
   if((pl != nullptr) and (record_insns_retired >= pipestart) and (record_insns_retired < pipeend)) {
+    
     uint32_t insn = get_insn(pc, s);
     uint32_t opcode = insn & 127;
     auto disasm = getAsmString(insn, pc);
@@ -603,7 +617,9 @@ int main(int argc, char **argv) {
       ("memlat,m", po::value<uint64_t>(&mem_lat)->default_value(4), "memory latency")
       ("pipelog,p", po::value<std::string>(&pipelog), "log for pipeline tracing")
       ("pipestart", po::value<uint64_t>(&pipestart)->default_value(0), "when to start logging")
-      ("pipeend", po::value<uint64_t>(&pipeend)->default_value(~0UL), "when to stop logging")      
+      ("pipeend", po::value<uint64_t>(&pipeend)->default_value(~0UL), "when to stop logging")
+      ("pipeip", po::value<uint64_t>(&pipeip)->default_value(0), "when to start logging")
+      ("pipeipcnt", po::value<uint64_t>(&pipeipcnt)->default_value(0), "when to start logging")      
       ("maxcycle", po::value<uint64_t>(&max_cycle)->default_value(1UL<<34), "maximum cycles")
       ("maxicnt", po::value<uint64_t>(&max_icnt)->default_value(1UL<<50), "maximum icnt")
       ("trace,t", po::value<bool>(&trace_retirement)->default_value(false), "trace retired instruction stream")
