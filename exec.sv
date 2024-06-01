@@ -80,7 +80,9 @@ module exec(clk,
 	    mtimecmp,
 	    mtimecmp_val,	    
 	    branch_valid,
-	    branch_fault);
+	    branch_fault,
+	    counters
+	    );
    input logic clk;
    input logic reset;
    output logic [7:0] putchar_fifo_out;
@@ -157,7 +159,11 @@ module exec(clk,
    
    input logic 			     branch_valid;
    input logic 			     branch_fault;
+
+
+   input	      counters_t counters;
    
+
    
    localparam N_INT_SCHED_ENTRIES = 1<<`LG_INT_SCHED_ENTRIES;
    
@@ -1181,6 +1187,7 @@ module exec(clk,
 	t_zero_shift_upper2 = 1'b0;
 `ifdef SECOND_EXEC_PORT	
 	case(int_uop2.op)
+`ifdef TWO_SRC_CHEAP	  
 	  BNE:
 	    begin
 	       t_take_br2 = t_srcA_2 != t_srcB_2;
@@ -1223,6 +1230,7 @@ module exec(clk,
 	       t_pc_2 = t_take_br2 ? int_uop2.rvimm : w_pc2_4;
 	       t_alu_valid2 = 1'b1;	       	       
 	    end
+`endif
 	  JAL:
 	    begin
 	       t_take_br2 = 1'b1;
@@ -1268,7 +1276,8 @@ module exec(clk,
 	       t_result2 = w_as64_2_sext;
 	       t_alu_valid2 = 1'b1;
 	       t_wr_int_prf2 = 1'b1;
-	    end	  
+	    end
+`ifdef TWO_SRC_CHEAP	  
 	  ADDU:
 	    begin
 	       t_result2 = w_as64_2;
@@ -1293,6 +1302,7 @@ module exec(clk,
 	       t_alu_valid2 = 1'b1;
 	       t_wr_int_prf2 = 1'b1;
 	    end
+`endif
 	  SLTI:
 	    begin
 	       t_result2 = {w_zf, $signed(t_srcA_2) < $signed(int_uop2.rvimm)};
@@ -1304,7 +1314,8 @@ module exec(clk,
 	       t_result2 = {w_zf, t_srcA_2 < int_uop2.rvimm};
 	       t_alu_valid2 = 1'b1;
 	       t_wr_int_prf2 = 1'b1;
-	    end	       
+	    end
+`ifdef TWO_SRC_CHEAP
 	  SUBU:
 	    begin
 	       t_sub2 = 1'b1;
@@ -1319,6 +1330,7 @@ module exec(clk,
 	       t_alu_valid2 = 1'b1;
 	       t_wr_int_prf2 = 1'b1;
 	    end
+`endif
 	  ANDI:
 	    begin
 	       t_result2 = int_uop2.rvimm & t_srcA_2;
@@ -1337,6 +1349,7 @@ module exec(clk,
 	       t_alu_valid2 = 1'b1;
 	       t_wr_int_prf2 = 1'b1;
 	    end
+`ifdef TWO_SRC_CHEAP			 	  
 	  AND:
 	    begin
 	       t_result2 = t_srcA_2 & t_srcB_2;	       
@@ -1362,6 +1375,7 @@ module exec(clk,
 	       t_wr_int_prf2 = 1'b1;
 	       t_alu_valid2 = 1'b1;
 	    end
+`endif
 	  SRLI:
 	    begin
 	       t_shift_amt2 = {(mode64 ? int_uop2.rvimm[5] : 1'b0), int_uop2.rvimm[4:0]};
@@ -1369,6 +1383,7 @@ module exec(clk,
 	       t_wr_int_prf2 = 1'b1;
 	       t_alu_valid2 = 1'b1;	       
 	    end
+`ifdef TWO_SRC_CHEAP			 	  	  
 	  SRA:
 	    begin
 	       t_signed_shift2 = 1'b1;
@@ -1392,7 +1407,8 @@ module exec(clk,
 	       t_result2 = {{32{w_shifter_out2[31]}}, w_shifter_out2[31:0]};
 	       t_wr_int_prf2 = 1'b1;
 	       t_alu_valid2 = 1'b1;
-	    end	  
+	    end
+`endif
 	  SRAIW:
 	    begin
 	       t_signed_shift2 = 1'b1;
@@ -1418,7 +1434,8 @@ module exec(clk,
 	       t_result2 = w_shifter_out2;
 	       t_wr_int_prf2 = 1'b1;
 	       t_alu_valid2 = 1'b1;		
-	    end	  
+	    end
+`ifdef TWO_SRC_CHEAP			 	  	  
 	  SLL:
 	    begin
 	       t_left_shift2 = 1'b1;
@@ -1434,7 +1451,8 @@ module exec(clk,
 	       t_result2 = {{32{w_shifter_out2[31]}}, w_shifter_out2[31:0]};
 	       t_wr_int_prf2 = 1'b1;
 	       t_alu_valid2 = 1'b1;
-	    end	  
+	    end
+`endif
 	  SLLI:
 	    begin
 	       t_left_shift2 = 1'b1;	       
@@ -2522,6 +2540,23 @@ module exec(clk,
 	    t_rd_csr = 'd0;
 	  RDTIME_CSR:
 	    t_rd_csr = w_time;
+	  RDL1DTLBHIT_CSR:
+	    t_rd_csr = counters.dtlb_hits;
+	  RDL1DTLBACCESS_CSR:
+	    t_rd_csr = counters.dtlb_accesses;
+	  RDL1ITLBHIT_CSR:
+	    t_rd_csr = counters.itlb_hits;
+	  RDL1ITLBACCESS_CSR:
+	    t_rd_csr = counters.itlb_accesses;
+	  RDL1DHIT_CSR:
+	    t_rd_csr = counters.l1d_hits;
+	  RDL1DACCESS_CSR:
+	    t_rd_csr = counters.l1d_accesses;
+	  RDL1IHIT_CSR:
+	    t_rd_csr = counters.l1i_hits;
+	  RDL1IACCESS_CSR:
+	    t_rd_csr = counters.l1i_accesses;
+	  	  
 	  default:
 	    begin
 	       if(t_rd_csr_en)

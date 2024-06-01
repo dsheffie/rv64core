@@ -69,6 +69,22 @@ function csr_t decode_csr(logic [11:0] csr);
        x = RDBRANCH_CSR;
      12'hc04:
        x = RDFAULTEDBRANCH_CSR;
+     12'hc05:
+       x = RDL1DTLBHIT_CSR;
+     12'hc06:
+       x = RDL1DTLBACCESS_CSR;
+     12'hc07:
+       x = RDL1ITLBHIT_CSR;
+     12'hc08:
+       x = RDL1ITLBACCESS_CSR;
+     12'hc09:
+       x = RDL1DHIT_CSR;
+     12'hc0a:
+       x = RDL1DACCESS_CSR;
+     12'hc0b:
+       x = RDL1IHIT_CSR;
+     12'hc0c:
+       x = RDL1IACCESS_CSR;
      12'hf14:
        x = MHARTID;
      default:
@@ -438,7 +454,9 @@ module decode_riscv(
 			7'h0:
 			  begin
 			     uop.op = (rd != 'd0) ? ADDU : NOP;
+`ifdef TWO_SRC_CHEAP
 			     uop.is_cheap_int = 1'b1;
+`endif
 			  end
 			7'h1:
 			  begin
@@ -447,7 +465,9 @@ module decode_riscv(
 			7'h20:
 			  begin
 			     uop.op = (rd != 'd0) ? SUBU : NOP;
+`ifdef TWO_SRC_CHEAP			     
 			     uop.is_cheap_int = 1'b1;
+`endif
 			  end
 			default:
 			  begin
@@ -460,7 +480,9 @@ module decode_riscv(
 			7'd0:
 			  begin
 			     uop.op = (rd != 'd0) ? SLL : NOP;
-			     uop.is_cheap_int = 1'b1;			     
+`ifdef TWO_SRC_CHEAP			     
+			     uop.is_cheap_int = 1'b1;			    
+`endif
 			  end
 			7'h1:
 			  begin
@@ -477,7 +499,9 @@ module decode_riscv(
 			7'd0:
 			  begin
 			     uop.op = (rd != 'd0) ? SLT : NOP;
+`ifdef TWO_SRC_CHEAP
 			     uop.is_cheap_int = 1'b1;
+`endif
 			  end
 			default:
 			  begin
@@ -490,7 +514,9 @@ module decode_riscv(
 			7'h0:
 			  begin
 			     uop.op = (rd != 'd0) ? SLTU : NOP;
+`ifdef TWO_SRC_CHEAP
 			     uop.is_cheap_int = 1'b1;
+`endif			     
 			  end
 			7'h1:
 			  begin
@@ -507,7 +533,9 @@ module decode_riscv(
 			7'h0:
 			  begin
 			     uop.op = (rd != 'd0) ? XOR : NOP;
-			     uop.is_cheap_int = 1'b1;			     
+`ifdef TWO_SRC_CHEAP
+			     uop.is_cheap_int = 1'b1;
+`endif			     
 			  end
 			7'h1:
 			  begin
@@ -524,7 +552,9 @@ module decode_riscv(
 			7'h0:
 			  begin
 			     uop.op = (rd != 'd0) ? SRL : NOP;
-			     uop.is_cheap_int = 1'b1;			     
+`ifdef TWO_SRC_CHEAP			     
+			     uop.is_cheap_int = 1'b1;
+`endif
 			  end
 			7'h1:
 			  begin
@@ -533,7 +563,9 @@ module decode_riscv(
 			7'h20:
 			  begin
 			     uop.op = (rd != 'd0) ? SRA : NOP;
+`ifdef TWO_SRC_CHEAP
 			     uop.is_cheap_int = 1'b1;
+`endif
 			  end
 			default:
 			  begin
@@ -546,7 +578,9 @@ module decode_riscv(
 			7'h0:
 			  begin
 			     uop.op = (rd != 'd0) ? OR : NOP;
+`ifdef TWO_SRC_CHEAP
 			     uop.is_cheap_int = 1'b1;
+`endif
 			  end
 			7'h1:
 			  begin
@@ -563,7 +597,9 @@ module decode_riscv(
 			7'h0:
 			  begin
 			     uop.op = (rd != 'd0) ? AND : NOP;
+`ifdef TWO_SRC_CHEAP
 			     uop.is_cheap_int = 1'b1;
+`endif
 			  end
 			7'h1:
 			  begin
@@ -603,12 +639,16 @@ module decode_riscv(
 		    if(insn[14:12] == 'd0 && insn[31:25] == 'd0)
 		      begin
 			 uop.op = (rd != 'd0) ? ADDW : NOP;
-			 uop.is_cheap_int = 1'b1;		    
+`ifdef TWO_SRC_CHEAP			 
+			 uop.is_cheap_int = 1'b1;
+`endif
 		      end
 		    else if(insn[14:12] == 'd0 && insn[31:25] == 'd32)
 		      begin
 			 uop.op = (rd != 'd0) ? SUBW : NOP;
-			 uop.is_cheap_int = 1'b1;		    
+`ifdef TWO_SRC_CHEAP			 
+			 uop.is_cheap_int = 1'b1;
+`endif
 		      end
 		    else if(insn[14:12] == 'd0 && insn[31:25] == 'd1)
 		      begin
@@ -617,7 +657,9 @@ module decode_riscv(
 		    else if(insn[14:12] == 'd1 && insn[31:25] == 'd0)
 		      begin
 			 uop.op = (rd != 'd0) ? SLLW : NOP;
+`ifdef TWO_SRC_CHEAP
 			 uop.is_cheap_int = 1'b1;
+`endif
 		      end
 		    else if(insn[14:12] == 'd4 && insn[31:25] == 'd1)
 		      begin
@@ -626,7 +668,9 @@ module decode_riscv(
 		    else if(insn[14:12] == 'd5 && insn[31:25] == 'd0)
 		      begin
 			 uop.op = (rd != 'd0) ? SRLW : NOP;
-			 uop.is_cheap_int = 1'b1;			 
+`ifdef TWO_SRC_CHEAP
+			 uop.is_cheap_int = 1'b1;
+`endif
 		      end		    
 		    else if(insn[14:12] == 'd5 && insn[31:25] == 'd1)
 		      begin
@@ -635,7 +679,9 @@ module decode_riscv(
 		    else if(insn[14:12] == 'd5 && insn[31:25] == 'd32)
 		      begin
 			 uop.op = (rd != 'd0) ? SRAW : NOP;
-			 uop.is_cheap_int = 1'b1;			 
+`ifdef TWO_SRC_CHEAP
+			 uop.is_cheap_int = 1'b1;
+`endif
 		      end		    
 		    else if(insn[14:12] == 'd6 && insn[31:25] == 'd1)
 		      begin
@@ -657,7 +703,9 @@ module decode_riscv(
 	       uop.rvimm = w_pc_imm;
 	       uop.br_pred = insn_pred;
 	       uop.is_br = 1'b1;
+`ifdef TWO_SRC_CHEAP
 	       uop.is_cheap_int = 1'b1;
+`endif
 	       case(insn[14:12])
 		 3'd0:
 		   begin
@@ -810,8 +858,10 @@ module decode_riscv(
 					  uop.srcA = 'd0;
 					  uop.srcA_valid = 1'b1;
 					  uop.srcB = 'd0;
-					  uop.srcB_valid = 1'b1;				     
+					  uop.srcB_valid = 1'b1;
+`ifdef TWO_SRC_CHEAP					  
 					  uop.is_cheap_int = 1'b1;
+`endif
 				       end
 				     else if(csr_id == RDCYCLE_CSR)
 				       begin

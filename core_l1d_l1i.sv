@@ -375,7 +375,23 @@ module
 
    wire 	w_l2_probe_val, w_l2_probe_ack;
    wire [(`M_WIDTH-1):0] w_l2_probe_addr;
-
+   
+   wire [63:0]		 w_l1i_tlb_accesses,
+			 w_l1i_tlb_hits, 
+			 w_l1d_tlb_accesses, 
+			 w_l1d_tlb_hits;
+   counters_t t_counters;
+   always_comb
+     begin
+	t_counters.itlb_hits = w_l1i_tlb_hits;
+	t_counters.itlb_accesses = w_l1i_tlb_accesses;
+	t_counters.dtlb_hits = w_l1d_tlb_hits;
+	t_counters.dtlb_accesses = w_l1d_tlb_accesses;
+	t_counters.l1d_hits = l1d_cache_hits;
+	t_counters.l1d_accesses = l1d_cache_accesses;
+	t_counters.l1i_hits = l1i_cache_hits;
+	t_counters.l1i_accesses = l1i_cache_accesses;	
+     end
    
    l2 l2cache (
 	       .clk(clk),
@@ -490,7 +506,9 @@ module
 		.mtimecmp_val(w_mtimecmp_val),
 		 
 	       .cache_accesses(l1d_cache_accesses),
-	       .cache_hits(l1d_cache_hits)
+	       .cache_hits(l1d_cache_hits),
+	       .tlb_hits(w_l1d_tlb_hits),
+	       .tlb_accesses(w_l1d_tlb_accesses)
 	       );
 
    wire [63:0]			    w_l1i_page_walk_req_va;
@@ -591,7 +609,9 @@ module
 	      .mem_rsp_valid(l1i_mem_rsp_valid),
 	      .mem_rsp_load_data(w_l1_mem_load_data),
 	      .cache_accesses(l1i_cache_accesses),
-	      .cache_hits(l1i_cache_hits)	      
+	      .cache_hits(l1i_cache_hits),
+	      .tlb_hits(w_l1i_tlb_hits),
+	      .tlb_accesses(w_l1i_tlb_accesses)	      
 	      );
    	      
    core cpu (
@@ -684,7 +704,8 @@ module
 	     .epc(epc),
 	     .core_mark_dirty_valid(w_core_mark_dirty_valid),
 	     .core_mark_dirty_addr(w_core_mark_dirty_addr),
-	     .core_mark_dirty_rsp_valid(w_core_mark_dirty_rsp_valid)
+	     .core_mark_dirty_rsp_valid(w_core_mark_dirty_rsp_valid),
+	     .counters(t_counters)
 	     );
    
 
@@ -787,7 +808,6 @@ module core_l1d_l1i(clk,
    output logic [63:0] 			l2_cache_accesses;
    output logic [63:0] 			l2_cache_hits;   
 
-   
    /* mem port */
    output logic 			mem_req_valid;
    output logic [31:0] 		mem_req_addr;
@@ -842,6 +862,8 @@ module core_l1d_l1i(clk,
    
    wire [63:0]					 w_epc64;
    assign epc = w_epc64[31:0];
+   
+
    
    
    core_l1d_l1i_64 c(

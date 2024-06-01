@@ -135,7 +135,9 @@ module l1i(clk,
 	   mem_rsp_valid,
 	   mem_rsp_load_data,
 	   cache_accesses,
-	   cache_hits
+	   cache_hits,
+	   tlb_accesses,
+	   tlb_hits
 	   );
 
    input logic clk;
@@ -211,6 +213,8 @@ module l1i(clk,
    input logic [L1I_CL_LEN_BITS-1:0] 	  mem_rsp_load_data;
    output logic [63:0] 			  cache_accesses;
    output logic [63:0] 			  cache_hits;
+   output logic [63:0] 			  tlb_accesses;
+   output logic [63:0] 			  tlb_hits;   
 
    wire 				  in_32b_mode = mode64==1'b0;
       
@@ -1052,24 +1056,27 @@ endfunction
 
 
    
-   tlb #(.LG_N(3), .ISIDE(0)) itlb(
-	   .clk(clk), 
-	   .reset(reset),
-	   .priv(priv),
-	   .clear(clear_tlb),
-	   .active(paging_active),
-	   .req(n_req),
-	   .va(n_cache_pc),
-	   .pa(w_tlb_pc),
-	   .hit(w_tlb_hit),
-	   .dirty(),
-	   .readable(),
-	   .writable(),
-	   .user(),
-           .replace_va(r_miss_pc),			
-	   .replace(t_reload_tlb),			
-	   .page_walk_rsp(page_walk_rsp)
-	   );
+   tlb #(.LG_N(3), .ISIDE(0)) 
+   itlb(
+	.clk(clk), 
+	.reset(reset),
+	.priv(priv),
+	.clear(clear_tlb),
+	.active(paging_active),
+	.req(n_req),
+	.va(n_cache_pc),
+	.pa(w_tlb_pc),
+	.hit(w_tlb_hit),
+	.dirty(),
+	.readable(),
+	.writable(),
+	.user(),
+	.tlb_hits(tlb_hits),
+	.tlb_accesses(tlb_accesses),	
+	.replace_va(r_miss_pc),			
+	.replace(t_reload_tlb),			
+	.page_walk_rsp(page_walk_rsp)
+	);
    
    
 `ifdef VERILATOR

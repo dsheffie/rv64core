@@ -143,5 +143,17 @@ typedef struct packed {
    logic [1:0]	pgsize;
 } page_walk_rsp_t;
 
+typedef struct packed {
+   logic [63:0]	itlb_hits;
+   logic [63:0]	itlb_accesses;
+   logic [63:0]	dtlb_hits;
+   logic [63:0]	dtlb_accesses;
+   logic [63:0]	l1d_hits;
+   logic [63:0]	l1d_accesses;
+   logic [63:0]	l1i_hits;
+   logic [63:0]	l1i_accesses;   
+} counters_t;
+
+
 
 `endif

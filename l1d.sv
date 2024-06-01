@@ -63,7 +63,9 @@ module l1d(clk,
 	   mtimecmp,
 	   mtimecmp_val,
 	   cache_accesses,
-	   cache_hits
+	   cache_hits,
+	   tlb_accesses,
+	   tlb_hits
 	   );
 
    localparam L1D_NUM_SETS = 1 << `LG_L1D_NUM_SETS;
@@ -135,6 +137,9 @@ module l1d(clk,
       
    output logic [63:0] 			 cache_accesses;
    output logic [63:0] 			 cache_hits;
+
+   output logic [63:0]			 tlb_accesses;
+   output logic [63:0] 			 tlb_hits;
    
          
    localparam LG_WORDS_PER_CL = `LG_L1D_CL_LEN - 2;
@@ -902,6 +907,8 @@ module l1d(clk,
 	    .readable(w_tlb_readable),
 	    .writable(w_tlb_writable),
 	    .user(w_tlb_user),
+            .tlb_hits(tlb_hits),
+            .tlb_accesses(tlb_accesses),			
             .replace_va(r_tlb_addr),
 	    .replace(t_reload_tlb),
 	    .page_walk_rsp(page_walk_rsp)

@@ -62,7 +62,11 @@ module rf6r3w(clk,
 	if(wen2)
 	  r_ram[wrptr2] <= wr2;
 	rd4 <= rdptr4=='d0 ? 'd0 : r_ram[rdptr4];
-	rd5 <= rdptr5=='d0 ? 'd0 : r_ram[rdptr5];	
+ `ifdef TWO_SRC_CHEAP			 	
+	rd5 <= rdptr5=='d0 ? 'd0 : r_ram[rdptr5];
+ `else
+	rd5 <= 'd0;
+ `endif
 `endif
      end // always_ff@ (posedge clk)   
 

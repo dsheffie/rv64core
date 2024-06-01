@@ -13,6 +13,8 @@ module tlb(clk,
 	   readable,
 	   writable,
 	   user,
+	   tlb_hits,
+	   tlb_accesses,
 	   replace_va,
 	   replace,
 	   page_walk_rsp);
@@ -32,6 +34,10 @@ module tlb(clk,
    output logic	       readable;
    output logic	       writable;
    output logic        user;
+
+   output logic [63:0] tlb_hits;
+   output logic [63:0] tlb_accesses;
+   
    input logic [63:0]  replace_va;
    input logic	       replace;
    input 	       page_walk_rsp_t page_walk_rsp;
@@ -83,6 +89,24 @@ module tlb(clk,
    ffs(.in(w_hits),
        .y(w_idx));
 
+
+   always_ff@(posedge clk)
+     begin
+	if(reset)
+	  begin
+	     tlb_hits <= 'd0;
+	     tlb_accesses <= 'd0;
+	  end
+	else
+	  begin
+	     tlb_hits <= (active & req & |w_hits) ? 
+			 tlb_hits + 'd1 : 
+			 tlb_hits;
+	     tlb_accesses <= (active & req) ?
+			     tlb_accesses + 'd1 : 
+			     tlb_accesses;
+	  end
+     end
    
    always_ff@(posedge clk)
      begin

@@ -126,7 +126,9 @@ module core(clk,
 	    epc,
 	    core_mark_dirty_valid,
 	    core_mark_dirty_addr,
-	    core_mark_dirty_rsp_valid);
+	    core_mark_dirty_rsp_valid,
+	    counters
+	    );
    input logic clk;
    input logic reset;
    output logic [7:0] putchar_fifo_out;
@@ -244,6 +246,9 @@ module core(clk,
    output logic				  core_mark_dirty_valid;
    output [63:0]			  core_mark_dirty_addr;
    input logic				  core_mark_dirty_rsp_valid;   
+
+   input	      counters_t counters;
+   
    
    localparam N_PRF_ENTRIES = (1<<`LG_PRF_ENTRIES);
    localparam N_ROB_ENTRIES = (1<<`LG_ROB_ENTRIES);
@@ -2182,7 +2187,8 @@ module core(clk,
 	   .mtimecmp(mtimecmp),
 	   .mtimecmp_val(mtimecmp_val),	     	   
 	   .branch_valid(r_branch_valid),
-	   .branch_fault(r_branch_fault)
+	   .branch_fault(r_branch_fault),
+	   .counters(counters)
 	   );
 
 
