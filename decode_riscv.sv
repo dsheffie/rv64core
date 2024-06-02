@@ -410,7 +410,7 @@ module decode_riscv(
 			end		      
 		      5'd2: /* load linked - punt */
 			begin
-			   uop.op = insn[14:12]==3'd2 ? LW : LD;
+			   uop.op = insn[14:12]==3'd2 ? LRW : LRD;
 			end
 		      5'd3: /* store conditional */
 			begin

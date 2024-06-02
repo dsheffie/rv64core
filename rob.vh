@@ -82,6 +82,7 @@ typedef struct packed {
    logic 	is_store;
    logic 	is_load;
    logic	is_atomic;
+   logic	is_ll;
    mem_op_t op;
    logic [4:0]	amo_op;
    logic 	spans_cacheline;

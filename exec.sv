@@ -2934,7 +2934,7 @@ module exec(clk,
 	t_mem_tail.has_cause = 1'b0;
 	t_mem_tail.cause = MISALIGNED_FETCH;
 	t_mem_tail.uncachable = 1'b0;
-	
+	t_mem_tail.is_ll = 1'b0;
 `ifdef ENABLE_CYCLE_ACCOUNTING
 	t_mem_tail.fetch_cycle = mem_uq.fetch_cycle;
 	t_mem_tail.restart_id = r_restart_counter;
@@ -3005,8 +3005,25 @@ module exec(clk,
 	       t_mem_tail.dst_ptr = mem_uq.dst;
 	       t_mem_tail.spans_cacheline = (w_agu_addr[2:0] != 3'd0);
 	       t_mem_tail.unaligned = |w_agu_addr[2:0];
-	    end // case: SW	  
-	  
+	    end // case: SW
+	  LRW:
+	    begin
+	       t_mem_tail.op = MEM_LW;
+	       t_mem_tail.is_ll = 1'b1;	       
+	       t_mem_tail.dst_valid = mem_uq.dst_valid;
+	       t_mem_tail.dst_ptr = mem_uq.dst;
+	       t_mem_tail.spans_cacheline = (w_agu_addr[1:0] != 2'd0);
+	       t_mem_tail.unaligned = |w_agu_addr[1:0];
+	    end // case: SW
+	 LRD:
+	    begin
+	       t_mem_tail.op = MEM_LD;
+	       t_mem_tail.is_ll = 1'b1;
+	       t_mem_tail.dst_valid = mem_uq.dst_valid;
+	       t_mem_tail.dst_ptr = mem_uq.dst;
+	       t_mem_tail.spans_cacheline = (w_agu_addr[2:0] != 3'd0);
+	       t_mem_tail.unaligned = |w_agu_addr[2:0];
+	    end // case: SW	  // 	  
 	  LW:
 	    begin
 	       t_mem_tail.is_load = 1'b1;

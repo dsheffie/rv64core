@@ -467,7 +467,18 @@ void record_retirement(long long pc,
 
   uint32_t insn = get_insn(pc, s);
   uint64_t delta = retire_cycle - last_retire_cycle;
-
+  static int64_t max_t = 0;
+  int64_t t = retire_cycle-fetch_cycle;
+  
+  if(t >= max_t ) {
+    max_t = t;
+    uint32_t insn = get_insn(pc, s);
+    uint32_t opcode = insn & 127;
+    auto disasm = getAsmString(insn, pc);
+    //printf("new max_t = %ld, op %s\n", max_t, disasm.c_str());
+    // printf("f %ld, a %ld, c %ld, r %ld\n", fetch_cycle, alloc_cycle, complete_cycle, retire_cycle);
+  }
+  
   if(retire_reg_val) {
     pl_regs[retire_reg_ptr & 31] = retire_reg_data;
   }

@@ -914,6 +914,34 @@ module l1d(clk,
 	    .page_walk_rsp(page_walk_rsp)
 	    );
 
+
+   logic t_wr_link_reg;
+   logic r_paging_active;   
+   logic [63:0]	n_link_reg, r_link_reg;
+
+   always_ff@(posedge clk)
+     begin
+	r_paging_active <= reset ? 1'b0 : paging_active;
+     end
+
+
+   wire w_paging_toggle = r_paging_active ^ paging_active;
+   
+   always_ff@(posedge clk)
+     begin
+	if(reset)
+	  begin
+	     r_link_reg <= 64'd0;
+	  end
+	else if(w_paging_toggle)
+	  begin
+	     r_link_reg <= 'd0;
+	  end
+	else if(t_wr_link_reg)
+	  begin
+	     r_link_reg <= n_link_reg;
+	  end
+     end
    
    
    always_comb
@@ -925,6 +953,7 @@ module l1d(clk,
 	t_rsp_data2 = 'd0;
 
 	t_shift_2 = t_data2 >> {r_req2.addr[`LG_L1D_CL_LEN-1:0], 3'd0};
+
 	
 	case(r_req2.op)
 	  MEM_LB:
@@ -1028,7 +1057,8 @@ module l1d(clk,
 	  end
      end // always_ff@ (negedge clk)
 `endif
-   
+
+   wire w_match_link = {r_req.addr[63:4], 4'd0} == r_link_reg;
    always_comb
      begin
 	t_data = mem_rsp_valid ? mem_rsp_load_data : 
@@ -1052,6 +1082,10 @@ module l1d(clk,
 	t_amo32_data = 32'hdeadbeef;
 	t_amo64_data = 64'hd0debabefacebeef;
 
+	t_wr_link_reg = 1'b0;
+	n_link_reg = r_link_reg;
+
+	
 	case(r_req.amo_op)
 	  5'd0: /* amoadd */
 	    begin
@@ -1110,6 +1144,8 @@ module l1d(clk,
 	    begin
 	       t_rsp_data = {{32{t_shift[31]}}, t_shift[31:0]};	       
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
+	       t_wr_link_reg = r_req.is_ll;
+	       n_link_reg = {r_req.addr[63:4], 4'd0};	       
 	    end
 	  MEM_LWU:
 	    begin
@@ -1120,6 +1156,8 @@ module l1d(clk,
 	    begin
 	       t_rsp_data = t_shift[63:0];	       
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
+	       t_wr_link_reg = r_req.is_ll;
+	       n_link_reg = {r_req.addr[63:4], 4'd0};
 	    end	  
 	  MEM_SB:
 	    begin
@@ -1144,16 +1182,18 @@ module l1d(clk,
 	    end
 	  MEM_SCD:
 	    begin
-	       t_rsp_data = 64'd0;
+	       t_rsp_data = {63'd0, ~w_match_link};
 	       t_array_data = (t_store_shift & t_store_mask) | ((~t_store_mask) & t_data);
-	       t_wr_store = t_hit_cache && (r_is_retry || r_did_reload) & (!r_req.has_cause);
+	       t_wr_store = w_match_link && t_hit_cache && 
+			    (r_is_retry || r_did_reload) & (!r_req.has_cause);
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
 	    end
 	  MEM_SCW:
 	    begin
-	       t_rsp_data = 64'd0;
+	       t_rsp_data = {63'd0, ~w_match_link};	       
 	       t_array_data = (t_store_shift & t_store_mask) | ((~t_store_mask) & t_data);
-	       t_wr_store = t_hit_cache && (r_is_retry || r_did_reload) & (!r_req.has_cause);
+	       t_wr_store = w_match_link && t_hit_cache && 
+			    (r_is_retry || r_did_reload) & (!r_req.has_cause);
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
 	    end
 	  MEM_AMOW:
@@ -1395,7 +1435,7 @@ module l1d(clk,
 		      begin
 			 t_push_miss = 1'b1;			 
 		      end
-		    else if(r_req2.is_atomic)
+		    else if(r_req2.is_atomic || r_req2.is_ll)
 		      begin
 			 t_push_miss = 1'b1;
 		      end
