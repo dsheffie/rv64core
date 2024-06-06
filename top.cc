@@ -719,7 +719,7 @@ int main(int argc, char **argv) {
   }
   
   s->pc = ss->pc;
-  signal(SIGINT, catchUnixSignal);
+  //signal(SIGINT, catchUnixSignal);
   
   double t0 = timestamp();
   if(setjmp(jenv) > 0) {
@@ -836,6 +836,7 @@ int main(int argc, char **argv) {
     
     if(tb->retire_valid) {
       ++insns_retired;
+      if(tb->took_irq) printf("an interrupt has occured!\n");
       if(last_retire > 1) {
 	pushout_histo[tb->retire_pc] += last_retire;
       }
@@ -843,9 +844,9 @@ int main(int argc, char **argv) {
 
       last_retired_pc = tb->retire_pc;
 
-      if(insns_retired >= start_trace_at) {
-	globals::log = trace_retirement = true;
-      }
+      //if(insns_retired >= start_trace_at) {
+      //globals::log = trace_retirement = true;
+      //}
 
       if(((insns_retired % heartbeat) == 0) or trace_retirement ) {
 
@@ -922,7 +923,8 @@ int main(int argc, char **argv) {
 	if(mismatch and not(exception)) {
 	  std::cout << "mismatch without an exception at icnt " << insns_retired << "\n";
 	  std::cout << std::hex << "last match " << std::hex << last_match_pc << std::dec << "\n";
-	  std::cout << std::hex << tb->retire_pc << "," << initial_pc << std::dec << "\n";
+	  std::cout << std::hex << "rtl : " << tb->retire_pc << ", sim : " << initial_pc << std::dec << "\n";
+	  std::cout << "irq : " << static_cast<int>(tb->took_irq) << "\n";
 	  break;
 	}
 	

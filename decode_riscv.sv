@@ -85,6 +85,10 @@ function csr_t decode_csr(logic [11:0] csr);
        x = RDL1IHIT_CSR;
      12'hc0c:
        x = RDL1IACCESS_CSR;
+     12'hc0d:
+       x = RDL2HIT_CSR;
+     12'hc0e:
+       x = RDL2ACCESS_CSR;
      12'hf14:
        x = MHARTID;
      default:

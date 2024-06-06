@@ -118,6 +118,7 @@ module core(clk,
 	    monitor_ack,
 	    mtimecmp,
 	    mtimecmp_val,
+	    took_irq,
 	    got_break,
 	    got_ud,
 	    got_bad_addr,
@@ -234,11 +235,11 @@ module core(clk,
    input logic [63:0]		      mtimecmp;
    input logic			      mtimecmp_val;
    
-   
-   output logic 			  got_break;
-   output logic 			  got_ud;
-   output logic 			  got_bad_addr;
-   output logic 			  got_monitor;
+   output logic			      took_irq;
+   output logic			      got_break;
+   output logic			      got_ud;
+   output logic			      got_bad_addr;
+   output logic			      got_monitor;
    
    output logic [`LG_ROB_ENTRIES:0] 	  inflight;
    output logic [`M_WIDTH-1:0] 		  epc;
@@ -329,7 +330,8 @@ module core(clk,
    
    logic 		     t_alloc, t_alloc_two, t_retire, t_retire_two,
 			     t_rat_copy, t_clr_rob;
-
+   logic		     t_took_irq, r_took_irq;
+   
    logic 		     t_possible_to_alloc;
    
    
@@ -474,27 +476,6 @@ module core(clk,
    wire [5:0] 	w_irq_id;
    find_first_set#(5) irq_ffs(.in(w_enabled_irqs[31:0]),
 			      .y(w_irq_id));
-
-   // logic [63:0]	r_last_timer, rc;
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if(mtimecmp_val) rc <= mtimecmp;
-   // 	if(r_state == ARCH_FAULT & r_irq & (t_rob_head.cause == 'd5))
-   // 	  begin
-   // 	     r_last_timer <= r_cycle;
-   // 	     $display("last timer irq was %d cycles ago, rc %d", 
-   // 		      r_cycle - r_last_timer, rc);
-   // 	  end
-   //   end
-   
-   // 	if(w_any_irq && r_state == ACTIVE)
-   // 	  begin
-   // 	     $display(">>>> w_irq_id = %d, r_priv %d, mie %b sie %b pending %b, cycle %d", 
-   // 		      w_irq_id, w_priv, w_mstatus_mie, w_mstatus_sie, 
-   // 		      w_enabled_irqs[31:0],
-   // 		      r_cycle);
-   // 	  end
-   //   end
    
    logic t_divide_ready;
    
@@ -518,7 +499,7 @@ module core(clk,
    assign flush_cl_req = r_flush_cl_req;
    assign flush_cl_addr = r_flush_cl_addr;
 
-   
+   assign took_irq = r_took_irq;
    assign got_break = r_got_break;
    assign got_ud = r_got_ud;
    assign got_bad_addr = r_got_bad_addr;
@@ -688,6 +669,29 @@ module core(clk,
 	     r_tval <= n_tval;
 	     r_pending_fault <= n_pending_fault;
 	  end
+     end // always_ff@ (posedge clk)
+
+   always_ff@(posedge clk)
+     begin
+	if(reset)
+	  begin
+	     r_took_irq <= 1'b0;
+	  end
+	else
+	  begin
+	     if(t_retire)
+	       begin
+		  if(r_took_irq)
+		    $display("clearing took irq at cycle %d, retire pc %x", r_cycle, t_rob_head.pc);
+		  r_took_irq <= 1'b0;
+	       end
+	     else if(t_took_irq)
+	       begin
+
+		  $display("setting took irq at cycle %d", r_cycle);
+		  r_took_irq <= 1'b1;
+	       end
+	  end
      end
 
    always_ff@(posedge clk)
@@ -833,7 +837,6 @@ module core(clk,
 `ifdef DUMP_ROB
    always_ff@(negedge clk)
      begin
-
 	if(r_cycle >= 'd3106120 )
 	  begin 
 	     $display("cycle %d : state = %d, alu complete %b, mem complete %b,head_ptr %d, complete %b,  can_retire_rob_head %b, head pc %x, empty %b, full %b, bob full %b", 
@@ -933,7 +936,7 @@ module core(clk,
 	n_l1i_flush_complete = r_l1i_flush_complete || l1i_flush_complete;
 	n_l1d_flush_complete = r_l1d_flush_complete || l1d_flush_complete;
 	n_l2_flush_complete = r_l2_flush_complete || l2_flush_complete;
-	
+	t_took_irq = 1'b0;
 	
 	if(r_state == ACTIVE)
 	  begin
@@ -967,12 +970,11 @@ module core(clk,
 			      n_state = ARCH_FAULT;
 			      n_cause = t_rob_head.cause;
 			      n_epc = t_rob_head.pc;
-			      //$display("n_epc = %x, t_rob_head.pc = %x, t_arch_fault = %b, w_any_irq = %b, cycle %d", 
-			      //n_epc, t_rob_head.pc, t_arch_fault, w_any_irq, r_cycle);
+			      $display("n_epc = %x, t_rob_head.pc = %x, t_arch_fault = %b, w_any_irq = %b, cycle %d", 
+				       n_epc, t_rob_head.pc, t_arch_fault, w_any_irq, r_cycle);
  
 			      n_tval = 'd0;
 			      n_irq = t_rob_head.is_irq;
-			      
 //`ifdef VERILATOR
 //			      start_log(w_any_irq ? 32'd1 : 32'd0);
 //`endif
@@ -1307,7 +1309,8 @@ module core(clk,
 		    n_restart_pc = w_exc_pc;
 		    n_restart_valid = 1'b1;
 		    if(n_got_restart_ack) $stop();
-		    n_irq = 1'b0;
+		     t_took_irq = r_irq;
+		     n_irq = 1'b0;
 		    n_state = DRAIN;
 		    //$display("restarting cycle %d, paging %b, priv %d, new pc %x", 
 		    //r_cycle, paging_active, w_priv, w_exc_pc);

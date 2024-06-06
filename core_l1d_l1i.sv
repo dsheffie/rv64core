@@ -65,6 +65,7 @@ module
 		       l2_cache_accesses,
 		       l2_cache_hits,
 		       monitor_ack,
+		   took_irq,
 		       got_break,
 		       got_ud,
 		       got_bad_addr,
@@ -141,6 +142,7 @@ module
    output logic [(`M_WIDTH-1):0] 	  retire_pc;
    output logic [(`M_WIDTH-1):0] 	  retire_two_pc;
    input logic 				  monitor_ack;
+   output logic				  took_irq;
    output logic 			  got_break;
    output logic 			  got_ud;
    output logic 			  got_bad_addr;
@@ -390,7 +392,9 @@ module
 	t_counters.l1d_hits = l1d_cache_hits;
 	t_counters.l1d_accesses = l1d_cache_accesses;
 	t_counters.l1i_hits = l1i_cache_hits;
-	t_counters.l1i_accesses = l1i_cache_accesses;	
+	t_counters.l1i_accesses = l1i_cache_accesses;
+	t_counters.l2_hits = l2_cache_hits;
+	t_counters.l2_accesses = l2_cache_accesses;
      end
    
    l2 l2cache (
@@ -695,7 +699,8 @@ module
 	     .retired_rob_ptr_two(retired_rob_ptr_two),
 	     .monitor_ack(monitor_ack),
 	     .mtimecmp(w_mtimecmp),
-	     .mtimecmp_val(w_mtimecmp_val),	     
+	     .mtimecmp_val(w_mtimecmp_val),
+	     .took_irq(took_irq),
 	     .got_break(got_break),
 	     .got_ud(got_ud),
 	     .got_bad_addr(got_bad_addr),
@@ -765,6 +770,7 @@ module core_l1d_l1i(clk,
 		    l2_cache_accesses,
 		    l2_cache_hits,
 		    monitor_ack,
+		    took_irq,
 		    got_break,
 		    got_ud,
 		    got_bad_addr,
@@ -834,6 +840,7 @@ module core_l1d_l1i(clk,
    output logic [31:0]				 retire_pc;
    output logic [31:0]				 retire_two_pc;
    input logic					 monitor_ack;
+   output logic					 took_irq;
    output logic					 got_break;
    output logic					 got_ud;
    output logic					 got_bad_addr;
@@ -917,6 +924,7 @@ module core_l1d_l1i(clk,
                      .l2_cache_accesses(l2_cache_accesses),
                      .l2_cache_hits(l2_cache_hits),
                      .monitor_ack(monitor_ack),
+		     .took_irq(took_irq),
                      .got_break(got_break),
                      .got_ud(got_ud),
                      .got_bad_addr(got_bad_addr),

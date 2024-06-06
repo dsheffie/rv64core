@@ -2556,6 +2556,10 @@ module exec(clk,
 	    t_rd_csr = counters.l1i_hits;
 	  RDL1IACCESS_CSR:
 	    t_rd_csr = counters.l1i_accesses;
+	  RDL2HIT_CSR:
+	    t_rd_csr = counters.l2_hits;
+	  RDL2ACCESS_CSR:
+	    t_rd_csr = counters.l2_accesses;
 	  	  
 	  default:
 	    begin

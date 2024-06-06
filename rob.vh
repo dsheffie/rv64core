@@ -153,6 +153,8 @@ typedef struct packed {
    logic [63:0]	l1d_accesses;
    logic [63:0]	l1i_hits;
    logic [63:0]	l1i_accesses;   
+   logic [63:0]	l2_hits;
+   logic [63:0]	l2_accesses;   
 } counters_t;
 
 

@@ -1427,14 +1427,14 @@ void execRiscv(state_t *s) {
 	int mpp = (s->mstatus >> MSTATUS_MPP_SHIFT) & 3;
 	/* set the IE state to previous IE state */
 	int mpie = (s->mstatus >> MSTATUS_MPIE_SHIFT) & 1;
-	printf("mpp = %d, mpie = %d\n", mpp, mpie);
+	//printf("mpp = %d, mpie = %d\n", mpp, mpie);
 	int64_t old = s->mstatus;
 	s->mstatus = (s->mstatus & ~(1 << mpp)) |(mpie << mpp);
 	/* set MPIE to 1 */
 	s->mstatus |= MSTATUS_MPIE;
 	/* set MPP to U */
 	s->mstatus &= ~MSTATUS_MPP;
-	printf("mret mstatus %lx, old %lx\n", s->mstatus, old);
+	//printf("mret mstatus %lx, old %lx\n", s->mstatus, old);
 	//exit(-1);
 	set_priv(s, mpp);
 	s->pc = s->mepc;
