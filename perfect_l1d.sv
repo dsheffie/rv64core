@@ -175,7 +175,6 @@ module perfect_l1d(clk,
    logic 				  r_got_req2, r_last_wr2, n_last_wr2;
    logic 				  r_last_rd2, n_last_rd2;
    
-   logic 				  rr_got_req, rr_last_wr, rr_is_retry;
 
    
    logic [LG_MRQ_SZ:0] 		  r_n_inflight;   
@@ -183,15 +182,13 @@ module perfect_l1d(clk,
 
    
    //1st read port
-   logic [`LG_L1D_NUM_SETS-1:0] 	  t_cache_idx, r_cache_idx, rr_cache_idx;
+   logic [`LG_L1D_NUM_SETS-1:0] 	  t_cache_idx, r_cache_idx;
    logic [N_TAG_BITS-1:0] 		  t_cache_tag, r_cache_tag;
 
-   logic 				  r_valid_out, r_dirty_out;
    logic [L1D_CL_LEN_BITS-1:0] 		  t_data;
    
    //2nd read port
    logic [`LG_L1D_NUM_SETS-1:0] 	  t_cache_idx2, r_cache_idx2;
-   logic 				  r_valid_out2, r_dirty_out2;
    
    
 
@@ -577,14 +574,10 @@ module perfect_l1d(clk,
 	     r_cache_idx <= 'd0;
 	     r_cache_tag <= 'd0;
 	     r_cache_idx2 <= 'd0;
-	     rr_cache_idx <= 'd0;
 	     r_got_req <= 1'b0;
 	     r_got_req2 <= 1'b0;
 	     
-	     rr_got_req <= 1'b0;
-	     rr_is_retry <= 1'b0;
 	     
-	     rr_last_wr <= 1'b0;
 	     r_last_wr <= 1'b0;
 	     r_last_rd <= 1'b0;
 	     r_last_wr2 <= 1'b0;
@@ -611,15 +604,10 @@ module perfect_l1d(clk,
 	     r_cache_tag <= t_cache_tag;
 	     
 	     r_cache_idx2 <= t_cache_idx2;
-	     rr_cache_idx <= r_cache_idx;
 	     
 	     r_got_req <= t_got_req;
 	     r_got_req2 <= t_got_req2;
 	     
-	     rr_got_req <= r_got_req;
-	     rr_is_retry <= r_is_retry;
-	     
-	     rr_last_wr <= r_last_wr;
 	     r_last_wr <= n_last_wr;
 	     r_last_rd <= n_last_rd;
 	     r_last_wr2 <= n_last_wr2;
@@ -654,13 +642,6 @@ module perfect_l1d(clk,
 
 
 
-   always_ff@(posedge clk)
-     begin
-	r_dirty_out <= 1'b0;
-	r_dirty_out2 <= 1'b0;
-	r_valid_out <= 1'b1;
-	r_valid_out2 <= 1'b1;
-     end
    
 
 
@@ -1216,21 +1197,18 @@ module perfect_l1d(clk,
 	       
 	       if(r_got_req)
 		 begin
-		    if(r_valid_out /*&& (r_tag_out == r_cache_tag)*/)
-		      begin /* valid cacheline - hit in cache */
-			 if(r_req.is_store)
-			   begin
-			      t_reset_graduated = 1'b1;				   
-			   end
-			 else
-			   begin
-			      n_core_mem_rsp.data = t_rsp_data[63:0];
-			      n_core_mem_rsp.has_cause = t_pf;
-			      n_core_mem_rsp.cause = LOAD_PAGE_FAULT;
-			      n_core_mem_rsp.dst_valid = t_rsp_dst_valid;
-			      n_core_mem_rsp_valid = 1'b1;
-			   end // else: !if(r_req.is_store)
-		      end // if (r_valid_out && (r_tag_out == r_cache_tag))
+		    if(r_req.is_store)
+		      begin
+			 t_reset_graduated = 1'b1;				   
+		      end
+		    else
+		      begin
+			 n_core_mem_rsp.data = t_rsp_data[63:0];
+			 n_core_mem_rsp.has_cause = t_pf;
+			 n_core_mem_rsp.cause = LOAD_PAGE_FAULT;
+			 n_core_mem_rsp.dst_valid = t_rsp_dst_valid;
+			 n_core_mem_rsp_valid = 1'b1;
+		      end // else: !if(r_req.is_store)
 		 end // if (r_got_req)
 
 	       
