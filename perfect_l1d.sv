@@ -157,9 +157,8 @@ module perfect_l1d(clk,
         
 `ifdef VERILATOR
          
-   localparam LG_WORDS_PER_CL = `LG_L1D_CL_LEN - 2;
-   localparam LG_DWORDS_PER_CL = `LG_L1D_CL_LEN - 3;
-   
+   localparam LG_WORDS_PER_CL = 2;
+   localparam LG_DWORDS_PER_CL = 1;
    localparam WORDS_PER_CL = 1<<(LG_WORDS_PER_CL);
    localparam N_TAG_BITS = `M_WIDTH - `LG_L1D_NUM_SETS - `LG_L1D_CL_LEN;
    localparam IDX_START = `LG_L1D_CL_LEN;
@@ -167,8 +166,8 @@ module perfect_l1d(clk,
    localparam WORD_START = 2;
    localparam WORD_STOP = WORD_START+LG_WORDS_PER_CL;
 
-  
-   localparam N_MQ_ENTRIES = (1<<`LG_MRQ_ENTRIES);
+   localparam LG_MRQ_SZ = 4;
+   localparam N_MQ_ENTRIES = (1<<LG_MRQ_SZ);
 
    
    logic 				  r_got_req, r_last_wr, n_last_wr;
@@ -179,25 +178,22 @@ module perfect_l1d(clk,
    logic 				  rr_got_req, rr_last_wr, rr_is_retry;
 
    
-   logic [`LG_MRQ_ENTRIES:0] 		  r_n_inflight;   
+   logic [LG_MRQ_SZ:0] 		  r_n_inflight;   
 
 
    
    //1st read port
    logic [`LG_L1D_NUM_SETS-1:0] 	  t_cache_idx, r_cache_idx, rr_cache_idx;
    logic [N_TAG_BITS-1:0] 		  t_cache_tag, r_cache_tag;
-   logic [N_TAG_BITS-1:0] 		  rr_cache_tag;
+
    logic 				  r_valid_out, r_dirty_out;
    logic [L1D_CL_LEN_BITS-1:0] 		  t_data;
    
    //2nd read port
    logic [`LG_L1D_NUM_SETS-1:0] 	  t_cache_idx2, r_cache_idx2;
-   logic [N_TAG_BITS-1:0] 		  t_cache_tag2, r_cache_tag2;
    logic 				  r_valid_out2, r_dirty_out2;
    
    
-   logic [`LG_L1D_NUM_SETS-1:0] 	  t_miss_idx, r_miss_idx;
-   logic [`M_WIDTH-1:0] 		  t_miss_addr, r_miss_addr;
 
    //write port   
  
@@ -261,9 +257,9 @@ module perfect_l1d(clk,
 
    
    mem_req_t r_mem_q[N_MQ_ENTRIES-1:0];
-   logic [`LG_MRQ_ENTRIES:0] r_mq_head_ptr, n_mq_head_ptr;
-   logic [`LG_MRQ_ENTRIES:0] r_mq_tail_ptr, n_mq_tail_ptr;
-   logic [`LG_MRQ_ENTRIES:0] t_mq_tail_ptr_plus_one;
+   logic [LG_MRQ_SZ:0] r_mq_head_ptr, n_mq_head_ptr;
+   logic [LG_MRQ_SZ:0] r_mq_tail_ptr, n_mq_tail_ptr;
+   logic [LG_MRQ_SZ:0] t_mq_tail_ptr_plus_one;
 
    
    logic [N_MQ_ENTRIES-1:0] r_mq_addr_valid;
@@ -407,15 +403,15 @@ module perfect_l1d(clk,
 	     n_mq_head_ptr = r_mq_head_ptr + 'd1;
 	  end
 	
-	t_mem_head = r_mem_q[r_mq_head_ptr[`LG_MRQ_ENTRIES-1:0]];
+	t_mem_head = r_mem_q[r_mq_head_ptr[LG_MRQ_SZ-1:0]];
 	
 	mem_q_empty = (r_mq_head_ptr == r_mq_tail_ptr);
 	
 	mem_q_full = (r_mq_head_ptr != r_mq_tail_ptr) &&
-		     (r_mq_head_ptr[`LG_MRQ_ENTRIES-1:0] == r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]);
+		     (r_mq_head_ptr[LG_MRQ_SZ-1:0] == r_mq_tail_ptr[LG_MRQ_SZ-1:0]);
 	
 	mem_q_almost_full = (r_mq_head_ptr != t_mq_tail_ptr_plus_one) &&
-			    (r_mq_head_ptr[`LG_MRQ_ENTRIES-1:0] == t_mq_tail_ptr_plus_one[`LG_MRQ_ENTRIES-1:0]);
+			    (r_mq_head_ptr[LG_MRQ_SZ-1:0] == t_mq_tail_ptr_plus_one[LG_MRQ_SZ-1:0]);
 	
 	
      end // always_comb
@@ -493,8 +489,8 @@ module perfect_l1d(clk,
      begin
 	if(t_push_miss)
 	  begin
-	     r_mem_q[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0] ] <= r_req2;
-	     r_mq_addr[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]] <= r_req2.addr[IDX_STOP-1:IDX_START];
+	     r_mem_q[r_mq_tail_ptr[LG_MRQ_SZ-1:0] ] <= r_req2;
+	     r_mq_addr[r_mq_tail_ptr[LG_MRQ_SZ-1:0]] <= r_req2.addr[IDX_STOP-1:IDX_START];
 	  end
      end
 
@@ -508,11 +504,11 @@ module perfect_l1d(clk,
 	  begin
 	     if(t_push_miss)
 	       begin
-		  r_mq_addr_valid[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]] <= 1'b1;
+		  r_mq_addr_valid[r_mq_tail_ptr[LG_MRQ_SZ-1:0]] <= 1'b1;
 	       end
 	     if(t_pop_mq)
 	       begin
-		  r_mq_addr_valid[r_mq_head_ptr[`LG_MRQ_ENTRIES-1:0]] <= 1'b0;		  
+		  r_mq_addr_valid[r_mq_head_ptr[LG_MRQ_SZ-1:0]] <= 1'b0;		  
 	       end
 	  end
      end // always_ff@ (posedge clk)
@@ -528,11 +524,10 @@ module perfect_l1d(clk,
    generate
       for(genvar i = 0; i < N_MQ_ENTRIES; i=i+1)
 	begin
-	   assign w_hit_busy_addrs[i] = (t_pop_mq && r_mq_head_ptr[`LG_MRQ_ENTRIES-1:0] == i) ? 1'b0 :
+	   assign w_hit_busy_addrs[i] = (t_pop_mq && r_mq_head_ptr[LG_MRQ_SZ-1:0] == i) ? 1'b0 :
 					r_mq_addr_valid[i] ? r_mq_addr[i] == t_cache_idx : 
 					1'b0;
-	   assign w_hit_busy_addrs2[i] = //(t_pop_mq && r_mq_head_ptr[`LG_MRQ_ENTRIES-1:0] == i) ? 1'b0 :
-					 r_mq_addr_valid[i] ? r_mq_addr[i] == t_cache_idx2 : 1'b0;	   
+	   assign w_hit_busy_addrs2[i] = r_mq_addr_valid[i] ? r_mq_addr[i] == t_cache_idx2 : 1'b0;	   
 	end
    endgenerate
    
@@ -582,11 +577,7 @@ module perfect_l1d(clk,
 	     r_cache_idx <= 'd0;
 	     r_cache_tag <= 'd0;
 	     r_cache_idx2 <= 'd0;
-	     r_cache_tag2 <= 'd0;
 	     rr_cache_idx <= 'd0;
-	     rr_cache_tag <= 'd0;
-	     r_miss_addr <= 'd0;
-	     r_miss_idx <= 'd0;
 	     r_got_req <= 1'b0;
 	     r_got_req2 <= 1'b0;
 	     
@@ -620,12 +611,8 @@ module perfect_l1d(clk,
 	     r_cache_tag <= t_cache_tag;
 	     
 	     r_cache_idx2 <= t_cache_idx2;
-	     r_cache_tag2 <= t_cache_tag2;
 	     rr_cache_idx <= r_cache_idx;
-	     rr_cache_tag <= r_cache_tag;
 	     
-	     r_miss_idx <= t_miss_idx;
-	     r_miss_addr <= t_miss_addr;
 	     r_got_req <= t_got_req;
 	     r_got_req2 <= t_got_req2;
 	     
@@ -1095,13 +1082,10 @@ module perfect_l1d(clk,
 	t_port2_hit_cache = r_got_req2;
 	
 	n_state = r_state;
-	t_miss_idx = r_miss_idx;
-	t_miss_addr = r_miss_addr;
 	t_cache_idx = 'd0;
 	t_cache_tag = 'd0;
 	
 	t_cache_idx2 = 'd0;
-	t_cache_tag2 = 'd0;	
 	
 	t_got_req = 1'b0;
 	t_got_req2 = 1'b0;
@@ -1208,10 +1192,7 @@ module perfect_l1d(clk,
 			 n_core_mem_rsp.has_cause = t_pf2;
 			 n_core_mem_rsp.cause = STORE_PAGE_FAULT;
 			 
-			 if(t_port2_hit_cache)
-			   begin
-			      n_cache_hits = r_cache_hits + 'd1;
-			   end
+			 n_cache_hits = r_cache_hits + 'd1;
 			 n_core_mem_rsp_valid = 1'b1;
 		      end // if (r_req2.is_store)
 		    else if(t_port2_hit_cache && !r_hit_busy_addr2)
@@ -1229,10 +1210,7 @@ module perfect_l1d(clk,
 		    else
 		      begin
 			 t_push_miss = 1'b1;
-			 if(t_port2_hit_cache)
-			   begin
-			      n_cache_hits = r_cache_hits + 'd1;
-			   end
+			 n_cache_hits = r_cache_hits + 'd1;
 		      end
 		 end // if (r_got_req2)
 	       
@@ -1353,7 +1331,6 @@ module perfect_l1d(clk,
 	       begin
 		  //use 2nd read port
 		  t_cache_idx2 = core_mem_va_req.addr[IDX_STOP-1:IDX_START];
-		  t_cache_tag2 = core_mem_va_req.addr[`M_WIDTH-1:IDX_STOP];
 		  
 		  n_req2 = core_mem_va_req;
 		  core_mem_va_req_ack = 1'b1;
