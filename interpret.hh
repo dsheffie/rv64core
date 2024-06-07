@@ -98,9 +98,11 @@ struct state_t{
   int64_t pmpaddr2;
   int64_t pmpaddr3;
   int64_t pmpcfg0;
+  int64_t mtimecmp;  
   int xlen() const {
     return 64;
   }
+  int64_t get_time() const;
   void sext_xlen(int64_t x, int i) {
     gpr[i] = (x << (64-xlen())) >> (64-xlen());
   }
@@ -122,7 +124,7 @@ struct state_t{
     }
     return false;
   }
-  bool memory_map_check(uint64_t pa, bool store = false);
+  bool memory_map_check(uint64_t pa, bool store = false, int64_t x = 0);  
   int8_t load8(uint64_t pa);
   int64_t load8u(uint64_t pa);  
   int16_t load16(uint64_t pa);

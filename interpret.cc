@@ -39,13 +39,44 @@ void initState(state_t *s) {
 
 }
 
-bool state_t::memory_map_check(uint64_t pa, bool store) {
+bool state_t::memory_map_check(uint64_t pa, bool store, int64_t x) {
   if(pa >= VIRTIO_BASE_ADDR and (pa < (VIRTIO_BASE_ADDR + VIRTIO_SIZE))) {
-    //printf("%s virtio range at pc %lx\n", store ? "write" : "read", pc);
-    return true;
+
+  }
+  if(pa >= UART_BASE_ADDR and (pa < (UART_BASE_ADDR + UART_SIZE))) {
   }
   if(pa >= PLIC_BASE_ADDR and (pa < (PLIC_BASE_ADDR + PLIC_SIZE))) {
-    //printf("%s plic range at pc %lx, offset %ld bytes\n", store ? "write" : "read", pc, pa-PLIC_BASE_ADDR);
+    printf(">> %s plic range at pc %lx, offset %ld bytes\n", store ? "write" : "read", pc, pa-PLIC_BASE_ADDR);
+    //exit(-1);
+    return true;
+  }
+  if(pa >= CLINT_BASE_ADDR and (pa < (CLINT_BASE_ADDR + CLINT_SIZE))) {
+    assert(store);
+    switch(pa-CLINT_BASE_ADDR)
+      {
+      case 0x0:
+	printf("msip access\n");
+	break;
+      case 0x4000:	
+	if(store) {
+	  mtimecmp = x;
+	  //std::cout << mtimecmp_cnt << "\n";
+	  //dump_calls();
+	  printf(">> mtimecmp = %ld at icnt %ld\n", mtimecmp, icnt);
+	  csr_t cc(mip);
+	  cc.mie.mtie = 0;
+	  mip = cc.raw;	  
+	}
+	break;
+      case 0xbff8:
+	assert(not(store));
+	break;
+      default:
+	break;
+      }
+    //printf(">> %s clint range at pc %lx, offset %ld bytes, st value %lx\n",
+    //store ? "write" : "read", pc, pa-CLINT_BASE_ADDR, x);
+    //exit(-1);
     return true;
   }  
   return false;
@@ -113,6 +144,10 @@ void state_t::store64(uint64_t pa, int64_t x) {
 }
 
 extern uint64_t csr_time;
+
+int64_t state_t::get_time() const {
+  return csr_time;
+}
 
 static std::unordered_map<uint64_t, std::pair<uint64_t, uint64_t>> tlb;
 
@@ -468,6 +503,18 @@ void execRiscv(state_t *s) {
   riscv_t m(0);
   s->took_exception = false;
 
+
+  csr_t c(s->mie);
+  //if(c.mie.mtie) {
+  //printf("s->icnt = %lu\n", s->icnt);
+  //exit(-1);
+  //}
+  if(s->get_time() >= s->mtimecmp) {
+    csr_t cc(0);
+    cc.mip.mtip = 1;
+    s->mip |= cc.raw;
+  }
+  
   irq = take_interrupt(s);
   if(irq) {
     except_cause = CAUSE_INTERRUPT | irq;
