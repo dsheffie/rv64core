@@ -14,6 +14,7 @@ import "DPI-C" function void wr_log(input longint pc,
 module l1d(clk, 
 	   reset,
 	   priv,
+	   page_table_root,
 	   l2_probe_addr,
 	   l2_probe_val,
 	   l2_probe_ack,	   
@@ -74,6 +75,7 @@ module l1d(clk,
    input logic clk;
    input logic reset;
    input logic [1:0] priv;
+   input logic [63:0] page_table_root;
    input logic l2_probe_val;
    input logic [(`M_WIDTH-1):0] l2_probe_addr;
    output logic 		l2_probe_ack;
@@ -88,14 +90,7 @@ module l1d(clk,
    input logic 	       page_walk_rsp_gnt;
    input logic 	       page_walk_rsp_valid;
    input 	       page_walk_rsp_t page_walk_rsp;
-   
-   //input logic	       page_walk_rsp_valid;
-   //input logic [63:0]  page_walk_rsp_pa;
-   //input logic	       page_walk_rsp_fault;
-   //input logic	       page_walk_rsp_dirty;   
-   //input logic	       page_walk_rsp_readable;
-   //input logic	       page_walk_rsp_writable;
-   
+      
    input logic [`LG_ROB_ENTRIES-1:0] head_of_rob_ptr;
    input logic 			     head_of_rob_ptr_valid;
    input logic retired_rob_ptr_valid;

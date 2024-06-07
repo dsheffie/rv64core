@@ -12,67 +12,95 @@ import "DPI-C" function void write_half(input longint addr, input shortint  data
 import "DPI-C" function void write_word(input longint addr, input int data, input longint root, int id);
 import "DPI-C" function void write_dword(input longint addr, input longint data, input longint root, int id);
 import "DPI-C" function longint dc_ld_translate(longint va, longint root );
-import "DPI-C" function longint dc_st_translate(longint va, longint root );
 `endif
 
+
 module perfect_l1d(clk, 
-		   reset,
-		   page_table_root,
-		   paging_active,
-		   clear_tlb,
-		   head_of_rob_ptr,
-		   head_of_rob_ptr_valid,
-		   retired_rob_ptr_valid,
-		   retired_rob_ptr_two_valid,
-		   retired_rob_ptr,
-		   retired_rob_ptr_two,
-		   restart_valid,
-		   memq_empty,
-		   drain_ds_complete,
-		   dead_rob_mask,
-		   flush_req,
-		   flush_complete,
-		   flush_cl_req,
-		   flush_cl_addr,
-		   //inputs from core
-		   core_mem_req_valid,
-		   core_mem_req,
-		   core_store_data_valid,
-		   core_store_data,
-		   core_store_data_ack,
-		   //outputs to core
-		   core_mem_req_ack,
-		   core_mem_rsp,
-		   core_mem_rsp_valid,
-		   //output to the memory system
-		   mem_req_valid, 
-		   mem_req_addr, 
-		   mem_req_store_data, 
-		   mem_req_opcode,
-		   //reply from memory system
-		   mem_rsp_valid,
-		   mem_rsp_load_data,
-		   cache_accesses,
-		   cache_hits
-		   );
+	   reset,
+	   priv,
+           page_table_root,		   
+	   l2_probe_addr,
+	   l2_probe_val,
+	   l2_probe_ack,	   
+	   l1d_state,
+  	   n_inflight,
+	   restart_complete,
+	   paging_active,
+	   clear_tlb,
+	   page_walk_req_valid,
+	   page_walk_req_va,
+	   page_walk_rsp_gnt,
+	   page_walk_rsp_valid,	   
+	   page_walk_rsp,
+	   head_of_rob_ptr,
+	   head_of_rob_ptr_valid,
+	   retired_rob_ptr_valid,
+	   retired_rob_ptr_two_valid,
+	   retired_rob_ptr,
+	   retired_rob_ptr_two,
+	   memq_empty,
+	   drain_ds_complete,
+	   dead_rob_mask,
+	   flush_req,
+	   flush_complete,
+	   flush_cl_req,
+	   flush_cl_addr,
+	   //inputs from core
+	   core_mem_va_req_valid,
+	   core_mem_va_req,
+	   //store data
+	   core_store_data_valid,
+	   core_store_data,
+	   core_store_data_ack,
+	   //outputs to core
+	   core_mem_va_req_ack,
+	   core_mem_rsp,
+	   core_mem_rsp_valid,
+	   //output to the memory system
+	   mem_req_valid,
+	   mem_req_uc,
+	   mem_req_addr, 
+	   mem_req_store_data, 
+	   mem_req_opcode,
+	   //reply from memory system
+	   mem_rsp_valid,
+	   mem_rsp_load_data,
+	   mtimecmp,
+	   mtimecmp_val,
+	   cache_accesses,
+	   cache_hits,
+	   tlb_accesses,
+	   tlb_hits
+	   );
 
    localparam L1D_NUM_SETS = 1 << `LG_L1D_NUM_SETS;
    localparam L1D_CL_LEN = 1 << `LG_L1D_CL_LEN;
-   localparam L1D_CL_LEN_BITS = 1 << (`LG_L1D_CL_LEN + 3);
-   
+   localparam L1D_CL_LEN_BITS = 1 << (`LG_L1D_CL_LEN + 3);   
    input logic clk;
    input logic reset;
-   input logic [63:0]  page_table_root;
-   input logic	       paging_active;
-   input logic	       clear_tlb;
+   input logic [1:0] priv;
+   input logic [63:0] page_table_root;
+   input logic l2_probe_val;
+   input logic [(`M_WIDTH-1):0]	l2_probe_addr;
+   output logic 		l2_probe_ack;
    
+   output logic [3:0] l1d_state;
+   output logic [3:0] n_inflight;
+   input logic 	      restart_complete;
+   input logic paging_active;
+   input logic clear_tlb;
+   output logic	page_walk_req_valid;
+   output logic [63:0] page_walk_req_va;
+   input logic 	       page_walk_rsp_gnt;
+   input logic 	       page_walk_rsp_valid;
+   input 	       page_walk_rsp_t page_walk_rsp;
+      
    input logic [`LG_ROB_ENTRIES-1:0] head_of_rob_ptr;
    input logic 			     head_of_rob_ptr_valid;
    input logic retired_rob_ptr_valid;
    input logic retired_rob_ptr_two_valid;
    input logic [`LG_ROB_ENTRIES-1:0] retired_rob_ptr;
    input logic [`LG_ROB_ENTRIES-1:0] retired_rob_ptr_two;
-   input logic 			     restart_valid;
    output logic			     memq_empty;
    input logic 			     drain_ds_complete;
    input logic [(1<<`LG_ROB_ENTRIES)-1:0] dead_rob_mask;
@@ -82,20 +110,20 @@ module perfect_l1d(clk,
    input logic [`M_WIDTH-1:0] flush_cl_addr;
    input logic 		      flush_req;
    output logic 	      flush_complete;
-   
-   input logic core_mem_req_valid;
-   input       mem_req_t core_mem_req;
+
+   input logic		      core_mem_va_req_valid;
+   input		      mem_req_t core_mem_va_req;
 
    input logic core_store_data_valid;
    input       mem_data_t core_store_data;
    output logic core_store_data_ack;
    
-   output logic core_mem_req_ack;
+   output logic core_mem_va_req_ack;
    output 	mem_rsp_t core_mem_rsp;
    output logic core_mem_rsp_valid;
 
-   
    output logic mem_req_valid;
+   output logic	mem_req_uc;
    output logic [(`M_WIDTH-1):0] mem_req_addr;
    output logic [L1D_CL_LEN_BITS-1:0] mem_req_store_data;
    output logic [3:0] 			  mem_req_opcode;
@@ -103,9 +131,30 @@ module perfect_l1d(clk,
    input logic 				  mem_rsp_valid;
    input logic [L1D_CL_LEN_BITS-1:0] 	  mem_rsp_load_data;
 
-   
+   output logic [63:0]			  mtimecmp;
+   output logic				  mtimecmp_val;
+      
    output logic [63:0] 			 cache_accesses;
    output logic [63:0] 			 cache_hits;
+
+   output logic [63:0]			 tlb_accesses;
+   output logic [63:0] 			 tlb_hits;
+
+
+   assign page_walk_req_valid = 1'b0;
+   always_ff@(posedge clk)
+    begin
+       l2_probe_ack <= reset ? 1'b0 : l2_probe_val;
+    end
+
+   logic [63:0]	r_mtimecmp;
+   logic	r_mtimecmp_val;
+   assign mtimecmp = r_mtimecmp;
+   assign mtimecmp_val = r_mtimecmp_val;
+   
+   
+      
+        
 `ifdef VERILATOR
          
    localparam LG_WORDS_PER_CL = `LG_L1D_CL_LEN - 2;
@@ -195,6 +244,22 @@ module perfect_l1d(clk,
    mem_req_t n_req, r_req, t_req;
    mem_req_t n_req2, r_req2;
 
+   always_ff@(posedge clk)
+     begin
+	if(reset)
+	  begin
+	     r_mtimecmp <= 64'd0;
+	     r_mtimecmp_val <= 1'b0;
+	  end
+	else
+	  begin
+	     r_mtimecmp_val <= t_wr_array && r_req.addr == `MTIMECMP_ADDR;
+	     r_mtimecmp <= r_req.data;
+	  end
+     end // always_ff@ (posedge clk)
+
+
+   
    mem_req_t r_mem_q[N_MQ_ENTRIES-1:0];
    logic [`LG_MRQ_ENTRIES:0] r_mq_head_ptr, n_mq_head_ptr;
    logic [`LG_MRQ_ENTRIES:0] r_mq_tail_ptr, n_mq_tail_ptr;
@@ -315,11 +380,11 @@ module perfect_l1d(clk,
 	  begin
 	     r_n_inflight <= 'd0;
 	  end
-	else if(core_mem_req_valid && core_mem_req_ack && !core_mem_rsp_valid)
+	else if(core_mem_va_req_valid && core_mem_va_req_ack && !core_mem_rsp_valid)
 	  begin
 	     r_n_inflight <= r_n_inflight + 'd1;
 	  end
-	else if(!(core_mem_req_valid && core_mem_req_ack) && core_mem_rsp_valid)
+	else if(!(core_mem_va_req_valid && core_mem_va_req_ack) && core_mem_rsp_valid)
 	  begin
 	     r_n_inflight <= r_n_inflight - 'd1;
 	  end
@@ -583,7 +648,7 @@ module perfect_l1d(clk,
 	     r_store_stalls <= n_store_stalls;
 	     memq_empty <= mem_q_empty 
 			   && drain_ds_complete 
-			   && !core_mem_req_valid 
+			   && !core_mem_va_req_valid 
 			   && !t_got_req && !t_got_req2 
 			   && !t_push_miss
 			   && (r_n_inflight == 'd0);
@@ -828,7 +893,7 @@ module perfect_l1d(clk,
 	
 	t_rsp_dst_valid = 1'b0;
 	t_rsp_data = 'd0;
-	
+
 	case(r_req.amo_op)
 	  5'd0: /* amoadd */
 	    begin
@@ -846,15 +911,19 @@ module perfect_l1d(clk,
 	       t_amo32_data = t_w32 | r_req.data[31:0];
 	       t_amo64_data = t_w64 | r_req.data[63:0];
 	    end
-	  5'd12:
+	  5'd12: /* amoand */
 	    begin
 	       t_amo32_data = t_w32 & r_req.data[31:0];
 	       t_amo64_data = t_w64 & r_req.data[63:0];
-	    end	    
+	    end
+	  5'd28: /* amomax */
+	    begin
+	       t_amo32_data = t_w32 < r_req.data[31:0] ? r_req.data[31:0] : t_w32;
+	       t_amo64_data = t_w64 < r_req.data[63:0] ? r_req.data[63:0] : t_w64;
+	    end
+	  
 	  default:
 	    begin
-	       t_amo32_data = 32'hdeadbeef;
-	       t_amo64_data = 64'hd0debabefacebeef;
 	    end
 	endcase // case (r_req.amo_op)
 
@@ -1048,7 +1117,7 @@ module perfect_l1d(clk,
 	n_req = r_req;
 	n_req2 = r_req2;
 	
-	core_mem_req_ack = 1'b0;
+	core_mem_va_req_ack = 1'b0;
 	core_store_data_ack = 1'b0;
 	
 	n_mem_req_valid = 1'b0;
@@ -1087,8 +1156,8 @@ module perfect_l1d(clk,
 		     (r_cache_idx == t_mem_head.addr[IDX_STOP-1:IDX_START] );
 	
 	t_cm_block = r_got_req && r_last_wr && 
-		     (r_cache_idx == core_mem_req.addr[IDX_STOP-1:IDX_START]) &&
-		     (r_cache_tag == core_mem_req.addr[`M_WIDTH-1:IDX_STOP]);
+		     (r_cache_idx == core_mem_va_req.addr[IDX_STOP-1:IDX_START]) &&
+		     (r_cache_tag == core_mem_va_req.addr[`M_WIDTH-1:IDX_STOP]);
 
 
 	t_cm_block_stall = t_cm_block && !(r_is_retry);//1'b0;
@@ -1273,21 +1342,21 @@ module perfect_l1d(clk,
 		    end
 	       end
 	     
-	       if(core_mem_req_valid &&
+	       if(core_mem_va_req_valid &&
 		  !t_got_miss && 
 		  !(mem_q_almost_full||mem_q_full) && 
 		  !t_got_rd_retry &&
-		  !(r_last_wr2 && (r_cache_idx2 == core_mem_req.addr[IDX_STOP-1:IDX_START]) && !core_mem_req.is_store) && 
+		  !(r_last_wr2 && (r_cache_idx2 == core_mem_va_req.addr[IDX_STOP-1:IDX_START]) && !core_mem_va_req.is_store) && 
 		  !t_cm_block_stall &&
-		  (!r_rob_inflight[core_mem_req.rob_ptr])
+		  (!r_rob_inflight[core_mem_va_req.rob_ptr])
 		  )
 	       begin
 		  //use 2nd read port
-		  t_cache_idx2 = core_mem_req.addr[IDX_STOP-1:IDX_START];
-		  t_cache_tag2 = core_mem_req.addr[`M_WIDTH-1:IDX_STOP];
+		  t_cache_idx2 = core_mem_va_req.addr[IDX_STOP-1:IDX_START];
+		  t_cache_tag2 = core_mem_va_req.addr[`M_WIDTH-1:IDX_STOP];
 		  
-		  n_req2 = core_mem_req;
-		  core_mem_req_ack = 1'b1;
+		  n_req2 = core_mem_va_req;
+		  core_mem_va_req_ack = 1'b1;
 		  t_got_req2 = 1'b1;
 
 `ifdef VERBOSE_L1D		       
@@ -1320,63 +1389,8 @@ module perfect_l1d(clk,
 	endcase // case r_state
      end // always_comb
 
-   always_ff@(negedge clk)
-     begin
-      if(t_push_miss && mem_q_full)
-	begin
-	   $display("attempting to push to a full memory queue");
-	   $stop();
-	end
-	if(t_pop_mq && mem_q_empty)
-	  begin
-	   $display("attempting to pop an empty memory queue");
-	   $stop();
-	  end
-     end
-
-`ifdef VERILATOR
-   logic [31:0] t_stall_reason;
-   always_comb
-     begin
-	t_stall_reason = 'd0;
-	if(core_mem_req_valid && !core_mem_req_ack)
-	  begin
-	     if(t_got_miss) 
-	       begin
-		  //$display("miss prevents ack at cycle %d", r_cycle);
-		  t_stall_reason = 'd1;
-	       end
-	     else if(mem_q_almost_full||mem_q_full) 
-	       begin
-		  //$display("full prevents ack at cycle %d", r_cycle);
-		  t_stall_reason = 'd2;
-	       end
-	     else if(t_got_rd_retry)
-	       begin
-		  //$display("retried load prevents ack at cycle %d", r_cycle);
-		  t_stall_reason = 'd4;
-	       end
-	     else if(r_last_wr2 && (r_cache_idx2 == core_mem_req.addr[IDX_STOP-1:IDX_START]) && !core_mem_req.is_store) 
-	       begin
-		  //$display("previous write to the same set prevents ack at cycle %d", r_cycle);
-		  t_stall_reason = 'd5;
-	       end
-	     else if(t_cm_block_stall) 
-	       begin
-		  //$display("retried store prevents ack at cycle %d", r_cycle);
-		  t_stall_reason = 'd6;
-	       end
-	     else if(r_graduated[core_mem_req.rob_ptr] != 2'b00) 
-	       begin
-		  //$display("rob pointer in flight prevents ack at cycle %d", r_cycle);
-		  t_stall_reason = 'd7;		  
-	       end
-	  end // if (core_mem_req_valid && !core_mem_req_ack)
-     end // always_comb
-   
 
 `endif
-`endif //  `ifdef VERILATOR
    
 endmodule // l1d
 
