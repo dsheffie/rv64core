@@ -454,10 +454,11 @@ module
    
    
 
-     l1d dcache (
+   /*perfect_*/l1d dcache (
 		 .clk(clk),
 		 .reset(reset),
 		 .priv(w_priv),
+	         .page_table_root(w_page_table_root),
 		 .l2_probe_val(w_l2_probe_val),
 		 .l2_probe_addr(w_l2_probe_addr),
 		 .l2_probe_ack(w_l2_probe_ack),		 

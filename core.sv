@@ -1050,13 +1050,9 @@ module core(clk,
 		 end // if (t_can_retire_rob_head)
 	       else if(!t_dq_empty)
 		 begin
-		    //$display("t_uop.serializing_op = %b, rob empty %b, monitor %b", 
-		    ///t_uop.serializing_op, t_rob_empty,
-		    //t_uop.op == MONITOR);
-
 		    if(t_uop.serializing_op && t_rob_empty)
 		      begin
-			 if(t_uop.op == MONITOR || t_uop.op == SFENCEVMA)
+			 if(t_uop.op == MONITOR )
 			   begin
 			      n_flush_req_l1i = 1'b1;
 			      n_flush_req_l1d = 1'b1;

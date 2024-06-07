@@ -662,10 +662,7 @@ module exec(clk,
 `ifdef VERILATOR
    always_ff@(negedge clk)
      begin
-	if(t_rd_csr_en && (int_uop.imm[5:0] == RDTIME_CSR))
-	  begin
-	     csr_puttime(w_time);
-	  end
+	csr_puttime(w_time);
      end
 `endif
    

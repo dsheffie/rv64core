@@ -541,26 +541,6 @@ module perfect_l1d(clk,
 
    
    
-`ifdef VERBOSE_L1D
-   always_ff@(negedge clk)
-   begin
-      if(t_pop_mq)
-	begin
-	   $display("popping pc %d rob ptr %d at cycle %d", 
-		     t_mem_head.pc, t_mem_head.rob_ptr, r_cycle);
-	end
-   end
-`endif
-
-   // always_ff@(negedge clk)
-   // begin
-   //    if(!mem_q_empty)
-   // 	begin
-   // 	   $display("mem head pc %x rob ptr %d at cycle %d", 
-   // 		     t_mem_head.pc, t_mem_head.rob_ptr, r_cycle);
-   // 	end
-   // end
-   
    logic r_dead_atomic, n_dead_atomic;
   
    always_ff@(posedge clk)
@@ -639,12 +619,6 @@ module perfect_l1d(clk,
 	r_req2 <= n_req2;
 	r_core_mem_rsp <= n_core_mem_rsp;
      end
-
-
-
-   
-
-
 
    logic [31:0] tt_w32_2, tt_bswap_w32_2;
    logic [63:0]	tt_w64;
@@ -1056,6 +1030,8 @@ module perfect_l1d(clk,
      end
 
 
+   logic t_accept_req;
+   
 	         
    always_comb
      begin
@@ -1127,7 +1103,8 @@ module perfect_l1d(clk,
 
 	t_cm_block_stall = t_cm_block && !(r_is_retry);//1'b0;
 	n_dead_atomic = 1'b0;
-	
+
+		
 	case(r_state)
 	  INITIALIZE:
 	    begin
@@ -1176,17 +1153,21 @@ module perfect_l1d(clk,
 			 n_cache_hits = r_cache_hits + 'd1;
 			 n_core_mem_rsp_valid = 1'b1;
 		      end // if (r_req2.is_store)
-		    else if(t_port2_hit_cache && !r_hit_busy_addr2)
+		    else if(t_port2_hit_cache)
 		      begin
-`ifdef VERBOSE_L1D
- 			 $display("cycle %d port2 hit for pc %d, addr %x, data %x", r_cycle, r_req2.pc, r_req2.addr, t_rsp_data2);
-`endif
-			 n_core_mem_rsp.data = t_rsp_data2[63:0];
-                         n_core_mem_rsp.dst_valid = t_rsp_dst_valid2;
-			 n_core_mem_rsp.has_cause = t_pf2;
-			 n_core_mem_rsp.cause = LOAD_PAGE_FAULT;
-                         n_cache_hits = r_cache_hits + 'd1;
-                         n_core_mem_rsp_valid = 1'b1;
+			if(!r_hit_busy_addr2)
+			  begin
+			     n_core_mem_rsp.data = t_rsp_data2[63:0];
+                             n_core_mem_rsp.dst_valid = t_rsp_dst_valid2;
+			     n_core_mem_rsp.has_cause = t_pf2;
+			     n_core_mem_rsp.cause = LOAD_PAGE_FAULT;
+                             n_cache_hits = r_cache_hits + 'd1;
+                             n_core_mem_rsp_valid = 1'b1;
+			  end
+			else
+			  begin
+			     t_push_miss = 1'b1;
+			  end // else: !if(!r_hit_busy_addr2)
 		      end
 		    else
 		      begin
@@ -1297,15 +1278,17 @@ module perfect_l1d(clk,
 			 end
 		    end
 	       end
-	     
-	       if(core_mem_va_req_valid &&
-		  !t_got_miss && 
-		  !(mem_q_almost_full||mem_q_full) && 
-		  !t_got_rd_retry &&
-		  !(r_last_wr2 && (r_cache_idx2 == core_mem_va_req.addr[IDX_STOP-1:IDX_START]) && !core_mem_va_req.is_store) && 
-		  !t_cm_block_stall &&
-		  (!r_rob_inflight[core_mem_va_req.rob_ptr])
-		  )
+
+	t_accept_req = core_mem_va_req_valid &&
+		       !t_got_miss && 
+		       !(mem_q_almost_full||mem_q_full) && 
+		       !t_got_rd_retry &&
+		       !(r_last_wr2 && (r_cache_idx2 == core_mem_va_req.addr[IDX_STOP-1:IDX_START]) && !core_mem_va_req.is_store) && 
+		       !t_cm_block_stall &&
+		       (!r_rob_inflight[core_mem_va_req.rob_ptr]);
+
+	       
+	       if(t_accept_req)
 	       begin
 		  //use 2nd read port
 		  t_cache_idx2 = core_mem_va_req.addr[IDX_STOP-1:IDX_START];
@@ -1344,7 +1327,24 @@ module perfect_l1d(clk,
 	endcase // case r_state
      end // always_comb
 
-
+   logic [63:0] r_stall_cnt, r_req_cnt;
+   
+   always_ff@(posedge clk)
+     begin
+	if(reset)
+	  begin
+	     r_stall_cnt <= 64'd0;
+	     r_req_cnt <= 64'd0;
+	  end
+	else
+	  begin
+	     r_stall_cnt <= (!t_accept_req) && core_mem_va_req_valid ? r_stall_cnt + 'd1 : r_stall_cnt;
+	     r_req_cnt <= core_mem_va_req_valid ? r_req_cnt + 'd1 : r_req_cnt;
+	     if(r_cycle[19:0] == 'd0) $display("cycle %d : req %d, stall %d", r_cycle, r_req_cnt, r_stall_cnt);
+	  end
+     end // always_ff@ (posedge clk)
+   
+   
 `endif
    
 endmodule // l1d

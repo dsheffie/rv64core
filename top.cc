@@ -201,6 +201,11 @@ long long translate(long long va, long long root, bool iside, bool store) {
   return pa;
 }
 
+long long dc_ld_translate(long long va, long long root) {
+  return translate(va,root, false, false);
+}
+
+
 uint64_t page_table_root = ~0UL;
 std::list<store_rec> store_queue;
 std::list<store_rec> atomic_queue;
@@ -682,6 +687,7 @@ int main(int argc, char **argv) {
   bool got_mem_req = false, got_mem_rsp = false, got_monitor = false, incorrect = false;
   bool got_putchar = false;
   bool was_in_flush_mode = false;
+  bool pending_irq = false;
 #ifdef USE_SDL
   if(use_fb) {
     assert(SDL_Init(SDL_INIT_VIDEO) == 0);
@@ -834,9 +840,15 @@ int main(int argc, char **argv) {
       }
     }
     
+
+    if(tb->took_irq) {
+      pending_irq = true;
+    }
+
+    
     if(tb->retire_valid) {
       ++insns_retired;
-      if(tb->took_irq) printf("an interrupt has occured!\n");
+
       if(last_retire > 1) {
 	pushout_histo[tb->retire_pc] += last_retire;
       }
@@ -914,6 +926,12 @@ int main(int argc, char **argv) {
 	int cnt = 0;
 	bool mismatch = (tb->retire_pc != ss->pc), exception = false;
 	uint64_t initial_pc = ss->pc;
+
+	if((tb->retire_pc != ss->pc) and pending_irq) {
+	  printf("divergence, rtl took interrupt\n");
+	  exit(-1);
+	}
+	
 	while( (tb->retire_pc != ss->pc) and (cnt < 3)) {
 	  execRiscv(ss);
 	  exception |= ss->took_exception;
@@ -924,7 +942,7 @@ int main(int argc, char **argv) {
 	  std::cout << "mismatch without an exception at icnt " << insns_retired << "\n";
 	  std::cout << std::hex << "last match " << std::hex << last_match_pc << std::dec << "\n";
 	  std::cout << std::hex << "rtl : " << tb->retire_pc << ", sim : " << initial_pc << std::dec << "\n";
-	  std::cout << "irq : " << static_cast<int>(tb->took_irq) << "\n";
+	  std::cout << "irq : " << pending_irq << "\n";
 	  break;
 	}
 	
