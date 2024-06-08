@@ -12,6 +12,11 @@ import "DPI-C" function void write_half(input longint addr, input shortint  data
 import "DPI-C" function void write_word(input longint addr, input int data, input longint root, int id);
 import "DPI-C" function void write_dword(input longint addr, input longint data, input longint root, int id);
 import "DPI-C" function longint dc_ld_translate(longint va, longint root );
+import "DPI-C" function void wr_log(input longint pc, 
+				    input longint addr, 
+				    input longint data, 
+				    int 	  is_atomic);
+
 `endif
 
 
@@ -221,7 +226,6 @@ module perfect_l1d(clk,
    
    logic [`M_WIDTH-1:0] 		  t_addr;
    logic 				  t_got_req, t_got_req2;
-   logic 				  t_got_miss;
    logic 				  t_push_miss;
    
    logic 				  t_mh_block, t_cm_block, t_cm_block2,
@@ -817,6 +821,21 @@ module perfect_l1d(clk,
      begin
 	t_pa <= dc_ld_translate({n_req.addr[63:12], 12'd0}, page_table_root);
      end
+
+   always_ff@(negedge clk)
+     begin
+	if(t_wr_array)
+	  begin
+	     wr_log(r_req.pc,
+		    r_req.addr, 
+		    r_req.op == MEM_AMOD ? t_amo64_data : 
+		    (r_req.op == MEM_AMOW ? {{32{t_amo32_data[31]}},t_amo32_data} : 
+		     r_req.data), 
+		    r_req.is_atomic ? 32'd1 : 32'd0);
+	     if(r_req.has_cause) $stop();
+	  end
+     end // always_ff@ (negedge clk)
+
    
    always_comb
      begin
@@ -835,7 +854,8 @@ module perfect_l1d(clk,
 	
 	t_rsp_dst_valid = 1'b0;
 	t_rsp_data = 'd0;
-
+	t_wr_array = 1'b0;
+	
 	case(r_req.amo_op)
 	  5'd0: /* amoadd */
 	    begin
@@ -952,48 +972,30 @@ module perfect_l1d(clk,
 	  MEM_SB:
 	    begin
 	       t_wr_array = r_got_req;
-	       //if(t_wr_array)
-	       //write_byte(r_req.addr, r_req.data[7:0],paging_active ? page_table_root : 64'd0);
-
 	    end
 	  MEM_SH:
 	    begin
 	       t_wr_array = r_got_req;	       
-	       //if(t_wr_array)
-	       //write_half(r_req.addr, bswap16(r_req.data[15:0]),paging_active ? page_table_root : 64'd0);
 	    end
 	  MEM_SW:
 	    begin
 	       t_wr_array = r_got_req;	       
-	       // if(t_wr_array)
-	       // 	 begin
-	       // 	    write_word(r_req.addr, bswap32(r_req.data[31:0]),paging_active ? page_table_root : 64'd0, 32'd0);
-	       // 	 end
 	    end
 	  MEM_SD:
 	    begin
 	       t_wr_array = r_got_req;	       
-	       //if(t_wr_array)
-		// write_dword(r_req.addr, r_req.data, paging_active ? page_table_root : 64'd0, 32'd0);	       	       
 	    end
 	  MEM_SCD:
 	    begin
 	       t_wr_array = r_got_req;
 	       t_rsp_data = 'd0;
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
-	       //if(t_wr_array & !(r_dead_atomic || w_dead_atomic))
-		 //write_dword(r_req.addr, r_req.data, paging_active ? page_table_root : 64'd0, 32'd1);
 	    end
 	  MEM_SCW:
 	    begin
 	       t_wr_array = r_got_req;
 	       t_rsp_data = 'd0;
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
-	       //if(t_wr_array & !(r_dead_atomic|w_dead_atomic))
-		 //begin
-		   // write_word(r_req.addr, r_req.data[31:0], paging_active ? page_table_root : 64'd0, 32'd1);
-		 //end
-	       
 	    end
 	  MEM_AMOW:
 	    begin
@@ -1002,10 +1004,6 @@ module perfect_l1d(clk,
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
 	       
 	       t_wr_array = r_got_req;
-	       //if(t_wr_array & !(r_dead_atomic||w_dead_atomic))
-	       //begin
-	       // write_word(r_req.addr, t_amo32_data, paging_active ? page_table_root : 64'd0, 32'd2);
-	       //end
 	    end // case: MEM_AMOW
 	  MEM_AMOD:
 	    begin
@@ -1030,7 +1028,7 @@ module perfect_l1d(clk,
      end
 
 
-   logic t_accept_req;
+   logic t_accept_req, t_st_block;
    
 	         
    always_comb
@@ -1052,7 +1050,6 @@ module perfect_l1d(clk,
 	n_last_wr2 = 1'b0;
 	n_last_rd2 = 1'b0;
 	
-	t_got_miss = 1'b0;
 	t_push_miss = 1'b0;
 	
 	n_req = r_req;
@@ -1279,13 +1276,14 @@ module perfect_l1d(clk,
 		    end
 	       end
 
-	t_accept_req = core_mem_va_req_valid &&
-		       !t_got_miss && 
-		       !(mem_q_almost_full||mem_q_full) && 
-		       !t_got_rd_retry &&
-		       !(r_last_wr2 && (r_cache_idx2 == core_mem_va_req.addr[IDX_STOP-1:IDX_START]) && !core_mem_va_req.is_store) && 
-		       !t_cm_block_stall &&
-		       (!r_rob_inflight[core_mem_va_req.rob_ptr]);
+	       t_st_block = (r_last_wr2 && (r_cache_idx2 == core_mem_va_req.addr[IDX_STOP-1:IDX_START]) && !core_mem_va_req.is_store);
+	       
+	       t_accept_req = core_mem_va_req_valid &&
+			      !(mem_q_almost_full|mem_q_full) && 
+			      !t_got_rd_retry &&
+			      !t_st_block &&
+			      !t_cm_block_stall &&
+			      (!r_rob_inflight[core_mem_va_req.rob_ptr]);
 
 	       
 	       if(t_accept_req)
@@ -1327,7 +1325,8 @@ module perfect_l1d(clk,
 	endcase // case r_state
      end // always_comb
 
-   logic [63:0] r_stall_cnt, r_req_cnt;
+   logic [63:0] r_stall_cnt, r_req_cnt, r_ststall_cnt, r_cmblock_cnt, r_full_cnt;
+
    
    always_ff@(posedge clk)
      begin
@@ -1335,12 +1334,34 @@ module perfect_l1d(clk,
 	  begin
 	     r_stall_cnt <= 64'd0;
 	     r_req_cnt <= 64'd0;
+	     r_ststall_cnt <= 64'd0;
+	     r_cmblock_cnt <= 64'd0;
+	     r_full_cnt <= 64'd0;	   
 	  end
 	else
 	  begin
-	     r_stall_cnt <= (!t_accept_req) && core_mem_va_req_valid ? r_stall_cnt + 'd1 : r_stall_cnt;
+	     if((!t_accept_req) && core_mem_va_req_valid)
+	       begin
+		  r_stall_cnt <= r_stall_cnt + 'd1;
+		  if(t_st_block)
+		    begin
+		       r_ststall_cnt <= r_ststall_cnt + 'd1;
+		    end
+		  if(t_cm_block_stall)
+		    begin
+		       r_cmblock_cnt <= r_cmblock_cnt + 'd1;
+		    end
+		  if(mem_q_full)
+		    begin
+		       r_full_cnt <= r_full_cnt + 'd1;
+		    end
+	       end
 	     r_req_cnt <= core_mem_va_req_valid ? r_req_cnt + 'd1 : r_req_cnt;
-	     if(r_cycle[19:0] == 'd0) $display("cycle %d : req %d, stall %d", r_cycle, r_req_cnt, r_stall_cnt);
+	     if(r_cycle[19:0] == 'd0 & 1'b0)
+	       begin
+		  $display("cycle %d : req %d, stall %d, store stall %d, cmblock %d, full %d",
+			   r_cycle, r_req_cnt, r_stall_cnt, r_ststall_cnt, r_cmblock_cnt, r_full_cnt);
+	       end
 	  end
      end // always_ff@ (posedge clk)
    
