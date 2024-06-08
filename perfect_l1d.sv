@@ -176,9 +176,8 @@ module perfect_l1d(clk,
 
    
    logic 				  r_got_req, r_last_wr, n_last_wr;
-   logic 				  r_last_rd, n_last_rd;
    logic 				  r_got_req2, r_last_wr2, n_last_wr2;
-   logic 				  r_last_rd2, n_last_rd2;
+
    
 
    
@@ -514,20 +513,13 @@ module perfect_l1d(clk,
 	  end
      end // always_ff@ (posedge clk)
 
-   wire [N_MQ_ENTRIES-1:0] w_hit_busy_addrs;
-   logic [N_MQ_ENTRIES-1:0] r_hit_busy_addrs;
-   logic 		   r_hit_busy_addr;
    
    wire [N_MQ_ENTRIES-1:0] w_hit_busy_addrs2;
-   logic [N_MQ_ENTRIES-1:0] r_hit_busy_addrs2;
    logic 		   r_hit_busy_addr2;
 
    generate
       for(genvar i = 0; i < N_MQ_ENTRIES; i=i+1)
 	begin
-	   assign w_hit_busy_addrs[i] = (t_pop_mq && r_mq_head_ptr[LG_MRQ_SZ-1:0] == i) ? 1'b0 :
-					r_mq_addr_valid[i] ? r_mq_addr[i] == t_cache_idx : 
-					1'b0;
 	   assign w_hit_busy_addrs2[i] = r_mq_addr_valid[i] ? r_mq_addr[i] == t_cache_idx2 : 1'b0;	   
 	end
    endgenerate
@@ -535,11 +527,7 @@ module perfect_l1d(clk,
 
    always_ff@(posedge clk)
      begin
-	r_hit_busy_addr <= reset ? 1'b0 : |w_hit_busy_addrs;
-	r_hit_busy_addrs <= t_got_req ? w_hit_busy_addrs : {{N_MQ_ENTRIES{1'b1}}};
-	
 	r_hit_busy_addr2 <= reset ? 1'b0 : |w_hit_busy_addrs2;
-	r_hit_busy_addrs2 <= t_got_req2 ? w_hit_busy_addrs2 : {{N_MQ_ENTRIES{1'b1}}};
      end
 
 
@@ -563,9 +551,7 @@ module perfect_l1d(clk,
 	     
 	     
 	     r_last_wr <= 1'b0;
-	     r_last_rd <= 1'b0;
 	     r_last_wr2 <= 1'b0;
-	     r_last_rd2 <= 1'b0;	     
 	     r_state <= INITIALIZE;
 	     r_mem_req_valid <= 1'b0;
 	     r_mem_req_addr <= 'd0;
@@ -593,9 +579,7 @@ module perfect_l1d(clk,
 	     r_got_req2 <= t_got_req2;
 	     
 	     r_last_wr <= n_last_wr;
-	     r_last_rd <= n_last_rd;
 	     r_last_wr2 <= n_last_wr2;
-	     r_last_rd2 <= n_last_rd2;	     
 	     r_state <= n_state;
 	     r_mem_req_valid <= n_mem_req_valid;
 	     r_mem_req_addr <= n_mem_req_addr;
@@ -1046,9 +1030,7 @@ module perfect_l1d(clk,
 	t_got_req2 = 1'b0;
 	
 	n_last_wr = 1'b0;
-	n_last_rd = 1'b0;
 	n_last_wr2 = 1'b0;
-	n_last_rd2 = 1'b0;
 	
 	t_push_miss = 1'b0;
 	
@@ -1163,6 +1145,10 @@ module perfect_l1d(clk,
 			  end
 			else
 			  begin
+			     /* why do you not need to worry about faults here ?
+			      * if an earlier store generated a fault and
+			      * the load is accessing the same location
+			      * this load will get cleared */
 			     t_push_miss = 1'b1;
 			  end // else: !if(!r_hit_busy_addr2)
 		      end
@@ -1192,23 +1178,15 @@ module perfect_l1d(clk,
 	       
 	     if(!mem_q_empty)
 	       begin
-		   // $display("t_mem_head.rob_ptr = %d, grad %b, dq ptr %d valid %b, atomic %b, r_cycle %d", 
-		   // 	    t_mem_head.rob_ptr,
-		   // 	    r_graduated[t_mem_head.rob_ptr], 
-		   // 	    core_store_data.rob_ptr, 
-		   // 	    core_store_data_valid,
-		   // 	    t_mem_head.is_atomic,
-		   // 	    r_cycle);
-		  
 		  if(!t_mh_block)
 		    begin
 		       if(t_mem_head.is_store)
 			 begin
 			    
-			    if(r_graduated[t_mem_head.rob_ptr] == 2'b10 && (core_store_data_valid ? (t_mem_head.rob_ptr == core_store_data.rob_ptr) : 1'b0) )
+			    if(r_graduated[t_mem_head.rob_ptr] == 2'b10 && core_store_data_valid && (t_mem_head.rob_ptr == core_store_data.rob_ptr)  )
 			      begin
 				 //$display("firing store for %x with data %x at cycle %d for rob ptr %d", 
-				//	  t_mem_head.addr, t_mem_head.data, r_cycle, t_mem_head.rob_ptr);
+				 //	  t_mem_head.addr, t_mem_head.data, r_cycle, t_mem_head.rob_ptr);
 				 t_pop_mq = 1'b1;
 				 core_store_data_ack = 1'b1;
 				 n_req = t_mem_head;
@@ -1270,7 +1248,6 @@ module perfect_l1d(clk,
 			    t_addr = t_mem_head.addr;
 			    t_got_req = 1'b1;
 			    n_is_retry = 1'b1;
-			    n_last_rd = 1'b1;
 			    t_got_rd_retry = 1'b1;
 			 end
 		    end
@@ -1302,7 +1279,6 @@ module perfect_l1d(clk,
 `endif
 		  
 		  n_last_wr2 = core_mem_req.is_store;
-		  n_last_rd2 = !core_mem_req.is_store;
 		  
 		  n_cache_accesses =  r_cache_accesses + 'd1;
 	       end // if (core_mem_req_valid &&...
