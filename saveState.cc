@@ -13,7 +13,8 @@ struct page {
   uint8_t data[4096];
 } __attribute__((packed));
 
-static const uint64_t MAGICNUM = 0x64646464beefd00dUL;
+
+static const uint64_t MAGIC_NUM = 0x6464f5f5beefd005UL;
 
 struct header {
   uint64_t magic;
@@ -22,8 +23,38 @@ struct header {
   uint64_t icnt;
   uint32_t num_nz_pages;
   uint64_t tohost_addr;
-  uint64_t fromhost_addr;  
-  header() {}
+  uint64_t fromhost_addr;
+
+  int64_t priv;
+  int64_t mstatus;
+  int64_t misa;
+  int64_t mideleg;
+  int64_t medeleg;
+  int64_t mscratch;
+  int64_t mhartid;
+  int64_t mtvec;
+  int64_t mcounteren;
+  int64_t mie;
+  int64_t mip;
+  int64_t mcause;
+  int64_t mepc;
+  int64_t mtval;
+  int64_t sscratch;
+  int64_t scause;
+  int64_t stvec;
+  int64_t sepc;
+  int64_t sip;
+  int64_t stval;
+  int64_t satp;
+  int64_t scounteren;
+  int64_t pmpaddr0;
+  int64_t pmpaddr1;
+  int64_t pmpaddr2;
+  int64_t pmpaddr3;
+  int64_t pmpcfg0;
+  int64_t mtimecmp;
+  
+  header() : magic(MAGIC_NUM) {}
 } __attribute__((packed));
 
 void dumpState(const state_t &s, const std::string &filename) {
@@ -44,11 +75,49 @@ void dumpState(const state_t &s, const std::string &filename) {
   }
   int fd = ::open(filename.c_str(), O_RDWR|O_CREAT|O_TRUNC, 0600);
   assert(fd != -1);
-  h.magic = MAGICNUM;
   h.pc = s.pc;
+  
+
+  static_assert(sizeof(s.gpr)==sizeof(h.gpr), "mistakes were made");
   memcpy(&h.gpr,&s.gpr,sizeof(s.gpr));
+
+  
   h.icnt = s.icnt;
   h.num_nz_pages = nz_pages.count();
+  h.tohost_addr = globals::tohost_addr;
+  h.fromhost_addr = globals::fromhost_addr;
+
+  h.priv = s.priv;
+  h.mstatus = s.mstatus;
+  h.misa = s.misa;
+  h.mideleg = s.mideleg;
+  h.medeleg = s.medeleg;
+  h.mscratch = s.mscratch;
+  h.mhartid = s.mhartid;
+  h.mtvec = s.mtvec;
+  h.mcounteren = s.mcounteren;
+  h.mie = s.mie;
+  h.mip = s.mip;
+  h.mcause = s.mcause;
+  h.mepc = s.mepc;
+  h.mtval = s.mtval;
+  h.sscratch = s.sscratch;
+  h.scause = s.scause;
+  h.stvec = s.stvec;
+  h.sepc = s.sepc;
+  h.sip = s.sip;
+  h.stval = s.stval;
+  h.satp = s.satp;
+  h.scounteren = s.scounteren; 
+  h.pmpaddr0 = s.pmpaddr0;
+  h.pmpaddr1 = s.pmpaddr1;
+  h.pmpaddr2 = s.pmpaddr2;
+  h.pmpaddr3 = s.pmpaddr3;
+  h.pmpcfg0 = s.pmpcfg0;
+  h.mtimecmp = s.mtimecmp;
+  
+
+  
   ssize_t wb = write(fd, &h, sizeof(h));
   assert(wb == sizeof(h));
 
@@ -64,59 +133,21 @@ void dumpState(const state_t &s, const std::string &filename) {
 }
 
 void loadState(state_t &s, const std::string &filename) {
-  header h;
   int fd = ::open(filename.c_str(), O_RDONLY, 0600);
   assert(fd != -1);
+  header h;
   size_t sz = read(fd, &h, sizeof(h));
   assert(sz == sizeof(h));
-  //std::cout << "got magic number of " << std::hex << h.magic << std::dec << "\n";
-  //std::cout << "got pc of " << std::hex << h.pc << std::dec << "\n";
-  //assert(h.magic == MAGICNUM);
+  
   s.pc = h.pc;
   memcpy(&s.gpr,&h.gpr,sizeof(s.gpr));
   s.icnt = h.icnt;
-  globals::tohost_addr = h.tohost_addr;
-  globals::fromhost_addr = h.fromhost_addr;
+  
   for(uint32_t i = 0; i < h.num_nz_pages; i++) {
     page p;
     sz = read(fd, &p, sizeof(p));
-    //std::cout << "sz = " << sz << "\n";
     assert(sz == sizeof(p));
     memcpy(s.mem+p.va, p.data, 4096);
   }
   close(fd);
-}
-
-static void emitGprValue(state_t &s, uint64_t &pc, int i, uint64_t u) {
-  int addi = 0, slli = 0;
-  slli = ((8) << 20) | (i<<15) | 1 << 12 | (i<<7) | 0x13;
-  for(int j = 56; j >= 0; j-=8) {
-    uint8_t v = (u>>j) & 0x0ff;
-    if(v) {
-      addi = ((v) << 20) | (i<<15) | 0 << 12 | (i<<7) | 0x13;
-      *reinterpret_cast<int*>(&s.mem[pc]) = addi;
-      pc += 4;	
-    }
-    
-    if(j != 0) {
-      *reinterpret_cast<int*>(&s.mem[pc]) = slli;
-      pc += 4;
-    }
-  }  
-}
-
-
-void emitCodeForInitialRegisterValues(state_t &s, uint64_t pc) {
-
-  for(int i = 1; i < 32; i++) {
-    uint64_t u = *reinterpret_cast<uint64_t*>(&s.gpr[i]);
-    emitGprValue(s, pc, i, u);
-  }
-  
-  *reinterpret_cast<int*>(&s.mem[pc]) = 0x73;
-  pc += 4;
-  for(int i = 0; i < 128; i++) {
-    *reinterpret_cast<int*>(&s.mem[pc]) = 0x13;
-    pc += 4;
-  }
 }
