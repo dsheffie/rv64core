@@ -238,8 +238,12 @@ module exec(clk,
    
    logic [`M_WIDTH-1:0] r_mem_result, r_int_result, r_int_result2;
    
-   logic 	r_fwd_int_srcA, r_fwd_int_srcB, r_fwd_int2_srcA, r_fwd_int2_srcB;
-   logic 	r_fwd_int_srcA2, r_fwd_int_srcB2, r_fwd_int2_srcA2, r_fwd_int2_srcB2;
+   logic		r_fwd_int_srcA, r_fwd_int_srcB, r_fwd_int2_srcA, r_fwd_int2_srcB;
+   logic		r_fwd_int_srcA2, r_fwd_int_srcB2, r_fwd_int2_srcA2, r_fwd_int2_srcB2;
+
+   logic		r_fwd_mul_srcA, r_fwd_mul_srcB;
+   logic		r_fwd_mul_srcA2, r_fwd_mul_srcB2;   
+   
    
    logic 	r_fwd_mem_srcA, r_fwd_mem_srcB, r_fwd_mem_srcA2, r_fwd_mem_srcB2;
 
@@ -286,7 +290,7 @@ module exec(clk,
    logic	       t_start_mul,t_is_mulw,t_signed_mul;
 
    logic 	t_mul_complete;
-   logic [`M_WIDTH-1:0] t_mul_result;
+   logic [`M_WIDTH-1:0] t_mul_result, r_mul_result;
    
    logic [`LG_ROB_ENTRIES-1:0] t_rob_ptr_out;
 
@@ -768,27 +772,30 @@ module exec(clk,
      end // always_comb
 
    
-   
    always_comb
      begin
 	t_srcA = r_fwd_int_srcA ? r_int_result :
 		 r_fwd_int2_srcA ? r_int_result2 :
 		 r_fwd_mem_srcA ? r_mem_result :
+		 r_fwd_mul_srcA ? r_mul_result :
 		 w_srcA;
 	
 	t_srcB = r_fwd_int_srcB ? r_int_result :
 		 r_fwd_int2_srcB ? r_int_result2 :		 
 		 r_fwd_mem_srcB ? r_mem_result :
+		 r_fwd_mul_srcB ? r_mul_result :		 
 		 w_srcB;
 
 	t_srcA_2 = r_fwd_int_srcA2 ? r_int_result :
 		   r_fwd_int2_srcA2 ? r_int_result2 :
 		   r_fwd_mem_srcA2 ? r_mem_result :
+		   r_fwd_mul_srcA2 ? r_mul_result :		   
 		   w_srcA_2;
 
 	t_srcB_2 = r_fwd_int_srcB2 ? r_int_result :
 		   r_fwd_int2_srcB2 ? r_int_result2 :
 		   r_fwd_mem_srcB2 ? r_mem_result :
+		   r_fwd_mul_srcB2 ? r_mul_result :		   		   
 		   w_srcB_2;
 	
 	
@@ -1009,14 +1016,14 @@ module exec(clk,
 	     begin
 		t_alu_srcA_match[i] = r_alu_sched_uops[i].srcA_valid && (
 									 (mem_rsp_dst_valid & (mem_rsp_dst_ptr == r_alu_sched_uops[i].srcA)) ||
-									 (r_mul_complete && (r_mul_prf_ptr == r_alu_sched_uops[i].srcA)) ||
+									 (t_mul_complete && (w_mul_prf_ptr == r_alu_sched_uops[i].srcA)) ||
 									 (r_div_complete && (r_div_prf_ptr == r_alu_sched_uops[i].srcA)) ||
 									 (r_start_int2 && t_wr_int_prf2 & (int_uop2.dst == r_alu_sched_uops[i].srcA)) ||			 
 									 (r_start_int && t_wr_int_prf & (int_uop.dst == r_alu_sched_uops[i].srcA))
 									 );
 		t_alu_srcB_match[i] = r_alu_sched_uops[i].srcB_valid && (
 									 (mem_rsp_dst_valid & (mem_rsp_dst_ptr == r_alu_sched_uops[i].srcB)) ||
-									 (r_mul_complete && (r_mul_prf_ptr == r_alu_sched_uops[i].srcB)) ||
+									 (t_mul_complete && (w_mul_prf_ptr == r_alu_sched_uops[i].srcB)) ||
 									 (r_div_complete && (r_div_prf_ptr == r_alu_sched_uops[i].srcB)) ||
 									 (r_start_int2 && t_wr_int_prf2 & (int_uop2.dst == r_alu_sched_uops[i].srcB)) ||
 									 (r_start_int && t_wr_int_prf & (int_uop.dst == r_alu_sched_uops[i].srcB))
@@ -1069,7 +1076,7 @@ module exec(clk,
 	     begin
 		t_alu_srcA_match2[i] = r_alu_sched_uops2[i].srcA_valid && (
 									   (mem_rsp_dst_valid & (mem_rsp_dst_ptr == r_alu_sched_uops2[i].srcA)) ||
-									   (r_mul_complete && (r_mul_prf_ptr == r_alu_sched_uops2[i].srcA)) ||
+									   (t_mul_complete && (w_mul_prf_ptr == r_alu_sched_uops2[i].srcA)) ||
 									   (r_div_complete && (r_div_prf_ptr == r_alu_sched_uops2[i].srcA)) ||
 									   (r_start_int2 && t_wr_int_prf2 & (int_uop2.dst == r_alu_sched_uops2[i].srcA)) ||			 
 									   (r_start_int && t_wr_int_prf & (int_uop.dst == r_alu_sched_uops2[i].srcA))
@@ -1077,7 +1084,7 @@ module exec(clk,
 		
 		t_alu_srcB_match2[i] = r_alu_sched_uops2[i].srcB_valid && (
 									   (mem_rsp_dst_valid & (mem_rsp_dst_ptr == r_alu_sched_uops2[i].srcB)) ||
-									   (r_mul_complete && (r_mul_prf_ptr == r_alu_sched_uops2[i].srcB)) ||
+									   (t_mul_complete && (w_mul_prf_ptr == r_alu_sched_uops2[i].srcB)) ||
 									   (r_div_complete && (r_div_prf_ptr == r_alu_sched_uops2[i].srcB)) ||
 									   (r_start_int2 && t_wr_int_prf2 & (int_uop2.dst == r_alu_sched_uops2[i].srcB)) ||
 									   (r_start_int && t_wr_int_prf & (int_uop.dst == r_alu_sched_uops2[i].srcB))
@@ -1590,6 +1597,15 @@ module exec(clk,
       .prf_ptr_val_out(),
       .prf_ptr_out(w_mul_prf_ptr)
       );
+
+   always_ff@(negedge clk)
+     begin
+	if(t_start_mul&r_start_int)
+	  $display("schedule multiply at cycle %d", r_cycle);
+	if(t_mul_complete)
+	  $display("multiply complete at cycle %d", r_cycle);
+     end
+   
    
    always_ff@(negedge clk)
      begin
@@ -3114,6 +3130,7 @@ module exec(clk,
      begin
 	r_int_result <= t_result;
 	r_int_result2 <= t_result2;
+	r_mul_result <= t_mul_result;
 	r_mem_result <= mem_rsp_load_data;
      end
 
@@ -3140,11 +3157,19 @@ module exec(clk,
 	
 	r_fwd_int_srcA <= r_start_int && t_wr_int_prf && (t_picked_uop.srcA == int_uop.dst);
 	r_fwd_int_srcB <= r_start_int && t_wr_int_prf && (t_picked_uop.srcB == int_uop.dst);
+
+	r_fwd_mul_srcA <= t_mul_complete && (t_picked_uop.srcA == w_mul_prf_ptr);
+	r_fwd_mul_srcB <= t_mul_complete && (t_picked_uop.srcB == w_mul_prf_ptr);
+	
 	r_fwd_int2_srcA <= r_start_int2 && t_wr_int_prf2 && (t_picked_uop.srcA == int_uop2.dst);
 	r_fwd_int2_srcB <= r_start_int2 && t_wr_int_prf2 && (t_picked_uop.srcB == int_uop2.dst);
 
 	r_fwd_int_srcA2 <= r_start_int && t_wr_int_prf && (t_picked_uop2.srcA == int_uop.dst);
 	r_fwd_int_srcB2 <= r_start_int && t_wr_int_prf && (t_picked_uop2.srcB == int_uop.dst);
+
+	r_fwd_mul_srcA2 <= t_mul_complete && (t_picked_uop2.srcA == w_mul_prf_ptr);
+	r_fwd_mul_srcB2 <= t_mul_complete && (t_picked_uop2.srcB == w_mul_prf_ptr);
+	
 	r_fwd_int2_srcA2 <= r_start_int2 && t_wr_int_prf2 && (t_picked_uop2.srcA == int_uop2.dst);
 	r_fwd_int2_srcB2 <= r_start_int2 && t_wr_int_prf2 && (t_picked_uop2.srcB == int_uop2.dst);
 	
