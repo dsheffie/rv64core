@@ -681,14 +681,14 @@ module core(clk,
 	  begin
 	     if(t_retire)
 	       begin
-		  if(r_took_irq)
-		    $display("clearing took irq at cycle %d, retire pc %x", r_cycle, t_rob_head.pc);
+		  //if(r_took_irq)
+		  //$display("clearing took irq at cycle %d, retire pc %x", r_cycle, t_rob_head.pc);
 		  r_took_irq <= 1'b0;
 	       end
 	     else if(t_took_irq)
 	       begin
 
-		  $display("setting took irq at cycle %d", r_cycle);
+		  //$display("setting took irq at cycle %d", r_cycle);
 		  r_took_irq <= 1'b1;
 	       end
 	  end
@@ -970,8 +970,8 @@ module core(clk,
 			      n_state = ARCH_FAULT;
 			      n_cause = t_rob_head.cause;
 			      n_epc = t_rob_head.pc;
-			      $display("n_epc = %x, t_rob_head.pc = %x, t_arch_fault = %b, w_any_irq = %b, cycle %d", 
-				       n_epc, t_rob_head.pc, t_arch_fault, w_any_irq, r_cycle);
+			      //$display("n_epc = %x, t_rob_head.pc = %x, t_arch_fault = %b, w_any_irq = %b, cycle %d", 
+			      //n_epc, t_rob_head.pc, t_arch_fault, w_any_irq, r_cycle);
  
 			      n_tval = 'd0;
 			      n_irq = t_rob_head.is_irq;

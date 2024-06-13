@@ -217,13 +217,12 @@ void start_log(int l) {
 void wr_log(long long pc, long long addr, long long data, int is_atomic) {
   if(not(enable_checker))
     return;
-  
-  if(addr == 0xffffffff81355000UL) {
-    printf("pc %llx, addr %llx, data %llx, atomic %d\n",
-	   pc, addr, data, is_atomic);
+
+  if(globals::log) {
+    printf("pc %llx, addr %llx, data %llx, atomic %d, store queue entries %d\n",
+	   pc, addr, data, is_atomic,
+	   static_cast<int>(store_queue.size()));
   }
-
-
   
   if(is_atomic) {
     atomic_queue.emplace_back(pc, addr, data);
@@ -233,7 +232,8 @@ void wr_log(long long pc, long long addr, long long data, int is_atomic) {
 
   auto &t = store_queue.front();
   if(globals::log) {
-    printf("check store : sim pc %lx, rtl pc %llx %lx, %lx\n", t.pc, pc, t.addr, t.data);
+    printf("check store : sim pc %lx, rtl pc %llx %lx, %lx\n",
+	   t.pc, pc, t.addr, t.data);
   }
   if(not(t.pc == pc and t.addr == addr and t.data == data)) {
     printf("you have a store error! for an atomic %d, pc mismatch %d, addr mismatch %d, data mismatch %d\n",
@@ -856,9 +856,9 @@ int main(int argc, char **argv) {
 
       last_retired_pc = tb->retire_pc;
 
-      //if(insns_retired >= start_trace_at) {
-      //globals::log = trace_retirement = true;
-      //}
+      if(insns_retired >= start_trace_at) {
+	globals::log = trace_retirement = true;
+      }
 
       if(((insns_retired % heartbeat) == 0) or trace_retirement ) {
 

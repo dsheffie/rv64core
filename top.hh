@@ -182,7 +182,7 @@ static inline T round_to_alignment(T x, T m) {
   return ((x+m-1) / m) * m;
 }
 
-static inline uint32_t get_insn(uint32_t pc, const state_t *s) {
+static inline uint32_t get_insn(uint64_t pc, const state_t *s) {
   return *reinterpret_cast<uint32_t*>(&s->mem[pc]);
 }
 
@@ -198,7 +198,10 @@ static inline void dump_histo(const std::string &fname,
   std::ofstream out(fname);
   std::sort(sorted_by_cnt.begin(), sorted_by_cnt.end());
   for(auto it = sorted_by_cnt.rbegin(), E = sorted_by_cnt.rend(); it != E; ++it) {
-    uint32_t r_inst = *reinterpret_cast<uint32_t*>(&s->mem[it->second]);
+    auto pc = it->second;
+    if(pc >= (1UL<<32))
+      continue;
+    uint32_t r_inst = *reinterpret_cast<uint32_t*>(&s->mem[pc]);
     auto s = getAsmString(r_inst, it->second);
     out << std::hex << it->second << ":"
   	      << s << ","

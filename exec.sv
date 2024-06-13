@@ -211,6 +211,10 @@ module exec(clk,
    logic 		       r_div_complete;
 
    logic 	t_pop_uq,t_pop_mem_uq,t_pop_mem_dq,t_pop_uq2;
+   logic	t_could_pop_uq2;
+   
+   logic	t_uq_swizzle;
+   
    
    logic 	r_mem_ready, r_dq_ready;
    logic	r_paging_active;
@@ -300,6 +304,8 @@ module exec(clk,
    /* non mem uop queue */
    uop_t r_uq[N_UQ_ENTRIES];
    uop_t uq, uq2, int_uop, int_uop2;
+   uop_t t_uq, t_uq2;
+   
    logic 			    r_start_int2;
    logic 			    r_start_int;
    
@@ -582,7 +588,33 @@ module exec(clk,
 	     r_mem_dq[r_mem_dq_tail_ptr[`LG_MEM_DQ_ENTRIES-1:0]] <= uq_uop.is_mem && uq_uop.srcB_valid ? t_dq0 : t_dq1;
 	  end	
      end
-   
+
+   always_comb
+     begin
+	t_uq = r_uq[r_uq_head_ptr[`LG_UQ_ENTRIES-1:0]];
+	t_uq2 = r_uq[r_uq_next_head_ptr[`LG_UQ_ENTRIES-1:0]];
+     end
+
+   always_comb
+     begin
+	t_pop_uq = 1'b0;
+	t_pop_uq2 = 1'b0;
+	t_alu_sched_full = (&r_alu_sched_valid);
+	t_alu_sched_full2 = (&r_alu_sched_valid2);
+	t_could_pop_uq2 = 1'b0;
+	t_uq_swizzle = 1'b0;
+	
+	t_pop_uq = !(t_flash_clear | t_uq_empty | t_alu_sched_full);
+`ifdef SECOND_EXEC_PORT
+	t_could_pop_uq2 = t_uq_next_empty ? 1'b0 : (t_pop_uq & (!t_alu_sched_full2));
+	t_pop_uq2 = t_could_pop_uq2 & (t_uq.is_cheap_int | t_uq2.is_cheap_int);
+
+	t_uq_swizzle = t_pop_uq 
+		       & t_could_pop_uq2
+		       & (t_uq.is_cheap_int)
+			 & (!t_uq2.is_cheap_int);
+`endif
+     end // always_comb
    
 
    
@@ -605,9 +637,12 @@ module exec(clk,
 
 	t_push_two_int = uq_push && uq_push_two && uq_uop.is_int && uq_uop_two.is_int;
 	t_push_one_int = ((uq_push && uq_uop.is_int) || (uq_push_two && uq_uop_two.is_int)) && !t_push_two_int;
+
+
+
+	uq  = t_uq_swizzle ? t_uq2 : t_uq;
+	uq2 = t_uq_swizzle ? t_uq : t_uq2;
 	
-	uq = r_uq[r_uq_head_ptr[`LG_UQ_ENTRIES-1:0]];
-	uq2 = r_uq[r_uq_next_head_ptr[`LG_UQ_ENTRIES-1:0]];
 
 	
 	if(t_push_two_int)
@@ -1086,19 +1121,6 @@ module exec(clk,
    endgenerate
    
    
-   always_comb
-     begin
-	t_pop_uq = 1'b0;
-	t_pop_uq2 = 1'b0;
-	t_alu_sched_full = (&r_alu_sched_valid);
-	t_alu_sched_full2 = (&r_alu_sched_valid2);
-	
-	t_pop_uq = !(t_flash_clear | t_uq_empty | t_alu_sched_full);
-`ifdef SECOND_EXEC_PORT
-	t_pop_uq2 = t_uq_next_empty ? 1'b0 : (t_pop_uq & uq2.is_cheap_int & (!t_alu_sched_full2));
-`endif
-     end // always_comb
-
 
    logic t_left_shift2, t_signed_shift2;
    wire [`M_WIDTH-1:0] w_shifter_out2;
