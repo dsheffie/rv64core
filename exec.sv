@@ -417,7 +417,27 @@ module exec(clk,
 	  end
      end // always_ff@ (posedge clk// )
    
-   
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if(uq_push & uq_uop.pc == 64'hffffffff80270a84 &
+   // 	   uq_uop.rob_ptr == 'd27)
+   // 	  begin
+   // 	    $display("pushed bad uop for rob ptr %d",
+   // 		     uq_uop.rob_ptr);
+   // 	  end
+   // 	if(uq_push_two & uq_uop_two.pc == 64'hffffffff80270a84 &
+   // 	   uq_uop_two.rob_ptr == 'd27)
+   // 	  begin
+   // 	    $display("pushed bad uop for rob ptr %d, op %d, %d %d %b %b",
+   // 		     uq_uop_two.rob_ptr,
+   // 		     uq_uop_two.op,
+   // 		     uq_uop_two.srcA,
+   // 		     uq_uop_two.srcB,
+   // 		     uq_uop_two.srcA_valid,
+   // 		     uq_uop_two.srcB_valid);
+   // 	  end
+
+   //   end
 
    always_comb
      begin
@@ -911,27 +931,31 @@ module exec(clk,
 	//allocation forwarding
 	t_alu_alloc_srcA_match = uq.srcA_valid && (
 						   (mem_rsp_dst_valid & (mem_rsp_dst_ptr == uq.srcA)) ||
+						   (t_mul_complete && (w_mul_prf_ptr == uq.srcA)) ||
 						   (r_start_int2 && t_wr_int_prf2 && (int_uop2.dst == uq.srcA)) ||
 						   (r_start_int && t_wr_int_prf & (int_uop.dst == uq.srcA))
 						   );
 	t_alu_alloc_srcB_match = uq.srcB_valid && (
 						   (mem_rsp_dst_valid & (mem_rsp_dst_ptr == uq.srcB)) ||
-						   (r_start_int2 && t_wr_int_prf2 && (int_uop2.dst == uq.srcB)) ||						   
+						   (t_mul_complete && (w_mul_prf_ptr == uq.srcB)) ||						   
+						   (r_start_int2 && t_wr_int_prf2 && (int_uop2.dst == uq.srcB)) ||
 						   (r_start_int && t_wr_int_prf & (int_uop.dst == uq.srcB))
 						   );
 	
 	t_alu_alloc_srcA_match2 = uq2.srcA_valid && (
 						     (mem_rsp_dst_valid & (mem_rsp_dst_ptr == uq2.srcA)) ||
+						     (t_mul_complete && (w_mul_prf_ptr == uq2.srcA)) ||
 						     (r_start_int2 && t_wr_int_prf2 && (int_uop2.dst == uq2.srcA)) ||
 						     (r_start_int && t_wr_int_prf & (int_uop.dst == uq2.srcA))
 						     );
 	t_alu_alloc_srcB_match2 = uq2.srcB_valid && (
 						     (mem_rsp_dst_valid & (mem_rsp_dst_ptr == uq2.srcB)) ||
-						     (r_start_int2 && t_wr_int_prf2 && (int_uop2.dst == uq2.srcB)) ||						   
+						     (t_mul_complete && (w_mul_prf_ptr == uq2.srcB)) ||						     
+						     (r_start_int2 && t_wr_int_prf2 && (int_uop2.dst == uq2.srcB)) ||	
 						     (r_start_int && t_wr_int_prf & (int_uop.dst == uq2.srcB))
 						     );		
      end // always_comb
-  
+   
 
    logic [N_INT_SCHED_ENTRIES-1:0] t_alu_sched_mask_valid;
    logic [N_INT_SCHED_ENTRIES-1:0] r_alu_sched_matrix [N_INT_SCHED_ENTRIES-1:0];
@@ -998,7 +1022,7 @@ module exec(clk,
    //   begin
    // 	for(integer i = 0; i < N_INT_SCHED_ENTRIES; i=i+1)
    // 	  begin
-   // 	     if(r_alu_sched_valid[i])
+   // 	     if(r_alu_sched_valid[i] & r_alu_sched_uops[i].pc == 64'hffffffff80270a84)
    // 	       begin
    // 		  $display("entry for pc %x is %b ready, src A %b, src B %b", 
    // 			   r_alu_sched_uops[i].pc, t_alu_entry_rdy[i],
@@ -1598,13 +1622,18 @@ module exec(clk,
       .prf_ptr_out(w_mul_prf_ptr)
       );
 
-   always_ff@(negedge clk)
-     begin
-	if(t_start_mul&r_start_int)
-	  $display("schedule multiply at cycle %d", r_cycle);
-	if(t_mul_complete)
-	  $display("multiply complete at cycle %d", r_cycle);
-     end
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if(t_start_mul&r_start_int)
+   // 	  begin
+   // 	     $display("schedule multiply at cycle %d", r_cycle);
+   // 	  end
+   // 	if(t_mul_complete)
+   // 	  begin
+   // 	     $display("multiply complete at cycle %d, rob slot %d prf ptr %d, r_start_int %b", 
+   // 		      r_cycle, t_rob_ptr_out, w_mul_prf_ptr, r_start_int);
+   // 	  end
+   //   end
    
    
    always_ff@(negedge clk)
