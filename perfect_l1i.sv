@@ -3,12 +3,7 @@
 `include "uop.vh"
 
 `ifdef VERILATOR
-import "DPI-C" function void record_fetch(int push1, int push2, int push3, int push4,
-					  longint pc0, longint pc1, longint pc2, longint pc3,
-					  int bubble, int fq_full);
-
-import "DPI-C" function int check_bad_fetch(longint pc, longint pa, int insn);
-
+import "DPI-C" function longint ic_translate(longint va, longint root);
 `endif
 
 
@@ -89,11 +84,11 @@ module compute_pht_idx(pc, hist, idx);
    
 endmodule
 
-module l1i(clk,
+module perfect_l1i(clk,
 	   reset,
 	   l1i_state,
 	   priv,
-	   page_table_root,	   	   
+	   page_table_root,	   
 	   paging_active,
 	   clear_tlb,
 	   mode64,
@@ -147,7 +142,8 @@ module l1i(clk,
    input logic paging_active;
    input logic	       clear_tlb;
    input logic [1:0]   priv;
-   input logic [63:0]  page_table_root;      
+   input logic [63:0]  page_table_root;   
+   
    input logic mode64;
    
    output      logic [63:0] page_walk_req_va;
@@ -198,7 +194,7 @@ module l1i(clk,
    localparam L1I_CL_LEN_BITS = 1 << (`LG_L1D_CL_LEN + 3);
    localparam LG_WORDS_PER_CL = `LG_L1D_CL_LEN - 2;
    localparam WORDS_PER_CL = 1<<LG_WORDS_PER_CL;
-   localparam N_TAG_BITS = `MAX_VA - `LG_L1I_NUM_SETS - `LG_L1D_CL_LEN;
+   localparam N_TAG_BITS = `M_WIDTH - `LG_L1I_NUM_SETS - `LG_L1D_CL_LEN;
    localparam IDX_START = `LG_L1D_CL_LEN;
    localparam IDX_STOP  = `LG_L1D_CL_LEN + `LG_L1I_NUM_SETS;
    localparam WORD_START = 2;
@@ -216,6 +212,7 @@ module l1i(clk,
    output logic [63:0] 			  cache_hits;
    output logic [63:0] 			  tlb_accesses;
    output logic [63:0] 			  tlb_hits;   
+
 
    wire 				  in_32b_mode = mode64==1'b0;
       
@@ -307,16 +304,14 @@ function logic [3:0] select_pd(logic [15:0] cl, logic[LG_WORDS_PER_CL-1:0] pos);
 endfunction
 
    
-   typedef enum logic [3:0] {INITIALIZE = 'd0,
+   typedef enum logic [2:0] {INITIALIZE = 'd0,
 			     IDLE = 'd1,
                              ACTIVE = 'd2,
                              INJECT_RELOAD = 'd3,
 			     RELOAD_TURNAROUND = 'd4,
                              FLUSH_CACHE = 'd5,
 			     WAIT_FOR_NOT_FULL = 'd6,
-			     INIT_PHT = 'd7,
-			     TLB_MISS = 'd8,
-			     TLB_MISS_TURNAROUND = 'd9
+			     INIT_PHT = 'd7
 			    } state_t;
    
    logic [(`M_WIDTH-1):0] r_pc, n_pc, r_miss_pc, n_miss_pc;
@@ -325,7 +320,6 @@ endfunction
    
    
    state_t n_state, r_state;
-   assign l1i_state = r_state;
    logic 		  r_restart_req, n_restart_req;
    logic 		  r_restart_ack, n_restart_ack;
    logic 		  r_req, n_req;
@@ -334,13 +328,8 @@ endfunction
    logic 		  t_push_insn, t_push_insn2,
 			  t_push_insn3, t_push_insn4;
    
-   logic		  t_unaligned_fetch;
-   logic		  n_page_fault, r_page_fault;
-   logic		  n_tlb_miss, r_tlb_miss;
+   logic		  t_page_fault, t_unaligned_fetch;
    
-   wire [63:0]		  w_tlb_pc;
-   wire			  w_tlb_hit;  
-   logic		  t_reload_tlb;
    
    logic 		  t_clear_fq;
    logic 		  r_flush_req, n_flush_req;
@@ -358,11 +347,13 @@ endfunction
    logic 		  t_init_pht;
    logic [`LG_PHT_SZ-1:0] r_init_pht_idx, n_init_pht_idx;
 
+   logic [63:0]		  r_cache_pc_pa;
+   
    
    localparam PP = (`M_WIDTH-32);
    localparam SEXT = `M_WIDTH-16;
    insn_fetch_t t_insn, t_insn2, t_insn3, t_insn4;
-   logic [3:0] t_pd;
+   logic [3:0] t_pd, r_pd;
 
    
    logic [63:0] 	  r_cycle;
@@ -385,11 +376,7 @@ endfunction
    assign cache_hits = r_cache_hits;
    assign cache_accesses = r_cache_accesses;
 
-   assign page_walk_req_valid = r_tlb_miss;
-   assign page_walk_req_va = r_miss_pc;
-   
-   
-   wire [`M_WIDTH-1:0] w_restart_pc = restart_pc;
+   wire [`M_WIDTH-1:0] w_restart_pc = in_32b_mode ? { {(`M_WIDTH-32){1'b0}}, restart_pc[31:0]} : restart_pc;
    
    always_comb
      begin
@@ -485,8 +472,8 @@ endfunction
 	else if(t_push_insn4)
 	  begin
 	     //$display("push4 cycle = %d, r_valid_out =%b, r_tag_out =%d, r_cache_tag = %d, r_cache_pc = %x", r_cycle, r_valid_out,r_tag_out,r_cache_tag,r_cache_pc);
-	     //$display("t_insn.pc = %x,  t_clear_fq=%b,hit=%b", t_insn.pc,t_clear_fq,t_hit);	     
-	     //$display("t_insn2.pc = %x", t_insn2.pc);
+	     //$display("t_insn.pc = %x,  bytes = %x, t_clear_fq=%b,hit=%b", t_insn.pc,t_insn.data,t_clear_fq,t_hit);	     
+	     //$display("t_insn2.pc = %x, bytes = %x", t_insn2.pc,t_insn2.data);
 	     //$display("t_insn3.pc = %x", t_insn3.pc);
 	     //$display("t_insn4.pc = %x", t_insn4.pc);	     	     	     
 	     r_fq[r_fq_tail_ptr[`LG_FQ_ENTRIES-1:0]] <= t_insn;
@@ -513,7 +500,7 @@ endfunction
      begin
 	if(restart_valid && restart_src_is_indirect)
 	  begin
-	     r_btb[restart_src_pc[(`LG_BTB_SZ+1):2]] <= restart_pc;
+	     r_btb[restart_src_pc[(`LG_BTB_SZ+1):2]] <= w_restart_pc;
 	  end	
      end // always_ff@ (posedge clk)
 
@@ -524,9 +511,9 @@ endfunction
 	
      end
 
+   
    always_comb
      begin
-	n_page_fault = r_page_fault;
 	n_pc = r_pc;
 	n_miss_pc = r_miss_pc;
 	n_cache_pc = 'd0;
@@ -542,8 +529,9 @@ endfunction
 	n_resteer_bubble = 1'b0;
 	t_next_spec_rs_tos = r_spec_rs_tos+'d1;
 	n_restart_req = restart_valid | r_restart_req;
+	t_page_fault = r_req && paging_active && (&r_cache_pc_pa);
 	
-	t_tag_match = r_tag_out == w_tlb_pc[`MAX_VA-1:IDX_STOP];
+	t_tag_match = r_tag_out == (paging_active ? r_cache_pc_pa[`M_WIDTH-1:IDX_STOP] : r_cache_tag);
 	
 	t_miss = r_req && !(r_valid_out && t_tag_match);
 	t_hit = r_req && (r_valid_out && t_tag_match);
@@ -614,8 +602,6 @@ endfunction
 	t_is_ret = 1'b0;
 	t_init_pht = 1'b0;
 	n_init_pht_idx = r_init_pht_idx;
-	t_reload_tlb = 1'b0;
-	n_tlb_miss = 1'b0;
 	
 	case(r_state)
 	  INITIALIZE:
@@ -639,7 +625,6 @@ endfunction
 		    n_restart_ack = 1'b1;
 		    n_restart_req = 1'b0;
 		    n_pc = w_restart_pc;
-		    //$display("restart ack, pc %x at cycle %d", n_pc, r_cycle);
 		    n_state = ACTIVE;
 		    t_clear_fq = 1'b1;
 		 end
@@ -647,7 +632,7 @@ endfunction
 	  ACTIVE:
 	    begin
 	       t_cache_idx = r_pc[IDX_STOP-1:IDX_START];
-	       t_cache_tag = r_pc[(`MAX_VA-1):IDX_STOP];
+	       t_cache_tag = r_pc[(`M_WIDTH-1):IDX_STOP];
 	       /* accessed with this address */
 	       n_cache_pc = r_pc;
 	       n_req = 1'b1;
@@ -668,34 +653,26 @@ endfunction
 		    n_restart_ack = 1'b1;
 		    n_restart_req = 1'b0;
 		    n_pc = w_restart_pc;
-		    //$display("restart ack, pc %x at cycle %d", n_pc, r_cycle);		    
 		    n_req = 1'b0;
 		    n_state = ACTIVE;
 		    t_clear_fq = 1'b1;
-		    n_page_fault = 1'b0;
 		 end // if (n_restart_req)
-	       else if(r_page_fault)
+	       else if(t_page_fault)
 		 begin
 		    if(!fq_full)
 		      begin
-			 //$display("taking page fault for pc %x at cycle %d, paging_active %b", 
-			 //r_cache_pc, r_cycle, paging_active);
-			 n_page_fault = 1'b0;
 			 t_push_insn = 1'b1;
 		      end
 		 end
-	       else if(!w_tlb_hit & r_req && paging_active)
-		 begin
-		    //$display("TLB MISS for r_cache_pc %x, r_cycle %d", r_cache_pc, r_cycle);
-		    n_state = TLB_MISS;
-		    n_pc = r_pc;
-		    n_miss_pc = r_cache_pc;
-		    n_tlb_miss = 1'b1;
-		 end
 	       else if(t_miss)
 		 begin
+		    // if(paging_active)
+		    //   begin
+		    // 	 $display("MISSED in the icache at cycle %d with paging active for address %x, resolved to pa %x", 
+		    // 		  r_cycle, r_cache_pc, r_cache_pc_pa);
+		    //   end
 		    n_state = INJECT_RELOAD;
-		    n_mem_req_addr = paging_active ? {w_tlb_pc[`M_WIDTH-1:`LG_L1D_CL_LEN], {`LG_L1D_CL_LEN{1'b0}}} : 
+		    n_mem_req_addr = paging_active ? {r_cache_pc_pa[`M_WIDTH-1:`LG_L1D_CL_LEN], {`LG_L1D_CL_LEN{1'b0}}} : 
 				     {r_cache_pc[`M_WIDTH-1:`LG_L1D_CL_LEN], {`LG_L1D_CL_LEN{1'b0}}};
 		    n_mem_req_valid = 1'b1;
 		    n_miss_pc = r_cache_pc;
@@ -704,6 +681,16 @@ endfunction
 	       else if(t_hit && !fq_full)
 		 begin		    
 		    t_update_spec_hist = (t_pd != 4'd0);
+		    //if(paging_active)
+		      //begin
+			 //$display("successful translation to tag %x, cache out %x", r_cache_pc_pa[`M_WIDTH-1:IDX_STOP], r_tag_out);
+			 //$stop();
+		     // end
+		    //if(t_pd == 4'd1)
+		    //begin
+		    //$display("cycle %d : r_cache_pc %x is a cond br, predict %b, hist %b, r_pht_idx %d", 
+		    //r_cycle, r_cache_pc, r_pht_out, r_spec_gbl_hist, r_pht_idx);
+		    //end
 		    if(t_pd == 4'd5 || t_pd == 4'd3) /* jal and j */
 		      begin
 			 t_is_cflow = 1'b1;
@@ -743,7 +730,7 @@ endfunction
 			      t_push_insn4 = 1'b1;
 			      t_cache_idx = r_cache_idx + 'd1;
 			      n_cache_pc = r_cache_pc + 'd16;
-			      t_cache_tag = n_cache_pc[(`MAX_VA-1):IDX_STOP];
+			      t_cache_tag = n_cache_pc[(`M_WIDTH-1):IDX_STOP];
 			      n_pc = r_cache_pc + 'd20;
 			   end
 			 else if(t_first_branch == 'd3 && !fq_full3)
@@ -751,7 +738,7 @@ endfunction
 			      t_push_insn3 = 1'b1;
 			      n_cache_pc = r_cache_pc + 'd12;
 			      n_pc = r_cache_pc + 'd16;
-			      t_cache_tag = n_cache_pc[(`MAX_VA-1):IDX_STOP];
+			      t_cache_tag = n_cache_pc[(`M_WIDTH-1):IDX_STOP];
 			      if(t_insn_idx != 0)
 				begin
 				   t_cache_idx = r_cache_idx + 'd1;
@@ -765,7 +752,7 @@ endfunction
 			      n_pc = r_cache_pc + 'd8;
 			      //guaranteed to end-up on another cacheline
 			      n_cache_pc = r_cache_pc + 'd8;
-			      t_cache_tag = n_cache_pc[(`MAX_VA-1):IDX_STOP];
+			      t_cache_tag = n_cache_pc[(`M_WIDTH-1):IDX_STOP];
 			      n_pc = r_cache_pc + 'd12;
 			      if(t_insn_idx == 2)
 				begin
@@ -794,14 +781,13 @@ endfunction
 	    begin
 	       if(mem_rsp_valid)
 		 begin
-		    //$display("icache fetch request for %x returns with data %x at cycle %d", r_pc, mem_rsp_load_data, r_cycle);
 		    n_state = RELOAD_TURNAROUND;
 		 end
 	    end
 	  RELOAD_TURNAROUND:
 	    begin
 	       t_cache_idx = r_miss_pc[IDX_STOP-1:IDX_START];
-	       t_cache_tag = r_miss_pc[(`MAX_VA-1):IDX_STOP];
+	       t_cache_tag = r_miss_pc[(`M_WIDTH-1):IDX_STOP];
 	       if(n_flush_req)
 		 begin
 		    n_flush_req = 1'b0;
@@ -814,11 +800,9 @@ endfunction
 		    n_restart_ack = 1'b1;
 		    n_restart_req = 1'b0;
 		    n_pc = w_restart_pc;
-		    //$display("restart ack, pc %x at cycle %d", n_pc, r_cycle);		    
 		    n_req = 1'b0;
 		    n_state = ACTIVE;
 		    t_clear_fq = 1'b1;
-		    n_page_fault = 1'b0;
 		 end // if (n_restart_req)
 	       else if(!fq_full)
 		 begin
@@ -841,64 +825,30 @@ endfunction
 	  WAIT_FOR_NOT_FULL:
 	    begin
 	       t_cache_idx = r_miss_pc[IDX_STOP-1:IDX_START];
-	       t_cache_tag = r_miss_pc[(`MAX_VA-1):IDX_STOP];
+	       t_cache_tag = r_miss_pc[(`M_WIDTH-1):IDX_STOP];
 	       n_cache_pc = r_miss_pc;
-	       if(n_flush_req)
+	       if(!fq_full)
+		 begin
+		    n_req = 1'b1;
+		    n_state = ACTIVE;
+		 end
+	       else if(n_flush_req)
 		 begin
 		    n_flush_req = 1'b0;
 		    //n_flush_complete = 1'b1;
 		    t_clear_fq = 1'b1;
 		    n_state = FLUSH_CACHE;
 		    t_cache_idx = 0;		    
-		 end	       
-	       else if(!fq_full)
-		 begin
-		    n_req = 1'b1;
-		    n_state = ACTIVE;
 		 end
 	       else if(n_restart_req)
 		 begin
 		    n_restart_ack = 1'b1;
 		    n_restart_req = 1'b0;
 		    n_pc = w_restart_pc;
-		    //$display("restart ack, pc %x at cycle %d", n_pc, r_cycle);
 		    n_req = 1'b0;
 		    n_state = ACTIVE;
 		    t_clear_fq = 1'b1;
-		    n_page_fault = 1'b0;
 		 end // if (n_restart_req)
-	    end // case: WAIT_FOR_NOT_FULL
-	  TLB_MISS:
-	    begin
-	       if(page_walk_rsp_valid)
-	          begin
-	             n_page_fault = page_walk_rsp.fault;
-	             t_reload_tlb = page_walk_rsp.fault==1'b0;
-		     n_state = TLB_MISS_TURNAROUND;
-		     //$display("mmu returns for %x, page fault %b at cycle %d", 
-		     //r_miss_pc, n_page_fault, r_cycle);
-		     //if(t_page_walk_pa != page_walk_rsp_pa)
-		     //begin
-		     //$display("va %x : local %x vs mmu %x", r_miss_pc, t_page_walk_pa, page_walk_rsp_pa);
-		     //$stop();
-		     //end
-	          end
-	       
-	       //n_state = ACTIVE;
-	       //n_req = 1'b1;
-	       //n_cache_pc = r_miss_pc;
-	       //t_cache_idx = r_miss_pc[IDX_STOP-1:IDX_START];
-	       //t_cache_tag = r_miss_pc[(`M_WIDTH-1):IDX_STOP];	       
-	       //n_page_fault = &t_page_walk_pa;
-	       //t_reload_tlb = (&t_page_walk_pa)==1'b0;
-	    end // case: TLB_MISS
-	  TLB_MISS_TURNAROUND:
-	    begin
-	       n_cache_pc = r_miss_pc;
-	       t_cache_idx = r_miss_pc[IDX_STOP-1:IDX_START];
-	       t_cache_tag = r_miss_pc[(`MAX_VA-1):IDX_STOP];
-	       n_state = ACTIVE;
-	       n_req = 1'b1;
 	    end
 	  default:
 	    begin
@@ -936,7 +886,7 @@ endfunction
    always_comb
      begin
 	t_insn.insn_bytes = t_insn_data;
-	t_insn.page_fault = r_page_fault;
+	t_insn.page_fault = t_page_fault;
 	t_insn.pc = r_cache_pc;
 	t_insn.pred_target = n_pc;
 	t_insn.pred = t_take_br;
@@ -1043,63 +993,27 @@ endfunction
 	     r_pht_update <= 1'b0;
 	     r_pht_update_idx <= 'd0;
 	     r_take_br <= 1'b0;
+	     r_pd <= 'd0;
 	  end
 	else
 	  begin
-	     
 	     r_pht_idx <= n_pht_idx;
 	     r_last_spec_gbl_hist <= r_spec_gbl_hist;
 	     r_pht_update <= branch_pc_valid;
 	     r_pht_update_idx <= t_retire_pht_idx;
 	     r_take_br <= took_branch;
+	     r_pd <= t_pd;
 	  end
      end // always_ff@
 
 
-   
-   tlb #(.LG_N(3), .ISIDE(0)) 
-   itlb(
-	.clk(clk), 
-	.reset(reset),
-	.priv(priv),
-	.clear(clear_tlb),
-	.active(paging_active),
-	.req(n_req),
-	.va(n_cache_pc),
-	.pa(w_tlb_pc),
-	.hit(w_tlb_hit),
-	.dirty(),
-	.readable(),
-	.writable(),
-	.user(),
-	.tlb_hits(tlb_hits),
-	.tlb_accesses(tlb_accesses),	
-	.replace_va(r_miss_pc),			
-	.replace(t_reload_tlb),			
-	.page_walk_rsp(page_walk_rsp)
-	);
-   
-   
-`ifdef VERILATOR
-   always_ff@(negedge clk)
+   always_ff@(posedge clk)
      begin
-	//$display("fe in state %d at cycle %d", r_state, r_cycle);
-	//$display("%b %b %b %b", t_push_insn, t_push_insn2, t_push_insn3, t_push_insn4);
-	record_fetch(t_push_insn ? 32'd1 : 32'd0,
-		     t_push_insn2 ? 32'd1 : 32'd0,
-		     t_push_insn3 ? 32'd1 : 32'd0,
-		     t_push_insn4 ? 32'd1 : 32'd0,
-		     { {(64-`M_WIDTH){1'b0}},t_insn.pc},
-		     { {(64-`M_WIDTH){1'b0}},t_insn2.pc},
-		     { {(64-`M_WIDTH){1'b0}},t_insn3.pc},
-		     { {(64-`M_WIDTH){1'b0}},t_insn4.pc},		     
-		     r_resteer_bubble ? 32'd1 : 32'd0,
-		     fq_full ? 32'd1 : 32'd0);
-	
-	
+	r_cache_pc_pa <= (n_req & paging_active) ? 
+			 ic_translate(n_cache_pc, page_table_root) :
+			 n_cache_pc;
      end
-`endif
-	  
+   
 
    ram2r1w #(.WIDTH(2), .LG_DEPTH(`LG_PHT_SZ) ) pht
      (
@@ -1129,7 +1043,7 @@ endfunction
 	   .clk(clk),
 	   .rd_addr(t_cache_idx),
 	   .wr_addr(r_mem_req_addr[IDX_STOP-1:IDX_START]),
-	   .wr_data(r_mem_req_addr[`MAX_VA-1:IDX_STOP]),
+	   .wr_data(r_mem_req_addr[`M_WIDTH-1:IDX_STOP]),
 	   .wr_en(mem_rsp_valid),
 	   .rd_data(r_tag_out)
 	   );
@@ -1239,24 +1153,13 @@ endfunction
 	     n_arch_gbl_hist = {r_arch_gbl_hist[`GBL_HIST_LEN-2:0], took_branch};
 	  end
      end
-
-    // always_ff@(negedge clk)
-    //   begin
-    // 	if(n_restart_ack)
-    // 	  begin
-    // 	     $display("restart pc %x, paging enabled %b, r_state = %d, n_state = %d", 
-    // 		      n_pc, paging_active, r_state, n_state);
-    // 	  end
-    //   end
    
    
    always_ff@(posedge clk)
      begin
 	if(reset)
-	  begin	  
-	     r_tlb_miss <= 1'b0;
+	  begin
 	     r_state <= INITIALIZE;
-	     r_page_fault <= 1'b0;
 	     r_init_pht_idx <= 'd0;
 	     r_pc <= 'd0;
 	     r_miss_pc <= 'd0;
@@ -1286,9 +1189,7 @@ endfunction
 	  end
 	else
 	  begin
-	     r_tlb_miss <= n_tlb_miss;
 	     r_state <= n_state;
-	     r_page_fault <= n_page_fault;
 	     r_init_pht_idx <= n_init_pht_idx;
 	     r_pc <= n_pc;
 	     r_miss_pc <= n_miss_pc;

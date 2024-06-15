@@ -205,6 +205,9 @@ long long dc_ld_translate(long long va, long long root) {
   return translate(va,root, false, false);
 }
 
+long long ic_translate(long long va, long long root) {
+  return translate(va,root,true, false);
+}
 
 uint64_t page_table_root = ~0UL;
 std::list<store_rec> store_queue;
