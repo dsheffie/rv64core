@@ -913,6 +913,7 @@ module l1d(clk,
    logic t_wr_link_reg;
    logic r_paging_active;   
    logic [63:0]	n_link_reg, r_link_reg;
+   logic	n_link_reg_val, r_link_reg_val;
 
    always_ff@(posedge clk)
      begin
@@ -921,7 +922,17 @@ module l1d(clk,
 
 
    wire w_paging_toggle = r_paging_active ^ paging_active;
-   
+   always_ff@(posedge clk)
+     begin
+	if(reset)
+	  begin
+	     r_link_reg_val <= 1'b0;
+	  end
+	else
+	  begin
+	     r_link_reg_val <= n_link_reg_val;
+	  end
+     end
    always_ff@(posedge clk)
      begin
 	if(reset)
@@ -1053,7 +1064,7 @@ module l1d(clk,
      end // always_ff@ (negedge clk)
 `endif
 
-   wire w_match_link = {r_req.addr[63:4], 4'd0} == r_link_reg;
+   wire w_match_link = ({r_req.addr[63:4], 4'd0} == r_link_reg) & r_link_reg_val;
    always_comb
      begin
 	t_data = mem_rsp_valid ? mem_rsp_load_data : 
@@ -1079,7 +1090,7 @@ module l1d(clk,
 
 	t_wr_link_reg = 1'b0;
 	n_link_reg = r_link_reg;
-
+	n_link_reg_val = r_link_reg_val;
 	
 	case(r_req.amo_op)
 	  5'd0: /* amoadd */
@@ -1140,7 +1151,8 @@ module l1d(clk,
 	       t_rsp_data = {{32{t_shift[31]}}, t_shift[31:0]};	       
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
 	       t_wr_link_reg = r_req.is_ll;
-	       n_link_reg = {r_req.addr[63:4], 4'd0};	       
+	       n_link_reg = {r_req.addr[63:4], 4'd0};
+	       n_link_reg_val = r_req.is_ll;
 	    end
 	  MEM_LWU:
 	    begin
@@ -1153,6 +1165,7 @@ module l1d(clk,
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
 	       t_wr_link_reg = r_req.is_ll;
 	       n_link_reg = {r_req.addr[63:4], 4'd0};
+	       n_link_reg_val = r_req.is_ll;
 	    end	  
 	  MEM_SB:
 	    begin
@@ -1182,6 +1195,7 @@ module l1d(clk,
 	       t_wr_store = w_match_link && t_hit_cache && 
 			    (r_is_retry || r_did_reload) & (!r_req.has_cause);
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
+	       n_link_reg_val = 1'b0;
 	    end
 	  MEM_SCW:
 	    begin
@@ -1190,6 +1204,7 @@ module l1d(clk,
 	       t_wr_store = w_match_link && t_hit_cache && 
 			    (r_is_retry || r_did_reload) & (!r_req.has_cause);
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
+	       n_link_reg_val = 1'b0;
 	    end
 	  MEM_AMOW:
 	    begin
