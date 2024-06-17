@@ -2988,6 +2988,9 @@ module exec(clk,
      begin
 	t_mem_tail.op = MEM_LW;
 	t_mem_tail.addr = w_agu_addr;
+`ifdef VERILATOR
+	t_mem_tail.vaddr = w_agu_addr;
+`endif	
 	t_mem_tail.rob_ptr = mem_uq.rob_ptr;
 	t_mem_tail.dst_valid = 1'b0;
 	t_mem_tail.dst_ptr = mem_uq.dst;

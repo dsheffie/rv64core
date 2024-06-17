@@ -1,9 +1,6 @@
 #ifndef __GLOBALSH__
 #define __GLOBALSH__
 
-struct SDL_Window;
-struct SDL_Surface;
-
 namespace globals {
   extern bool syscall_emu;
   extern uint32_t tohost_addr;
@@ -13,11 +10,8 @@ namespace globals {
   extern bool silent;
   extern bool log;
   extern std::map<std::string, uint32_t> symtab;
-  extern SDL_Window *sdlwin;
-  extern SDL_Surface *sdlscr;
+
 };
 
-#define FB_WIDTH 320
-#define FB_HEIGHT 200
 
 #endif

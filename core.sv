@@ -27,7 +27,9 @@ import "DPI-C" function void record_retirement(input longint pc,
 					       input int     retire_ptr,
 					       input longint retire_data,
 					       input int     fault,
-					       input int     br_mispredict);
+					       input int     br_mispredict,
+					       input int     paging_active,
+					       input longint page_table_root);
 
 import "DPI-C" function void record_restart(input int restart_cycles);
 import "DPI-C" function void record_ds_restart(input int delay_cycles);
@@ -776,7 +778,9 @@ module core(clk,
 			       {27'd0, t_rob_head.ldst},
 			       {{(64-`M_WIDTH){1'b0}},t_rob_head.data},
 			       t_rob_head.faulted ? 32'd1 : 32'd0,
-			       t_rob_head.faulted ? 32'd1 : 32'd0			       
+			       t_rob_head.faulted ? 32'd1 : 32'd0,
+			       paging_active ? 32'd1 : 32'd0,
+			       page_table_root
 			       );
    	  end
    	if(t_retire_two)
@@ -789,9 +793,11 @@ module core(clk,
    			       r_cycle,
 			       t_rob_next_head.valid_dst ? 32'd1 : 32'd0,
 			       {27'd0, t_rob_next_head.ldst},
-			       {{(64-`M_WIDTH){1'b0}},t_rob_next_head.data},			       
-			       t_rob_next_head.faulted ? 32'd1 : 32'd0,
-			       32'd0);	     
+			       {{(64-`M_WIDTH){1'b0}},t_rob_next_head.data},		   
+			       t_rob_next_head.faulted ? 32'd1 : 32'd0,			       
+			       32'd0,
+			       paging_active ? 32'd1 : 32'd0,
+			       page_table_root);	     
    	  end // if (t_retire_two)
 	if(r_state == RAT && n_state == ACTIVE)
 	  begin
@@ -1295,7 +1301,10 @@ module core(clk,
 	       //$display("exception handler pc %x. page root %x",
 	       //w_exc_pc, page_table_root);
 	       if(w_exc_pc == r_epc)
-		 $stop();
+		 begin
+		    $display("stuck in exception loop, w_exc_pc = %x, page_table_root = %x, cause %d",
+			     w_exc_pc, page_table_root, r_cause);
+		 end
 	       n_state = WAIT_FOR_CSR_WRITE;
 	    end // case: WRITE_CSRS
 	  WAIT_FOR_CSR_WRITE:

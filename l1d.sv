@@ -4,8 +4,8 @@
 
 `ifdef VERILATOR
 import "DPI-C" function void wr_log(input longint pc, 
-				    input longint addr, 
-				    input longint data, 
+				    input longint unsigned addr, 
+				    input longint unsigned data, 
 				    int 	  is_atomic);
 `endif
 

@@ -13,8 +13,8 @@ import "DPI-C" function void write_word(input longint addr, input int data, inpu
 import "DPI-C" function void write_dword(input longint addr, input longint data, input longint root, int id);
 import "DPI-C" function longint dc_ld_translate(longint va, longint root );
 import "DPI-C" function void wr_log(input longint pc, 
-				    input longint addr, 
-				    input longint data, 
+				    input longint unsigned addr, 
+				    input longint unsigned data, 
 				    int 	  is_atomic);
 
 `endif
@@ -804,14 +804,17 @@ module perfect_l1d(clk,
    always_ff@(posedge clk)
      begin
 	t_pa <= dc_ld_translate({n_req.addr[63:12], 12'd0}, page_table_root);
+
      end
 
+   wire [63:0] w_taddr  = {t_req_addr_pa[63:12], r_req.addr[11:0]};
+   
    always_ff@(negedge clk)
      begin
 	if(t_wr_array)
 	  begin
 	     wr_log(r_req.pc,
-		    r_req.addr, 
+		    w_taddr,
 		    r_req.op == MEM_AMOD ? t_amo64_data : 
 		    (r_req.op == MEM_AMOW ? {{32{t_amo32_data[31]}},t_amo32_data} : 
 		     r_req.data), 

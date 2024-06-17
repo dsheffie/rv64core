@@ -887,7 +887,7 @@ void execRiscv(state_t *s) {
 	    if(not(t.pc == s->pc and t.addr == pa and t.data == std::max(mm,x))) {
 	      printf("you have an atomic error\n");
 	      printf("rtl %lx, %lx, %lx\n", t.pc, t.addr, t.data);
-	      printf("sim %lx, %lx, %lx\n", s->pc, pa, std::max(mm,x));
+	      printf("sim %lx, %lx, %x\n", s->pc, pa, std::max(mm,x));
 	      exit(-1);
 	    }
 	    atomic_queue.pop_front();
@@ -1127,14 +1127,15 @@ void execRiscv(state_t *s) {
 
       int sz = 1<<(m.s.sel);
       int64_t pa = s->translate(ea, fault, sz, true);
-      if(ea == 0xffffffff81355000UL) {
-	printf("store to %lx at pc %lx with value %lx\n", pa, s->pc, s->gpr[m.s.rs2]);
-      }
+
+      
       if(fault) {
 	except_cause = CAUSE_STORE_PAGE_FAULT;
 	tval = ea;
 	goto handle_exception;
       }
+
+
       
       switch(m.s.sel)
 	{

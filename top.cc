@@ -21,9 +21,6 @@ std::map<std::string, uint32_t> globals::symtab;
 char **globals::sysArgv = nullptr;
 int globals::sysArgc = 0;
 
-SDL_Window *globals::sdlwin = nullptr;
-SDL_Surface *globals::sdlscr = nullptr;
-
 static uint64_t cycle = 0;
 static uint64_t fetch_slots = 0;
 static bool trace_retirement = false;
@@ -142,6 +139,7 @@ long long translate(long long va, long long root, bool iside, bool store) {
   int mask_bits = -1;
   a = root + (((va >> 30) & 511)*8);
   u = *reinterpret_cast<int64_t*>(s->mem + a);
+  //printf("1st level entry %lx\n", a);
   if((u & 1) == 0) {
     if(verbose_ic_translate)
       printf("failed translation for %llx at level 3, u %lx r %llx\n", va, u, root);
@@ -156,6 +154,7 @@ long long translate(long long va, long long root, bool iside, bool store) {
   root = ((u >> 10) & ((1UL<<44)-1)) * 4096;
   a = root + (((va >> 21) & 511)*8);
   u = *reinterpret_cast<int64_t*>(s->mem + a);
+  //printf("2nd level entry %lx\n", a);  
   if((u & 1) == 0) {
     if(verbose_ic_translate)
       printf("failed translation for %llx at level 2\n", va);
@@ -169,6 +168,7 @@ long long translate(long long va, long long root, bool iside, bool store) {
   //3rd level walk
   root = ((u >> 10) & ((1UL<<44)-1)) * 4096;  
   a = root + (((va >> 12) & 511)*8);
+  //printf("3rd level entry %lx\n", a);
   u = *reinterpret_cast<int64_t*>(s->mem + a);
   if((u & 1) == 0) {
     if(verbose_ic_translate)
@@ -196,9 +196,9 @@ long long translate(long long va, long long root, bool iside, bool store) {
   
   u = ((u >> 10) & ((1UL<<44)-1)) * 4096;
   uint64_t pa = (u&(~m)) | (va & m);
-  //printf("translation complete, pa %lx!\n", pa);
+  // printf("translation complete, va %llx -> pa %llx!\n", va, pa);
   //exit(-1);
-  return pa;
+  return (pa & ((1UL<<32)-1));
 }
 
 long long dc_ld_translate(long long va, long long root) {
@@ -217,7 +217,10 @@ void start_log(int l) {
   trace_retirement |= (l!=0);
 }
 
-void wr_log(long long pc, long long addr, long long data, int is_atomic) {
+void wr_log(long long pc,
+	    unsigned long long addr,
+	    unsigned long long data,
+	    int is_atomic) {
   if(not(enable_checker))
     return;
 
@@ -239,10 +242,11 @@ void wr_log(long long pc, long long addr, long long data, int is_atomic) {
 	   t.pc, pc, t.addr, t.data);
   }
   if(not(t.pc == pc and t.addr == addr and t.data == data)) {
-    printf("you have a store error! for an atomic %d, pc mismatch %d, addr mismatch %d, data mismatch %d\n",
+    printf("you have a store error! for an atomic %d, pc match %d, addr match %d, data match %d\n",
 	   is_atomic, t.pc==pc, t.addr==addr, t.data == data);
-    printf("sim pc %lx, rtl pc %llx %lx, %lx\n", t.pc, pc, t.addr, t.data);
-    //exit(-1);
+    printf("sim pc %lx, rtl pc %llx sim addr %lx, sim data %lx, rtl addr %llx, rtl data %llx, addr xor %llx\n",
+	   t.pc, pc, t.addr, t.data, addr, data, t.addr ^ addr);
+    exit(-1);
   }
   store_queue.pop_front();
 }
@@ -471,7 +475,10 @@ void record_retirement(long long pc,
 		       int retire_reg_ptr,
 		       long long retire_reg_data,
 		       int faulted ,
-		       int br_mispredict) {
+		       int br_mispredict,
+		       int paging_active,
+		       long long page_table_root
+		       ) {
 
   uint32_t insn = get_insn(pc, s);
   uint64_t delta = retire_cycle - last_retire_cycle;
@@ -530,7 +537,7 @@ void record_retirement(long long pc,
     
     uint32_t insn = get_insn(pc, s);
     uint32_t opcode = insn & 127;
-    auto disasm = getAsmString(insn, pc);
+    auto disasm = getAsmString(pc, page_table_root, paging_active);
     riscv_t m(insn);
     if(opcode == 0x3 ) {
       std::stringstream ss;
@@ -691,20 +698,6 @@ int main(int argc, char **argv) {
   bool got_putchar = false;
   bool was_in_flush_mode = false;
   bool pending_irq = false;
-#ifdef USE_SDL
-  if(use_fb) {
-    assert(SDL_Init(SDL_INIT_VIDEO) == 0);
-    globals::sdlwin = SDL_CreateWindow("FRAMEBUFFER",
-				       SDL_WINDOWPOS_UNDEFINED,
-				       SDL_WINDOWPOS_UNDEFINED,
-				       FB_WIDTH,
-				       FB_HEIGHT,
-				       SDL_WINDOW_SHOWN);
-    assert(globals::sdlwin != nullptr);
-    globals::sdlscr = SDL_GetWindowSurface(globals::sdlwin);
-    assert(globals::sdlscr);
-  }
-#endif
   
   globals::syscall_emu = not(use_checkpoint);
   tb->syscall_emu = globals::syscall_emu;
@@ -1472,11 +1465,6 @@ int main(int argc, char **argv) {
   }
   //delete tb;
   stopCapstone();
-#ifdef USE_SDL
-  if(globals::sdlwin) {
-    SDL_DestroyWindow(globals::sdlwin);
-    SDL_Quit();
-  }
-#endif
+
   exit(EXIT_SUCCESS);
 }

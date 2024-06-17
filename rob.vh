@@ -98,6 +98,10 @@ typedef struct packed {
 `ifdef ENABLE_CYCLE_ACCOUNTING
    logic [63:0] 	    fetch_cycle;
 `endif
+
+`ifdef VERILATOR
+   logic [63:0]		    vaddr;
+`endif
    logic [3:0] 		    restart_id;   
 } mem_req_t;
 
