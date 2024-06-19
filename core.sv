@@ -843,7 +843,7 @@ module core(clk,
 `ifdef DUMP_ROB
    always_ff@(negedge clk)
      begin
-	if(r_cycle >= 'd3106120 )
+	if(r_cycle >= 64'd10000)
 	  begin 
 	     $display("cycle %d : state = %d, alu complete %b, mem complete %b,head_ptr %d, complete %b,  can_retire_rob_head %b, head pc %x, empty %b, full %b, bob full %b", 
 		      r_cycle,
@@ -1280,7 +1280,7 @@ module core(clk,
 	       //if(r_irq)
 	       //begin
 	       //$display("took fault for %x with cause %d at cycle %d, priv %d, tval %x, irq %b, epc %x, cycle %d", 
-	       //t_rob_head.pc, t_rob_head.cause, r_cycle, priv, n_tval, r_irq, r_epc, r_cycle);
+	       //	t_rob_head.pc, t_rob_head.cause, r_cycle, priv, n_tval, r_irq, r_epc, r_cycle);
 	       //end
 	       
 	       t_bump_rob_head = 1'b1;

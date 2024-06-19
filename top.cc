@@ -129,6 +129,44 @@ void record_l1d(int req, int ack, int ack_st, int blocked, int stall_reason) {
 
 static bool verbose_ic_translate = false;
 
+long long loadgpr(int gprid) {
+  return s->gpr[gprid];
+}
+
+int load_priv() {
+  printf("initial priv = %d\n", s->priv);
+  return s->priv;
+}
+
+int is_satp_armed() {
+  return not(s->unpaged_mode());
+}
+
+#define LOAD(x) long long load_##x() {printf("loading %s with %lx\n", #x, s->x); return s->x;}
+
+LOAD(scounteren);
+LOAD(satp);
+LOAD(stval);
+LOAD(scause);
+LOAD(sepc);
+LOAD(mcause);
+LOAD(mie);
+LOAD(mip);
+LOAD(mstatus);
+LOAD(mtvec);
+LOAD(stvec);
+LOAD(mcounteren);
+LOAD(mideleg);
+LOAD(medeleg);
+LOAD(mscratch);
+LOAD(sscratch);
+LOAD(mepc);
+LOAD(mtval);
+#undef LOAD
+
+
+
+
 void csr_putchar(char c) {
   if(c==0) std::cout << "\n";
   else std::cout << c;
@@ -704,9 +742,9 @@ int main(int argc, char **argv) {
   
   if(use_checkpoint) {
     loadState(*s, rv32_binary.c_str());
-    for(int i = 0; i < 32; i++) {
-      assert(s->gpr[i] == 0);
-    }
+    //for(int i = 0; i < 32; i++) {
+    //if(s->gpr[i] == 0);
+    //}
     loadState(*ss, rv32_binary.c_str());
   }
   else {

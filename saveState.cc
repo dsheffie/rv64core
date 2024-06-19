@@ -149,5 +149,49 @@ void loadState(state_t &s, const std::string &filename) {
     assert(sz == sizeof(p));
     memcpy(s.mem+p.va, p.data, 4096);
   }
+
+  switch(h.priv&3)
+    {
+    case 0:
+      s.priv = priv_user;
+      break;
+    case 1:
+      s.priv = priv_supervisor;
+      break;
+    case 2:
+      s.priv = priv_hypervisor;
+      break;
+    case 3:
+      s.priv = priv_machine;
+      break;
+    }
+  s.mstatus = h.mstatus;
+  s.misa = h.misa;
+  s.mideleg = h.mideleg;
+  s.medeleg = h.medeleg;
+  s.mscratch = h.mscratch;
+  s.mhartid = h.mhartid;
+  s.mtvec = h.mtvec;
+  s.mcounteren = h.mcounteren;
+  s.mie = h.mie;
+  s.mip = h.mip;
+  s.mcause = h.mcause;
+  s.mepc = h.mepc;
+  s.mtval = h.mtval;
+  s.sscratch = h.sscratch;
+  s.scause = h.scause;
+  s.stvec = h.stvec;
+  s.sepc = h.sepc;
+  s.sip = h.sip;
+  s.stval = h.stval;
+  s.satp = h.satp;
+  s.scounteren = h.scounteren; 
+  s.pmpaddr0 = h.pmpaddr0;
+  s.pmpaddr1 = h.pmpaddr1;
+  s.pmpaddr2 = h.pmpaddr2;
+  s.pmpaddr3 = h.pmpaddr3;
+  s.pmpcfg0 = h.pmpcfg0;
+  s.mtimecmp = h.mtimecmp;
+  
   close(fd);
 }

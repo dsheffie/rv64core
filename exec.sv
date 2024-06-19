@@ -5,6 +5,27 @@
 import "DPI-C" function void csr_putchar(input byte x);
 import "DPI-C" function void csr_puttime(input longint mtime);
 import "DPI-C" function void term_sim();
+import "DPI-C" function int load_priv();
+import "DPI-C" function int is_satp_armed();
+import "DPI-C" function longint load_scounteren();
+import "DPI-C" function longint load_satp();
+import "DPI-C" function longint load_stval();
+import "DPI-C" function longint load_scause();
+import "DPI-C" function longint load_sepc();
+import "DPI-C" function longint load_mcause();
+import "DPI-C" function longint load_mie();
+import "DPI-C" function longint load_mip();
+import "DPI-C" function longint load_mstatus();
+import "DPI-C" function longint load_mtvec();
+import "DPI-C" function longint load_stvec();
+import "DPI-C" function longint load_mcounteren();
+import "DPI-C" function longint load_mideleg();
+import "DPI-C" function longint load_medeleg();
+import "DPI-C" function longint load_mscratch();
+import "DPI-C" function longint load_sscratch();
+import "DPI-C" function longint load_mepc();
+import "DPI-C" function longint load_mtval();
+
 
 import "DPI-C" function void report_exec(input int int_valid, 
 					 input int int_blocked,
@@ -2483,7 +2504,13 @@ module exec(clk,
      begin
 	if(reset)
 	  begin /* begin in machine priv mode */
+`ifdef VERILATOR
+	     /* verilator lint_off WIDTH */
+	     r_priv <= load_priv();
+	     /* verilator lint_on WIDTH */
+`else
 	     r_priv <= 2'd3;
+`endif
 	  end
 	else
 	  begin
@@ -2738,38 +2765,62 @@ module exec(clk,
    //	      r_mepc, int_uop.pc, r_cycle, w_mret_mstatus);
    //end	
    //end
-  
+
    
    always_ff@(posedge clk)
      begin
 	if(reset)
 	  begin
+`ifdef VERILATOR
+	     r_scounteren <= load_scounteren();
+	     r_satp <= load_satp();
+	     r_stval <= load_stval();
+	     r_scause <= load_scause();
+	     r_sepc <= load_sepc();
+	     r_mcause <= load_mcause();
+	     r_mie <= load_mie();
+	     r_mip <= load_mip();
+	     r_mstatus <= load_mstatus();
+	     r_stvec <= load_stvec();
+	     r_mtvec <= load_mtvec();
+	     r_mcounteren <= load_mcounteren();
+	     r_mideleg <= load_mideleg();
+	     r_medeleg <= load_medeleg();
+	     r_sscratch <= load_sscratch();
+	     r_mscratch <= load_mscratch();
+	     r_mepc <= load_mepc();
+	     r_mtval <= load_mtval();
+	     /* verilator lint_off WIDTH */	     
+	     r_satp_armed <= is_satp_armed();
+	     /* verilator lint_on WIDTH */	     
+`else
 	     r_scounteren <= 'd0;
 	     r_satp <= 'd0;
 	     r_stval <= 'd0;
 	     r_scause <= 'd0;
 	     r_sepc <= 'd0;
-	     
 	     r_mcause <= 'd0;
-	     
 	     r_mie <= 'd0;
 	     r_mip <= 'd0;
 	     r_mstatus <= 64'ha00000000;
 	     r_mtvec <= 'd0;
+	     r_stvec <= 'd0;
 	     r_mcounteren <= 'd0;
 	     r_mideleg <= 'd0;
 	     r_medeleg <= 'd0;
-
+	     r_sscratch <= 'd0;
+	     r_mscratch <= 'd0;
+	     r_mepc <= 'd0;
+	     r_mtval <= 'd0;
+	     r_satp_armed <= 1'b0;
+`endif // !`ifdef VERILATOR
 	     r_pmpaddr0 <= 'd0;
 	     r_pmpaddr1 <= 'd0;
 	     r_pmpaddr2 <= 'd0;
 	     r_pmpaddr3 <= 'd0;
 	     r_pmpcfg0 <= 'd0;
-	     r_mscratch <= 'd0;
-	     r_mepc <= 'd0;
-	     r_mtval <= 'd0;
-	     r_satp_armed <= 1'b0;
 	     r_misa <= 64'h8000000000141101;
+	     
 	  end // if (reset)
 	else if(update_csr_exc)
 	  begin
@@ -3254,6 +3305,7 @@ module exec(clk,
 
    rf6r3w #(.WIDTH(`M_WIDTH), .LG_DEPTH(`LG_PRF_ENTRIES)) 
    intprf (.clk(clk),
+	   .reset(reset),
 	   .rdptr0(t_picked_uop.srcA),
 	   .rdptr1(t_picked_uop.srcB),
 	   .rdptr2(t_mem_uq.srcA),
