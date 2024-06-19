@@ -2796,22 +2796,22 @@ module exec(clk,
 `else
 	     r_scounteren <= 'd0;
 	     r_satp <= 'd0;
-	     r_stval <= 'd0;
-	     r_scause <= 'd0;
-	     r_sepc <= 'd0;
-	     r_mcause <= 'd0;
+	     //r_stval <= 'd0;
+	     //r_scause <= 'd0;
+	     //r_sepc <= 'd0;
+	     //r_mcause <= 'd0;
 	     r_mie <= 'd0;
 	     r_mip <= 'd0;
 	     r_mstatus <= 64'ha00000000;
-	     r_mtvec <= 'd0;
-	     r_stvec <= 'd0;
+	    // r_mtvec <= 'd0;
+	    // r_stvec <= 'd0;
 	     r_mcounteren <= 'd0;
-	     r_mideleg <= 'd0;
-	     r_medeleg <= 'd0;
-	     r_sscratch <= 'd0;
-	     r_mscratch <= 'd0;
-	     r_mepc <= 'd0;
-	     r_mtval <= 'd0;
+	     //r_mideleg <= 'd0;
+	     //r_medeleg <= 'd0;
+	     //r_sscratch <= 'd0;
+	     //r_mscratch <= 'd0;
+	     //r_mepc <= 'd0;
+	     //r_mtval <= 'd0;
 	     r_satp_armed <= 1'b0;
 `endif // !`ifdef VERILATOR
 	     r_pmpaddr0 <= 'd0;
