@@ -134,7 +134,7 @@ long long loadgpr(int gprid) {
 }
 
 int load_priv() {
-  printf("initial priv = %d\n", s->priv);
+  /*printf("initial priv = %d\n", s->priv); */
   return s->priv;
 }
 
@@ -142,7 +142,7 @@ int is_satp_armed() {
   return not(s->unpaged_mode());
 }
 
-#define LOAD(x) long long load_##x() {printf("loading %s with %lx\n", #x, s->x); return s->x;}
+#define LOAD(x) long long load_##x() {/*printf("loading %s with %lx\n", #x, s->x);*/ return s->x;}
 
 LOAD(scounteren);
 LOAD(satp);
