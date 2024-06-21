@@ -520,17 +520,6 @@ void record_retirement(long long pc,
 
   uint32_t insn = get_insn(pc, s);
   uint64_t delta = retire_cycle - last_retire_cycle;
-  static int64_t max_t = 0;
-  int64_t t = retire_cycle-fetch_cycle;
-  
-  if(t >= max_t ) {
-    max_t = t;
-    uint32_t insn = get_insn(pc, s);
-    uint32_t opcode = insn & 127;
-    auto disasm = getAsmString(insn, pc);
-    //printf("new max_t = %ld, op %s\n", max_t, disasm.c_str());
-    // printf("f %ld, a %ld, c %ld, r %ld\n", fetch_cycle, alloc_cycle, complete_cycle, retire_cycle);
-  }
   
   if(retire_reg_val) {
     pl_regs[retire_reg_ptr & 31] = retire_reg_data;
@@ -818,8 +807,16 @@ int main(int argc, char **argv) {
       ++n_branches;
     }
     if(tb->branch_fault) {
-      mispredicts[tb->branch_pc]++; 
+      uint64_t pa = tb->branch_pc;
+      if(tb->paging_active) {
+	pa = translate(tb->branch_pc, tb->page_table_root, true, false);
+      }
+      //auto disasm = getAsmString(tb->branch_pc, tb->page_table_root, tb->paging_active); 
+      //printf("mispredict at %lx, translated to %lx, %s\n",
+      //tb->branch_pc, pa, disasm.c_str());
+      mispredicts[pa]++; 
     }
+    
     if(tb->branch_fault) {
       ++n_mispredicts;
     }
@@ -855,22 +852,38 @@ int main(int argc, char **argv) {
     }
 
     
-    /* virtual addresses */
-    if(globals::syscall_emu) {
-      if(tb->rob_empty) {
-	tip_map[last_retired_pc]+= 1.0;
+    if(tb->rob_empty) {
+      uint64_t pa = last_retired_pc;
+      if(tb->paging_active) {
+	pa = translate(last_retired_pc, tb->page_table_root, true, false);
       }
-      else if(!(tb->retire_valid or tb->retire_two_valid)) {
-	tip_map[tb->retire_pc]+= 1.0;
-      }
-      else {
-	assert(tb->retire_valid or tb->retire_two_valid);      
-	double total = static_cast<double>(tb->retire_valid) +
-	  static_cast<double>(tb->retire_two_valid);
-	tip_map[tb->retire_pc]+= 1.0 / total;
-	if(tb->retire_two_valid) {
-	  tip_map[tb->retire_two_pc]+= 1.0 / total;
-	}
+      tip_map[pa]+= 1.0;
+    }
+    else if(!(tb->retire_valid or tb->retire_two_valid)) {
+      uint64_t pa = tb->retire_pc;
+      if(tb->paging_active) {
+	pa = translate(tb->retire_pc, tb->page_table_root, true, false);
+      }	
+      tip_map[pa]+= 1.0;
+    }
+    else {
+      assert(tb->retire_valid or tb->retire_two_valid);
+      
+      double total = static_cast<double>(tb->retire_valid) +
+	static_cast<double>(tb->retire_two_valid);
+      
+      uint64_t pa = tb->retire_pc;
+      if(tb->paging_active) {
+	pa = translate(tb->retire_pc, tb->page_table_root, true, false);
+      }	
+      
+      tip_map[pa]+= 1.0 / total;
+      if(tb->retire_two_valid) {
+	pa = tb->retire_two_pc;
+	if(tb->paging_active) {
+	  pa = translate(tb->retire_two_pc, tb->page_table_root, true, false);
+	}	
+	tip_map[pa]+= 1.0 / total;
       }
     }
     
@@ -880,11 +893,17 @@ int main(int argc, char **argv) {
     }
 
     
+    
     if(tb->retire_valid) {
       ++insns_retired;
 
+
       if(last_retire > 1) {
-	pushout_histo[tb->retire_pc] += last_retire;
+	uint64_t pa = tb->retire_pc;
+	if(tb->paging_active) {
+	  pa = translate(tb->retire_pc, tb->page_table_root, true, false);
+	}
+	pushout_histo[pa] += last_retire;
       }
       last_retire = 0;
 
@@ -1428,16 +1447,14 @@ int main(int argc, char **argv) {
     out << total_pushout << " cycles of pushout\n";
     dump_histo(pushout_name, pushout_histo, s);
     
-    //std::ofstream branch_info("retire_info.csv");
     uint64_t total_retire = 0, total_cycle = 0;
     for(auto &p : retire_map) {
       total_retire += p.second;
     }
     for(auto &p : retire_map) {
-      //branch_info << p.first << "," << p.second << "," << static_cast<double>(p.second) / total_retire << "\n";
       total_cycle += (p.first * p.second);
     }
-    //branch_info.close();
+
     int median_int_rdy;
     double avg_int_rdy = histo_mean_median(int_sched_rdy_map, median_int_rdy);
     out << "avg int rdy insn = " << avg_int_rdy << "\n";
@@ -1472,15 +1489,13 @@ int main(int argc, char **argv) {
     std::cout << "total_retire = " << total_retire << "\n";
     std::cout << "total_cycle  = " << total_cycle << "\n";
     std::cout << "total ipc    = " << static_cast<double>(total_retire) / total_cycle << "\n";
-    if(globals::syscall_emu) {
-      double tip_cycles = 0.0;
-      for(auto &p : tip_map) {
-	tip_cycles += p.second;
-      }
-      std::cout << "tip cycles  = " << tip_cycles << "\n";
-      dump_histo("tip.txt", tip_map, s);    
-      out.close();
+    double tip_cycles = 0.0;
+    for(auto &p : tip_map) {
+      tip_cycles += p.second;
     }
+    std::cout << "tip cycles  = " << tip_cycles << "\n";
+    dump_histo("tip.txt", tip_map, s);    
+    out.close();
   }
   else {
     std::cout << "instructions retired = " << insns_retired << "\n";
