@@ -13,6 +13,7 @@ module tlb(clk,
 	   readable,
 	   writable,
 	   user,
+	   zero_page,
 	   tlb_hits,
 	   tlb_accesses,
 	   replace_va,
@@ -35,6 +36,8 @@ module tlb(clk,
    output logic	       writable;
    output logic        user;
 
+   output logic	       zero_page;
+      
    output logic [63:0] tlb_hits;
    output logic [63:0] tlb_accesses;
    
@@ -54,9 +57,11 @@ module tlb(clk,
    logic [1:0]	       r_pgsize[N-1:0];
    logic [27:0]	       r_va_tags[N-1:0];
    logic [51:0]	       r_pa_data[N-1:0];
+
    
    wire [N-1:0]	       w_hits4k, w_hits2m, w_hits1g;
    wire [N-1:0]	       w_hits;
+
    
    wire [LG_N:0]	       w_idx;   
    generate
@@ -115,6 +120,7 @@ module tlb(clk,
 	readable <= r_readable[w_idx[LG_N-1:0]];
 	dirty <= r_dirty[w_idx[LG_N-1:0]];
 	pa <= active ? w_pa_sel : va;
+	zero_page <= reset ? 1'b0 : ((|va[39:12]) == 1'b0);
      end
 
    logic [63:0] r_cycle;
@@ -140,6 +146,8 @@ module tlb(clk,
 	  end
 	else if(replace)
 	  begin
+	     //$display("tlb replace entry %d with %x, ISIDE=%d", 
+	     //r_lfsr[LG_N:1], {page_walk_rsp.paddr[63:12], 12'd0}, ISIDE);
 	     r_valid[r_lfsr[LG_N:1]] <= 1'b1;
 	  end
      end // always_ff@ (posedge clk)

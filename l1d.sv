@@ -228,7 +228,7 @@ module l1d(clk,
    logic 				  t_got_req, t_got_req2, t_replay_req2;
    logic 				  t_tlb_xlat;
    logic 				  n_pending_tlb_miss, r_pending_tlb_miss;
-   
+   logic				  n_pending_tlb_zero_page, r_pending_tlb_zero_page;
    logic 				  t_got_miss;
    logic 				  t_push_miss;
    
@@ -310,7 +310,7 @@ module l1d(clk,
    logic [63:0] 	       n_cache_hits, r_cache_hits;
 
    wire 		       w_tlb_hit, w_tlb_dirty, w_tlb_writable, w_tlb_readable, 
-			       w_tlb_user;
+			       w_tlb_user, w_zero_page;
 
 
    
@@ -608,6 +608,7 @@ module l1d(clk,
 	     r_page_walk_gnt <= 1'b0;
 	     r_flush_was_active <= 1'b0;
 	     r_pending_tlb_miss <= 1'b0;
+	     r_pending_tlb_zero_page <= 1'b0;
 	     r_tlb_addr <= 'd0;
 	     r_ack_ld_early <= 1'b0;
 	     r_did_reload <= 1'b0;
@@ -661,6 +662,7 @@ module l1d(clk,
 	     r_page_walk_gnt <= n_page_walk_gnt;
 	     r_flush_was_active <= n_flush_was_active;
 	     r_pending_tlb_miss <= n_pending_tlb_miss;
+	     r_pending_tlb_zero_page <= n_pending_tlb_zero_page;
 	     r_tlb_addr <= n_tlb_addr;
 	     r_ack_ld_early <= t_ack_ld_early;
 	     r_did_reload <= n_did_reload;
@@ -902,6 +904,7 @@ module l1d(clk,
 	    .readable(w_tlb_readable),
 	    .writable(w_tlb_writable),
 	    .user(w_tlb_user),
+            .zero_page(w_zero_page),			
             .tlb_hits(tlb_hits),
             .tlb_accesses(tlb_accesses),			
             .replace_va(r_tlb_addr),
@@ -1308,6 +1311,7 @@ module l1d(clk,
 	
 	t_tlb_xlat = 1'b0;
 	n_pending_tlb_miss  = r_pending_tlb_miss;
+	n_pending_tlb_zero_page = r_pending_tlb_zero_page;
 	
 	t_got_non_mem = 1'b0;
 	n_last_wr = 1'b0;
@@ -1416,6 +1420,7 @@ module l1d(clk,
 				  r_req2.pc, r_tlb_addr, w_tlb_pa, t_port2_hit_cache, r_req2.rob_ptr, r_cycle, t_port2_hit_cache );
 `endif
 			 n_pending_tlb_miss = 1'b0;
+			 n_pending_tlb_zero_page = 1'b0;
 		      end
 		    
 		    if(drain_ds_complete || r_req2.op == MEM_NOP)
@@ -1429,12 +1434,13 @@ module l1d(clk,
 		    else if(!w_tlb_hit)
 		      begin
 			 n_pending_tlb_miss = 1'b1;
+			 n_pending_tlb_zero_page = w_zero_page;
 			 if(r_pending_tlb_miss) $stop();
 		      end
 		    else if(w_tlb_st_exc)
 		      begin
-			 $display("store exception for pc %x, addr %x", 
-				  r_req2.pc, r_req2.addr);
+			 $display("store exception for pc %x, addr %x, cycle %d", 
+				  r_req2.pc, r_req2.addr, r_cycle);
 			 n_core_mem_rsp.dst_valid = r_req2.dst_valid;
 			 n_core_mem_rsp.has_cause = 1'b1;
 			 n_core_mem_rsp.cause = STORE_PAGE_FAULT;
@@ -1609,10 +1615,6 @@ module l1d(clk,
 		 end // if (r_got_req)
 	       else if(n_pending_tlb_miss)
 		 begin
-		    if(n_state != ACTIVE)
-		      begin
-			 $stop();
-		      end
 		    n_state = TLB_RELOAD;
 		    n_page_walk_gnt = 1'b0;
 		    n_page_walk_req_valid = 1'b1;
