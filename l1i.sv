@@ -1057,7 +1057,7 @@ endfunction
 
 
    
-   tlb #(.LG_N(5), .ISIDE(1)) 
+   tlb #(.LG_N(6), .ISIDE(1)) 
    itlb(
 	.clk(clk), 
 	.reset(reset),

@@ -2,9 +2,6 @@
 #include <signal.h>
 #include <setjmp.h>
 
-#ifdef USE_SDL
-#include <SDL2/SDL.h>
-#endif
 
 #define BRANCH_DEBUG 1
 #define CACHE_STATS 1
@@ -648,7 +645,6 @@ int main(int argc, char **argv) {
   std::string log_name = "log.txt";
   std::string pushout_name = "pushout.txt";
   std::string branch_name = "branch_info.txt";
-  bool use_fb = false;
   uint64_t heartbeat = 1UL<<36, start_trace_at = ~0UL;
   uint64_t max_cycle = 0, max_icnt = 0, mem_lat = 1;
   uint64_t last_store_addr = 0, last_load_addr = 0, last_addr = 0;
@@ -677,7 +673,6 @@ int main(int argc, char **argv) {
       ("maxicnt", po::value<uint64_t>(&max_icnt)->default_value(1UL<<50), "maximum icnt")
       ("trace,t", po::value<bool>(&trace_retirement)->default_value(false), "trace retired instruction stream")
       ("starttrace,s", po::value<uint64_t>(&start_trace_at)->default_value(~0UL), "start tracing retired instructions")
-      ("fb", po::value<bool>(&use_fb)->default_value(false), "use an SDL framebuffer")
       ; 
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);

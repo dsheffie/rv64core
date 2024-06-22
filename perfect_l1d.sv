@@ -171,7 +171,7 @@ module perfect_l1d(clk,
    localparam WORD_START = 2;
    localparam WORD_STOP = WORD_START+LG_WORDS_PER_CL;
 
-   localparam LG_MRQ_SZ = 4;
+   localparam LG_MRQ_SZ = 6;
    localparam N_MQ_ENTRIES = (1<<LG_MRQ_SZ);
 
    
@@ -264,7 +264,35 @@ module perfect_l1d(clk,
    
    logic [N_MQ_ENTRIES-1:0] r_mq_addr_valid;
    logic [IDX_STOP-IDX_START-1:0] r_mq_addr[N_MQ_ENTRIES-1:0];
-  
+   logic [15:0]			  r_mq_mask[N_MQ_ENTRIES-1:0];
+
+
+   function logic [15:0] make_mask(mem_req_t r);
+      logic [15:0]		  t_m, m;
+      logic			  b,s,w,d;
+      
+      b = 	(r.op == MEM_SB || r.op == MEM_LB || r.op == MEM_LBU);
+      s = 	(r.op == MEM_SH || r.op == MEM_LH || r.op == MEM_LHU);
+      w = 	(r.op == MEM_SW || r.op == MEM_LW );
+      d	= 	(r.op == MEM_SD || r.op == MEM_LD );         
+      t_m = b ? 16'h0001 :
+	    s ? 16'h0003 :
+	    w ? 16'h000f :
+	    d ? 16'h00ff :
+	    16'hffff;
+      m = t_m << r.addr[3:0];      
+      return m;
+   endfunction
+ 
+   
+   logic [15:0]			  t_mq_mask, t_req_mask;
+   
+   always_comb
+     begin
+	t_mq_mask = make_mask(r_req2);
+	t_req_mask = make_mask(core_mem_va_req);
+     end
+   
    
    mem_req_t t_mem_tail, t_mem_head;
    logic 	mem_q_full, mem_q_empty, mem_q_almost_full;
@@ -491,6 +519,9 @@ module perfect_l1d(clk,
 	  begin
 	     r_mem_q[r_mq_tail_ptr[LG_MRQ_SZ-1:0] ] <= r_req2;
 	     r_mq_addr[r_mq_tail_ptr[LG_MRQ_SZ-1:0]] <= r_req2.addr[IDX_STOP-1:IDX_START];
+	     r_mq_mask[r_mq_tail_ptr[LG_MRQ_SZ-1:0]] <= t_mq_mask;
+	     //$display("mask %b, addr %d, op %d", 
+	     //t_mq_mask, r_req2.addr[3:0], r_req2.op);
 	  end
      end
 
@@ -504,7 +535,7 @@ module perfect_l1d(clk,
 	  begin
 	     if(t_push_miss)
 	       begin
-		  r_mq_addr_valid[r_mq_tail_ptr[LG_MRQ_SZ-1:0]] <= 1'b1;
+		  r_mq_addr_valid[r_mq_tail_ptr[LG_MRQ_SZ-1:0]] <= r_req2.is_store;
 	       end
 	     if(t_pop_mq)
 	       begin
@@ -520,16 +551,15 @@ module perfect_l1d(clk,
    generate
       for(genvar i = 0; i < N_MQ_ENTRIES; i=i+1)
 	begin
-	   assign w_hit_busy_addrs2[i] = r_mq_addr_valid[i] ? r_mq_addr[i] == t_cache_idx2 : 1'b0;	   
+	   assign w_hit_busy_addrs2[i] = r_mq_addr_valid[i] ? (r_mq_addr[i] == t_cache_idx2) & (|(r_mq_mask[i] & t_req_mask)) : 1'b0;	   
 	end
    endgenerate
    
-
    always_ff@(posedge clk)
      begin
 	r_hit_busy_addr2 <= reset ? 1'b0 : |w_hit_busy_addrs2;
      end
-
+   
 
    
    

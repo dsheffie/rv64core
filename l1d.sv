@@ -537,7 +537,7 @@ module l1d(clk,
 	  begin
 	     r_mem_q[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0] ] <= t_req2_pa;
 	     r_mq_addr[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]] <= r_req2.addr[IDX_STOP-1:IDX_START];
-	     r_mq_mask[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]] <= t_mq_mask;	     
+	     r_mq_mask[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]] <= t_mq_mask & {16{r_req2.is_store}};	     
 	     r_mq_op[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]] <= r_req2.op;
 	     r_mq_is_load[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]] <= r_req2.is_load;
 	     r_mq_is_unaligned[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]] <= r_req2.unaligned;
@@ -587,13 +587,11 @@ module l1d(clk,
 					1'b0;
 
 	   assign w_addr_intersect[i] = (|(r_mq_mask[i] & t_req_mask));
-	   assign w_hit_busy_addrs2[i] = r_mq_addr_valid[i] ? ((core_mem_va_req.is_load && r_mq_is_load[i]) ? 1'b0 : (r_mq_addr[i] == t_cache_idx2)&w_addr_intersect[i]) : 1'b0;
-	   
+	   assign w_hit_busy_addrs2[i] = r_mq_addr_valid[i] ? (r_mq_addr[i] == t_cache_idx2)&w_addr_intersect[i] : 1'b0;
 	   assign w_unaligned_in_mq[i] = r_mq_addr_valid[i] ? r_mq_is_unaligned[i] : 1'b0;
 	end
    endgenerate
    
-
    always_ff@(posedge clk)
      begin
 	r_hit_busy_addr <= reset ? 1'b0 : |w_hit_busy_addrs;
