@@ -258,9 +258,36 @@ module l1d(clk,
    logic [`LG_MRQ_ENTRIES:0] r_mq_tail_ptr, n_mq_tail_ptr;
    logic [`LG_MRQ_ENTRIES:0] t_mq_tail_ptr_plus_one;
 
+   function logic [15:0] make_mask(mem_req_t r);
+      logic [15:0]		  t_m, m;
+      logic			  b,s,w,d;
+      
+      b = 	(r.op == MEM_SB || r.op == MEM_LB || r.op == MEM_LBU);
+      s = 	(r.op == MEM_SH || r.op == MEM_LH || r.op == MEM_LHU);
+      w = 	(r.op == MEM_SW || r.op == MEM_LW );
+      d	= 	(r.op == MEM_SD || r.op == MEM_LD );         
+      t_m = b ? 16'h0001 :
+	    s ? 16'h0003 :
+	    w ? 16'h000f :
+	    d ? 16'h00ff :
+	    16'hffff;
+      m = t_m << r.addr[3:0];      
+      return m;
+   endfunction
+   
+   logic [15:0]			  t_mq_mask, t_req_mask;
+   
+   always_comb
+     begin
+	t_mq_mask = make_mask(r_req2);
+	t_req_mask = make_mask(core_mem_va_req);
+     end
+   
    
    logic [N_MQ_ENTRIES-1:0] r_mq_addr_valid;
    logic [IDX_STOP-IDX_START-1:0] r_mq_addr[N_MQ_ENTRIES-1:0];
+   logic [15:0]			  r_mq_mask[N_MQ_ENTRIES-1:0];
+   
    logic [`M_WIDTH-1:0] 	  r_mq_full_addr[N_MQ_ENTRIES-1:0];
    logic 			  r_mq_is_load[N_MQ_ENTRIES-1:0];
    logic 			  r_mq_is_unaligned[N_MQ_ENTRIES-1:0];
@@ -510,6 +537,7 @@ module l1d(clk,
 	  begin
 	     r_mem_q[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0] ] <= t_req2_pa;
 	     r_mq_addr[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]] <= r_req2.addr[IDX_STOP-1:IDX_START];
+	     r_mq_mask[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]] <= t_mq_mask;	     
 	     r_mq_op[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]] <= r_req2.op;
 	     r_mq_is_load[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]] <= r_req2.is_load;
 	     r_mq_is_unaligned[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]] <= r_req2.unaligned;
@@ -543,12 +571,8 @@ module l1d(clk,
    logic 		   r_hit_busy_addr;
    
    wire [N_MQ_ENTRIES-1:0] w_hit_busy_addrs2;
-   wire [N_MQ_ENTRIES-1:0] w_hit_busy_full_addrs2;
-   logic [N_MQ_ENTRIES-1:0] r_hit_busy_full_addrs2;
+   wire [N_MQ_ENTRIES-1:0] w_addr_intersect;
    
-   wire [N_MQ_ENTRIES-1:0] w_hit_busy_word_addrs2;
-   logic [N_MQ_ENTRIES-1:0] r_hit_busy_word_addrs2;
-
    logic [N_MQ_ENTRIES-1:0] r_hit_busy_addrs2;
    logic 		   r_hit_busy_addr2, r_hit_busy_word_addr2;
 
@@ -561,13 +585,10 @@ module l1d(clk,
 	   assign w_hit_busy_addrs[i] = (t_pop_mq && r_mq_head_ptr[`LG_MRQ_ENTRIES-1:0] == i) ? 1'b0 :
 					r_mq_addr_valid[i] ? r_mq_addr[i] == t_cache_idx : 
 					1'b0;
-	   
-	   assign w_hit_busy_addrs2[i] = r_mq_addr_valid[i] ? (core_mem_va_req.is_load && r_mq_is_load[i]) ? 1'b0 : r_mq_addr[i] == t_cache_idx2 : 1'b0;
 
-	   assign w_hit_busy_full_addrs2[i] = r_mq_addr_valid[i] ? (r_mq_full_addr[i] ==  core_mem_va_req.addr) : 1'b0;
+	   assign w_addr_intersect[i] = (|(r_mq_mask[i] & t_req_mask));
+	   assign w_hit_busy_addrs2[i] = r_mq_addr_valid[i] ? ((core_mem_va_req.is_load && r_mq_is_load[i]) ? 1'b0 : (r_mq_addr[i] == t_cache_idx2)&w_addr_intersect[i]) : 1'b0;
 	   
-	   assign w_hit_busy_word_addrs2[i] = r_mq_addr_valid[i] ? (r_mq_word_addr[i] ==  core_mem_va_req.addr[`M_WIDTH-1:2]) : 1'b0;
-
 	   assign w_unaligned_in_mq[i] = r_mq_addr_valid[i] ? r_mq_is_unaligned[i] : 1'b0;
 	end
    endgenerate
@@ -576,15 +597,10 @@ module l1d(clk,
    always_ff@(posedge clk)
      begin
 	r_hit_busy_addr <= reset ? 1'b0 : |w_hit_busy_addrs;
-	r_hit_busy_addrs <= t_got_req ? w_hit_busy_addrs : {{N_MQ_ENTRIES{1'b1}}};
-	
-	r_hit_busy_addr2 <= reset ? 1'b0 : |w_hit_busy_addrs2;
-	r_hit_busy_addrs2 <= t_got_req2 ? w_hit_busy_addrs2 : {{N_MQ_ENTRIES{1'b1}}};
+	r_hit_busy_addr2 <= reset ? 1'b0 : |w_hit_busy_addrs2;	
 
-	r_hit_busy_word_addr2 <= reset ? 1'b0 : |w_hit_busy_word_addrs2;
-	
-	r_hit_busy_full_addrs2 <= t_got_req2 ? w_hit_busy_full_addrs2 : {{N_MQ_ENTRIES{1'b1}}};
-	r_hit_busy_word_addrs2 <= t_got_req2 ? w_hit_busy_word_addrs2 : {{N_MQ_ENTRIES{1'b1}}};
+	r_hit_busy_addrs <= t_got_req ? w_hit_busy_addrs : {{N_MQ_ENTRIES{1'b1}}};
+	r_hit_busy_addrs2 <= t_got_req2 ? w_hit_busy_addrs2 : {{N_MQ_ENTRIES{1'b1}}};
 
 	r_any_unaligned <= reset ? 1'b0 : (|w_unaligned_in_mq) | core_mem_va_req.unaligned;
      end // always_ff@ (posedge clk)
@@ -890,7 +906,7 @@ module l1d(clk,
 
 
 
-   tlb #(.LG_N(5)) dtlb(
+   tlb #(.LG_N(6)) dtlb(
     	    .clk(clk), 
     	    .reset(reset),
 	    .priv(priv),
