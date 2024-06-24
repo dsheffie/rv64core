@@ -2095,6 +2095,7 @@ module core(clk,
    decode_riscv dec0 
      (
       .mode64(r_mode64),
+      .priv(w_priv),
       .insn(insn.insn_bytes),
       .page_fault(insn.page_fault),
       .irq(w_any_irq),
@@ -2112,6 +2113,7 @@ module core(clk,
    decode_riscv dec1 
      (	
 	.mode64(r_mode64),
+	.priv(w_priv),
 	.insn(insn_two.insn_bytes),
 	.page_fault(insn_two.page_fault),
 	.irq(w_any_irq),	

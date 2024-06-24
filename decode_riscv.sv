@@ -2,53 +2,53 @@
 `include "rob.vh"
 `include "uop.vh"
 
-function csr_t decode_csr(logic [11:0] csr);
+function csr_t decode_csr(logic [11:0] csr, logic [1:0] priv);
    csr_t   x;
    case(csr)
      12'h100:
-       x= SSTATUS;
+       x = (priv==2'd0) ? BADCSR : SSTATUS;
      12'h104:
-       x = SIE;
+       x = (priv==2'd0) ? BADCSR : SIE;
      12'h105:
-       x = STVEC;
+       x = (priv==2'd0) ? BADCSR : STVEC;
      12'h106:
-       x = SCOUNTEREN;
+       x = (priv==2'd0) ? BADCSR : SCOUNTEREN;
      12'h140:
-       x = SSCRATCH;
+       x = (priv==2'd0) ? BADCSR : SSCRATCH;
      12'h141:
-       x = SEPC;
+       x = (priv==2'd0) ? BADCSR : SEPC;
      12'h142:
-       x = SCAUSE;
+       x = (priv==2'd0) ? BADCSR : SCAUSE;
      12'h143:
-       x = STVAL;
+       x = (priv==2'd0) ? BADCSR : STVAL;
      12'h144:
-       x = SIP;
+       x = (priv==2'd0) ? BADCSR : SIP;
      12'h180:
-       x = SATP;
+       x = (priv==2'd0) ? BADCSR : SATP;
      12'h300:
-       x = MSTATUS;
+       x = (priv != 2'd3) ? BADCSR : MSTATUS;
      12'h301: /* misa */
-       x = MISA;
+       x = (priv != 2'd3) ? BADCSR :  MISA;
      12'h302:
-       x = MEDELEG;
+       x = (priv != 2'd3) ? BADCSR :  MEDELEG;
      12'h303:
-       x = MIDELEG;
+       x = (priv != 2'd3) ? BADCSR :  MIDELEG;
      12'h304:
-       x = MIE;
+       x = (priv != 2'd3) ? BADCSR :  MIE;
      12'h305:
-       x = MTVEC;
+       x = (priv != 2'd3) ? BADCSR :  MTVEC;
      12'h306:
-       x = MCOUNTEREN;
+       x = (priv != 2'd3) ? BADCSR :  MCOUNTEREN;
      12'h340:
-       x = MSCRATCH;
+       x = (priv != 2'd3) ? BADCSR :  MSCRATCH;
      12'h341:
-       x = MEPC;
+       x = (priv != 2'd3) ? BADCSR :  MEPC;
      12'h342:
-       x = MCAUSE;
+       x = (priv != 2'd3) ? BADCSR :  MCAUSE;
      12'h343:
-       x = MTVEC;
+       x = (priv != 2'd3) ? BADCSR :  MTVEC;
      12'h344:
-       x = MIP;
+       x = (priv != 2'd3) ? BADCSR :  MIP;
      12'h3a0:
        x = PMPCFG0;
      12'h3b0:
@@ -90,7 +90,7 @@ function csr_t decode_csr(logic [11:0] csr);
      12'hc0e:
        x = RDL2ACCESS_CSR;
      12'hf14:
-       x = MHARTID;
+       x = (priv != 2'd3) ? BADCSR : MHARTID;
      default:
        x = BADCSR;
    endcase // case (op)
@@ -101,6 +101,7 @@ endfunction // is_store
 
 module decode_riscv(
 		    mode64,
+		    priv,
 		    insn,
 		    page_fault,
 		    irq,
@@ -115,6 +116,7 @@ module decode_riscv(
 		    uop);
 
    input logic mode64;
+   input logic [1:0] priv;
    input logic [31:0] insn;
    input logic	      page_fault;
    input logic 	      irq;
@@ -129,7 +131,12 @@ module decode_riscv(
    output 	uop_t uop;
 
    wire [6:0] 	opcode = page_fault|irq ? 'd0 : insn[6:0];
-   
+
+   //wire		w_priv_user = (priv == 2'd0);
+   //wire		w_priv_supervisor = (priv == 2'd1);   
+   //wire		w_priv_machine = (priv == 2'd3);
+
+      
    localparam ZP = (`LG_PRF_ENTRIES-5);
    wire [`LG_PRF_ENTRIES-1:0] rd = {{ZP{1'b0}},insn[11:7]};
    wire [`LG_PRF_ENTRIES-1:0] rs1 = {{ZP{1'b0}},insn[19:15]};
@@ -173,7 +180,7 @@ module decode_riscv(
 		    
    always_comb
      begin
-	csr_id = decode_csr(insn[31:20]);
+	csr_id = decode_csr(insn[31:20], priv);
 	rd_is_link = (rd == 'd1) || (rd == 'd5);
 	rs1_is_link = (rs1 == 'd1) || (rs1 == 'd5);
 	uop.op = page_fault ? FETCH_PF : (irq ? IRQ : II);
@@ -813,10 +820,13 @@ module decode_riscv(
 		 end
 	       else if((insn[31:20] == 12'h102) && insn[19:7] == 'd0)
 		 begin
-		    uop.op = SRET;
-		    uop.serializing_op = 1'b1;
-		    uop.must_restart = 1'b1;
-		    uop.imm = {10'd0, MSTATUS};			     
+		    if(priv != 2'd0)
+		      begin
+			 uop.op = SRET;
+			 uop.serializing_op = 1'b1;
+			 uop.must_restart = 1'b1;
+			 uop.imm = {10'd0, MSTATUS};
+		      end
 		 end
 	       else if((insn[31:20] == 12'h105) && insn[19:7] == 'd0)
 		 begin /* WFI - treat as nop */
@@ -828,15 +838,17 @@ module decode_riscv(
 		 end	       
 	       else if((insn[31:20] == 12'h302) && insn[19:7] == 'd0)
 		 begin
-		    uop.op = MRET;
-		    uop.serializing_op = 1'b1;
-		    uop.must_restart = 1'b1;
-		    uop.imm = {10'd0, MSTATUS};
+		    if(priv == 2'd3)
+		      begin
+			 uop.op = MRET;
+			 uop.serializing_op = 1'b1;
+			 uop.must_restart = 1'b1;
+			 uop.imm = {10'd0, MSTATUS};
+		      end
 		 end
 	       else		 
 		 begin
 		    uop.imm = {5'd0, rs1[4:0], csr_id};
-
 		    if(csr_id != BADCSR)
 		      begin
 			 case(insn[14:12])
