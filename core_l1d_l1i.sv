@@ -49,29 +49,33 @@ module
 		   retire_reg_valid,
 		   retire_reg_two_ptr,
 		   retire_reg_two_data,
-		       retire_reg_two_valid,
-		       retire_valid,
-		       retire_two_valid,
+		   retire_reg_two_valid,
+		   retire_valid,
+		   retire_two_valid,
 		   rob_empty,
-		       retire_pc,
-		       retire_two_pc,
-		       branch_pc,
-		       branch_pc_valid,		    
-		       branch_fault,
-		       l1i_cache_accesses,
-		       l1i_cache_hits,
-		       l1d_cache_accesses,
-		       l1d_cache_hits,
-		       l2_cache_accesses,
-		       l2_cache_hits,
-		       monitor_ack,
+		   retire_pc,
+		   retire_two_pc,
+		   branch_pc,
+		   branch_pc_valid,		    
+		   branch_fault,
+		   l1i_cache_accesses,
+		   l1i_cache_hits,
+		   l1d_cache_accesses,
+		   l1d_cache_hits,
+		   l2_cache_accesses,
+		   l2_cache_hits,
+		   l1i_tlb_accesses,
+		   l1i_tlb_hits,		   
+		   l1d_tlb_accesses,
+		   l1d_tlb_hits,		   		   
+		   monitor_ack,
 		   took_irq,
-		       got_break,
-		       got_ud,
-		       got_bad_addr,
-		       got_monitor,
-		       inflight,
-		       epc,
+		   got_break,
+		   got_ud,
+		   got_bad_addr,
+		   got_monitor,
+		   inflight,
+		   epc,
 		   restart_ack);
 
    localparam L1D_CL_LEN = 1 << `LG_L1D_CL_LEN;
@@ -114,6 +118,11 @@ module
    output logic [63:0] 			l2_cache_accesses;
    output logic [63:0] 			l2_cache_hits;   
 
+   output logic [63:0] l1i_tlb_accesses;
+   output logic [63:0] l1i_tlb_hits;
+   output logic [63:0] l1d_tlb_accesses;
+   output logic [63:0] l1d_tlb_hits;
+   
    
    /* mem port */
    output logic 			mem_req_valid;
@@ -382,6 +391,13 @@ module
 			 w_l1i_tlb_hits, 
 			 w_l1d_tlb_accesses, 
 			 w_l1d_tlb_hits;
+
+   assign l1i_tlb_accesses = w_l1i_tlb_accesses;
+   assign l1i_tlb_hits = w_l1i_tlb_hits;   
+   assign l1d_tlb_accesses = w_l1d_tlb_accesses;
+   assign l1d_tlb_hits = w_l1d_tlb_hits;   
+   
+   
    counters_t t_counters;
    always_comb
      begin
@@ -925,6 +941,10 @@ module core_l1d_l1i(clk,
                      .l1d_cache_hits(l1d_cache_hits),
                      .l2_cache_accesses(l2_cache_accesses),
                      .l2_cache_hits(l2_cache_hits),
+		     .l1i_tlb_accesses(),
+		     .l1i_tlb_hits(),
+		     .l1d_tlb_accesses(),
+		     .l1d_tlb_hits(),		     		     
                      .monitor_ack(monitor_ack),
 		     .took_irq(took_irq),
                      .got_break(got_break),

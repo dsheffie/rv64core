@@ -1326,7 +1326,17 @@ int main(int argc, char **argv) {
     out << "l1i hit rate = "
 	      << 100.0 *(static_cast<double>(tb->l1i_cache_hits) / tb->l1i_cache_accesses)
 	      << "\n";
-
+    out << "l1d tlb hits = " << tb->l1d_tlb_hits << "\n";
+    out << "l1d tlb accesses = " << tb->l1d_tlb_accesses << "\n";
+    out << "l1d tlb hit rate = "
+	<<  100.0 *(static_cast<double>(tb->l1d_tlb_hits) /
+		    tb->l1d_tlb_accesses) << "\n";
+    out << "l1i tlb hits = " << tb->l1i_tlb_hits << "\n";
+    out << "l1i tlb accesses = " << tb->l1i_tlb_accesses << "\n";        
+    out << "l1i tlb hit rate = "
+	<<  100.0 *(static_cast<double>(tb->l1i_tlb_hits) /
+		    tb->l1i_tlb_accesses) << "\n";
+    
     out << "l2 cache hits = " << tb->l2_cache_hits << "\n";
     out << "l2 cache accesses = " << tb->l2_cache_accesses << "\n";
 
