@@ -201,7 +201,6 @@ module l1d(clk,
    logic 				  r_flush_complete, n_flush_complete;
    
 
-   logic [31:0] 			  t_array_out_b32[WORDS_PER_CL-1:0];
    logic [L1D_CL_LEN_BITS-1:0] 		  t_shift, t_shift_2;
    logic [L1D_CL_LEN_BITS-1:0] 		  t_store_shift, t_store_mask;
 
@@ -895,12 +894,6 @@ module l1d(clk,
       .rd_data1(r_valid_out2)
       );
 
-   generate
-      for(genvar i = 0; i < WORDS_PER_CL; i=i+1)
-	begin
-	   assign t_array_out_b32[i] = t_data[((i+1)*32)-1:i*32];
-	end
-   endgenerate
 
 
 
