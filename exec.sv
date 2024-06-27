@@ -25,6 +25,7 @@ import "DPI-C" function longint load_mscratch();
 import "DPI-C" function longint load_sscratch();
 import "DPI-C" function longint load_mepc();
 import "DPI-C" function longint load_mtval();
+import "DPI-C" function longint load_icnt();
 
 
 import "DPI-C" function void report_exec(input int int_valid, 
@@ -734,15 +735,15 @@ module exec(clk,
      end // always_ff@ (posedge clk)
    
    logic [63:0]        r_cycle, r_retired_insns, r_branches, r_branch_faults;
-   wire [63:0]	       w_time = r_cycle;
-   
+
+   logic [63:0]	       r_mtime;
    logic [63:0]	       r_mtimecmp;
    wire		       w_mtip = r_cycle >= r_mtimecmp;
 
 `ifdef VERILATOR
    always_ff@(negedge clk)
      begin
-	csr_puttime(w_time);
+	csr_puttime(r_mtime);
      end
 `endif
    
@@ -2630,7 +2631,7 @@ module exec(clk,
 	  RDFAULTEDBRANCH_CSR:
 	    t_rd_csr = 'd0;
 	  RDTIME_CSR:
-	    t_rd_csr = w_time;
+	    t_rd_csr = r_mtime;
 	  RDL1DTLBHIT_CSR:
 	    t_rd_csr = counters.dtlb_hits;
 	  RDL1DTLBACCESS_CSR:
@@ -2766,6 +2767,23 @@ module exec(clk,
    //end	
    //end
 
+   always_ff@(posedge clk)
+     begin
+	if(reset)
+	  begin
+`ifdef VERILATOR
+	     r_mtime <= load_icnt();
+`else
+	     r_mtime <= 'd0;
+`endif
+	  end
+	else
+	  begin
+	     r_mtime <= r_mtime + 'd1;
+	  end	
+     end // always_ff@ (posedge clk)
+   
+   
    
    always_ff@(posedge clk)
      begin

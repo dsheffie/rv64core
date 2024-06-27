@@ -1280,7 +1280,7 @@ module core(clk,
 	       //if(r_irq)
 	       //begin
 	       //$display("took fault for %x with cause %d at cycle %d, priv %d, tval %x, irq %b, epc %x, cycle %d", 
-	       //	t_rob_head.pc, t_rob_head.cause, r_cycle, priv, n_tval, r_irq, r_epc, r_cycle);
+	       //t_rob_head.pc, t_rob_head.cause, r_cycle, priv, n_tval, r_irq, r_epc, r_cycle);
 	       //end
 	       
 	       t_bump_rob_head = 1'b1;

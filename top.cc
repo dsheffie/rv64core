@@ -159,6 +159,7 @@ LOAD(mscratch);
 LOAD(sscratch);
 LOAD(mepc);
 LOAD(mtval);
+LOAD(icnt);
 #undef LOAD
 
 
@@ -741,7 +742,6 @@ int main(int argc, char **argv) {
   if(not(pipelog.empty())) {
     pl = new pipeline_logger(pipelog);
   }
-  
   s->pc = ss->pc;
   //signal(SIGINT, catchUnixSignal);
   
@@ -1207,11 +1207,10 @@ int main(int argc, char **argv) {
 
       
       if(tb->mem_req_opcode == 4) {/*load word */
+	//printf("got dram read for %lx at cycle %lu\n",
+	//tb->mem_req_addr, cycle);	
 	for(int i = 0; i < 4; i++) {
 	  uint64_t ea = (tb->mem_req_addr + 4*i) & ((1UL<<32)-1);
-	  //if(tb->paging_active) {
-	  //printf("got dram read for %lx, data %x\n", ea, mem_r32(s,ea));
-	  //}
 	  tb->mem_rsp_load_data[i] = mem_r32(s,ea);
 	}
 	last_load_addr = tb->mem_req_addr;
@@ -1220,11 +1219,10 @@ int main(int argc, char **argv) {
 	++n_loads;
       }
       else if(tb->mem_req_opcode == 7) { /* store word */
+	//printf("got dram write for %lx at cycle %lu\n",
+	//tb->mem_req_addr, cycle);		
 	for(int i = 0; i < 4; i++) {
 	  uint64_t ea = (tb->mem_req_addr + 4*i) & ((1UL<<32)-1);
-	  //if(tb->paging_active) {
-	  //printf("got dram write for %lx, data %x\n", ea, tb->mem_req_store_data[i]);
-	  //}
 	  mem_w32(s, ea, tb->mem_req_store_data[i]);
 	}
 	last_store_addr = tb->mem_req_addr;
