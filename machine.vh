@@ -51,6 +51,8 @@
 /* mem uop queue */
 `define LG_MQ_ENTRIES 2
 
+`define LG_MDQ_ENTRIES 3
+
 /* mem retry queue */
 `define LG_MRQ_ENTRIES 3
 
