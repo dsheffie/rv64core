@@ -209,24 +209,24 @@ module l2(clk,
      
    logic [127:0] 	t_d0;
    wire [127:0] 	w_d0;
-   wire [TAG_BITS-1:0] 	w_tag;
-   wire 		w_valid, w_dirty;
+   wire [TAG_BITS-1:0] 	w_tag0;
+   wire 		w_valid0, w_dirty0;
 
    
    reg_ram1rw #(.WIDTH(128), .LG_DEPTH(LG_L2_LINES)) data_ram0
      (.clk(clk), .addr(t_idx), .wr_data(t_d0), .wr_en(t_wr_d0), .rd_data(w_d0));
       
-   reg_ram1rw #(.WIDTH(TAG_BITS), .LG_DEPTH(LG_L2_LINES)) tag_ram
-     (.clk(clk), .addr(t_idx), .wr_data(r_tag), .wr_en(t_wr_tag), .rd_data(w_tag));   
+   reg_ram1rw #(.WIDTH(TAG_BITS), .LG_DEPTH(LG_L2_LINES)) tag_ram0
+     (.clk(clk), .addr(t_idx), .wr_data(r_tag), .wr_en(t_wr_tag), .rd_data(w_tag0));   
    
-   reg_ram1rw #(.WIDTH(1), .LG_DEPTH(LG_L2_LINES)) valid_ram
-     (.clk(clk), .addr(t_idx), .wr_data(t_valid), .wr_en(t_wr_valid), .rd_data(w_valid));   
+   reg_ram1rw #(.WIDTH(1), .LG_DEPTH(LG_L2_LINES)) valid_ram0
+     (.clk(clk), .addr(t_idx), .wr_data(t_valid), .wr_en(t_wr_valid), .rd_data(w_valid0));   
 
-   reg_ram1rw #(.WIDTH(1), .LG_DEPTH(LG_L2_LINES)) dirty_ram
-     (.clk(clk), .addr(t_idx), .wr_data(t_dirty), .wr_en(t_wr_dirty), .rd_data(w_dirty));   
+   reg_ram1rw #(.WIDTH(1), .LG_DEPTH(LG_L2_LINES)) dirty_ram0
+     (.clk(clk), .addr(t_idx), .wr_data(t_dirty), .wr_en(t_wr_dirty), .rd_data(w_dirty0));   
 
-   wire 		w_hit = w_valid ? (r_tag == w_tag) : 1'b0;
-   wire 		w_need_wb = w_valid ? w_dirty : 1'b0;
+   wire 		w_hit = w_valid0 ? (r_tag == w_tag0) : 1'b0;
+   wire 		w_need_wb = w_valid0 ? w_dirty0 : 1'b0;
    
    logic		n_mmu_mark_req, r_mmu_mark_req;
    logic		n_mmu_mark_dirty, r_mmu_mark_dirty;
@@ -715,10 +715,10 @@ module l2(clk,
 	       else
 		 begin
 		    n_cache_hits = r_cache_hits - 64'd1;			 		    
-		    if(w_dirty)
+		    if(w_dirty0)
 		      begin
 			 n_mem_req_store_data = w_d0;
-			 n_addr = {w_tag, t_idx, {{`LG_L2_CL_LEN{1'b0}}}};
+			 n_addr = {w_tag0, t_idx, {{`LG_L2_CL_LEN{1'b0}}}};
 			 n_mem_opcode = 4'd7; 
 			 n_mem_req = 1'b1;
 			 n_state = DIRTY_STORE;			 
@@ -781,12 +781,12 @@ module l2(clk,
 	  FLUSH_TRIAGE:
 	    begin
 	       //if(w_need_wb)
-	       //$display("address = %x needs wb", {w_tag, t_idx, 6'd0});
+	       //$display("address = %x needs wb", {w_tag0, t_idx, 6'd0});
 	       
 	       if(w_need_wb)
 		 begin
 		    n_mem_req_store_data = w_d0;
-		    n_addr = {w_tag, t_idx, {{`LG_L2_CL_LEN{1'b0}}}};
+		    n_addr = {w_tag0, t_idx, {{`LG_L2_CL_LEN{1'b0}}}};
 		    n_mem_opcode = 4'd7; 
 		    n_mem_req = 1'b1;
 		    n_state = FLUSH_STORE;
