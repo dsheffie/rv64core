@@ -1492,6 +1492,21 @@ int main(int argc, char **argv) {
     std::cout << "total_retire = " << total_retire << "\n";
     std::cout << "total_cycle  = " << total_cycle << "\n";
     std::cout << "total ipc    = " << static_cast<double>(total_retire) / total_cycle << "\n";
+
+    uint64_t l1i_misses = tb->l1i_cache_accesses -
+      tb->l1i_cache_hits;
+    uint64_t l1d_misses = tb->l1d_cache_accesses -
+      tb->l1d_cache_hits;
+    uint64_t l2_misses = tb->l2_cache_accesses -
+      tb->l2_cache_hits;    
+    
+    double l1i_mpki = static_cast<double>(l1i_misses) / (total_retire/1000);
+    double l1d_mpki = static_cast<double>(l1d_misses) / (total_retire/1000);
+    double l2_mpki = static_cast<double>(l2_misses) / (total_retire/1000);        
+    std::cout << "l1i mpki     = " << l1i_mpki << "\n";
+    std::cout << "l1d mpki     = " << l1d_mpki << "\n";
+    std::cout << "l2  mpki     = " << l2_mpki << "\n";        
+    
     double tip_cycles = 0.0;
     for(auto &p : tip_map) {
       tip_cycles += p.second;
