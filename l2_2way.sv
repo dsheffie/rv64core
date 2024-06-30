@@ -144,6 +144,10 @@ module l2_2way(clk,
    logic [`M_WIDTH-(`LG_L2_CL_LEN+1):0]    n_last_l1i_addr, r_last_l1i_addr;
    logic [`M_WIDTH-(`LG_L2_CL_LEN+1):0]    n_last_l1d_addr, r_last_l1d_addr;
    logic 		   t_gnt_l1i, t_gnt_l1d;
+
+   logic		   r_wb1, n_wb1;
+   logic [TAG_BITS-1:0]	   r_tag_wb1;
+   logic [127:0]	   r_data_wb1;
    
    
    logic [`M_WIDTH-1:0]    n_addr, r_addr;
@@ -183,6 +187,7 @@ module l2_2way(clk,
 				     WAIT_CLEAN_RELOAD,
 				     WAIT_STORE_IDLE,
 				     FLUSH_STORE,
+				     FLUSH_STORE_WAY2,
 				     FLUSH_WAIT,
 				     FLUSH_TRIAGE,
 				     UPDATE_PTE
@@ -273,7 +278,9 @@ module l2_2way(clk,
      end
    
    
-   wire 		w_need_wb = w_valid0 ? w_dirty0 : 1'b0;
+   wire 		w_need_wb0 = w_valid0 ? w_dirty0 : 1'b0;
+   wire			w_need_wb1 = w_valid1 ? w_dirty1 : 1'b0;   
+   wire			w_need_wb = w_need_wb0 | w_need_wb1;
    
    logic		n_mmu_mark_req, r_mmu_mark_req;
    logic		n_mmu_mark_dirty, r_mmu_mark_dirty;
@@ -334,6 +341,7 @@ module l2_2way(clk,
 	     r_mmu_mark_dirty <= 1'b0;
 	     r_mmu_mark_accessed <= 1'b0;
 	     r_replace <= 1'b0;
+	     r_wb1 <= 1'b0;
 	  end
 	else
 	  begin
@@ -375,6 +383,7 @@ module l2_2way(clk,
 	     r_mmu_mark_dirty <= n_mmu_mark_dirty;
 	     r_mmu_mark_accessed <= n_mmu_mark_accessed;
 	     r_replace <= n_replace;
+	     r_wb1 <= n_wb1;
 	  end
      end // always_ff@ (posedge clk)
 
@@ -482,6 +491,15 @@ module l2_2way(clk,
 	    end
 	endcase // case (r_pstate)
      end // always_comb
+
+   always_ff@(posedge clk)
+     begin
+	if(n_wb1)
+	  begin
+	     r_tag_wb1 <= w_tag1;
+	     r_data_wb1 <= w_d1;
+	  end
+     end
       
    
    always_ff@(posedge clk)
@@ -580,6 +598,8 @@ module l2_2way(clk,
 	n_mmu_mark_dirty = r_mmu_mark_dirty;
 	n_mmu_mark_accessed = r_mmu_mark_accessed;
 	
+	n_wb1 = r_wb1;
+	
 	case(r_state)
 	  INITIALIZE:
 	    begin
@@ -617,7 +637,6 @@ module l2_2way(clk,
 	       
 	       if(n_flush_req)
 		 begin
-		    $stop();
 		    t_idx = 'd0;
 		    n_state = FLUSH_WAIT;
 		 end
@@ -893,14 +912,14 @@ module l2_2way(clk,
 	    end
 	  FLUSH_TRIAGE:
 	    begin
-	       $stop();
 	       //if(w_need_wb)
 	       //$display("address = %x needs wb", {w_tag0, t_idx, 6'd0});
+	       n_wb1 = w_need_wb0 & w_need_wb1;
 	       
 	       if(w_need_wb)
 		 begin
-		    n_mem_req_store_data = w_d0;
-		    n_addr = {w_tag0, t_idx, {{`LG_L2_CL_LEN{1'b0}}}};
+		    n_mem_req_store_data = w_need_wb0 ? w_d0 : w_d1;
+		    n_addr = {(w_need_wb0 ? w_tag0 : w_tag1), t_idx, 4'd0};
 		    n_mem_opcode = 4'd7; 
 		    n_mem_req = 1'b1;
 		    n_state = FLUSH_STORE;
@@ -925,21 +944,38 @@ module l2_2way(clk,
 	    begin
 	       if(mem_rsp_valid)
 		 begin
-		    n_mem_req = 1'b0;
-		    t_idx = r_idx + 'd1;
-		    if(r_idx == (L2_LINES-1))
+		    n_mem_req = 1'b0;			 		    
+		    if(r_wb1)
 		      begin
-			 n_state = IDLE;
-			 //$display("L2 flush complete at cycle %d", r_cycle);
-			 n_flush_complete = 1'b1;
-			 n_flush_req = 1'b0;
+			 n_state = FLUSH_STORE_WAY2;
 		      end
 		    else
 		      begin
-			 n_state = FLUSH_WAIT;
-		      end		    
-		 end
+			 t_idx = r_idx + 'd1;
+			 if(r_idx == (L2_LINES-1))
+			   begin
+			      n_state = IDLE;
+			      //$display("L2 flush complete at cycle %d", r_cycle);
+			      n_flush_complete = 1'b1;
+			      n_flush_req = 1'b0;
+			   end
+			 else
+			   begin
+			      n_state = FLUSH_WAIT;
+			   end		    
+		      end
+		 end // if (mem_rsp_valid)
+	    end // case: FLUSH_STORE
+	  FLUSH_STORE_WAY2:
+	    begin
+	       n_wb1 = 1'b0;
+	       n_mem_req_store_data = r_data_wb1;
+	       n_addr = {r_tag_wb1, t_idx, 4'd0};
+	       n_mem_opcode = 4'd7; 
+	       n_mem_req = 1'b1;
+	       n_state = FLUSH_STORE;
 	    end
+	  
 	  default:
 	    begin
 	    end
