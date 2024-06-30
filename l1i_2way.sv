@@ -12,18 +12,6 @@ import "DPI-C" function int check_bad_fetch(longint pc, longint pa, int insn);
 `endif
 
 
-/*
-typedef enum logic [3:0] {
-			  NOT_CFLOW = 'd0,
-			  IS_COND_BR = 'd1,
- 			  IS_RET = 'd2,
-			  IS_J = 'd3,
-			  IS_JR = 'd4,
-			  IS_JAL = 'd5,
-			  IS_JALR = 'd6
-			  } jump_t;
-*/
-
 
 module compute_pht_idx(pc, hist, idx);
    input logic [`M_WIDTH-1:0] pc;
@@ -34,7 +22,7 @@ module compute_pht_idx(pc, hist, idx);
    
 endmodule
 
-module l1i(clk,
+module l1i_2way(clk,
 	   reset,
 	   l1i_state,
 	   priv,
@@ -162,9 +150,9 @@ module l1i(clk,
    output logic [63:0] 			  tlb_accesses;
    output logic [63:0] 			  tlb_hits;   
 
-   wire 				  in_32b_mode = mode64==1'b0;
-      
-   logic [N_TAG_BITS-1:0] 		  t_cache_tag, r_cache_tag, r_tag_out;
+   logic [N_TAG_BITS-1:0]		  t_cache_tag, r_cache_tag;
+
+   wire [N_TAG_BITS-1:0]		  w_tag_out0, w_tag_out1;
 
    logic 				  r_pht_update;
    logic [1:0] 				  r_pht_out, r_pht_update_out;
@@ -181,12 +169,13 @@ module l1i(clk,
    logic [BTB_ENTRIES-1:0] 		  r_btb_valid;
    
    
-   logic [(4*WORDS_PER_CL)-1:0] 	  r_jump_out;
+   logic [(4*WORDS_PER_CL)-1:0] 	  w_jump_out0, w_jump_out1;
    
    logic [`LG_L1I_NUM_SETS-1:0] 	    t_cache_idx, r_cache_idx;   
-   logic [L1I_CL_LEN_BITS-1:0] 		    r_array_out;   
    logic 				    r_mem_req_valid, n_mem_req_valid;
    logic [(`M_WIDTH-1):0] 		    r_mem_req_addr, n_mem_req_addr;
+
+   wire [127:0]				    w_array_out0, w_array_out1;   
    
 
    insn_fetch_t r_fq[N_FQ_ENTRIES-1:0];
@@ -274,8 +263,10 @@ endfunction
    logic 		  r_restart_req, n_restart_req;
    logic 		  r_restart_ack, n_restart_ack;
    logic 		  r_req, n_req;
-   logic 		  r_valid_out;
-   logic 		  t_miss, t_hit, t_tag_match;
+   logic		  w_valid_out0, w_valid_out1;
+   
+   logic 		  t_miss, t_hit;
+   
    logic 		  t_push_insn, t_push_insn2,
 			  t_push_insn3, t_push_insn4;
    
@@ -469,6 +460,13 @@ endfunction
 	
      end
 
+
+   wire w_hit0 = w_valid_out0 ? w_tag_out0 == w_tlb_pc[`MAX_VA-1:IDX_STOP] : 1'b0;
+   wire	w_hit1 = w_valid_out1 ? w_tag_out1 == w_tlb_pc[`MAX_VA-1:IDX_STOP] : 1'b0;   
+   wire	w_hit = w_hit0 | w_hit1;
+   wire [127:0]	w_array = w_hit0 ? w_array_out0 : w_array_out1;
+   wire [(4*WORDS_PER_CL)-1:0] w_jump = w_hit0 ? w_jump_out0 : w_jump_out1;
+   
    always_comb
      begin
 	n_page_fault = r_page_fault;
@@ -476,6 +474,8 @@ endfunction
 	n_miss_pc = r_miss_pc;
 	n_cache_pc = 'd0;
 	n_state = r_state;
+	n_reload = r_reload;
+	
 	n_restart_ack = 1'b0;
 	n_flush_req = r_flush_req | flush_req;
 	n_flush_complete = 1'b0;
@@ -487,34 +487,32 @@ endfunction
 	n_resteer_bubble = 1'b0;
 	t_next_spec_rs_tos = r_spec_rs_tos+'d1;
 	n_restart_req = restart_valid | r_restart_req;
-	
-	t_tag_match = r_tag_out == w_tlb_pc[`MAX_VA-1:IDX_STOP];
-	
-	t_miss = r_req && !(r_valid_out && t_tag_match);
-	t_hit = r_req && (r_valid_out && t_tag_match);
+		
+	t_miss = r_req && !w_hit;
+	t_hit = r_req && w_hit;
 
 	t_insn_idx = r_cache_pc[WORD_STOP-1:WORD_START];
 	
-	t_pd = select_pd(r_jump_out, t_insn_idx);
+	t_pd = select_pd(w_jump, t_insn_idx);
 
-	t_insn_data  = select_cl32(r_array_out, t_insn_idx);
-	t_insn_data2 = select_cl32(r_array_out, t_insn_idx + 2'd1);
-	t_insn_data3 = select_cl32(r_array_out, t_insn_idx + 2'd2);
-	t_insn_data4 = select_cl32(r_array_out, t_insn_idx + 2'd3);
+	t_insn_data  = select_cl32(w_array, t_insn_idx);
+	t_insn_data2 = select_cl32(w_array, t_insn_idx + 2'd1);
+	t_insn_data3 = select_cl32(w_array, t_insn_idx + 2'd2);
+	t_insn_data4 = select_cl32(w_array, t_insn_idx + 2'd3);
 
 
 	t_branch_marker = {1'b1,
-			   select_pd(r_jump_out, 'd3) != 4'd0,
-                           select_pd(r_jump_out, 'd2) != 4'd0,
-                           select_pd(r_jump_out, 'd1) != 4'd0,
-                           select_pd(r_jump_out, 'd0) != 4'd0
+			   select_pd(w_jump, 'd3) != 4'd0,
+                           select_pd(w_jump, 'd2) != 4'd0,
+                           select_pd(w_jump, 'd1) != 4'd0,
+                           select_pd(w_jump, 'd0) != 4'd0
                            } >> t_insn_idx;
 
 	t_spec_branch_marker = ({1'b1,
-				select_pd(r_jump_out, 'd3) != 4'd0,
-				select_pd(r_jump_out, 'd2) != 4'd0,
-				select_pd(r_jump_out, 'd1) != 4'd0,
-				select_pd(r_jump_out, 'd0) != 4'd0
+				select_pd(w_jump, 'd3) != 4'd0,
+				select_pd(w_jump, 'd2) != 4'd0,
+				select_pd(w_jump, 'd1) != 4'd0,
+				select_pd(w_jump, 'd0) != 4'd0
 				} >> t_insn_idx) & 
 			       {4'b1111, !((t_pd == 4'd1) && !r_pht_out[1])};
 
@@ -535,10 +533,10 @@ endfunction
 	    t_first_branch = 'd7;
 	endcase
 
-	t_branch_cnt = {2'd0, select_pd(r_jump_out, 'd0) != 4'd0} +
-		       {2'd0, select_pd(r_jump_out, 'd1) != 4'd0} +
-		       {2'd0, select_pd(r_jump_out, 'd2) != 4'd0} +
-		       {2'd0, select_pd(r_jump_out, 'd3) != 4'd0};
+	t_branch_cnt = {2'd0, select_pd(w_jump, 'd0) != 4'd0} +
+		       {2'd0, select_pd(w_jump, 'd1) != 4'd0} +
+		       {2'd0, select_pd(w_jump, 'd2) != 4'd0} +
+		       {2'd0, select_pd(w_jump, 'd3) != 4'd0};
 	
 		
 	t_jal_simm = {{(11+PP){t_insn_data[31]}}, t_insn_data[31], t_insn_data[19:12], t_insn_data[20], t_insn_data[30:21], 1'b0};
@@ -645,6 +643,7 @@ endfunction
 		    n_mem_req_valid = 1'b1;
 		    n_miss_pc = r_cache_pc;
 		    n_pc = r_pc;
+		    n_reload = r_cycle[0];
 		 end
 	       else if(t_hit && !fq_full)
 		 begin		    
@@ -918,9 +917,13 @@ endfunction
 `endif
      end // always_comb
    
-   logic t_wr_valid_ram_en, t_valid_ram_value;
+   logic t_wr_valid_ram_en0, t_wr_valid_ram_en1;
+   logic t_valid_ram_value0, t_valid_ram_value1;
+   
    logic [`LG_L1I_NUM_SETS-1:0] t_valid_ram_idx;
 
+   logic			r_reload, n_reload;
+   
    
    compute_pht_idx cpi0 (.pc(n_cache_pc), .hist(r_spec_gbl_hist), .idx(n_pht_idx));
 
@@ -934,8 +937,12 @@ endfunction
    
    always_comb
      begin
-	t_wr_valid_ram_en = mem_rsp_valid || r_state == FLUSH_CACHE;
-	t_valid_ram_value = (r_state != FLUSH_CACHE);
+	t_wr_valid_ram_en0 = (mem_rsp_valid && (r_reload == 1'b0)) || (r_state == FLUSH_CACHE);
+	t_wr_valid_ram_en1 = (mem_rsp_valid && (r_reload == 1'b1)) || (r_state == FLUSH_CACHE);
+	
+	t_valid_ram_value0 = (r_state != FLUSH_CACHE);
+	t_valid_ram_value1 = (r_state != FLUSH_CACHE);
+	
 	t_valid_ram_idx = mem_rsp_valid ? r_mem_req_addr[IDX_STOP-1:IDX_START] : r_cache_idx;
      end
 
@@ -1060,28 +1067,28 @@ endfunction
       );
          
    ram1r1w #(.WIDTH(1), .LG_DEPTH(`LG_L1I_NUM_SETS))
-   valid_array (
+   valid_array0 (
 	   .clk(clk),
 	   .rd_addr(t_cache_idx),
 	   .wr_addr(t_valid_ram_idx),
-	   .wr_data(t_valid_ram_value),
-	   .wr_en(t_wr_valid_ram_en),
-	   .rd_data(r_valid_out)
+	   .wr_data(t_valid_ram_value0),
+	   .wr_en(t_wr_valid_ram_en0),
+	   .rd_data(w_valid_out0)
 	   );
 
    
    ram1r1w #(.WIDTH(N_TAG_BITS), .LG_DEPTH(`LG_L1I_NUM_SETS))
-   tag_array (
+   tag_array0 (
 	   .clk(clk),
 	   .rd_addr(t_cache_idx),
 	   .wr_addr(r_mem_req_addr[IDX_STOP-1:IDX_START]),
 	   .wr_data(r_mem_req_addr[`MAX_VA-1:IDX_STOP]),
-	   .wr_en(mem_rsp_valid),
-	   .rd_data(r_tag_out)
+	   .wr_en(mem_rsp_valid & (r_reload == 1'b0)),
+	   .rd_data(w_tag_out0)
 	   );
    
    ram1r1w #(.WIDTH(L1I_CL_LEN_BITS), .LG_DEPTH(`LG_L1I_NUM_SETS)) 
-   insn_array (
+   insn_array0 (
 	   .clk(clk),
 	   .rd_addr(t_cache_idx),
 	   .wr_addr(r_mem_req_addr[IDX_STOP-1:IDX_START]),
@@ -1089,10 +1096,47 @@ endfunction
 		     mem_rsp_load_data[95:64],
 		     mem_rsp_load_data[63:32], 
 		     mem_rsp_load_data[31:0]}),
-	   .wr_en(mem_rsp_valid),
-	   .rd_data(r_array_out)
+	   .wr_en(mem_rsp_valid & (r_reload == 1'b0)),
+	   .rd_data(w_array_out0)
 	   );
 
+
+   
+   ram1r1w #(.WIDTH(1), .LG_DEPTH(`LG_L1I_NUM_SETS))
+   valid_array1 (
+	   .clk(clk),
+	   .rd_addr(t_cache_idx),
+	   .wr_addr(t_valid_ram_idx),
+	   .wr_data(t_valid_ram_value1),
+	   .wr_en(t_wr_valid_ram_en1),
+	   .rd_data(w_valid_out1)
+	   );
+
+   
+   ram1r1w #(.WIDTH(N_TAG_BITS), .LG_DEPTH(`LG_L1I_NUM_SETS))
+   tag_array1 (
+    	       .clk(clk),
+	       .rd_addr(t_cache_idx),
+	       .wr_addr(r_mem_req_addr[IDX_STOP-1:IDX_START]),
+	       .wr_data(r_mem_req_addr[`MAX_VA-1:IDX_STOP]),
+	       .wr_en(mem_rsp_valid & (r_reload == 1'b1)),
+	       .rd_data(w_tag_out1)
+	       );
+   
+   ram1r1w #(.WIDTH(L1I_CL_LEN_BITS), .LG_DEPTH(`LG_L1I_NUM_SETS)) 
+   insn_array1 (
+	   .clk(clk),
+	   .rd_addr(t_cache_idx),
+		.wr_addr(r_mem_req_addr[IDX_STOP-1:IDX_START]),
+		.wr_data({mem_rsp_load_data[127:96],
+			  mem_rsp_load_data[95:64],
+			  mem_rsp_load_data[63:32], 
+			  mem_rsp_load_data[31:0]}),
+		.wr_en(mem_rsp_valid & (r_reload == 1'b1)),
+		.rd_data(w_array_out1)
+		);
+
+   
    wire [3:0] w_pd0, w_pd1, w_pd2, w_pd3;
    predecode pd0 (.insn(mem_rsp_load_data[31:0]),   .pd(w_pd0));
    predecode pd1 (.insn(mem_rsp_load_data[63:32]),  .pd(w_pd1));
@@ -1101,13 +1145,23 @@ endfunction
    
    
    ram1r1w #(.WIDTH(4*WORDS_PER_CL), .LG_DEPTH(`LG_L1I_NUM_SETS))
-   pd_data (
+   pd_data0 (
 	    .clk(clk),
 	    .rd_addr(t_cache_idx),
 	    .wr_addr(r_mem_req_addr[IDX_STOP-1:IDX_START]),
 	    .wr_data({w_pd3,w_pd2,w_pd1,w_pd0}),
-	    .wr_en(mem_rsp_valid),
-	    .rd_data(r_jump_out)
+	    .wr_en(mem_rsp_valid & (r_reload == 1'b0)),
+	    .rd_data(w_jump_out0)
+	    );
+
+   ram1r1w #(.WIDTH(4*WORDS_PER_CL), .LG_DEPTH(`LG_L1I_NUM_SETS))
+   pd_data1 (
+	    .clk(clk),
+	    .rd_addr(t_cache_idx),
+	    .wr_addr(r_mem_req_addr[IDX_STOP-1:IDX_START]),
+	    .wr_data({w_pd3,w_pd2,w_pd1,w_pd0}),
+	    .wr_en(mem_rsp_valid & (r_reload == 1'b1)),
+	    .rd_data(w_jump_out1)
 	    );
 	    
 	     
@@ -1202,6 +1256,7 @@ endfunction
 	  begin	  
 	     r_tlb_miss <= 1'b0;
 	     r_state <= INITIALIZE;
+	     r_reload <= 1'b0;
 	     r_page_fault <= 1'b0;
 	     r_init_pht_idx <= 'd0;
 	     r_pc <= 'd0;
@@ -1234,6 +1289,7 @@ endfunction
 	  begin
 	     r_tlb_miss <= n_tlb_miss;
 	     r_state <= n_state;
+	     r_reload <= n_reload;
 	     r_page_fault <= n_page_fault;
 	     r_init_pht_idx <= n_init_pht_idx;
 	     r_pc <= n_pc;
