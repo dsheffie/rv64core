@@ -124,7 +124,7 @@ module l2(clk,
    output logic [63:0] cache_accesses;
    
    
-   localparam LG_L2_LINES = `LG_L2_NUM_SETS;
+   localparam LG_L2_LINES = `LG_L2_NUM_SETS-1;
    localparam L2_LINES = 1<<LG_L2_LINES;
    
    localparam TAG_BITS = `M_WIDTH - (LG_L2_LINES + `LG_L2_CL_LEN);

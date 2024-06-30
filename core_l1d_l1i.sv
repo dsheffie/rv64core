@@ -413,7 +413,7 @@ module
 	t_counters.l2_accesses = l2_cache_accesses;
      end
    
-   l2 l2cache (
+   l2_2way l2cache (
 	       .clk(clk),
 	       .reset(reset),
 	       .l2_state(l2_state),

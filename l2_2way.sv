@@ -1,6 +1,6 @@
 `include "machine.vh"
 
-module l2(clk,
+module l2_2way(clk,
 	  reset,
 	  l2_state,
 	  l1d_req,
@@ -739,7 +739,7 @@ module l2(clk,
 		 begin
 		    n_reload = 1'b0;
 		    t_wr_last = 1'b1;
-		    t_last = w_hit0;
+		    t_last = w_hit0 ? 1'b0 : 1'b1;
 		    //$display("hit, hit 0 = %b, hit 1 = %b, r_addr %x", w_hit0, w_hit1, r_addr);
 		    if(r_opcode == 4'd4)
 		      begin			 
@@ -798,7 +798,8 @@ module l2(clk,
 		 begin
 		    n_cache_hits = r_cache_hits - 64'd1;
 		    n_replace = ~w_last;
-
+		    //$display("replace %b for addr %x", n_replace, r_saveaddr);
+		    
 		    if(n_replace)
 		      begin
 			 if(w_dirty1)
