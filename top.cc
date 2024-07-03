@@ -1138,7 +1138,7 @@ int main(int argc, char **argv) {
     was_in_flush_mode = tb->in_flush_mode;
     
     ++last_retire;
-    if(last_retire > (1U<<20) && not(tb->in_flush_mode)) {
+    if(last_retire > (1U<<21) && not(tb->in_flush_mode)) {
       std::cout << "in flush mode = " << static_cast<int>(tb->in_flush_mode) << "\n";
       std::cout << "no retire in " << last_retire << " cycles, last retired "
     		<< std::hex
@@ -1502,11 +1502,13 @@ int main(int argc, char **argv) {
     
     double l1i_mpki = static_cast<double>(l1i_misses) / (total_retire/1000);
     double l1d_mpki = static_cast<double>(l1d_misses) / (total_retire/1000);
-    double l2_mpki = static_cast<double>(l2_misses) / (total_retire/1000);        
+    double l2_mpki = static_cast<double>(l2_misses) / (total_retire/1000);
+    double jpki = static_cast<double>(n_mispredicts) / (total_retire/1000);
+    std::cout << "jpki         = " << jpki << "\n";
     std::cout << "l1i mpki     = " << l1i_mpki << "\n";
     std::cout << "l1d mpki     = " << l1d_mpki << "\n";
     std::cout << "l2  mpki     = " << l2_mpki << "\n";        
-    
+    std::cout << "l1d accesses = " << tb->l1d_cache_accesses << "\n";
     double tip_cycles = 0.0;
     for(auto &p : tip_map) {
       tip_cycles += p.second;

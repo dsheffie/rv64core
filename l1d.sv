@@ -1493,6 +1493,13 @@ module l1d(clk,
 		    else
 		      begin
 			 t_push_miss = 1'b1;
+`ifdef FOO
+			 $display("cycle %d port2 hit cache %b, pending busy %b for pc %x addr %x, data %x, rob %d dst %x dst valid %b",
+				  r_cycle, 
+				  t_port2_hit_cache,
+				  r_hit_busy_addr2,
+				  r_req2.pc, r_req2.addr, t_rsp_data2, r_req2.rob_ptr, r_req2.dst_ptr, r_req2.dst_valid);
+`endif
 			 if(t_port2_hit_cache)
 			   begin
 			      n_cache_hits = r_cache_hits + 'd1;

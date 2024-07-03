@@ -8,7 +8,7 @@
 
 `define FPGA 1
 
-//`define SECOND_EXEC_PORT 1
+`define SECOND_EXEC_PORT 1
 //`define FOUR_CYCLE_L1D 1
 //`define TWO_SRC_CHEAP 1
 
