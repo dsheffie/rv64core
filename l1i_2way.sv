@@ -152,6 +152,8 @@ module l1i_2way(clk,
 
    logic [N_TAG_BITS-1:0]		  t_cache_tag, r_cache_tag;
 
+   wire					  w_last_out;
+   
    wire [N_TAG_BITS-1:0]		  w_tag_out0, w_tag_out1;
 
    logic 				  r_pht_update;
@@ -466,6 +468,14 @@ endfunction
    wire	w_hit = w_hit0 | w_hit1;
    wire [127:0]	w_array = w_hit0 ? w_array_out0 : w_array_out1;
    wire [(4*WORDS_PER_CL)-1:0] w_jump = w_hit0 ? w_jump_out0 : w_jump_out1;
+
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if(r_req)
+   // 	  begin
+   // 	     $display("cycle %d, hit 0 %b, hit 1 %b", r_cycle, w_hit0, w_hit1);
+   // 	  end
+   //   end
    
    always_comb
      begin
@@ -643,7 +653,15 @@ endfunction
 		    n_mem_req_valid = 1'b1;
 		    n_miss_pc = r_cache_pc;
 		    n_pc = r_pc;
-		    n_reload = r_cycle[0];
+		    n_reload = r_cycle[0];//!w_last_out;
+		    //$display("cycle %d :missed for pc %x, set idx %d, replace way %d, w_tag_out0 = %x w_tag_out1 = %x",
+		    //r_cycle,
+		    //n_mem_req_addr,
+		    //r_cache_pc[11:4],
+		    //n_reload,
+		    //{w_tag_out0, r_cache_pc[11:4], 4'd0},
+		    //{w_tag_out1, r_cache_pc[11:4], 4'd0},			     
+		    //);
 		 end
 	       else if(t_hit && !fq_full)
 		 begin		    
@@ -738,7 +756,7 @@ endfunction
 	    begin
 	       if(mem_rsp_valid)
 		 begin
-		    //$display("icache fetch request for %x returns with data %x at cycle %d", r_pc, mem_rsp_load_data, r_cycle);
+		    //$display("icache fetch request for %x returns with data %x at cycle %d, r_miss_pc %x", r_pc, mem_rsp_load_data, r_cycle, r_miss_pc);
 		    n_state = RELOAD_TURNAROUND;
 		 end
 	    end
@@ -919,16 +937,21 @@ endfunction
    
    logic t_wr_valid_ram_en0, t_wr_valid_ram_en1;
    logic t_valid_ram_value0, t_valid_ram_value1;
+
+   logic t_last_ram_value, t_last_ram_en;
    
    logic [`LG_L1I_NUM_SETS-1:0] t_valid_ram_idx;
 
    logic			r_reload, n_reload;
    
+
+   always_comb
+     begin
+	t_last_ram_en = r_req || (r_state == FLUSH_CACHE);
+	t_last_ram_value = w_hit1;
+     end
    
    compute_pht_idx cpi0 (.pc(n_cache_pc), .hist(r_spec_gbl_hist), .idx(n_pht_idx));
-
-   
-
    always_comb
      begin
 	t_retire_pht_idx = branch_pht_idx;
@@ -1052,7 +1075,19 @@ endfunction
 	
      end
 `endif
-	  
+
+
+   ram1r1w #(.WIDTH(1), .LG_DEPTH(`LG_L1I_NUM_SETS))
+   last_array (
+	       .clk(clk),
+	       .rd_addr(t_cache_idx),
+	       .wr_addr(t_cache_idx),
+	       .wr_data(t_last_ram_value),
+	       .wr_en(t_last_ram_en),
+	       .rd_data(w_last_out)
+	       );
+
+   	  
 
    ram2r1w #(.WIDTH(2), .LG_DEPTH(`LG_PHT_SZ) ) pht
      (
