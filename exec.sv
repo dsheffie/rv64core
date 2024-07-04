@@ -1209,8 +1209,8 @@ module exec(clk,
    
    wire [31:0] w_add32_srcA = {w_c_sub32[30:0], 1'b0};
    wire [31:0] w_add32_srcB = w_s_sub32;
-   
-   ppa32 add0 (.A(w_add32_srcA), .B(w_add32_srcB), .Y(w_add32));
+
+   assign w_add32 = w_add32_srcA+w_add32_srcB;
 
    wire [63:0] w_as64_, w_as64_2_;
    addsub #(.W(64)) as0 
