@@ -4,6 +4,7 @@
 
 `ifdef VERILATOR
 import "DPI-C" function longint ic_translate(longint va, longint root);
+import "DPI-C" function longint ic_read_dword(input longint addr);
 `endif
 
 
@@ -18,61 +19,6 @@ typedef enum logic [3:0] {
 			  IS_JALR = 'd6
 			  } jump_t;
 */
-
-module predecode(insn, pd);
-   input logic [31:0] insn;
-   output logic [3:0] pd;
-   logic [6:0] 	      opcode;
-   
-   logic [4:0] 	      rd, rs1;
-   logic 	      rd_is_link, rs1_is_link;
-   
-   always_comb
-     begin
-	pd = 4'd0;
-	opcode = insn[6:0];
-	rd = insn[11:7];
-	rs1 = insn[19:15];
-	rd_is_link = (rd == 'd1) || (rd == 'd5);
-	rs1_is_link = (rs1 == 'd1) || (rs1 == 'd5);
-	
-	case(opcode)
-	  7'h63: /* cond branches */
-	    begin
-	       pd = 'd1;
-	    end
-	  7'h67: /* jalr and jr */
-	    begin
-	       //$display("rd = %d, rs1 = %d, rd link %b, rs1 link %b", rd, rs1, rd_is_link, rs1_is_link);
-	       if(rd == 'd0)
-		 begin
-		    pd = rs1_is_link ? 'd2 /* return */: 'd4; /*jr */
-		 end
-	       else
-		 begin
-		    /* jalr */
-		    pd = 'd6;
-		 end
-
-	    end
-	  7'h6f:
-	    begin
-	       //$display("rd = %d, rs1 = %d", rd, rs1);
-	       if(rd_is_link)
-		 begin
-		    pd = 'd5 /*jal*/;
-		 end
-	       else		 
-		 begin
-		    pd = 'd3; /* j */
-		 end
-	    end
-	  default:
-	    begin
-	    end
-	endcase // case (opcode)
-     end // always_comb
-endmodule // predecode
 
 
 module compute_pht_idx(pc, hist, idx);
@@ -214,9 +160,7 @@ module perfect_l1i(clk,
    output logic [63:0] 			  tlb_hits;   
 
 
-   wire 				  in_32b_mode = mode64==1'b0;
-      
-   logic [N_TAG_BITS-1:0] 		  t_cache_tag, r_cache_tag, r_tag_out;
+   logic [N_TAG_BITS-1:0] 		  t_cache_tag, r_cache_tag;
 
    logic 				  r_pht_update;
    logic [1:0] 				  r_pht_out, r_pht_update_out;
@@ -236,8 +180,7 @@ module perfect_l1i(clk,
    logic [(4*WORDS_PER_CL)-1:0] 	  r_jump_out;
    
    logic [`LG_L1I_NUM_SETS-1:0] 	    t_cache_idx, r_cache_idx;   
-   logic [L1I_CL_LEN_BITS-1:0] 		    r_array_out;   
-   logic 				    r_mem_req_valid, n_mem_req_valid;
+   logic				    r_mem_req_valid, n_mem_req_valid;
    logic [(`M_WIDTH-1):0] 		    r_mem_req_addr, n_mem_req_addr;
    
 
@@ -323,8 +266,7 @@ endfunction
    logic 		  r_restart_req, n_restart_req;
    logic 		  r_restart_ack, n_restart_ack;
    logic 		  r_req, n_req;
-   logic 		  r_valid_out;
-   logic 		  t_miss, t_hit, t_tag_match;
+   logic		  t_miss, t_hit;
    logic 		  t_push_insn, t_push_insn2,
 			  t_push_insn3, t_push_insn4;
    
@@ -376,7 +318,7 @@ endfunction
    assign cache_hits = r_cache_hits;
    assign cache_accesses = r_cache_accesses;
 
-   wire [`M_WIDTH-1:0] w_restart_pc = in_32b_mode ? { {(`M_WIDTH-32){1'b0}}, restart_pc[31:0]} : restart_pc;
+   wire [`M_WIDTH-1:0] w_restart_pc = restart_pc;
    
    always_comb
      begin
@@ -530,20 +472,18 @@ endfunction
 	t_next_spec_rs_tos = r_spec_rs_tos+'d1;
 	n_restart_req = restart_valid | r_restart_req;
 	t_page_fault = r_req && paging_active && (&r_cache_pc_pa);
-	
-	t_tag_match = r_tag_out == (paging_active ? r_cache_pc_pa[`M_WIDTH-1:IDX_STOP] : r_cache_tag);
-	
-	t_miss = r_req && !(r_valid_out && t_tag_match);
-	t_hit = r_req && (r_valid_out && t_tag_match);
+		
+	t_miss = 1'b0;
+	t_hit = r_req;
 
 	t_insn_idx = r_cache_pc[WORD_STOP-1:WORD_START];
 	
 	t_pd = select_pd(r_jump_out, t_insn_idx);
 
-	t_insn_data  = select_cl32(r_array_out, t_insn_idx);
-	t_insn_data2 = select_cl32(r_array_out, t_insn_idx + 2'd1);
-	t_insn_data3 = select_cl32(r_array_out, t_insn_idx + 2'd2);
-	t_insn_data4 = select_cl32(r_array_out, t_insn_idx + 2'd3);
+	t_insn_data  = select_cl32(r_ifetch_data, t_insn_idx);
+	t_insn_data2 = select_cl32(r_ifetch_data, t_insn_idx + 2'd1);
+	t_insn_data3 = select_cl32(r_ifetch_data, t_insn_idx + 2'd2);
+	t_insn_data4 = select_cl32(r_ifetch_data, t_insn_idx + 2'd3);
 
 
 	t_branch_marker = {1'b1,
@@ -1013,6 +953,38 @@ endfunction
 			 ic_translate(n_cache_pc, page_table_root) :
 			 n_cache_pc;
      end
+
+   logic [63:0] t_fetch_addr;
+   logic [127:0] r_ifetch_data;
+   
+   always_comb
+     begin
+	t_fetch_addr = {t_cache_tag, t_cache_idx, 4'd0};
+	if(n_req & paging_active)
+	  begin
+	     t_fetch_addr = ic_translate(t_fetch_addr, page_table_root);
+	  end
+     end
+
+   always_ff@(posedge clk)
+     begin
+	if(n_req)
+	  begin
+	     r_ifetch_data[63:0] <= ic_read_dword(t_fetch_addr);
+	     r_ifetch_data[127:64] <= ic_read_dword(t_fetch_addr+64'd8);	     
+	  end
+     end
+   
+   wire [3:0] w_bogo_pd0, w_bogo_pd1, w_bogo_pd2, w_bogo_pd3;
+   predecode bogo_pd0 (.insn(r_ifetch_data[31:0]),   .pd(w_bogo_pd0));
+   predecode bogo_pd1 (.insn(r_ifetch_data[63:32]),  .pd(w_bogo_pd1));
+   predecode bogo_pd2 (.insn(r_ifetch_data[95:64]),  .pd(w_bogo_pd2));
+   predecode bogo_pd3 (.insn(r_ifetch_data[127:96]), .pd(w_bogo_pd3));   
+
+   always_comb
+     begin
+	r_jump_out = {w_bogo_pd3, w_bogo_pd2, w_bogo_pd1, w_bogo_pd0};
+     end
    
 
    ram2r1w #(.WIDTH(2), .LG_DEPTH(`LG_PHT_SZ) ) pht
@@ -1027,57 +999,6 @@ endfunction
       .rd_data1(r_pht_update_out)
       );
          
-   ram1r1w #(.WIDTH(1), .LG_DEPTH(`LG_L1I_NUM_SETS))
-   valid_array (
-	   .clk(clk),
-	   .rd_addr(t_cache_idx),
-	   .wr_addr(t_valid_ram_idx),
-	   .wr_data(t_valid_ram_value),
-	   .wr_en(t_wr_valid_ram_en),
-	   .rd_data(r_valid_out)
-	   );
-
-   
-   ram1r1w #(.WIDTH(N_TAG_BITS), .LG_DEPTH(`LG_L1I_NUM_SETS))
-   tag_array (
-	   .clk(clk),
-	   .rd_addr(t_cache_idx),
-	   .wr_addr(r_mem_req_addr[IDX_STOP-1:IDX_START]),
-	   .wr_data(r_mem_req_addr[`M_WIDTH-1:IDX_STOP]),
-	   .wr_en(mem_rsp_valid),
-	   .rd_data(r_tag_out)
-	   );
-   
-   ram1r1w #(.WIDTH(L1I_CL_LEN_BITS), .LG_DEPTH(`LG_L1I_NUM_SETS)) 
-   insn_array (
-	   .clk(clk),
-	   .rd_addr(t_cache_idx),
-	   .wr_addr(r_mem_req_addr[IDX_STOP-1:IDX_START]),
-	   .wr_data({mem_rsp_load_data[127:96],
-		     mem_rsp_load_data[95:64],
-		     mem_rsp_load_data[63:32], 
-		     mem_rsp_load_data[31:0]}),
-	   .wr_en(mem_rsp_valid),
-	   .rd_data(r_array_out)
-	   );
-
-   wire [3:0] w_pd0, w_pd1, w_pd2, w_pd3;
-   predecode pd0 (.insn(mem_rsp_load_data[31:0]),   .pd(w_pd0));
-   predecode pd1 (.insn(mem_rsp_load_data[63:32]),  .pd(w_pd1));
-   predecode pd2 (.insn(mem_rsp_load_data[95:64]),  .pd(w_pd2));
-   predecode pd3 (.insn(mem_rsp_load_data[127:96]), .pd(w_pd3));   
-   
-   
-   ram1r1w #(.WIDTH(4*WORDS_PER_CL), .LG_DEPTH(`LG_L1I_NUM_SETS))
-   pd_data (
-	    .clk(clk),
-	    .rd_addr(t_cache_idx),
-	    .wr_addr(r_mem_req_addr[IDX_STOP-1:IDX_START]),
-	    .wr_data({w_pd3,w_pd2,w_pd1,w_pd0}),
-	    .wr_en(mem_rsp_valid),
-	    .rd_data(r_jump_out)
-	    );
-	    
 	     
    always_comb
      begin
