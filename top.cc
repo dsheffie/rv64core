@@ -124,7 +124,6 @@ void record_l1d(int req, int ack, int ack_st, int blocked, int stall_reason) {
   l1d_stall_reasons[stall_reason&15]++;
 }
 
-static bool verbose_ic_translate = false;
 
 long long loadgpr(int gprid) {
   return s->gpr[gprid];
@@ -177,8 +176,6 @@ long long translate(long long va, long long root, bool iside, bool store) {
   u = *reinterpret_cast<int64_t*>(s->mem + a);
   //printf("1st level entry %lx\n", a);
   if((u & 1) == 0) {
-    if(verbose_ic_translate)
-      printf("failed translation for %llx at level 3, u %lx r %llx\n", va, u, root);
     return (~0UL);
   }
   if((u>>1)&7) {
@@ -192,8 +189,6 @@ long long translate(long long va, long long root, bool iside, bool store) {
   u = *reinterpret_cast<int64_t*>(s->mem + a);
   //printf("2nd level entry %lx\n", a);  
   if((u & 1) == 0) {
-    if(verbose_ic_translate)
-      printf("failed translation for %llx at level 2\n", va);
     return (~0UL);
   }
   if((u>>1)&7) {
@@ -207,8 +202,6 @@ long long translate(long long va, long long root, bool iside, bool store) {
   //printf("3rd level entry %lx\n", a);
   u = *reinterpret_cast<int64_t*>(s->mem + a);
   if((u & 1) == 0) {
-    if(verbose_ic_translate)
-      printf("failed translation for %llx at level 1\n", va);
     return (~0UL);
   }
   assert((u>>1)&7);
@@ -274,8 +267,8 @@ void wr_log(long long pc,
 
   auto &t = store_queue.front();
   if(globals::log) {
-    printf("check store : sim pc %lx, rtl pc %llx %lx, %lx\n",
-	   t.pc, pc, t.addr, t.data);
+    std::cout << "check store : sim pc " << std::hex << t.pc << ", rtl pc " << pc
+	      << t.addr << ", " << t.data << std::dec << "\n";
   }
   if(not(t.pc == pc and t.addr == addr and t.data == data)) {
     printf("you have a store error! for an atomic %d, pc match %d, addr match %d, data match %d\n",
@@ -327,9 +320,7 @@ void term_sim() {
 std::string getAsmString(uint64_t addr, uint64_t root, bool paging_enabled) {
   int64_t pa = addr;
   if(paging_enabled) {
-    verbose_ic_translate = true;
     pa = translate(addr, root, true, false);
-    verbose_ic_translate = false;
     if(pa == -1) {
       return "code page not present";
     }
@@ -345,6 +336,10 @@ long long read_dword(long long addr) {
   long long x = *reinterpret_cast<long long*>(s->mem + pa);
   //std::cout << std::hex << addr << " -> " << x << std::hex << "\n";
   return x;
+}
+
+long long ic_read_dword(long long addr) {
+  return read_dword(addr);
 }
 
 int read_word(long long addr) {
