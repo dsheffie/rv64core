@@ -11,7 +11,7 @@ import "DPI-C" function void wr_log(input longint pc,
 
 //`define VERBOSE_L1D 1
 
-module l1d(clk, 
+module nu_l1d(clk, 
 	   reset,
 	   priv,
 	   page_table_root,

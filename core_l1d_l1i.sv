@@ -470,7 +470,7 @@ module
    
    
 
-   l1d dcache (
+   nu_l1d dcache (
 	       .clk(clk),
 	       .reset(reset),
 	       .priv(w_priv),

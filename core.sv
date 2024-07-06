@@ -375,7 +375,7 @@ module core(clk,
    logic 		     n_l2_flush_complete, r_l2_flush_complete;
    
    
-   cause_t 		     n_cause, r_cause;
+   logic [4:0] 		     n_cause, r_cause;
    logic [63:0]		     r_tval, n_tval;
    logic [63:0]		     r_epc, n_epc;
    
