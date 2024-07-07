@@ -330,8 +330,6 @@ module nu_l1d(clk,
    logic [L1D_CL_LEN_BITS-1:0] r_mem_req_store_data, n_mem_req_store_data;
    
    logic [3:0] 		       r_mem_req_opcode, n_mem_req_opcode;
-   logic [63:0] 	       n_cache_accesses, r_cache_accesses;
-   logic [63:0] 	       n_cache_hits, r_cache_hits;
 
    wire 		       w_tlb_hit, w_tlb_dirty, w_tlb_writable, w_tlb_readable, 
 			       w_tlb_user, w_zero_page;
@@ -364,8 +362,9 @@ module nu_l1d(clk,
    assign core_mem_rsp_valid = r_core_mem_rsp_valid;
    assign core_mem_rsp = r_core_mem_rsp;
 `endif
-   assign cache_accesses = r_cache_accesses;
-   assign cache_hits = r_cache_hits;
+   assign cache_accesses = 'd0;
+   assign cache_hits = 'd0;
+   
    
    assign page_walk_req_valid = r_page_walk_req_valid;
    assign page_walk_req_va = r_tlb_addr;
@@ -663,8 +662,6 @@ module nu_l1d(clk,
 	     r_mem_req_store_data <= 'd0;
 	     r_mem_req_opcode <= 'd0;
 	     r_core_mem_rsp_valid <= 1'b0;
-	     r_cache_hits <= 'd0;
-	     r_cache_accesses <= 'd0;
 	     r_store_stalls <= 'd0;
 	     r_inhibit_write <= 1'b0;
 	     memq_empty <= 1'b1;
@@ -719,8 +716,6 @@ module nu_l1d(clk,
 	     r_mem_req_store_data <= n_mem_req_store_data;
 	     r_mem_req_opcode <= n_mem_req_opcode;
 	     r_core_mem_rsp_valid <= n_core_mem_rsp_valid;
-	     r_cache_hits <= n_cache_hits;
-	     r_cache_accesses <= n_cache_accesses;
 	     r_store_stalls <= n_store_stalls;
 	     r_inhibit_write <= n_inhibit_write;
 	     memq_empty <= mem_q_empty 
@@ -855,14 +850,6 @@ module nu_l1d(clk,
       .rd_data1(r_dirty_out2)
       );
 
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if(t_write_dirty_en && (t_dirty_wr_addr == 'd2))
-   // 	  begin
-   // 	     $display(">> MARKING CACHE LINE 2 as %d at cycle %d, state %d", t_dirty_value, r_cycle, r_state);
-	     
-   // 	  end
-   //   end
    
    logic t_valid_value;
    logic t_write_valid_en;
@@ -1296,6 +1283,7 @@ module nu_l1d(clk,
 
    mem_rsp_t t_core_mem_rsp;
    logic t_core_mem_rsp_valid;
+   wire	 w_got_reload_pf = page_walk_rsp_valid & page_walk_rsp.fault;
    
    always_comb
      begin
@@ -1471,9 +1459,6 @@ module nu_l1d(clk,
 	n_core_mem_rsp.mark_page_dirty = t_core_mem_rsp.mark_page_dirty;
 	n_core_mem_rsp.cause = t_core_mem_rsp.cause;
 	
-	n_cache_accesses = r_cache_accesses;
-	n_cache_hits = r_cache_hits;
-	
 	n_store_stalls = r_store_stalls;
 
 	n_flush_req = r_flush_req | flush_req;
@@ -1520,37 +1505,17 @@ module nu_l1d(clk,
 	    end
 	  ACTIVE:
 	    begin
-	       
 	       if(r_got_req)
 		 begin
-`ifdef VERBOSE_L1D
-		       $display("req 1 : cycle %d, rob ptr %d, r_is_retry %b, addr %x, is store %b, r_cache_idx = %d, r_cache_tag = %d, valid %b, uc %b",
-				r_cycle, r_req.rob_ptr, r_is_retry, r_req.addr, r_req.is_store, r_cache_idx, r_cache_tag, 
-				r_valid_out, r_req.uncachable);
-
-`endif
-
-		    
 		    if(r_valid_out && (r_tag_out == r_cache_tag) && !r_req.uncachable)
 		      begin /* valid cacheline - hit in cache */
-			 if(r_req.is_store)
-			   begin
-			      t_reset_graduated = 1'b1;				   
-			   end
-			 else
+			 t_reset_graduated = r_req.is_store;
+			 if(r_req.is_store==1'b0)
 			   begin
 			      n_core_mem_rsp.data = t_rsp_data[`M_WIDTH-1:0];
 			      n_core_mem_rsp.dst_valid = t_rsp_dst_valid;
 			      n_core_mem_rsp_valid = 1'b1;
 			      n_core_mem_rsp.has_cause = r_req.spans_cacheline;
-`ifdef VERBOSE_L1D			      
-			      if(r_did_reload)
-				begin
-				   $display("late ack at cycle %d for load with rob ptr %d, data %x, dst valid %b", 
-					    r_cycle, r_req.rob_ptr, n_core_mem_rsp.data , n_core_mem_rsp.dst_valid );
-			      end
-`endif
-			      
 			   end // else: !if(r_req.is_store)
 		      end // if (r_valid_out && (r_tag_out == r_cache_tag))
 		    else if(r_valid_out && r_dirty_out && (r_tag_out != r_cache_tag) && !r_req.uncachable)
@@ -1625,19 +1590,6 @@ module nu_l1d(clk,
 			 begin
 			    $stop();
 			 end
-`ifdef VERBOSE_L1D
-		       $display("at cycle %d : cache invalid miss for rob ptr %d, r_is_retry %b, addr %x, is store %b, r_cache_idx = %d, r_cache_tag = %d, valid %b, n_state %d",
-				r_cycle, 
-				r_req.rob_ptr, 
-				r_is_retry, 
-				r_req.addr, 
-				r_req.is_store, 
-				r_cache_idx, 
-				r_cache_tag, 
-				r_valid_out,
-				n_state);
-`endif
-		       
 		    end // else: !if(r_valid_out && r_dirty_out && (r_tag_out != r_cache_tag)...
 		 end // if (r_got_req)
 	       else if(n_pending_tlb_miss)
@@ -1647,20 +1599,9 @@ module nu_l1d(clk,
 		    n_page_walk_req_valid = 1'b1;
 		 end
 
-
 	       
 	     if(!mem_q_empty && !t_got_miss && !r_lock_cache && !n_pending_tlb_miss)
 	       begin
-		  // $display("t_mem_head.rob_ptr = %d, grad %b, dq ptr %d valid %b, data %x, addr %x, pc %x", 
-		  // 	   t_mem_head.rob_ptr, 
-		  // 	   r_graduated[t_mem_head.rob_ptr], 
-		  // 	   core_store_data.rob_ptr, 
-		  // 	   core_store_data_valid,
-		  // 	   core_store_data.data,
-		  // 	   t_mem_head.addr,
-		  // 	   t_mem_head.pc
-		  // 	   );
-		  
 		  if(!t_mh_block)
 		    begin
 		       //if(t_mem_head.uncachable) $display("uncachable op");
@@ -1721,7 +1662,6 @@ module nu_l1d(clk,
 		   t_tlb_xlat = 1'b1;
 		   n_tlb_addr = core_mem_va_req.addr;
 		   n_last_wr2 = core_mem_va_req.is_store;
-		   n_cache_accesses =  r_cache_accesses + 'd1;
 		end // if (core_mem_va_req_valid &&...
 	      else if(r_flush_req && mem_q_empty && !(r_got_req && r_last_wr))
 		begin
@@ -1861,6 +1801,7 @@ module nu_l1d(clk,
 		     n_inhibit_write = 1'b0;
 		  end
 	    end
+	  
 	  TLB_RELOAD:
 	    begin
 	       if(page_walk_rsp_valid)
