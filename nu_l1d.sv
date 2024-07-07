@@ -193,7 +193,6 @@ module nu_l1d(clk,
 
    logic 				  t_array_wr_en;
 		  
-   logic 				  t_ack_ld_early, r_ack_ld_early;
    logic 				  r_flush_req, n_flush_req;
    logic 				  r_flush_cl_req, n_flush_cl_req;
    logic 				  r_flush_complete, n_flush_complete;
@@ -223,7 +222,7 @@ module nu_l1d(clk,
    
    logic [`M_WIDTH-1:0] 		  t_addr;
    logic 				  t_got_req, t_got_req2, t_replay_req2;
-   logic 				  t_tlb_xlat;
+   logic 				  t_tlb_xlat,t_tlb_xlat_replay;
    logic 				  n_pending_tlb_miss, r_pending_tlb_miss;
    logic				  n_pending_tlb_zero_page, r_pending_tlb_zero_page;
    logic 				  t_got_miss;
@@ -309,10 +308,7 @@ module nu_l1d(clk,
                              FLUSH_CL_WAIT, //9			     
                              HANDLE_RELOAD, //10
 			     TLB_RELOAD, //11
-			     TLB_TURNAROUND, //12
-			     UC_LOAD, //13
-			     UC_STORE, //14
-			     UC_TURNAROUND //15
+			     TLB_TURNAROUND //12
                              } state_t;
 
    
@@ -499,7 +495,7 @@ module nu_l1d(clk,
 		  
 		  r_rob_inflight[r_req2.rob_ptr] <= 1'b1;
 	       end
-	     if(r_got_req && r_valid_out && (r_tag_out == r_cache_tag) && !r_req.uncachable || t_ack_ld_early)
+	     if(r_got_req && r_valid_out && (r_tag_out == r_cache_tag) && !r_req.uncachable)
 	       begin
 		  //$display("rob entry %d leaves at cycle %d", r_req.rob_ptr, r_cycle);
 		  if(r_rob_inflight[r_req.rob_ptr] == 1'b0) 
@@ -627,7 +623,6 @@ module nu_l1d(clk,
 	     r_pending_tlb_miss <= 1'b0;
 	     r_pending_tlb_zero_page <= 1'b0;
 	     r_tlb_addr <= 'd0;
-	     r_ack_ld_early <= 1'b0;
 	     r_did_reload <= 1'b0;
 	     r_stall_store <= 1'b0;
 	     r_is_retry <= 1'b0;
@@ -678,7 +673,6 @@ module nu_l1d(clk,
 	     r_pending_tlb_miss <= n_pending_tlb_miss;
 	     r_pending_tlb_zero_page <= n_pending_tlb_zero_page;
 	     r_tlb_addr <= n_tlb_addr;
-	     r_ack_ld_early <= t_ack_ld_early;
 	     r_did_reload <= n_did_reload;
 	     r_stall_store <= n_stall_store;
 	     r_is_retry <= n_is_retry;
@@ -731,16 +725,6 @@ module nu_l1d(clk,
 	  end
      end // always_ff@ (posedge clk)
 
-`ifdef VERBOSE_L1D
-   always_ff@(negedge clk)
-     begin
-	if(memq_empty)
-	  begin
-	     $display("MEMQ EMTPY AT CYCLE %d", r_cycle);
-	  end
-     end
-`endif
-   
    always_ff@(posedge clk)
      begin
 	r_req <= n_req;
@@ -752,40 +736,8 @@ module nu_l1d(clk,
      begin
 	t_array_wr_addr = mem_rsp_valid ? r_mem_req_addr[IDX_STOP-1:IDX_START] : r_cache_idx;
 	t_array_wr_data = mem_rsp_valid ? mem_rsp_load_data : t_store_shift;
-	t_array_wr_en = (mem_rsp_valid && (!(r_state == UC_LOAD || r_state == UC_STORE))) || t_wr_array;
+	t_array_wr_en = (mem_rsp_valid) | t_wr_array;
      end
-
-   
-
-`ifdef VERBOSE_L1D
-   always_ff@(negedge clk)
-     begin
-   	if(t_wr_array)
-   	  begin
-   	     $display("cycle %d : WRITING set %d WITH data %x, addr %x, op %d ptr %d, retry %b, dirty addr %x, dirty value %b, dirty en %b", 
-   		      r_cycle, 
-		      r_cache_idx, 
-		      t_array_data,
-		      r_req.addr, 
-		      r_req.op,
-		      r_req.rob_ptr, 
-		      r_is_retry,
-		      t_dirty_wr_addr,
-		      t_dirty_value,
-		      t_write_dirty_en);
-   	  end	
-     end // always_ff@ (negedge clk)
-
-   always_ff@(negedge clk)
-     begin
-	if(r_state == FLUSH_CL)
-	  begin
-	     $display("flush line %d at cycle %d for addr %x, was dirty %b, r_last_wr = %b, rr_last_wr = %b",
-		      r_cache_idx, r_cycle, {r_tag_out,r_cache_idx,4'd0}, r_dirty_out, r_last_wr, rr_last_wr);
-	  end
-     end // always_ff@ (negedge clk)
-
-`endif
    
  ram2r1w #(.WIDTH(N_TAG_BITS), .LG_DEPTH(`LG_L1D_NUM_SETS)) dc_tag
      (
@@ -794,7 +746,7 @@ module nu_l1d(clk,
       .rd_addr1(t_cache_idx2),
       .wr_addr(r_mem_req_addr[IDX_STOP-1:IDX_START]),
       .wr_data(r_mem_req_addr[`M_WIDTH-1:IDX_STOP]),
-      .wr_en(mem_rsp_valid & (!((r_state == UC_LOAD) | (r_state == UC_STORE)))),
+      .wr_en(mem_rsp_valid),
       .rd_data0(r_tag_out),
       .rd_data1(r_tag_out2)
       );
@@ -826,7 +778,7 @@ module nu_l1d(clk,
 	  begin
 	     t_write_dirty_en = 1'b1;	     
 	  end
-	else if(mem_rsp_valid & (!((r_state == UC_LOAD) | (r_state == UC_STORE))))
+	else if(mem_rsp_valid)
 	  begin
 	     t_dirty_wr_addr = r_mem_req_addr[IDX_STOP-1:IDX_START];
 	     t_write_dirty_en = 1'b1;
@@ -864,7 +816,7 @@ module nu_l1d(clk,
 	  begin
 	     t_write_valid_en = 1'b1;
 	  end
-	else if(mem_rsp_valid & (!((r_state == UC_LOAD) | (r_state == UC_STORE))))	
+	else if(mem_rsp_valid)
 	  begin
 	     t_valid_wr_addr = r_mem_req_addr[IDX_STOP-1:IDX_START];
 	     t_valid_value = !r_inhibit_write;
@@ -893,7 +845,7 @@ module nu_l1d(clk,
 	    .priv(priv),
     	    .clear(clear_tlb),
     	    .active(paging_active),
-    	    .req(t_tlb_xlat),
+    	    .req(t_tlb_xlat|t_tlb_xlat_replay),
 	    .va(n_tlb_addr),
 	    .pa(w_tlb_pa),
 	    .hit(w_tlb_hit),
@@ -1279,7 +1231,6 @@ module nu_l1d(clk,
 
    wire w_flush_hit = (r_tag_out == l2_probe_addr[`M_WIDTH-1:IDX_STOP]) & r_valid_out;
 
-   wire	w_uncachable = (w_tlb_pa >= `UC_START) && (w_tlb_pa < `UC_END) && 1'b0;
 
    mem_rsp_t t_core_mem_rsp;
    logic t_core_mem_rsp_valid;
@@ -1311,7 +1262,7 @@ module nu_l1d(clk,
 	     t_core_mem_rsp.rob_ptr = r_req2.rob_ptr;
 	     t_core_mem_rsp.dst_ptr = r_req2.dst_ptr;
 	     t_req2_pa.addr = w_tlb_pa;
-	     t_req2_pa.uncachable = w_uncachable;
+	     t_req2_pa.uncachable = 1'b0;
 	     
 	     if(r_pending_tlb_miss)
 	       begin
@@ -1340,10 +1291,6 @@ module nu_l1d(clk,
 		  t_core_mem_rsp.cause = STORE_PAGE_FAULT;
 		  t_core_mem_rsp.addr = r_req2.addr;
 		  t_core_mem_rsp_valid = 1'b1;			 
-	       end
-	     else if(w_uncachable & !(r_req2.is_store))
-	       begin
-		  t_push_miss = 1'b1;			 
 	       end
 	     else if(r_req2.is_atomic || r_req2.is_ll)
 	       begin
@@ -1384,6 +1331,7 @@ module nu_l1d(clk,
 	& !(t_mem_head.is_store | t_mem_head.is_atomic);
    
    logic t_new_req;
+   logic t_accept;
    
    always_comb
      begin
@@ -1399,17 +1347,19 @@ module nu_l1d(clk,
 		    !(n_pending_tlb_miss | r_pending_tlb_miss) &&
 		    !t_cm_block_stall &&
 		    (!r_rob_inflight[core_mem_va_req.rob_ptr])	;
+
      end
-   
+
+   logic t_old_ack;
    always_comb
      begin
+	t_old_ack = 1'b0;
 	n_flush_was_active = r_flush_was_active;
 	n_page_walk_gnt = r_page_walk_gnt | page_walk_rsp_gnt;
 	n_l2_probe_ack = 1'b0;
 	t_reload_tlb = 1'b0;
 	n_page_walk_req_valid = 1'b0;
-	n_tlb_addr = r_tlb_addr;
-	t_ack_ld_early = 1'b0;
+
 	t_got_rd_retry = 1'b0;
 	t_port2_hit_cache = r_valid_out2 && (r_tag_out2 == w_tlb_pa[`M_WIDTH-1:IDX_STOP]);
 	
@@ -1419,27 +1369,24 @@ module nu_l1d(clk,
 	t_cache_idx = 'd0;
 	t_cache_tag = 'd0;
 	
-	t_cache_idx2 = 'd0;
-	t_cache_tag2 = 'd0;	
+
 	
 	t_got_req = 1'b0;
-	t_got_req2 = 1'b0;
+
 	t_replay_req2 = 1'b0;
 	
-	t_tlb_xlat = 1'b0;
 	
 	t_got_non_mem = 1'b0;
 	n_last_wr = 1'b0;
-	n_last_wr2 = 1'b0;
+
 	
 	
 	t_got_miss = 1'b0;
 
 	
 	n_req = r_req;
-	n_req2 = r_req2;
-	
-	core_mem_va_req_ack = 1'b0;
+
+	t_tlb_xlat_replay = 1'b0;
 	core_store_data_ack = 1'b0;
 	
 	n_mem_req_valid = 1'b0;
@@ -1515,6 +1462,7 @@ module nu_l1d(clk,
 			      n_core_mem_rsp.data = t_rsp_data[`M_WIDTH-1:0];
 			      n_core_mem_rsp.dst_valid = t_rsp_dst_valid;
 			      n_core_mem_rsp_valid = 1'b1;
+			      if(t_core_mem_rsp_valid) $stop();
 			      n_core_mem_rsp.has_cause = r_req.spans_cacheline;
 			   end // else: !if(r_req.is_store)
 		      end // if (r_valid_out && (r_tag_out == r_cache_tag))
@@ -1551,18 +1499,7 @@ module nu_l1d(clk,
 		    begin
 		       t_got_miss = 1'b1;
 		       n_inhibit_write = 1'b0;	
-		       if(r_req.uncachable)
-			 begin
-			    n_state = r_req.is_store ? UC_STORE : UC_LOAD;
-			    n_mem_req_store_data = {64'd0, r_req.data};
-			    n_mem_req_addr = r_req.addr;
-			    n_mem_req_opcode = r_req.op;
-			    n_mem_req_uc = 1'b1;
-			    n_mem_req_valid = 1'b1;
-			    //$display("generating uc op for address %x, rob id %d",
-			    //n_mem_req_addr, r_req.rob_ptr);
-			 end
-		       else if(r_hit_busy_addr && r_is_retry || !r_hit_busy_addr || r_lock_cache)
+		       if(r_hit_busy_addr && r_is_retry || !r_hit_busy_addr || r_lock_cache)
 			 begin
 			    t_miss_idx = r_cache_idx;
 			    t_miss_addr = r_req.addr;		       
@@ -1599,94 +1536,75 @@ module nu_l1d(clk,
 		    n_page_walk_req_valid = 1'b1;
 		 end
 
+	       /* not qualified on r_got_req */
 	       
-	     if(!mem_q_empty && !t_got_miss && !r_lock_cache && !n_pending_tlb_miss)
+	       if(!mem_q_empty && !t_got_miss && !r_lock_cache && !n_pending_tlb_miss)
+		 begin
+		    if(!t_mh_block)
+		      begin
+			 //if(t_mem_head.uncachable) $display("uncachable op");
+			 if(t_mem_head.is_store || t_mem_head.is_atomic)
+			   begin
+			      if(w_st_amo_grad && (core_store_data_valid ? (t_mem_head.rob_ptr == core_store_data.rob_ptr) : 1'b0) )
+				begin
+				   t_pop_mq = 1'b1;
+				   core_store_data_ack = 1'b1;
+				   n_req = t_mem_head;
+				   n_req.data = core_store_data.data;
+				   t_cache_idx = t_mem_head.addr[IDX_STOP-1:IDX_START];
+				   t_cache_tag = t_mem_head.addr[`M_WIDTH-1:IDX_STOP];
+				   t_addr = t_mem_head.addr;
+				   t_got_req = 1'b1;
+				   n_is_retry = 1'b1;
+				   n_last_wr = 1'b1;
+				end // if (t_mem_head.rob_ptr == head_of_rob_ptr)
+			      else if(drain_ds_complete && dead_rob_mask[t_mem_head.rob_ptr])
+				begin
+				   t_pop_mq = 1'b1;
+				   t_force_clear_busy = 1'b1;
+				end
+			   end // if (t_mem_head.is_store)
+			 else
+			   begin
+			      t_pop_mq = 1'b1;
+			      n_req = t_mem_head;
+			      t_cache_idx = t_mem_head.addr[IDX_STOP-1:IDX_START];
+			      t_cache_tag = t_mem_head.addr[`M_WIDTH-1:IDX_STOP];
+			      t_addr = t_mem_head.addr;
+			      t_got_req = 1'b1;
+			      n_is_retry = 1'b1;
+			      t_got_rd_retry = 1'b1;
+			   end // else: !if(t_mem_head.is_store || t_mem_head.is_atomic)
+		      end
+		 end // if (!mem_q_empty && !t_got_miss && !r_lock_cache && !n_pending_tlb_miss)
+	       
+	       
+	       
+	     if(t_new_req)
 	       begin
-		  if(!t_mh_block)
-		    begin
-		       //if(t_mem_head.uncachable) $display("uncachable op");
-		       if(t_mem_head.is_store || t_mem_head.is_atomic)
-			 begin
-			    if(w_st_amo_grad && (core_store_data_valid ? (t_mem_head.rob_ptr == core_store_data.rob_ptr) : 1'b0) )
-			      begin
-				 //`ifdef VERBOSE_L1D
-//`endif
-				 t_pop_mq = 1'b1;
-				 core_store_data_ack = 1'b1;
-				 n_req = t_mem_head;
-				 n_req.data = core_store_data.data;
-				 t_cache_idx = t_mem_head.addr[IDX_STOP-1:IDX_START];
-				 t_cache_tag = t_mem_head.addr[`M_WIDTH-1:IDX_STOP];
-				 t_addr = t_mem_head.addr;
-				 t_got_req = 1'b1;
-				 n_is_retry = 1'b1;
-				 n_last_wr = 1'b1;
-			      end // if (t_mem_head.rob_ptr == head_of_rob_ptr)
-			    else if(drain_ds_complete && dead_rob_mask[t_mem_head.rob_ptr])
-			      begin
-`ifdef VERBOSE_L1D
-				 $display("CLEARING EVERYTHING OUT, should clear line %d for rob ptr %d, data %x", 
-					  t_mem_head.addr[IDX_STOP-1:IDX_START], t_mem_head.rob_ptr, t_mem_head.data);
-`endif
-				 t_pop_mq = 1'b1;
-				 t_force_clear_busy = 1'b1;
-			      end
-			 end // if (t_mem_head.is_store)
-		       else
-			 begin
-			    t_pop_mq = 1'b1;
-			    n_req = t_mem_head;
-			    t_cache_idx = t_mem_head.addr[IDX_STOP-1:IDX_START];
-			    t_cache_tag = t_mem_head.addr[`M_WIDTH-1:IDX_STOP];
-			    t_addr = t_mem_head.addr;
-			    t_got_req = 1'b1;
-			    n_is_retry = 1'b1;
-			    t_got_rd_retry = 1'b1;
-`ifdef VERBOSE_L1D			    
-			    $display("firing load for %x at cycle %d for rob ptr %d, state = %d, n_state = %d", 
-				     t_mem_head.addr, r_cycle, t_mem_head.rob_ptr, r_state, n_state);
-`endif
-			 end // else: !if(t_mem_head.is_store || t_mem_head.is_atomic)
-		    end
-	       end // if (!mem_q_empty && !t_got_miss && !r_lock_cache && !n_pending_tlb_miss)
-	       
-	       
-              if(t_new_req)
-		begin
-		   //use 2nd read port
-		   t_cache_idx2 = core_mem_va_req.addr[IDX_STOP-1:IDX_START];
-		   t_cache_tag2 = core_mem_va_req.addr[`M_WIDTH-1:IDX_STOP];
-		   n_req2 = core_mem_va_req;
-		   core_mem_va_req_ack = 1'b1;
-		   t_got_req2 = 1'b1;
-		   t_tlb_xlat = 1'b1;
-		   n_tlb_addr = core_mem_va_req.addr;
-		   n_last_wr2 = core_mem_va_req.is_store;
-		end // if (core_mem_va_req_valid &&...
-	      else if(r_flush_req && mem_q_empty && !(r_got_req && r_last_wr))
-		begin
+		  t_old_ack = 1'b1;
+	       end  
+	     else if(r_flush_req && mem_q_empty && !(r_got_req && r_last_wr))
+	       begin
 		   if(n_state != r_state) $stop();
-		   n_state = FLUSH_CACHE;
-		    if(!mem_q_empty) $stop();
-		   if(r_got_req && r_last_wr) $stop();
-`ifdef VERBOSE_L1D
-		   $display("flush begins at cycle %d, mem_q_empty = %b",r_cycle, mem_q_empty);
-`endif
-		    t_cache_idx = 'd0;
-		   n_flush_req = 1'b0;
-		end
-	      else if(r_flush_cl_req && mem_q_empty && !(r_got_req && r_last_wr)
-		       && !(n_page_walk_req_valid | t_got_miss | r_wr_array | t_wr_array))
-		begin
-		   //$display("t_got_miss = %b, n_state = %d", t_got_miss, n_state);
-		   if(n_state != r_state) $stop();		    
-		   if(!mem_q_empty) $stop();
-		   if(r_got_req && r_last_wr) $stop();
-		   t_cache_idx = l2_probe_addr[IDX_STOP-1:IDX_START];
-		   n_flush_cl_req = 1'b0;
-		   n_flush_was_active = 1'b1;
+		  n_state = FLUSH_CACHE;
+		  if(!mem_q_empty) $stop();
+		  if(r_got_req && r_last_wr) $stop();
+		  t_cache_idx = 'd0;
+		  n_flush_req = 1'b0;
+	       end
+	     else if(r_flush_cl_req && mem_q_empty && !(r_got_req && r_last_wr)
+		     && !(n_page_walk_req_valid | t_got_miss | r_wr_array | t_wr_array))
+	       begin
+		  //$display("t_got_miss = %b, n_state = %d", t_got_miss, n_state);
+		  if(n_state != r_state) $stop();		    
+		  if(!mem_q_empty) $stop();
+		  if(r_got_req && r_last_wr) $stop();
+		  t_cache_idx = l2_probe_addr[IDX_STOP-1:IDX_START];
+		  n_flush_cl_req = 1'b0;
+		  n_flush_was_active = 1'b1;
 		   n_state = FLUSH_CL;
-		end
+	       end
 	    end // case: ACTIVE
 	  WAIT_INJECT_RELOAD:
 	    begin
@@ -1700,20 +1618,6 @@ module nu_l1d(clk,
 		 begin
 		    n_state = HANDLE_RELOAD;
 		    n_inhibit_write = 1'b0;
-		    if(!(r_req.is_store || r_req.is_atomic || r_lock_cache))
-		      begin
-			 t_ack_ld_early = 1'b1;
-			 n_core_mem_rsp.rob_ptr = r_req.rob_ptr;
-			 n_core_mem_rsp.dst_ptr = r_req.dst_ptr;			 
-			 n_core_mem_rsp.data = t_rsp_data[`M_WIDTH-1:0];
-			 n_core_mem_rsp.has_cause = r_req.spans_cacheline;
-			 n_core_mem_rsp_valid = 1'b1;
-			 n_core_mem_rsp.dst_valid = r_req.dst_valid & n_core_mem_rsp_valid;
-`ifdef VERBOSE_L1D
-			 $display("early ack at cycle %d for load with rob ptr %d, data %x, dst valid %b, addr %x, line %d, r_lock_cache = %b",
-				    r_cycle, r_req.rob_ptr, n_core_mem_rsp.data , n_core_mem_rsp.dst_valid, r_req.addr, r_req.addr[11:4], r_lock_cache );
-`endif
-		      end
 		 end
 	    end
 	  HANDLE_RELOAD:
@@ -1721,7 +1625,7 @@ module nu_l1d(clk,
 	       t_cache_idx = r_req.addr[IDX_STOP-1:IDX_START];
 	       t_cache_tag = r_req.addr[`M_WIDTH-1:IDX_STOP];
 	       n_last_wr = r_req.is_store;
-	       t_got_req = r_req.is_store | (r_ack_ld_early == 1'b0);
+	       t_got_req = 1'b1;
 	       t_addr  = r_req.addr;
 	       n_did_reload = 1'b1;
 	       n_state = ACTIVE;
@@ -1808,16 +1712,6 @@ module nu_l1d(clk,
 		 begin
 		    t_reload_tlb = page_walk_rsp.fault==1'b0;
 		    n_state = TLB_TURNAROUND;
-		    if(page_walk_rsp.fault)
-		      begin
-			 //$display("taking page fault for pc %x", r_req2.pc);
-			 n_req2.op = MEM_NOP;
-			 n_req2.is_store = 1'b0;
-			 n_req2.has_cause = 1'b1;
-			 n_req2.cause = (r_req2.is_store | r_req2.is_atomic) ? 
-					STORE_PAGE_FAULT : LOAD_PAGE_FAULT;
-			 //$stop();
-		      end		    
 		 end // if (page_walk_rsp_valid)
 	       else if(n_flush_cl_req)
 		 begin
@@ -1832,36 +1726,7 @@ module nu_l1d(clk,
 	       n_page_walk_gnt = 1'b0;
 	       n_state = ACTIVE;
 	       t_replay_req2 = 1'b1;
-	       t_tlb_xlat = 1'b1;
-	    end
-	  UC_LOAD:
-	    begin
-	       if(mem_rsp_valid)
-		 begin
-		    //$display("uc load for %d completes", r_req.rob_ptr);
-		    t_ack_ld_early = 1'b1;
-		    n_core_mem_rsp.rob_ptr = r_req.rob_ptr;
-		    n_core_mem_rsp.dst_ptr = r_req.dst_ptr;			 
-		    n_core_mem_rsp.data = t_rsp_data[`M_WIDTH-1:0];
-		    n_core_mem_rsp.has_cause = r_req.spans_cacheline;
-		    n_core_mem_rsp_valid = 1'b1;
-		    n_core_mem_rsp.dst_valid = r_req.dst_valid & n_core_mem_rsp_valid;
-		    n_state = UC_TURNAROUND;
-
-		 end
-	    end
-	  UC_STORE:
-	    begin
-	       if(mem_rsp_valid)
-		 begin
-		    //$display("uc store for %d completes at cycle %d", r_req.rob_ptr, r_cycle);
-		    n_state = UC_TURNAROUND;
-		    t_ack_ld_early = 1'b1;
-		 end
-	    end
-	  UC_TURNAROUND:
-	    begin
-	       n_state = ACTIVE;
+	       t_tlb_xlat_replay = 1'b1;
 	    end
 	  default:
 	    begin
@@ -1875,10 +1740,6 @@ module nu_l1d(clk,
 	//   begin
 	//      $display("pending flush request at cycle %d, memq empty %b", r_cycle, mem_q_empty);
 	//   end
-	if((r_state == UC_LOAD || r_state == UC_STORE) && mem_rsp_valid && t_write_dirty_en) 
-	  begin
-	     $stop();
-	  end
 	// if(retired_rob_ptr_valid && (retired_rob_ptr == 'd1))
 	//   begin
 	//      $display("port a marking retired at cycle %d", r_cycle);
@@ -1900,6 +1761,55 @@ module nu_l1d(clk,
 	  end
      end
 
+   
+   always_comb
+     begin
+	t_cache_idx2 = 'd0;
+	t_cache_tag2 = 'd0;
+	n_req2 = r_req2;
+	
+	core_mem_va_req_ack = 1'b0;
+	t_got_req2 = 1'b0;
+	n_last_wr2 = 1'b0;
+	t_tlb_xlat = 1'b0;
+	n_tlb_addr = r_tlb_addr;
+	t_accept = t_new_req & t_old_ack;
+	if(w_got_reload_pf)
+	  begin
+	     n_req2.op = MEM_NOP;
+	     n_req2.is_store = 1'b0;
+	     n_req2.has_cause = 1'b1;
+	     n_req2.cause = (r_req2.is_store | r_req2.is_atomic) ? 
+			    STORE_PAGE_FAULT : LOAD_PAGE_FAULT;
+	  end
+        else if(t_accept)
+	  begin
+	     //if(r_state != ACTIVE) $stop();
+	     //use 2nd read port
+	     t_cache_idx2 = core_mem_va_req.addr[IDX_STOP-1:IDX_START];
+	     t_cache_tag2 = core_mem_va_req.addr[`M_WIDTH-1:IDX_STOP];
+	     n_req2 = core_mem_va_req;
+	     core_mem_va_req_ack = 1'b1;
+	     t_got_req2 = 1'b1;
+	     t_tlb_xlat = 1'b1;
+	     n_tlb_addr = core_mem_va_req.addr;
+	     n_last_wr2 = core_mem_va_req.is_store;
+	     if(!t_old_ack) 
+	       begin
+		  $display("r_state = %d, n_state = %d, idx2 %d, idx1 = %d",
+			   r_state, n_state, t_cache_idx2, r_cache_idx);
+	       end
+	  end // if (core_mem_va_req_valid &&...
+     end // always_comb
+   
+   always_ff@(negedge clk)
+     begin
+       if(t_accept & !t_old_ack)
+	 begin
+	    $display("new req = %b, old ack = %b, r_state = %d", 
+		     t_new_req, t_old_ack, r_state);
+	 end
+     end
 
 endmodule // l1d
 
