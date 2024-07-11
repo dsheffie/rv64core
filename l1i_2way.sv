@@ -476,7 +476,7 @@ endfunction
    // 	     $display("cycle %d, hit 0 %b, hit 1 %b", r_cycle, w_hit0, w_hit1);
    // 	  end
    //   end
-   
+   logic			r_reload, n_reload;   
    always_comb
      begin
 	n_page_fault = r_page_fault;
@@ -942,7 +942,7 @@ endfunction
    
    logic [`LG_L1I_NUM_SETS-1:0] t_valid_ram_idx;
 
-   logic			r_reload, n_reload;
+
    
 
    always_comb

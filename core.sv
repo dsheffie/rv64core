@@ -841,9 +841,15 @@ module core(clk,
    
 //`define DUMP_ROB
 `ifdef DUMP_ROB
+   logic [63:0] r_watchdog;
+   always_ff@(posedge clk)
+     begin
+	r_watchdog <= reset | t_retire ? 'd0 : (r_watchdog + 'd1);
+     end
+   
    always_ff@(negedge clk)
      begin
-	if(r_cycle >= 64'd10000)
+	if(r_watchdog >= 64'd10000)
 	  begin 
 	     $display("cycle %d : state = %d, alu complete %b, mem complete %b,head_ptr %d, complete %b,  can_retire_rob_head %b, head pc %x, empty %b, full %b, bob full %b", 
 		      r_cycle,

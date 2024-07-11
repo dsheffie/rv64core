@@ -3,10 +3,11 @@
 `include "uop.vh"
 
 `ifdef VERILATOR
-import "DPI-C" function void wr_log(input longint pc, 
+import "DPI-C" function void wr_log(input longint pc,
+				    input int rob_ptr,
 				    input longint unsigned addr, 
 				    input longint unsigned data, 
-				    int 	  is_atomic);
+				    int			   is_atomic);
 `endif
 
 //`define VERBOSE_L1D 1
@@ -198,8 +199,8 @@ module nu_l1d(clk,
    logic 				  r_flush_complete, n_flush_complete;
    
 
-   logic [L1D_CL_LEN_BITS-1:0] 		  t_shift, t_shift_2;
-   logic [L1D_CL_LEN_BITS-1:0] 		  t_store_shift, t_store_mask;
+   logic [127:0] 		  t_shift, t_shift_2;
+   logic [127:0] 		  t_store_shift, t_store_mask;
 
    
    
@@ -218,7 +219,7 @@ module nu_l1d(clk,
 
 
    
-   logic [L1D_CL_LEN_BITS-1:0] 		  t_array_data;
+   logic [127:0]			  t_array_data;
    
    logic [`M_WIDTH-1:0] 		  t_addr;
    logic 				  t_got_req, t_got_req2, t_replay_req2;
@@ -768,6 +769,28 @@ module nu_l1d(clk,
    logic t_dirty_value;
    logic t_write_dirty_en;
    logic [`LG_L1D_NUM_SETS-1:0] t_dirty_wr_addr;
+
+   always_ff@(negedge clk)
+     begin
+	if(mem_rsp_valid && t_wr_array)
+	  begin
+	     $stop();
+	  end
+	if(t_wr_array)
+	  begin
+	     $display("pc %x op %d rob ptr %d: t_array_data = %x, t_data = %x, t_store_shift = %x, mem_rsp_valid = %b, fwd = %b",
+		      r_req.pc,
+		      r_req.op,
+		      r_req.rob_ptr,
+		      t_array_data,
+		      t_data,
+		      t_store_shift,
+		      mem_rsp_valid, 
+		      (r_got_req && r_must_forward));
+	  end
+     end
+			 
+	     
    
    always_comb
      begin
@@ -1002,7 +1025,9 @@ module nu_l1d(clk,
      begin
 	if(t_wr_store)
 	  begin
+	     $display("writing data %x", r_req.data);
 	     wr_log(r_req.pc,
+		    {27'd0, r_req.rob_ptr},
 		    r_req.addr, 
 		    r_req.op == MEM_AMOD ? t_amo64_data : (r_req.op == MEM_AMOW ? {{32{t_amo32_data[31]}},t_amo32_data} : r_req.data), 
 		    r_req.is_atomic ? 32'd1 : 32'd0);
@@ -1190,35 +1215,6 @@ module nu_l1d(clk,
 	    assign w_store_byte_en[i] = mem_rsp_valid ? 1'b1 : (t_wr_array & t_store_mask[i*8]);
 	 end
    endgenerate
-   
-`ifdef VERILATOR
-   logic [3:0]	r_restart_counter;
-   always_ff@(posedge clk)
-     begin
-	r_restart_counter <= reset ? 'd0 : 
-			     (restart_complete ? r_restart_counter + 'd1 : r_restart_counter);
-     end
-
-   always_ff@(negedge clk)
-     begin
-	//$display("cycle %d, state %d", r_cycle, r_state);
-	if(t_got_req2 && r_restart_counter != core_mem_req.restart_id)
-	  begin
-	     $display("cycle %d : current restart id is %d but ingesting %d", r_cycle, r_restart_counter, core_mem_req.restart_id);
-	     $stop();
-	  end
-	
-	//if((t_got_req2==1'b0) & core_mem_va_req_valid)
-	//begin
-	//$display("can't ingest new op at cycle %d, inflight %d, tlb miss %b", 
-	//r_cycle,
-	//r_rob_inflight[core_mem_va_req.rob_ptr], 
-	//n_pending_tlb_miss);
-	//end
-
-     end
-`endif //  `ifdef VERILATOR
-
 
 
    wire w_st_amo_grad = t_mem_head.is_store ? 
@@ -1586,7 +1582,6 @@ module nu_l1d(clk,
 	       end  
 	     else if(r_flush_req && mem_q_empty && !(r_got_req && r_last_wr))
 	       begin
-		   if(n_state != r_state) $stop();
 		  n_state = FLUSH_CACHE;
 		  if(!mem_q_empty) $stop();
 		  if(r_got_req && r_last_wr) $stop();
@@ -1596,8 +1591,6 @@ module nu_l1d(clk,
 	     else if(r_flush_cl_req && mem_q_empty && !(r_got_req && r_last_wr)
 		     && !(n_page_walk_req_valid | t_got_miss | r_wr_array | t_wr_array))
 	       begin
-		  //$display("t_got_miss = %b, n_state = %d", t_got_miss, n_state);
-		  if(n_state != r_state) $stop();		    
 		  if(!mem_q_empty) $stop();
 		  if(r_got_req && r_last_wr) $stop();
 		  t_cache_idx = l2_probe_addr[IDX_STOP-1:IDX_START];
@@ -1761,6 +1754,9 @@ module nu_l1d(clk,
 	  end
      end
 
+   wire w_reload_line = ((core_mem_va_req.addr[IDX_STOP-1:IDX_START] == r_miss_idx) & (r_state != ACTIVE)) | 
+	((core_mem_va_req.addr[IDX_STOP-1:IDX_START] == t_miss_idx) & t_got_miss);
+   
    
    always_comb
      begin
@@ -1773,7 +1769,9 @@ module nu_l1d(clk,
 	n_last_wr2 = 1'b0;
 	t_tlb_xlat = 1'b0;
 	n_tlb_addr = r_tlb_addr;
-	t_accept = t_new_req & t_old_ack;
+	
+	t_accept = t_new_req & (t_got_req ? n_last_wr : 1'b1) & !w_reload_line;
+	/*& t_old_ack*/;
 	if(w_got_reload_pf)
 	  begin
 	     n_req2.op = MEM_NOP;
@@ -1794,11 +1792,22 @@ module nu_l1d(clk,
 	     t_tlb_xlat = 1'b1;
 	     n_tlb_addr = core_mem_va_req.addr;
 	     n_last_wr2 = core_mem_va_req.is_store;
-	     if(!t_old_ack) 
+	    
+	     
+	     $display("cycle %d pc %x rob ptr %d addr %x r_state = %d, n_state = %d, idx2 %d, miss idx = %d old ack %b, mem_rsp_valid = %b",
+		      r_cycle,
+		      core_mem_va_req.pc,
+		      core_mem_va_req.rob_ptr,
+		      {core_mem_va_req.addr[63:4],4'd0},
+		      r_state, n_state, t_cache_idx2, r_miss_idx,
+		      t_old_ack,mem_rsp_valid);
+
+	     if(r_state != ACTIVE && (r_miss_idx ==t_cache_idx2))
 	       begin
-		  $display("r_state = %d, n_state = %d, idx2 %d, idx1 = %d",
-			   r_state, n_state, t_cache_idx2, r_cache_idx);
+		  $stop();
 	       end
+
+	     
 	  end // if (core_mem_va_req_valid &&...
      end // always_comb
    

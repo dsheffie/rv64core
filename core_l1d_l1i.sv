@@ -242,13 +242,7 @@ module
 	  end
      end // always_ff@ (posedge clk)
 
-
-   //always_ff@(negedge clk)
-     //begin
-   //$display("r_flush_state = %d", r_flush_state);
-   //end
-	      
-     always_comb
+   always_comb
      begin
 	n_flush_state = r_flush_state;
 	n_flush = r_flush;
@@ -470,7 +464,7 @@ module
    
    
 
-   nu_l1d dcache (
+   l1d dcache (
 	       .clk(clk),
 	       .reset(reset),
 	       .priv(w_priv),

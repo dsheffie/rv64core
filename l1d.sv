@@ -4,6 +4,7 @@
 
 `ifdef VERILATOR
 import "DPI-C" function void wr_log(input longint pc, 
+				    input int rob_ptr,
 				    input longint unsigned addr, 
 				    input longint unsigned data, 
 				    int 	  is_atomic);
@@ -1061,6 +1062,7 @@ module l1d(clk,
 	if(t_wr_store)
 	  begin
 	     wr_log(r_req.pc,
+		    {27'd0, r_req.rob_ptr},		    
 		    r_req.addr, 
 		    r_req.op == MEM_AMOD ? t_amo64_data : (r_req.op == MEM_AMOW ? {{32{t_amo32_data[31]}},t_amo32_data} : r_req.data), 
 		    r_req.is_atomic ? 32'd1 : 32'd0);
@@ -1249,35 +1251,6 @@ module l1d(clk,
 	 end
    endgenerate
    
-`ifdef VERILATOR
-   logic [3:0]	r_restart_counter;
-   always_ff@(posedge clk)
-     begin
-	r_restart_counter <= reset ? 'd0 : 
-			     (restart_complete ? r_restart_counter + 'd1 : r_restart_counter);
-     end
-
-   always_ff@(negedge clk)
-     begin
-	//$display("cycle %d, state %d", r_cycle, r_state);
-	if(t_got_req2 && r_restart_counter != core_mem_req.restart_id)
-	  begin
-	     $display("cycle %d : current restart id is %d but ingesting %d", r_cycle, r_restart_counter, core_mem_req.restart_id);
-	     $stop();
-	  end
-	
-	//if((t_got_req2==1'b0) & core_mem_va_req_valid)
-	//begin
-	//$display("can't ingest new op at cycle %d, inflight %d, tlb miss %b", 
-	//r_cycle,
-	//r_rob_inflight[core_mem_va_req.rob_ptr], 
-	//n_pending_tlb_miss);
-	//end
-
-     end
-`endif //  `ifdef VERILATOR
-
-
 
    wire w_st_amo_grad = t_mem_head.is_store ? 
 			r_graduated[t_mem_head.rob_ptr] == 2'b10 : 1'b1;	       

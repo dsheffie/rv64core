@@ -113,7 +113,7 @@ module exec(clk,
    
    output logic [1:0] priv;
    output logic       priv_update;
-   input	      cause_t cause;
+   input logic [4:0]  cause;
    input logic [63:0] epc;
    input logic [63:0] tval;
    input logic 	      irq;
@@ -174,7 +174,7 @@ module exec(clk,
    
    input logic [`LG_PRF_ENTRIES-1:0] mem_rsp_dst_ptr;
    input logic 			     mem_rsp_dst_valid;
-   input logic [`M_WIDTH-1:0] 	     mem_rsp_load_data;
+   input logic [63:0]		     mem_rsp_load_data;
 
    input logic [63:0]		      mtimecmp;
    input logic			      mtimecmp_val;
@@ -249,17 +249,36 @@ module exec(clk,
    wire [`M_WIDTH-2:0] 	w_zf = 'd0;
       
    
-   logic [`M_WIDTH-1:0] t_pc, t_pc_2;
+   logic [63:0] t_pc, t_pc_2;
    logic 	t_srcs_rdy;
 
+   //does this scheduler entry contain a valid uop?
+   logic [N_INT_SCHED_ENTRIES-1:0] r_alu_sched_valid, r_alu_sched_valid2;
+   logic [`LG_INT_SCHED_ENTRIES:0] t_alu_sched_alloc_ptr, t_alu_sched_alloc_ptr2;
+   logic 			   t_alu_sched_full, t_alu_sched_full2;
+   logic [N_INT_SCHED_ENTRIES-1:0] t_alu_alloc_entry, t_alu_select_entry, t_alu_alloc_entry2, t_alu_select_entry2;
    
-   wire [`M_WIDTH-1:0] w_srcA, w_srcB;
-   logic [`M_WIDTH-1:0] t_srcA_2, t_srcB_2;
-   wire [`M_WIDTH-1:0] 	w_srcA_2, w_srcB_2;
+   uop_t r_alu_sched_uops[N_INT_SCHED_ENTRIES-1:0], t_picked_uop;
+   uop_t r_alu_sched_uops2[N_INT_SCHED_ENTRIES-1:0], t_picked_uop2;
+   logic [N_INT_SCHED_ENTRIES-1:0] t_alu_entry_rdy, t_alu_entry_rdy2;
+   logic [`LG_INT_SCHED_ENTRIES:0] t_alu_sched_select_ptr, t_alu_sched_select_ptr2;
    
-   wire [`M_WIDTH-1:0] w_mem_srcA, w_mem_srcB;
+	
+   logic [N_INT_SCHED_ENTRIES-1:0] r_alu_srcA_rdy, r_alu_srcB_rdy, r_alu_srcA_rdy2, r_alu_srcB_rdy2;
+   logic [N_INT_SCHED_ENTRIES-1:0] t_alu_srcA_match, t_alu_srcB_match, t_alu_srcA_match2, t_alu_srcB_match2;
    
-   logic [`M_WIDTH-1:0] r_mem_result, r_int_result, r_int_result2;
+   logic 			   t_alu_alloc_srcA_match, t_alu_alloc_srcB_match, t_alu_alloc_srcA_match2, t_alu_alloc_srcB_match2;
+   
+   
+   wire [N_INT_SCHED_ENTRIES-1:0] w_alu_sched_oldest_ready, w_alu_sched_oldest_ready2;
+   
+   wire [63:0] w_srcA, w_srcB;
+   logic [63:0] t_srcA_2, t_srcB_2;
+   wire [63:0] 	w_srcA_2, w_srcB_2;
+   
+   wire [63:0] w_mem_srcA, w_mem_srcB;
+   
+   logic [63:0] r_mem_result, r_int_result, r_int_result2;
    
    logic		r_fwd_int_srcA, r_fwd_int_srcB, r_fwd_int2_srcA, r_fwd_int2_srcB;
    logic		r_fwd_int_srcA2, r_fwd_int_srcB2, r_fwd_int2_srcA2, r_fwd_int2_srcB2;
@@ -276,8 +295,8 @@ module exec(clk,
 	 r_fwd_mem_mem_srcA,r_fwd_mem_mem_srcB;
    
       
-   logic [`M_WIDTH-1:0] t_srcA, t_srcB;
-   logic [`M_WIDTH-1:0] t_mem_srcA, t_mem_srcB;
+   logic [63:0] t_srcA, t_srcB;
+   logic [63:0] t_mem_srcA, t_mem_srcB;
    
    
    
@@ -297,6 +316,12 @@ module exec(clk,
    logic [63:0]	r_mtvec, r_mtval, r_misa, r_mip,  r_scounteren;
    logic [63:0]	r_mcause, r_scause;
    logic [63:0]	r_pmpaddr0, r_pmpaddr1, r_pmpaddr2, r_pmpaddr3, r_pmpcfg0;
+   logic t_push_putchar;
+
+   wire [1:0] w_mpp = r_mstatus[12:11];
+   wire	      w_spp = r_mstatus[8];
+   wire	      w_mpie = r_mstatus[7];
+   wire	      w_spie = r_mstatus[5];
    
    assign mie = r_mie;
    assign mip = r_mip;
@@ -308,12 +333,12 @@ module exec(clk,
 
    logic	t_zero_shift_upper;
    logic [5:0] 	t_shift_amt;
-   wire [`M_WIDTH-1:0] w_shifter_out;
+   wire [63:0] w_shifter_out;
 
    logic	       t_start_mul,t_is_mulw,t_signed_mul;
 
    logic 	t_mul_complete;
-   logic [`M_WIDTH-1:0] t_mul_result, r_mul_result;
+   logic [63:0] t_mul_result, r_mul_result;
    
    logic [`LG_ROB_ENTRIES-1:0] t_rob_ptr_out;
 
@@ -324,8 +349,8 @@ module exec(clk,
    /* divider */
    logic 	t_div_ready, t_signed_div, t_is_rem, t_start_div32, t_start_div64;
    logic [`LG_ROB_ENTRIES-1:0] t_div_rob_ptr;
-   logic [`M_WIDTH-1:0]        t_div_result;
-   logic 			    t_div_complete;
+   logic [63:0]		       t_div_result;
+   logic		       t_div_complete;
 
    logic [N_ROB_ENTRIES-1:0] 	    r_uq_wait, r_mq_wait;
    /* non mem uop queue */
@@ -852,30 +877,6 @@ module exec(clk,
 		     r_fwd_int2_mem_srcB ? r_int_result2 :
 		     w_mem_srcB;	
      end // always_comb
-
-
-
-
-   //does this scheduler entry contain a valid uop?
-   logic [N_INT_SCHED_ENTRIES-1:0] r_alu_sched_valid, r_alu_sched_valid2;
-   logic [`LG_INT_SCHED_ENTRIES:0] t_alu_sched_alloc_ptr, t_alu_sched_alloc_ptr2;
-   logic 			   t_alu_sched_full, t_alu_sched_full2;
-   logic [N_INT_SCHED_ENTRIES-1:0] t_alu_alloc_entry, t_alu_select_entry, t_alu_alloc_entry2, t_alu_select_entry2;
-   
-   uop_t r_alu_sched_uops[N_INT_SCHED_ENTRIES-1:0], t_picked_uop;
-   uop_t r_alu_sched_uops2[N_INT_SCHED_ENTRIES-1:0], t_picked_uop2;
-   logic [N_INT_SCHED_ENTRIES-1:0] t_alu_entry_rdy, t_alu_entry_rdy2;
-   logic [`LG_INT_SCHED_ENTRIES:0] t_alu_sched_select_ptr, t_alu_sched_select_ptr2;
-   
-	
-   logic [N_INT_SCHED_ENTRIES-1:0] r_alu_srcA_rdy, r_alu_srcB_rdy, r_alu_srcA_rdy2, r_alu_srcB_rdy2;
-   logic [N_INT_SCHED_ENTRIES-1:0] t_alu_srcA_match, t_alu_srcB_match, t_alu_srcA_match2, t_alu_srcB_match2;
-   
-   logic 			   t_alu_alloc_srcA_match, t_alu_alloc_srcB_match, t_alu_alloc_srcA_match2, t_alu_alloc_srcB_match2;
-   
-   
-   wire [N_INT_SCHED_ENTRIES-1:0] w_alu_sched_oldest_ready, w_alu_sched_oldest_ready2;
-
    
    find_first_set#(`LG_INT_SCHED_ENTRIES) ffs_int_sched_alloc( .in(~r_alu_sched_valid),
 							      .y(t_alu_sched_alloc_ptr));
@@ -1177,11 +1178,12 @@ module exec(clk,
    
 
    logic t_left_shift2, t_signed_shift2;
-   wire [`M_WIDTH-1:0] w_shifter_out2;
+   wire [63:0] w_shifter_out2;
    logic	       t_zero_shift_upper2;
    logic [5:0] t_shift_amt2;   
+   wire [63:0] w_pc2_4;
    
-   shift_right #(.LG_W(`LG_M_WIDTH))
+   shift_right #(.LG_W(6))
    s1(.is_left(t_left_shift2), 
       .is_signed(t_signed_shift2), 
       .data(t_zero_shift_upper2 ? {{32{(t_signed_shift2 ? t_srcA_2[31] : 1'b0)}}, t_srcA_2[31:0]} : t_srcA_2), 
@@ -1191,8 +1193,8 @@ module exec(clk,
    
    
   
-   wire [`M_WIDTH-1:0] w_pc2_4;
-   mwidth_add npc_2 (.A(int_uop2.pc), .B('d4), .Y(w_pc2_4));
+
+   mwidth_add npc_2 (.A(int_uop2.pc), .B(64'd4), .Y(w_pc2_4));
  
    logic  t_sub2, t_addi_2;
    wire [31:0] w_s_sub32, w_c_sub32;
@@ -1911,7 +1913,7 @@ module exec(clk,
    wire [63:0]	       w_fe_indirect_target = {int_uop.jmp_imm,int_uop.imm};
    wire		       w_mispredicted_indirect = w_indirect_target != w_fe_indirect_target;
       
-   mwidth_add add3 (.A(int_uop.pc), .B('d4), .Y(w_pc4));
+   mwidth_add add3 (.A(int_uop.pc), .B(64'd4), .Y(w_pc4));
 
    always_comb
      begin
@@ -2690,12 +2692,6 @@ module exec(clk,
    //end
 
 
-   logic t_push_putchar;
-
-   wire [1:0] w_mpp = r_mstatus[12:11];
-   wire	      w_spp = r_mstatus[8];
-   wire	      w_mpie = r_mstatus[7];
-   wire	      w_spie = r_mstatus[5];
    
    
    wire [3:0] w_mret_mstatus_b30 = 

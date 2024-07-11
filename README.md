@@ -1,4 +1,6 @@
-# rv32core
+# rv64core
+
+Known working with Verilator 4.210
 
 Pedagogical SystemVerilog model for an RV64m CPU. Relatively simple uarch - two-wide renamed, OOO microarchitecture. 1 mem FU, 2 int FU.  Each int FU backed by matrix-style scheduler.
 

@@ -247,6 +247,7 @@ void start_log(int l) {
 }
 
 void wr_log(long long pc,
+	    int robptr,
 	    unsigned long long addr,
 	    unsigned long long data,
 	    int is_atomic) {
@@ -271,8 +272,8 @@ void wr_log(long long pc,
 	      << t.addr << ", " << t.data << std::dec << "\n";
   }
   if(not(t.pc == pc and t.addr == addr and t.data == data)) {
-    printf("you have a store error! for an atomic %d, pc match %d, addr match %d, data match %d\n",
-	   is_atomic, t.pc==pc, t.addr==addr, t.data == data);
+    printf("you have a store error! for an atomic %d, pc match %d, addr match %d, data match %d, rob ptr %d\n",
+	   is_atomic, t.pc==pc, t.addr==addr, t.data == data, robptr);
     printf("sim pc %lx, rtl pc %llx sim addr %lx, sim data %lx, rtl addr %llx, rtl data %llx, addr xor %llx\n",
 	   t.pc, pc, t.addr, t.data, addr, data, t.addr ^ addr);
     exit(-1);
