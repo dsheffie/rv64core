@@ -12,10 +12,11 @@ import "DPI-C" function void write_half(input longint addr, input shortint  data
 import "DPI-C" function void write_word(input longint addr, input int data, input longint root, int id);
 import "DPI-C" function void write_dword(input longint addr, input longint data, input longint root, int id);
 import "DPI-C" function longint dc_ld_translate(longint va, longint root );
-import "DPI-C" function void wr_log(input longint pc, 
+import "DPI-C" function void wr_log(input longint pc,
+				    input int robptr,
 				    input longint unsigned addr, 
 				    input longint unsigned data, 
-				    int 	  is_atomic);
+				    int 		   is_atomic);
 
 `endif
 
@@ -844,6 +845,7 @@ module perfect_l1d(clk,
 	if(t_wr_array)
 	  begin
 	     wr_log(r_req.pc,
+		    32'd0,
 		    w_taddr,
 		    r_req.op == MEM_AMOD ? t_amo64_data : 
 		    (r_req.op == MEM_AMOW ? {{32{t_amo32_data[31]}},t_amo32_data} : 
