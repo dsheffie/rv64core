@@ -8,12 +8,15 @@ module addsub(A, B, is_sub, Y);
    output [W-1:0] Y;
 
    wire [W-1:0]	  w_s, w_c;
+
+   wire [W-1:0]	  w_zero = {{W{1'b0}}};
+   wire [W-1:0]	  w_one = {{(W-1){1'b0}}, 1'b1};
    
    csa #(.N(W)) csa0 
      (
       .a(A), 
       .b(is_sub ? ~B :B ), 
-      .cin(is_sub ? 'd1 : 'd0), 
+      .cin(is_sub ? w_one : w_zero), 
       .s(w_s), 
       .cout(w_c) 
       );

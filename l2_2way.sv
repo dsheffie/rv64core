@@ -106,13 +106,6 @@ module l2_2way(clk,
    output logic				  mmu_rsp_valid;
    output logic [63:0]			  mmu_rsp_data;
 
-   logic [63:0] r_mmu_rsp_data, n_mmu_rsp_data;
-   logic	r_mmu_rsp_valid, n_mmu_rsp_valid;
-   logic	n_mem_mark_rsp_valid, r_mem_mark_rsp_valid;
-   
-   assign mmu_rsp_valid = r_mmu_rsp_valid;
-   assign mmu_rsp_data = r_mmu_rsp_data;
-   assign mem_mark_rsp_valid = r_mem_mark_rsp_valid;
    
    input logic	mem_mark_valid;
    input logic	       mem_mark_accessed;
@@ -123,6 +116,13 @@ module l2_2way(clk,
    output logic [63:0] cache_hits;
    output logic [63:0] cache_accesses;
    
+   logic [63:0] r_mmu_rsp_data, n_mmu_rsp_data;
+   logic	r_mmu_rsp_valid, n_mmu_rsp_valid;
+   logic	n_mem_mark_rsp_valid, r_mem_mark_rsp_valid;
+   
+   assign mmu_rsp_valid = r_mmu_rsp_valid;
+   assign mmu_rsp_data = r_mmu_rsp_data;
+   assign mem_mark_rsp_valid = r_mem_mark_rsp_valid;
    
    localparam LG_L2_LINES = `LG_L2_NUM_SETS;
    localparam L2_LINES = 1<<LG_L2_LINES;
