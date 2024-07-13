@@ -283,7 +283,7 @@ endfunction
    logic [4:0] 		  t_branch_marker, t_spec_branch_marker;
    logic [2:0] 		  t_first_branch;
 
-   logic 		  t_init_pht;
+   logic 		  t_init_pht, t_init_rsb;
    logic [`LG_PHT_SZ-1:0] r_init_pht_idx, n_init_pht_idx;
 
    
@@ -556,6 +556,7 @@ endfunction
 	t_is_call = 1'b0;
 	t_is_ret = 1'b0;
 	t_init_pht = 1'b0;
+	t_init_rsb = 1'b0;
 	n_init_pht_idx = r_init_pht_idx;
 	t_reload_tlb = 1'b0;
 	n_tlb_miss = 1'b0;
@@ -568,10 +569,11 @@ endfunction
 	  INIT_PHT:
 	    begin
 	       t_init_pht = 1'b1;
+	       t_init_rsb = 1'b1;	       
 	       n_init_pht_idx = r_init_pht_idx + 'd1;
 	       if(r_init_pht_idx == (PHT_ENTRIES-1))
 		 begin
-		    n_state = FLUSH_CACHE;	       
+		    n_state = FLUSH_CACHE;	       		    
 		    t_cache_idx = 0;
 		 end
 	    end
@@ -1193,7 +1195,11 @@ endfunction
    always_comb
      begin
 	n_spec_rs_tos = r_spec_rs_tos;
-	if(n_restart_ack)
+	if(t_init_rsb)
+	  begin
+	     n_spec_rs_tos = r_spec_rs_tos + 'd1;
+	  end
+	else if(n_restart_ack)
 	  begin
 	     n_spec_rs_tos = r_arch_rs_tos;
 	  end
@@ -1209,11 +1215,12 @@ endfunction
 
    always_ff@(posedge clk)
      begin
-	if(t_is_call)
+	if(t_init_rsb)
 	  begin
-	     //$display("call at %x, place %x in pos %d of the rsb",
-	     //r_cache_pc, r_cache_pc + 'd4, r_spec_rs_tos);
-		 
+	     r_spec_return_stack[r_spec_rs_tos] <= 64'd0;
+	  end
+	else if(t_is_call)
+	  begin
 	     r_spec_return_stack[r_spec_rs_tos] <= r_cache_pc + 'd4;
 	  end
 	else if(n_restart_ack)
@@ -1224,7 +1231,11 @@ endfunction
    
    always_ff@(posedge clk)
      begin
-	if(retire_reg_valid && retire_valid && retired_call)
+	if(t_init_rsb)
+	  begin
+	     r_arch_return_stack[r_arch_rs_tos] <= 64'd0;
+	  end
+	else if(retire_reg_valid && retire_valid && retired_call)
 	  begin
 	     r_arch_return_stack[r_arch_rs_tos] <= retire_reg_data;
 	  end
@@ -1232,7 +1243,11 @@ endfunction
    always_comb
      begin
 	n_arch_rs_tos = r_arch_rs_tos;
-	if(retire_valid && retired_call)
+	if(t_init_rsb)
+	  begin
+	     n_arch_rs_tos = r_arch_rs_tos + 'd1;
+	  end
+	else if(retire_valid && retired_call)
 	  begin
 	     n_arch_rs_tos = r_arch_rs_tos - 'd1;
 	  end
