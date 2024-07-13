@@ -849,8 +849,8 @@ module l2_2way(clk,
 			   end
 			 else //invalid or clean
 			   begin
-			      if(r_reload)
-				$stop();
+			      //if(r_reload)
+			      //$stop();
 			      n_reload = 1'b1;
 			      n_state = CLEAN_RELOAD;
 			      n_mem_opcode = 4'd4; //load

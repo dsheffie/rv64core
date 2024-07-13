@@ -1,7 +1,7 @@
 
-import "DPI-C" pure function longint read_mem64(longint addr);
-import "DPI-C" function void write_mem64(longint addr, longint data);
-import "DPI-C" function void load_mem();
+//import "DPI-C" pure function longint read_mem64(longint addr);
+//import "DPI-C" function void write_mem64(longint addr, longint data);
+//import "DPI-C" function void load_mem();
 
 
 module sim_top();
@@ -15,62 +15,56 @@ module sim_top();
    wire [127:0] w_mem_req_store_data;
    wire w_retire_valid, w_retire_two_valid;
    wire [63:0] w_retire_pc, w_retire_two_pc;
-   logic [127:0] n_data, r_data;
-   logic 	n_ack, r_ack;
-   logic [31:0] n_last_cnt, r_last_cnt;
+   reg [127:0] n_data, r_data;
+   reg 	n_ack, r_ack;
+   reg [31:0] n_last_cnt, r_last_cnt;
+   reg [63:0] r_cycles;
    
   //reg [63:0] r_mem [0:(1<<29)-1];
     
    initial
-  begin
-     load_mem();
-     //$readmemh("/home/dsheffie/linux.mem", r_mem);
-
-    clk = 1'b0;
-    reset = 1'b1;
-    #1000
-    reset = 1'b0;
-  end
-  
-  always
-    clk = #5 !clk;
-  
-  reg [63:0] r_cycles;
-   
-  
-  
-  always_ff@(posedge clk)
-  begin
-     r_resume <= reset ? 1'b0 : n_resume;
-     r_cycles <= reset ? 64'd0 : (r_cycles + 64'd1);
-     r_ack <= reset ? 1'b0 : n_ack;
-     r_data <= reset ? 64'd0 : n_data;
-     r_last_cnt <= reset ? 'd0 : n_last_cnt;
-  end
-
-   always_comb
      begin
+	//load_mem();
+	//$readmemh("/home/dsheffie/linux.mem", r_mem);
+	
+	clk = 1'b0;
+	reset = 1'b1;
+	#1000
+	  reset = 1'b0;
+     end
+   
+   always
+     begin
+	clk = #5 !clk;
+     end
+   
+   always@(posedge clk)
+     begin
+	r_resume <= reset ? 1'b0 : n_resume;
+	r_cycles <= reset ? 64'd0 : (r_cycles + 64'd1);
+	r_ack <= reset ? 1'b0 : n_ack;
+	r_data <= reset ? 64'd0 : n_data;
+	r_last_cnt <= reset ? 'd0 : n_last_cnt;
+     end
+   
+   always@(*)
+     begin
+	n_last_cnt = r_last_cnt + 'd1;
 	if(w_retire_valid || w_retire_two_valid)
 	  begin
 	     n_last_cnt = 'd0;
 	  end
-	else
-	  begin
-	     n_last_cnt = r_last_cnt + 'd1;
-	  end
      end // always_comb
   
-   always_ff@(negedge clk)
+   always@(negedge clk)
      begin
 	if(w_retire_valid) $display("retire port a %x at %d", w_retire_pc, r_cycles);
 	if(w_retire_two_valid) $display("retire port b %x at %d", w_retire_two_pc, r_cycles);
-	$display("core state %d, l1i state %d, l2d state %d", 
-		 w_core_state, w_l1i_state, w_l1d_state);
+	$display("cycle %d core state %d, l1i state %d, l2d state %d", 
+		 r_cycles, w_core_state, w_l1i_state, w_l1d_state);
      end
-	
   
-  
-  always_comb
+  always@(*)
     begin
        n_data = r_data;
        n_ack = 1'b0;
@@ -78,9 +72,11 @@ module sim_top();
        if(w_mem_req_valid)
 	 begin
 	    $display("memory request for addr %x", w_mem_req_addr);
+	    //$stop();
 	    if(w_mem_req_opcode == 'd4)
 	      begin
-		 n_data = {read_mem64(w_mem_req_addr + 'd8), read_mem64(w_mem_req_addr)};
+		 n_data = {32'h00000013,32'h00000013,32'h00000013,32'h00000013};
+		 //{read_mem64(w_mem_req_addr + 'd8), read_mem64(w_mem_req_addr)};
 		 n_ack = 1'b1;
 	      end
 	    else if(w_mem_req_opcode == 'd7)
@@ -89,8 +85,6 @@ module sim_top();
 	      end
 	 end
     end // always_comb
-   
-  
   
   
  core_l1d_l1i 
