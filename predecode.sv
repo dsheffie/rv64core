@@ -1,3 +1,20 @@
+
+
+/*
+typedef enum logic [3:0] {
+			  NOT_CFLOW = 'd0,
+			  IS_COND_BR = 'd1,
+ 			  IS_RET = 'd2,
+			  IS_J = 'd3,
+			  IS_JR = 'd4,
+			  IS_JAL = 'd5,
+			  IS_JALR = 'd6
+			  } jump_t;
+*/
+
+
+
+
 module predecode(insn, pd);
    input logic [31:0] insn;
    output logic [3:0] pd;

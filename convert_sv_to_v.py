@@ -3,6 +3,7 @@
 import glob
 import os
 import subprocess
+import re
 
 def main():
     svs = glob.glob('*.sv')
@@ -10,7 +11,23 @@ def main():
         os.mkdir('verilog')
 
     outputs = []
+    modules = set()
     for sv in svs:
+        module_names = []
+        with open(sv, 'r') as in_:
+            for line in in_:
+                m = re.search(r'module\s+(\w+)(#?)(\s+)?\(', line)
+                if m == None:
+                    continue
+                g = m.groups()
+                module_names.append(g[0])
+
+        for module in module_names:
+            if module in modules:
+                print('huh already seen %s, source %s' % (module, sv))
+            else:
+                modules.add(module)
+        
         r = sv.split('.sv')[0]
         v = r+'.v'
         cmd = ['sv2v', sv, '--write=verilog/'+v, '-D=FPGA64_32']

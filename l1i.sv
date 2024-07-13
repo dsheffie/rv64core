@@ -12,28 +12,6 @@ import "DPI-C" function int check_bad_fetch(longint pc, longint pa, int insn);
 `endif
 
 
-/*
-typedef enum logic [3:0] {
-			  NOT_CFLOW = 'd0,
-			  IS_COND_BR = 'd1,
- 			  IS_RET = 'd2,
-			  IS_J = 'd3,
-			  IS_JR = 'd4,
-			  IS_JAL = 'd5,
-			  IS_JALR = 'd6
-			  } jump_t;
-*/
-
-
-module compute_pht_idx(pc, hist, idx);
-   input logic [`M_WIDTH-1:0] pc;
-   input logic [`GBL_HIST_LEN-1:0] hist;
-   output logic [`LG_PHT_SZ-1:0]   idx;
-
-   assign idx = hist ^ pc[17:2];
-   
-endmodule
-
 module l1i(clk,
 	   reset,
 	   l1i_state,
