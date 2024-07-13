@@ -1,11 +1,11 @@
+`ifdef VERILATOR
 `include "machine.vh"
 `include "rob.vh"
 `include "uop.vh"
 
-`ifdef VERILATOR
 import "DPI-C" function longint ic_translate(longint va, longint root);
 import "DPI-C" function longint ic_read_dword(input longint addr);
-`endif
+
 
 
 module perfect_l1i(clk,
@@ -1119,3 +1119,4 @@ endfunction
      end
    
 endmodule
+`endif

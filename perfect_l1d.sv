@@ -1,10 +1,10 @@
+`ifdef VERILATOR
+
 `include "machine.vh"
 `include "rob.vh"
 `include "uop.vh"
 
-//`define VERBOSE_L1D 1
 
-`ifdef VERILATOR
 import "DPI-C" function int read_word(input longint addr);
 import "DPI-C" function longint read_dword(input longint addr);
 import "DPI-C" function void write_byte(input longint addr, input byte data, input longint root);
@@ -18,7 +18,7 @@ import "DPI-C" function void wr_log(input longint pc,
 				    input longint unsigned data, 
 				    int 		   is_atomic);
 
-`endif
+
 
 
 module perfect_l1d(clk, 
@@ -1381,3 +1381,4 @@ module perfect_l1d(clk,
    
 endmodule // l1d
 
+`endif
