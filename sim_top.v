@@ -19,6 +19,7 @@ module sim_top();
    reg 	n_ack, r_ack;
    reg [31:0] n_last_cnt, r_last_cnt;
    reg [63:0] r_cycles;
+   reg 	      r_seen_retire, n_seen_retire;
    
   //reg [63:0] r_mem [0:(1<<29)-1];
     
@@ -26,7 +27,9 @@ module sim_top();
      begin
 	//load_mem();
 	//$readmemh("/home/dsheffie/linux.mem", r_mem);
-	
+	//$dumpfile("rv64.vcd");
+	//$dumpvars(0, sim_top);
+	//$dumpoff;
 	clk = 1'b0;
 	reset = 1'b1;
 	#1000
@@ -45,11 +48,18 @@ module sim_top();
 	r_ack <= reset ? 1'b0 : n_ack;
 	r_data <= reset ? 64'd0 : n_data;
 	r_last_cnt <= reset ? 'd0 : n_last_cnt;
+	r_seen_retire <= reset ? 1'b0 : n_seen_retire;
      end
    
    always@(*)
      begin
 	n_last_cnt = r_last_cnt + 'd1;
+	n_seen_retire = r_seen_retire;
+	if(w_retire_valid && (r_seen_retire == 1'b0))
+	  begin
+	     n_seen_retire = 1'b1;
+	     //$dumpon;
+	  end
 	if(w_retire_valid || w_retire_two_valid)
 	  begin
 	     n_last_cnt = 'd0;
@@ -62,6 +72,9 @@ module sim_top();
 	if(w_retire_two_valid) $display("retire port b %x at %d", w_retire_two_pc, r_cycles);
 	$display("cycle %d core state %d, l1i state %d, l2d state %d", 
 		 r_cycles, w_core_state, w_l1i_state, w_l1d_state);
+	if(r_cycles > 64'd100000)
+	  $finish();
+	
      end
   
   always@(*)
