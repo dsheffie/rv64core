@@ -548,7 +548,9 @@ void record_retirement(long long pc,
       if(pipeipcnt == 0) {
 	pipestart = record_insns_retired;
 	pipeend = record_insns_retired + 4096;
-	printf("trace %lx hit enough times : starts at %lu, will end at %lu\n", pipeip, pipestart, pipeend);
+	std::cout << "trace " << std::hex << pipeip << " hit enough times : starts at " 
+		  << std::dec << pipestart << ", will end at "
+		  << pipeend << "\n";
 	pipeip = 0;
       }
     }
