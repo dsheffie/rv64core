@@ -776,18 +776,18 @@ module nu_l1d(clk,
 	  begin
 	     $stop();
 	  end
-	if(t_wr_array)
-	  begin
-	     $display("pc %x op %d rob ptr %d: t_array_data = %x, t_data = %x, t_store_shift = %x, mem_rsp_valid = %b, fwd = %b",
-		      r_req.pc,
-		      r_req.op,
-		      r_req.rob_ptr,
-		      t_array_data,
-		      t_data,
-		      t_store_shift,
-		      mem_rsp_valid, 
-		      (r_got_req && r_must_forward));
-	  end
+	// if(t_wr_array)
+	//   begin
+	//      $display("pc %x op %d rob ptr %d: t_array_data = %x, t_data = %x, t_store_shift = %x, mem_rsp_valid = %b, fwd = %b",
+	// 	      r_req.pc,
+	// 	      r_req.op,
+	// 	      r_req.rob_ptr,
+	// 	      t_array_data,
+	// 	      t_data,
+	// 	      t_store_shift,
+	// 	      mem_rsp_valid, 
+	// 	      (r_got_req && r_must_forward));
+	//   end
      end
 			 
 	     
@@ -928,8 +928,7 @@ module nu_l1d(clk,
    always_comb
      begin
 	t_data2 = r_got_req2 && r_must_forward2 ? r_array_wr_data : r_array_out2;
-	t_hit_cache2 = r_valid_out2 && (r_tag_out2 == w_tlb_pa[`M_WIDTH-1:IDX_STOP]) && r_got_req2 && 
-		      (r_state == ACTIVE);
+	t_hit_cache2 = r_valid_out2 && (r_tag_out2 == w_tlb_pa[`M_WIDTH-1:IDX_STOP]) && r_got_req2;
 	t_rsp_dst_valid2 = 1'b0;
 	t_rsp_data2 = 'd0;
 
@@ -1025,7 +1024,6 @@ module nu_l1d(clk,
      begin
 	if(t_wr_store)
 	  begin
-	     $display("writing data %x", r_req.data);
 	     wr_log(r_req.pc,
 		    {27'd0, r_req.rob_ptr},
 		    r_req.addr, 
@@ -1794,13 +1792,13 @@ module nu_l1d(clk,
 	     n_last_wr2 = core_mem_va_req.is_store;
 	    
 	     
-	     $display("cycle %d pc %x rob ptr %d addr %x r_state = %d, n_state = %d, idx2 %d, miss idx = %d old ack %b, mem_rsp_valid = %b",
-		      r_cycle,
-		      core_mem_va_req.pc,
-		      core_mem_va_req.rob_ptr,
-		      {core_mem_va_req.addr[63:4],4'd0},
-		      r_state, n_state, t_cache_idx2, r_miss_idx,
-		      t_old_ack,mem_rsp_valid);
+	     // $display("cycle %d pc %x rob ptr %d addr %x r_state = %d, n_state = %d, idx2 %d, miss idx = %d old ack %b, mem_rsp_valid = %b",
+	     // 	      r_cycle,
+	     // 	      core_mem_va_req.pc,
+	     // 	      core_mem_va_req.rob_ptr,
+	     // 	      {core_mem_va_req.addr[63:4],4'd0},
+	     // 	      r_state, n_state, t_cache_idx2, r_miss_idx,
+	     // 	      t_old_ack,mem_rsp_valid);
 
 	     if(r_state != ACTIVE && (r_miss_idx ==t_cache_idx2))
 	       begin
@@ -1811,14 +1809,14 @@ module nu_l1d(clk,
 	  end // if (core_mem_va_req_valid &&...
      end // always_comb
    
-   always_ff@(negedge clk)
-     begin
-       if(t_accept & !t_old_ack)
-	 begin
-	    $display("new req = %b, old ack = %b, r_state = %d", 
-		     t_new_req, t_old_ack, r_state);
-	 end
-     end
+   // always_ff@(negedge clk)
+   //   begin
+   //     if(t_accept & !t_old_ack)
+   // 	 begin
+   // 	    $display("new req = %b, old ack = %b, r_state = %d", 
+   // 		     t_new_req, t_old_ack, r_state);
+   // 	 end
+   //   end
 
 endmodule // l1d
 
