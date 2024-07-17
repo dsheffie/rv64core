@@ -473,7 +473,6 @@ module
 	       .l2_probe_addr(w_l2_probe_addr),
 	       .l2_probe_ack(w_l2_probe_ack),		 
 	       .l1d_state(l1d_state),
-	       .n_inflight(n_inflight),
 	       .restart_complete(w_restart_complete),
 	       .paging_active(w_paging_active),
 	       .clear_tlb(w_clear_tlb),
@@ -733,7 +732,6 @@ endmodule // core_l1d_l1i
 module core_l1d_l1i(clk, 
 		    reset,
 		    syscall_emu,
-		    n_inflight,
 		    core_state,
 		    l1i_state,
 		    l1d_state,
@@ -797,7 +795,6 @@ module core_l1d_l1i(clk,
    input logic clk;
    input logic reset;
    input logic syscall_emu;
-   output logic [3:0] n_inflight;
    output logic [4:0] core_state;
    output logic [3:0] l1i_state;
    output logic [3:0] l1d_state;
@@ -889,7 +886,6 @@ module core_l1d_l1i(clk,
 		     .clk(clk),
                      .reset(reset),
 		     .syscall_emu(syscall_emu),
-		     .n_inflight(n_inflight),
 		     .core_state(core_state),
 		     .l1i_state(l1i_state),
 		     .l1d_state(l1d_state),

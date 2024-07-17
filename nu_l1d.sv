@@ -20,7 +20,6 @@ module nu_l1d(clk,
 	   l2_probe_val,
 	   l2_probe_ack,	   
 	   l1d_state,
-  	   n_inflight,
 	   restart_complete,
 	   paging_active,
 	   clear_tlb,
@@ -82,7 +81,6 @@ module nu_l1d(clk,
    output logic			 l2_probe_ack;
    
    output logic [3:0] l1d_state;
-   output logic [3:0] n_inflight;
    input logic 	      restart_complete;
    input logic paging_active;
    input logic clear_tlb;
@@ -144,7 +142,7 @@ module nu_l1d(clk,
    localparam WORDS_PER_CL = 1<<(LG_WORDS_PER_CL);
    localparam BYTES_PER_CL = 1 << `LG_L1D_CL_LEN;
    
-   localparam N_TAG_BITS = `M_WIDTH - `LG_L1D_NUM_SETS - `LG_L1D_CL_LEN;
+   localparam N_TAG_BITS = `PA_WIDTH - `LG_L1D_NUM_SETS - `LG_L1D_CL_LEN;
    localparam IDX_START = `LG_L1D_CL_LEN;
    localparam IDX_STOP  = `LG_L1D_CL_LEN + `LG_L1D_NUM_SETS;
    localparam WORD_START = 2;
@@ -167,7 +165,6 @@ module nu_l1d(clk,
    assign l2_probe_ack = r_l2_probe_ack;
    
    logic [`LG_MRQ_ENTRIES:0] 		  r_n_inflight;   
-   assign n_inflight = r_n_inflight;
    
    
    
@@ -323,7 +320,7 @@ module nu_l1d(clk,
    logic r_mem_req_valid, n_mem_req_valid;
    logic r_mem_req_uc, n_mem_req_uc;
    
-   logic [(`M_WIDTH-1):0] r_mem_req_addr, n_mem_req_addr;
+   logic [(`PA_WIDTH-1):0] r_mem_req_addr, n_mem_req_addr;
    logic [L1D_CL_LEN_BITS-1:0] r_mem_req_store_data, n_mem_req_store_data;
    
    logic [3:0] 		       r_mem_req_opcode, n_mem_req_opcode;
@@ -510,13 +507,22 @@ module nu_l1d(clk,
 	       end
 	  end
      end
+
+   //logic [IDX_STOP-IDX_START-1:0] r_last_push_line;
+   //logic			  r_last_push_valid;
+   //always_ff@(posedge clk)
+   //begin
+   //r_last_push_line <= r_req2.addr[IDX_STOP-1:IDX_START];
+   //r_last_push_valid <= reset ? 1'b0 : t_push_miss;
+   //end
    
+   //wire w_hit_last_push = r_last_push_valid ? (r_cache_idx2 == r_last_push_line) : 1'b0;
    
    // always_ff@(negedge clk)
    //   begin
-   // 	if(t_push_miss && !t_port2_hit_cache && !(r_hit_busy_addr2 || r_fwd_busy_addr2 || r_pop_busy_addr2))
+   // 	if(t_push_miss && !t_port2_hit_cache && !(r_hit_busy_addr2 || r_fwd_busy_addr2 || r_pop_busy_addr2 /*|| w_hit_last_push*/))
    // 	  begin
-   // 	     $display("cycle %d : pushing rob ptr %d, addr %x -> was store %b, idx %d last idx %d busy %b, pc %x, fwd %b",
+   // 	     $display("cycle %d : pushing rob ptr %d, addr %x -> was store %b, idx %d last idx %d busy %b, pc %x, fwd %b, last_line %d, valid last %b, last push %b",
    // 		      r_cycle,
    // 		      r_req2.rob_ptr,
    // 		      r_req2.addr,
@@ -525,7 +531,10 @@ module nu_l1d(clk,
    // 		      rr_cache_idx2,
    // 		      r_hit_busy_addr2,
    // 		      r_req2.pc,
-   // 		      r_fwd_busy_addr2);
+   // 		      r_fwd_busy_addr2,
+   // 		      r_last_push_line,
+   // 		      r_last_push_valid,
+   // 		      w_hit_last_push);
    // 	  end
    //   end
 
@@ -746,7 +755,7 @@ module nu_l1d(clk,
       .rd_addr0(t_cache_idx),
       .rd_addr1(t_cache_idx2),
       .wr_addr(r_mem_req_addr[IDX_STOP-1:IDX_START]),
-      .wr_data(r_mem_req_addr[`M_WIDTH-1:IDX_STOP]),
+      .wr_data(r_mem_req_addr[`PA_WIDTH-1:IDX_STOP]),
       .wr_en(mem_rsp_valid),
       .rd_data0(r_tag_out),
       .rd_data1(r_tag_out2)
@@ -925,7 +934,7 @@ module nu_l1d(clk,
      end
    
 
-   wire w_port2_hit_cache = r_valid_out2 && (r_tag_out2[19:0] == w_tlb_pa[`PA_WIDTH-1:IDX_STOP]);
+   wire w_port2_hit_cache = r_valid_out2 && (r_tag_out2 == w_tlb_pa[`PA_WIDTH-1:IDX_STOP]);
    
    always_comb
      begin
@@ -1224,7 +1233,7 @@ module nu_l1d(clk,
 
    wire	w_tlb_st_not_dirty = w_tlb_hit & paging_active & (r_req2.is_store | r_req2.is_atomic) & w_tlb_writable & !w_tlb_dirty;   
 
-   wire w_flush_hit = (r_tag_out[19:0] == l2_probe_addr[`PA_WIDTH-1:IDX_STOP]) & r_valid_out;
+   wire w_flush_hit = (r_tag_out == l2_probe_addr[`PA_WIDTH-1:IDX_STOP]) & r_valid_out;
 
 
    mem_rsp_t t_core_mem_rsp;
@@ -1367,7 +1376,6 @@ module nu_l1d(clk,
 
 	
 	t_got_req = 1'b0;
-
 	t_replay_req2 = 1'b0;
 	
 	
@@ -1512,7 +1520,7 @@ module nu_l1d(clk,
 			    else
 			      begin
 				 n_lock_cache = 1'b0;
-				 n_mem_req_addr = {r_req.addr[`M_WIDTH-1:`LG_L1D_CL_LEN], 4'd0};
+				 n_mem_req_addr = {r_req.addr[`PA_WIDTH-1:`LG_L1D_CL_LEN], 4'd0};
 				 n_mem_req_opcode = MEM_LW;				 
 				 n_state = INJECT_RELOAD;
 				 n_mem_req_valid = 1'b1;
@@ -1547,7 +1555,7 @@ module nu_l1d(clk,
 				   n_req = t_mem_head;
 				   n_req.data = core_store_data.data;
 				   t_cache_idx = t_mem_head.addr[IDX_STOP-1:IDX_START];
-				   t_cache_tag = t_mem_head.addr[`M_WIDTH-1:IDX_STOP];
+				   t_cache_tag = t_mem_head.addr[`PA_WIDTH-1:IDX_STOP];
 				   t_addr = t_mem_head.addr;
 				   t_got_req = 1'b1;
 				   n_is_retry = 1'b1;
@@ -1564,7 +1572,7 @@ module nu_l1d(clk,
 			      t_pop_mq = 1'b1;
 			      n_req = t_mem_head;
 			      t_cache_idx = t_mem_head.addr[IDX_STOP-1:IDX_START];
-			      t_cache_tag = t_mem_head.addr[`M_WIDTH-1:IDX_STOP];
+			      t_cache_tag = t_mem_head.addr[`PA_WIDTH-1:IDX_STOP];
 			      t_addr = t_mem_head.addr;
 			      t_got_req = 1'b1;
 			      n_is_retry = 1'b1;
@@ -1595,7 +1603,7 @@ module nu_l1d(clk,
 		  t_cache_idx = l2_probe_addr[IDX_STOP-1:IDX_START];
 		  n_flush_cl_req = 1'b0;
 		  n_flush_was_active = 1'b1;
-		   n_state = FLUSH_CL;
+		  n_state = FLUSH_CL;
 	       end
 	    end // case: ACTIVE
 	  WAIT_INJECT_RELOAD:
@@ -1615,7 +1623,7 @@ module nu_l1d(clk,
 	  HANDLE_RELOAD:
 	    begin
 	       t_cache_idx = r_req.addr[IDX_STOP-1:IDX_START];
-	       t_cache_tag = r_req.addr[`M_WIDTH-1:IDX_STOP];
+	       t_cache_tag = r_req.addr[`PA_WIDTH-1:IDX_STOP];
 	       n_last_wr = r_req.is_store;
 	       t_got_req = 1'b1;
 	       t_addr  = r_req.addr;
@@ -1728,19 +1736,6 @@ module nu_l1d(clk,
 
    always_ff@(negedge clk)
      begin
-	// if(r_flush_cl_req)
-	//   begin
-	//      $display("pending flush request at cycle %d, memq empty %b", r_cycle, mem_q_empty);
-	//   end
-	// if(retired_rob_ptr_valid && (retired_rob_ptr == 'd1))
-	//   begin
-	//      $display("port a marking retired at cycle %d", r_cycle);
-	//   end
-	// if(retired_rob_ptr_two_valid && (retired_rob_ptr_two == 'd1) )
-	//   begin
-	//      $display("port b marking retired at cycle %d", r_cycle);
-	//   end
-	
       if(t_push_miss && mem_q_full)
 	begin
 	   $display("attempting to push to a full memory queue");
@@ -1784,7 +1779,7 @@ module nu_l1d(clk,
 	     //if(r_state != ACTIVE) $stop();
 	     //use 2nd read port
 	     t_cache_idx2 = core_mem_va_req.addr[IDX_STOP-1:IDX_START];
-	     t_cache_tag2 = core_mem_va_req.addr[`M_WIDTH-1:IDX_STOP];
+	     t_cache_tag2 = core_mem_va_req.addr[`PA_WIDTH-1:IDX_STOP];
 	     n_req2 = core_mem_va_req;
 	     core_mem_va_req_ack = 1'b1;
 	     t_got_req2 = 1'b1;
@@ -1810,14 +1805,6 @@ module nu_l1d(clk,
 	  end // if (core_mem_va_req_valid &&...
      end // always_comb
    
-   // always_ff@(negedge clk)
-   //   begin
-   //     if(t_accept & !t_old_ack)
-   // 	 begin
-   // 	    $display("new req = %b, old ack = %b, r_state = %d", 
-   // 		     t_new_req, t_old_ack, r_state);
-   // 	 end
-   //   end
 
 endmodule // l1d
 

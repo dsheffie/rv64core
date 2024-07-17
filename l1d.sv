@@ -20,7 +20,6 @@ module l1d(clk,
 	   l2_probe_val,
 	   l2_probe_ack,	   
 	   l1d_state,
-  	   n_inflight,
 	   restart_complete,
 	   paging_active,
 	   clear_tlb,
@@ -82,7 +81,6 @@ module l1d(clk,
    output logic 		l2_probe_ack;
    
    output logic [3:0] l1d_state;
-   output logic [3:0] n_inflight;
    input logic 	      restart_complete;
    input logic paging_active;
    input logic clear_tlb;
@@ -169,7 +167,6 @@ module l1d(clk,
    assign l2_probe_ack = r_l2_probe_ack;
    
    logic [`LG_MRQ_ENTRIES:0] 		  r_n_inflight;   
-   assign n_inflight = r_n_inflight;
    
    
    
