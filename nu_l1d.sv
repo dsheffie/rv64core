@@ -78,8 +78,8 @@ module nu_l1d(clk,
    input logic [1:0] priv;
    input logic [63:0] page_table_root;
    input logic l2_probe_val;
-   input logic [(`M_WIDTH-1):0] l2_probe_addr;
-   output logic 		l2_probe_ack;
+   input logic [(`PA_WIDTH-1):0] l2_probe_addr;
+   output logic			 l2_probe_ack;
    
    output logic [3:0] l1d_state;
    output logic [3:0] n_inflight;
@@ -121,7 +121,7 @@ module nu_l1d(clk,
 
    output logic mem_req_valid;
    output logic	mem_req_uc;
-   output logic [(`M_WIDTH-1):0] mem_req_addr;
+   output logic [(`PA_WIDTH-1):0] mem_req_addr;
    output logic [L1D_CL_LEN_BITS-1:0] mem_req_store_data;
    output logic [3:0] 			  mem_req_opcode;
 
@@ -334,7 +334,7 @@ module nu_l1d(clk,
 
    
    
-   wire [63:0] w_tlb_pa;
+   wire [`PA_WIDTH-1:0] w_tlb_pa;
    logic [63:0] r_tlb_addr, n_tlb_addr;
    logic 	t_reload_tlb;
    logic	n_page_walk_req_valid, r_page_walk_req_valid;
@@ -346,7 +346,7 @@ module nu_l1d(clk,
    
    logic [31:0] 			 r_cycle;
    assign flush_complete = r_flush_complete;
-   assign mem_req_addr = r_mem_req_addr;
+   assign mem_req_addr = r_mem_req_addr[31:0];
    assign mem_req_store_data = r_mem_req_store_data;
    assign mem_req_opcode = r_mem_req_opcode;
    assign mem_req_valid = r_mem_req_valid;
@@ -924,11 +924,13 @@ module nu_l1d(clk,
 	  end
      end
    
+
+   wire w_port2_hit_cache = r_valid_out2 && (r_tag_out2[19:0] == w_tlb_pa[`PA_WIDTH-1:IDX_STOP]);
    
    always_comb
      begin
 	t_data2 = r_got_req2 && r_must_forward2 ? r_array_wr_data : r_array_out2;
-	t_hit_cache2 = r_valid_out2 && (r_tag_out2 == w_tlb_pa[`M_WIDTH-1:IDX_STOP]) && r_got_req2;
+	t_hit_cache2 = w_port2_hit_cache && r_got_req2;
 	t_rsp_dst_valid2 = 1'b0;
 	t_rsp_data2 = 'd0;
 
@@ -1046,8 +1048,7 @@ module nu_l1d(clk,
 		 (r_got_req && r_must_forward) ? r_array_wr_data : 
 		 r_array_out;
 	
-	t_hit_cache = r_valid_out && (r_tag_out == r_cache_tag) && r_got_req && 
-		      (r_state == ACTIVE || r_state == INJECT_RELOAD) && 
+	t_hit_cache = r_valid_out && (r_tag_out == r_cache_tag) && r_got_req && (r_state == ACTIVE) && 
 		      (r_req.uncachable==1'b0);
 	t_array_data = 'd0;
 	t_wr_array = 1'b0;
@@ -1223,7 +1224,7 @@ module nu_l1d(clk,
 
    wire	w_tlb_st_not_dirty = w_tlb_hit & paging_active & (r_req2.is_store | r_req2.is_atomic) & w_tlb_writable & !w_tlb_dirty;   
 
-   wire w_flush_hit = (r_tag_out == l2_probe_addr[`M_WIDTH-1:IDX_STOP]) & r_valid_out;
+   wire w_flush_hit = (r_tag_out[19:0] == l2_probe_addr[`PA_WIDTH-1:IDX_STOP]) & r_valid_out;
 
 
    mem_rsp_t t_core_mem_rsp;
@@ -1255,7 +1256,7 @@ module nu_l1d(clk,
 	     t_core_mem_rsp.data = r_req2.addr;
 	     t_core_mem_rsp.rob_ptr = r_req2.rob_ptr;
 	     t_core_mem_rsp.dst_ptr = r_req2.dst_ptr;
-	     t_req2_pa.addr = w_tlb_pa;
+	     t_req2_pa.addr = {32'd0, w_tlb_pa};
 	     t_req2_pa.uncachable = 1'b0;
 	     
 	     if(r_pending_tlb_miss)
@@ -1355,7 +1356,7 @@ module nu_l1d(clk,
 	n_page_walk_req_valid = 1'b0;
 
 	t_got_rd_retry = 1'b0;
-	t_port2_hit_cache = r_valid_out2 && (r_tag_out2 == w_tlb_pa[`M_WIDTH-1:IDX_STOP]);
+	t_port2_hit_cache = w_port2_hit_cache;
 	
 	n_state = r_state;
 	t_miss_idx = r_miss_idx;

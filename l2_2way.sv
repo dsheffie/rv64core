@@ -69,8 +69,8 @@ module l2_2way(clk,
    input logic l1d_req;
    input logic l1i_req;
    input logic l1d_uc;
-   input logic [(`M_WIDTH-1):0] l1d_addr;
-   input logic [(`M_WIDTH-1):0] l1i_addr;   
+   input logic [(`PA_WIDTH-1):0] l1d_addr;
+   input logic [(`PA_WIDTH-1):0] l1i_addr;   
    input logic [3:0] 		l1d_opcode;
    output logic l1d_rsp_valid;
    output logic l1i_rsp_valid;
@@ -86,22 +86,22 @@ module l2_2way(clk,
    input logic [(1 << (`LG_L1D_CL_LEN+3)) - 1 :0] l1_mem_req_store_data;
 
    output logic 				  l2_probe_val;
-   output logic [(`M_WIDTH-1):0] 		  l2_probe_addr;
+   output logic [(`PA_WIDTH-1):0]		  l2_probe_addr;
    input logic 					  l2_probe_ack;
    
    output logic [(1 << (`LG_L1D_CL_LEN+3)) - 1 :0] l1_mem_load_data;
    
    output logic mem_req_valid;
-   output logic [`M_WIDTH-1:0] mem_req_addr;
+   output logic [`PA_WIDTH-1:0] mem_req_addr;
    output logic [(1 << (`LG_L2_CL_LEN+3)) - 1 :0] mem_req_store_data;
    output logic [3:0] 	mem_req_opcode;
    
    input logic 		mem_rsp_valid;
    input logic [(1 << (`LG_L2_CL_LEN+3)) - 1 :0] mem_rsp_load_data;
 
-   input logic				  mmu_req_valid;
-   input logic [63:0]			  mmu_req_addr;
-   input logic [63:0]			  mmu_req_data;
+   input logic					 mmu_req_valid;
+   input logic [`PA_WIDTH-1:0]			  mmu_req_addr;
+   input logic [63:0]				  mmu_req_data;
    input logic				  mmu_req_store;
    output logic				  mmu_rsp_valid;
    output logic [63:0]			  mmu_rsp_data;
@@ -127,7 +127,7 @@ module l2_2way(clk,
    localparam LG_L2_LINES = `LG_L2_NUM_SETS;
    localparam L2_LINES = 1<<LG_L2_LINES;
    
-   localparam TAG_BITS = `M_WIDTH - (LG_L2_LINES + `LG_L2_CL_LEN);
+   localparam TAG_BITS = `PA_WIDTH - (LG_L2_LINES + `LG_L2_CL_LEN);
 
    logic 		t_wr_dirty0, t_wr_valid0;
    logic		t_wr_dirty1, t_wr_valid1;
@@ -141,8 +141,8 @@ module l2_2way(clk,
    logic [LG_L2_LINES-1:0] t_idx, r_idx;
    logic [TAG_BITS-1:0]    n_tag, r_tag;
 
-   logic [`M_WIDTH-(`LG_L2_CL_LEN+1):0]    n_last_l1i_addr, r_last_l1i_addr;
-   logic [`M_WIDTH-(`LG_L2_CL_LEN+1):0]    n_last_l1d_addr, r_last_l1d_addr;
+   logic [`PA_WIDTH-(`LG_L2_CL_LEN+1):0]	n_last_l1i_addr, r_last_l1i_addr;
+   logic [`PA_WIDTH-(`LG_L2_CL_LEN+1):0]    n_last_l1d_addr, r_last_l1d_addr;
    logic 		   t_gnt_l1i, t_gnt_l1d;
 
    logic		   r_wb1, n_wb1;
@@ -150,8 +150,8 @@ module l2_2way(clk,
    logic [127:0]	   r_data_wb1;
    
    
-   logic [`M_WIDTH-1:0]    n_addr, r_addr;
-   logic [`M_WIDTH-1:0] 	 n_saveaddr, r_saveaddr;
+   logic [`PA_WIDTH-1:0]    n_addr, r_addr;
+   logic [`PA_WIDTH-1:0] 	 n_saveaddr, r_saveaddr;
    
    logic [3:0] 		   n_opcode, r_opcode;
 
@@ -440,7 +440,7 @@ module l2_2way(clk,
      end // always_comb
 
    logic t_probe_mmu_req_valid;
-   logic [(`M_WIDTH-1):0] r_l2_probe_addr, n_l2_probe_addr;
+   logic [(`PA_WIDTH-1):0] r_l2_probe_addr, n_l2_probe_addr;
    logic 		  n_l2_probe_val, r_l2_probe_val;
    typedef enum logic  {PROBE_IDLE, PROBE_WAIT } probe_state_t;
 
@@ -647,9 +647,9 @@ module l2_2way(clk,
 		    n_mmu_mark_accessed = mem_mark_accessed;
 		    n_mmu_addr3 = mem_mark_addr[3];		    
 		    t_idx = mem_mark_addr[LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN];			 
-		    n_tag = mem_mark_addr[(`M_WIDTH-1):LG_L2_LINES+`LG_L2_CL_LEN];
-		    n_addr = {mem_mark_addr[(`M_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
-		    n_saveaddr = {mem_mark_addr[(`M_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
+		    n_tag = mem_mark_addr[(`PA_WIDTH-1):LG_L2_LINES+`LG_L2_CL_LEN];
+		    n_addr = {mem_mark_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
+		    n_saveaddr = {mem_mark_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
 		    n_opcode = MEM_LW;
 		    n_mark_pte = 1'b1;
 		    n_state = CHECK_VALID_AND_TAG;
@@ -658,9 +658,9 @@ module l2_2way(clk,
 		 begin
 		    n_mmu_addr3 = mmu_req_addr[3];		    
 		    t_idx = mmu_req_addr[LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN];			 
-		    n_tag = mmu_req_addr[(`M_WIDTH-1):LG_L2_LINES+`LG_L2_CL_LEN];
-		    n_addr = {mmu_req_addr[(`M_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
-		    n_saveaddr = {mmu_req_addr[(`M_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
+		    n_tag = mmu_req_addr[(`PA_WIDTH-1):LG_L2_LINES+`LG_L2_CL_LEN];
+		    n_addr = {mmu_req_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
+		    n_saveaddr = {mmu_req_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
 		    n_opcode = MEM_LW;
 		    n_state = CHECK_VALID_AND_TAG;
 		    n_mmu = 1'b1;
@@ -673,10 +673,10 @@ module l2_2way(clk,
 			 //$display("accepting i-side, addr=%x", l1i_addr);			 
 			 n_last_gnt = 1'b0;			 
 			 t_idx = l1i_addr[LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN];
-			 n_tag = l1i_addr[(`M_WIDTH-1):LG_L2_LINES+`LG_L2_CL_LEN];
-			 n_last_l1i_addr = l1i_addr[(`M_WIDTH-1):`LG_L2_CL_LEN];
-			 n_addr = {l1i_addr[(`M_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
-			 n_saveaddr = {l1i_addr[(`M_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
+			 n_tag = l1i_addr[(`PA_WIDTH-1):LG_L2_LINES+`LG_L2_CL_LEN];
+			 n_last_l1i_addr = l1i_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN];
+			 n_addr = {l1i_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
+			 n_saveaddr = {l1i_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
 			 n_opcode = MEM_LW;
 			 n_l1i_req = 1'b0;
 			 t_gnt_l1i = 1'b1;
@@ -686,20 +686,13 @@ module l2_2way(clk,
 			 //$display("accepting d-side, addr = %x, store=%b", l1d_addr, l1d_opcode == MEM_SW);
 			 n_last_gnt = 1'b1;
 			 t_idx = l1d_addr[LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN];			 
-			 n_tag = l1d_addr[(`M_WIDTH-1):LG_L2_LINES+`LG_L2_CL_LEN];
-			 n_addr = {l1d_addr[(`M_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
-			 n_last_l1d_addr = l1d_addr[(`M_WIDTH-1):`LG_L2_CL_LEN];			 
-			 n_saveaddr = {l1d_addr[(`M_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
+			 n_tag = l1d_addr[(`PA_WIDTH-1):LG_L2_LINES+`LG_L2_CL_LEN];
+			 n_addr = {l1d_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
+			 n_last_l1d_addr = l1d_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN];			 
+			 n_saveaddr = {l1d_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
 			 n_store_data = l1_mem_req_store_data;
 			 n_opcode = l1d_opcode;
 			 n_l1d_req = 1'b0;
-			 
-			 if(!(l1d_opcode == MEM_SW || l1d_opcode == MEM_LW))
-			   begin
-			      $display("opcode is %d", l1d_opcode);
-			      $stop();
-			   end
-			 
 			 
 			 if(l1d_opcode == MEM_SW)
 			   begin
@@ -714,10 +707,10 @@ module l2_2way(clk,
 			      //$display("accepting i-side, addr=%x", l1i_addr);			 			      
 			      n_last_gnt = 1'b0;			 
 			      t_idx = l1i_addr[LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN];			 			      
-			      n_tag = l1i_addr[(`M_WIDTH-1):LG_L2_LINES+`LG_L2_CL_LEN];
-			      n_last_l1i_addr = l1i_addr[(`M_WIDTH-1):`LG_L2_CL_LEN];
-			      n_addr = {l1i_addr[(`M_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
-			      n_saveaddr = {l1i_addr[(`M_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
+			      n_tag = l1i_addr[(`PA_WIDTH-1):LG_L2_LINES+`LG_L2_CL_LEN];
+			      n_last_l1i_addr = l1i_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN];
+			      n_addr = {l1i_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
+			      n_saveaddr = {l1i_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
 			      n_opcode = MEM_LW;
 			      n_l1i_req = 1'b0;	
 			      t_gnt_l1i = 1'b1;
@@ -727,17 +720,14 @@ module l2_2way(clk,
 			      //$display("accepting d-side, addr = %x, store=%b", l1d_addr, l1d_opcode == MEM_SW);
 			      n_last_gnt = 1'b1;
 			      t_idx = l1d_addr[LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN];			 			      			      
-			      n_tag = l1d_addr[(`M_WIDTH-1):LG_L2_LINES+`LG_L2_CL_LEN];
-			      n_addr = {l1d_addr[(`M_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
-			      n_last_l1d_addr = l1d_addr[(`M_WIDTH-1):`LG_L2_CL_LEN];
-			      n_saveaddr = {l1d_addr[(`M_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
+			      n_tag = l1d_addr[(`PA_WIDTH-1):LG_L2_LINES+`LG_L2_CL_LEN];
+			      n_addr = {l1d_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
+			      n_last_l1d_addr = l1d_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN];
+			      n_saveaddr = {l1d_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
 			      n_store_data = l1_mem_req_store_data;
 			      n_opcode = l1d_opcode;
 			      n_l1d_req = 1'b0;
 
-			      if(!(l1d_opcode == MEM_SW || l1d_opcode == MEM_LW))
-				$stop();	
-			      
 			      if(l1d_opcode == MEM_SW)
 				begin
 				   n_l1d_rsp_valid = 1'b1;

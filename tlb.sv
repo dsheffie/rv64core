@@ -1,4 +1,5 @@
 `include "rob.vh"
+`include "machine.vh"
 
 module tlb(clk,
 	   reset,
@@ -29,7 +30,8 @@ module tlb(clk,
    input logic req;
    
    input logic [63:0] va;
-   output logic [63:0] pa;
+   output logic [`PA_WIDTH-1:0] pa;
+   
    output logic	       hit;
    output logic	       dirty;
    output logic	       readable;
@@ -119,7 +121,7 @@ module tlb(clk,
 	writable <= r_writable[w_idx[LG_N-1:0]];
 	readable <= r_readable[w_idx[LG_N-1:0]];
 	dirty <= r_dirty[w_idx[LG_N-1:0]];
-	pa <= active ? w_pa_sel : va;
+	pa <= active ? w_pa_sel[`PA_WIDTH-1:0] : va[`PA_WIDTH-1:0];
 	zero_page <= reset ? 1'b0 : ((|va[39:12]) == 1'b0);
      end
 

@@ -30,7 +30,7 @@ module mmu(clk, reset, clear_tlb, page_table_root,
    input logic [63:0] l1d_va;   
 
    output logic	      mem_req_valid;
-   output logic [63:0] mem_req_addr;
+   output logic [`PA_WIDTH-1:0] mem_req_addr;
    output logic [63:0] mem_req_data;   
    output logic	       mem_req_store;
 
@@ -84,7 +84,7 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 
    
    assign mem_req_valid = r_req;
-   assign mem_req_addr = r_addr;
+   assign mem_req_addr = r_addr[31:0];
    assign l1d_rsp_valid = r_l1d_rsp_valid;
    assign l1i_rsp_valid = r_l1i_rsp_valid;
 

@@ -898,7 +898,7 @@ module l1d(clk,
 
 
 
-   tlb #(.LG_N(6)) dtlb(
+   tlb #(.LG_N(5)) dtlb(
     	    .clk(clk), 
     	    .reset(reset),
 	    .priv(priv),
@@ -1084,7 +1084,7 @@ module l1d(clk,
 		 r_array_out;
 	
 	t_hit_cache = r_valid_out && (r_tag_out == r_cache_tag) && r_got_req && 
-		      (r_state == ACTIVE || r_state == INJECT_RELOAD) && 
+		      (r_state == ACTIVE) && 
 		      (r_req.uncachable==1'b0);
 	t_array_data = 'd0;
 	t_wr_array = 1'b0;

@@ -76,6 +76,8 @@
 
 `define M_WIDTH (1 << `LG_M_WIDTH)
 
+`define PA_WIDTH 32
+
 `define LG_BTB_SZ 7
 
 `define UC_START (64'h40500000)
