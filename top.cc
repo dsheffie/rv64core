@@ -246,6 +246,28 @@ void start_log(int l) {
   trace_retirement |= (l!=0);
 }
 
+static uint64_t log_l1d_accesses = 0;
+static uint64_t log_l1d_is_ld_hit = 0;
+static uint64_t log_l1d_is_st_hit = 0;
+static uint64_t log_l1d_is_hit_under_miss = 0;
+
+void log_l1d(int is_st_hit,
+	     int is_ld_hit,
+	     int is_hit_under_miss) {
+  log_l1d_accesses++;
+  if(is_st_hit) {
+    log_l1d_is_st_hit++;
+  }
+  if(is_ld_hit) {
+    log_l1d_is_ld_hit++;
+  }
+  
+  if(is_hit_under_miss) {
+    log_l1d_is_hit_under_miss++;
+  }
+  
+}
+
 void wr_log(long long pc,
 	    int robptr,
 	    unsigned long long addr,
@@ -1507,6 +1529,13 @@ int main(int argc, char **argv) {
     std::cout << "l1d mpki     = " << l1d_mpki << "\n";
     std::cout << "l2  mpki     = " << l2_mpki << "\n";        
     std::cout << "l1d accesses = " << tb->l1d_cache_accesses << "\n";
+
+
+    std::cout << "log_l1d_accesses = " << log_l1d_accesses << "\n";
+    std::cout << "log_l1d_is_ld_hit = " << log_l1d_is_ld_hit << "\n";
+    std::cout << "log_l1d_is_st_hit = " << log_l1d_is_st_hit << "\n";
+    std::cout << "log_l1d_is_hit_under_miss = " << log_l1d_is_hit_under_miss << "\n";
+
     double tip_cycles = 0.0;
     for(auto &p : tip_map) {
       tip_cycles += p.second;
