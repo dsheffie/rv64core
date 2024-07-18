@@ -3,11 +3,16 @@
 `include "uop.vh"
 
 `ifdef VERILATOR
+import "DPI-C" function void log_l1d(input int is_st_hit,
+				     input int is_ld_hit,
+				     input int is_hit_under_miss);
+   
+   
 import "DPI-C" function void wr_log(input longint pc,
-				    input int rob_ptr,
+				    input int 		   rob_ptr,
 				    input longint unsigned addr, 
 				    input longint unsigned data, 
-				    int			   is_atomic);
+				    int 		   is_atomic);
 `endif
 
 //`define VERBOSE_L1D 1
@@ -52,6 +57,7 @@ module nu_l1d(clk,
 	   core_mem_va_req_ack,
 	   core_mem_rsp,
 	   core_mem_rsp_valid,
+	   mem_rdy,
 	   //output to the memory system
 	   mem_req_valid,
 	   mem_req_uc,
@@ -116,11 +122,14 @@ module nu_l1d(clk,
    output logic core_mem_va_req_ack;
    output 	mem_rsp_t core_mem_rsp;
    output logic core_mem_rsp_valid;
-
+   input logic mem_rdy;
+   
    output logic mem_req_valid;
    output logic	mem_req_uc;
    output logic [(`PA_WIDTH-1):0] mem_req_addr;
    output logic [L1D_CL_LEN_BITS-1:0] mem_req_store_data;
+
+   
    output logic [3:0] 			  mem_req_opcode;
 
    input logic 				  mem_rsp_valid;
@@ -279,6 +288,8 @@ module nu_l1d(clk,
    
    
    logic [N_MQ_ENTRIES-1:0] r_mq_addr_valid;
+   logic [N_MQ_ENTRIES-1:0] r_mq_inflight;
+   
    logic [IDX_STOP-IDX_START-1:0] r_mq_addr[N_MQ_ENTRIES-1:0];
    logic [15:0]			  r_mq_mask[N_MQ_ENTRIES-1:0];
    
@@ -508,36 +519,33 @@ module nu_l1d(clk,
 	  end
      end
 
-   //logic [IDX_STOP-IDX_START-1:0] r_last_push_line;
-   //logic			  r_last_push_valid;
-   //always_ff@(posedge clk)
-   //begin
-   //r_last_push_line <= r_req2.addr[IDX_STOP-1:IDX_START];
-   //r_last_push_valid <= reset ? 1'b0 : t_push_miss;
-   //end
-   
-   //wire w_hit_last_push = r_last_push_valid ? (r_cache_idx2 == r_last_push_line) : 1'b0;
-   
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if(t_push_miss && !t_port2_hit_cache && !(r_hit_busy_addr2 || r_fwd_busy_addr2 || r_pop_busy_addr2 /*|| w_hit_last_push*/))
-   // 	  begin
-   // 	     $display("cycle %d : pushing rob ptr %d, addr %x -> was store %b, idx %d last idx %d busy %b, pc %x, fwd %b, last_line %d, valid last %b, last push %b",
-   // 		      r_cycle,
-   // 		      r_req2.rob_ptr,
-   // 		      r_req2.addr,
-   // 		      r_req2.is_store,
-   // 		      r_cache_idx2,
-   // 		      rr_cache_idx2,
-   // 		      r_hit_busy_addr2,
-   // 		      r_req2.pc,
-   // 		      r_fwd_busy_addr2,
-   // 		      r_last_push_line,
-   // 		      r_last_push_valid,
-   // 		      w_hit_last_push);
-   // 	  end
-   //   end
 
+   /* logic to check if memory request port is free */
+   wire w_cache_port1_hit = r_valid_out & (r_tag_out == r_cache_tag);
+   wire w_req_port_free = r_got_req ? w_cache_port1_hit : 1'b1;
+   
+   wire w_gen_early_req = t_push_miss & mem_rdy & !t_port2_hit_cache & 
+	!(r_hit_busy_addr2 | r_fwd_busy_addr2 | r_pop_busy_addr2 );
+   
+   always_ff@(posedge clk)
+     begin
+	if(reset)
+	  begin
+	     r_mq_inflight <= 'd0;
+	  end
+	else
+	  begin
+	     if(w_gen_early_req)
+	       begin
+		  r_mq_inflight[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]] <= 1'b1;
+	       end
+	     if(t_pop_mq)
+	       begin
+		  r_mq_inflight[r_mq_head_ptr[`LG_MRQ_ENTRIES-1:0]] <= 1'b0;		  
+	       end
+	  end
+     end // always_ff@ (posedge clk)
+   
    always_ff@(posedge clk)
      begin
 	if(t_push_miss)
@@ -1057,8 +1065,7 @@ module nu_l1d(clk,
 		 (r_got_req && r_must_forward) ? r_array_wr_data : 
 		 r_array_out;
 	
-	t_hit_cache = r_valid_out && (r_tag_out == r_cache_tag) && r_got_req && (r_state == ACTIVE) && 
-		      (r_req.uncachable==1'b0);
+	t_hit_cache =  r_got_req & w_cache_port1_hit & (r_state == ACTIVE) & (r_req.uncachable==1'b0);
 	t_array_data = 'd0;
 	t_wr_array = 1'b0;
 	t_wr_store = 1'b0;
@@ -1239,6 +1246,7 @@ module nu_l1d(clk,
    mem_rsp_t t_core_mem_rsp;
    logic t_core_mem_rsp_valid;
    wire	 w_got_reload_pf = page_walk_rsp_valid & page_walk_rsp.fault;
+   wire  w_port2_rd_hit = t_port2_hit_cache && (!r_hit_busy_addr2) & (!r_pending_tlb_miss);
    
    always_comb
      begin
@@ -1312,7 +1320,7 @@ module nu_l1d(clk,
 		  t_core_mem_rsp.mark_page_dirty = w_tlb_st_not_dirty;
 		  t_core_mem_rsp.addr = r_req2.addr;
 	       end // if (r_req2.is_store)
-	     else if(t_port2_hit_cache && (!r_hit_busy_addr2) & (!r_pending_tlb_miss) )
+	     else if(w_port2_rd_hit)
 	       begin
 		  t_core_mem_rsp.data = t_rsp_data2[`M_WIDTH-1:0];
                   t_core_mem_rsp.dst_valid = t_rsp_dst_valid2;
@@ -1325,9 +1333,21 @@ module nu_l1d(clk,
 	       end
 	  end // if (r_got_req2)
      end // always_comb
-   
+
+`ifdef VERILATOR
+   always_ff@(negedge clk)
+     begin
+	if(r_got_req2)
+	  begin
+	     log_l1d(r_req2.is_store & w_port2_rd_hit ? 32'd1 : 32'd0,
+		     ((r_req2.is_store==1'b0) & w_port2_rd_hit) ? 32'd1 : 32'd0,
+		     ((r_req2.is_store==1'b0) & w_port2_rd_hit & (r_state != ACTIVE)) ? 32'd1 : 32'd0);
+	  end
+     end
+`endif
+    
      
-   wire w_got_hit = r_got_req ? (r_valid_out && (r_tag_out == r_cache_tag) && !r_req.uncachable) : 1'b1;
+   wire w_got_hit = r_got_req ? w_cache_port1_hit & (!r_req.uncachable) : 1'b1;
    
    wire	w_mh_block = r_got_req && r_last_wr && (r_cache_idx == t_mem_head.addr[IDX_STOP-1:IDX_START] );
 
@@ -1457,7 +1477,7 @@ module nu_l1d(clk,
 	    begin
 	       if(r_got_req)
 		 begin
-		    if(r_valid_out && (r_tag_out == r_cache_tag) && !r_req.uncachable)
+		    if(w_got_hit)
 		      begin /* valid cacheline - hit in cache */
 			 t_reset_graduated = r_req.is_store;
 			 if(r_req.is_store==1'b0)
@@ -1542,10 +1562,13 @@ module nu_l1d(clk,
 	       /* not qualified on r_got_req */
 	       
 	       if(!mem_q_empty && !t_got_miss && !r_lock_cache && !n_pending_tlb_miss)
-		 begin
+		 begin		    
 		    if(!t_mh_block)
 		      begin
-			 //if(t_mem_head.uncachable) $display("uncachable op");
+
+			 //$display("replaying mem op, early req %b", 
+			 //r_mq_inflight[r_mq_head_ptr[`LG_MRQ_ENTRIES-1:0]]);
+			 
 			 if(t_mem_head.is_store || t_mem_head.is_atomic)
 			   begin
 			      if(w_st_amo_grad && (core_store_data_valid ? (t_mem_head.rob_ptr == core_store_data.rob_ptr) : 1'b0) )

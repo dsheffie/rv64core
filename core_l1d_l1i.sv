@@ -369,6 +369,7 @@ module
    page_walk_rsp_t page_walk_rsp;
    
    wire	       w_restart_complete;
+   wire	       w_l2_l1d_rdy;
    
    logic	drain_ds_complete;
    logic [(1<<`LG_ROB_ENTRIES)-1:0] dead_rob_mask;
@@ -414,7 +415,7 @@ module
 	       .l2_probe_val(w_l2_probe_val),
 	       .l2_probe_addr(w_l2_probe_addr),
 	       .l2_probe_ack(w_l2_probe_ack),
-	       
+	       .l1d_rdy(w_l2_l1d_rdy),
 	       .l1d_req(l1d_mem_req_valid),
 	       .l1d_uc(l1d_mem_req_uc),
 	       .l1i_req(l1i_mem_req_valid),
@@ -506,9 +507,9 @@ module
 	       
 	       .core_mem_rsp_valid(core_mem_rsp_valid),
 	       .core_mem_rsp(core_mem_rsp),
-
-		  .mem_req_valid(l1d_mem_req_valid),
-		  .mem_req_uc(l1d_mem_req_uc),
+		  .mem_rdy(w_l2_l1d_rdy),
+	        .mem_req_valid(l1d_mem_req_valid),
+	        .mem_req_uc(l1d_mem_req_uc),
 	       .mem_req_addr(l1d_mem_req_addr),
 	       .mem_req_store_data(l1d_mem_req_store_data),
 	       .mem_req_opcode(l1d_mem_req_opcode),
