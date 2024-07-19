@@ -61,12 +61,15 @@ module nu_l1d(clk,
 	   //output to the memory system
 	   mem_req_valid,
 	   mem_req_uc,
-	   mem_req_addr, 
+	   mem_req_addr,
+	   mem_req_tag,
 	   mem_req_store_data, 
 	   mem_req_opcode,
 	   //reply from memory system
 	   mem_rsp_valid,
 	   mem_rsp_load_data,
+	   mem_rsp_tag,
+	   mem_rsp_addr,	      
 	   mtimecmp,
 	   mtimecmp_val,
 	   cache_accesses,
@@ -128,12 +131,14 @@ module nu_l1d(clk,
    output logic	mem_req_uc;
    output logic [(`PA_WIDTH-1):0] mem_req_addr;
    output logic [L1D_CL_LEN_BITS-1:0] mem_req_store_data;
-
-   
+   output logic [`LG_MRQ_ENTRIES:0]   mem_req_tag;
    output logic [3:0] 			  mem_req_opcode;
 
    input logic 				  mem_rsp_valid;
    input logic [L1D_CL_LEN_BITS-1:0] 	  mem_rsp_load_data;
+   input logic [`LG_MRQ_ENTRIES:0] 	  mem_rsp_tag;
+   input logic [`PA_WIDTH-1:0] 		  mem_rsp_addr;
+   
 
    output logic [63:0]			  mtimecmp;
    output logic				  mtimecmp_val;
@@ -330,12 +335,28 @@ module nu_l1d(clk,
    
    logic r_mem_req_valid, n_mem_req_valid;
    logic r_mem_req_uc, n_mem_req_uc;
-   
    logic [(`PA_WIDTH-1):0] r_mem_req_addr, n_mem_req_addr;
    logic [L1D_CL_LEN_BITS-1:0] r_mem_req_store_data, n_mem_req_store_data;
-   
    logic [3:0] 		       r_mem_req_opcode, n_mem_req_opcode;
+   logic [`LG_MRQ_ENTRIES:0]   r_mem_req_tag, n_mem_req_tag;
 
+
+   logic 		       n_port1_req_valid;
+   logic 		       n_port1_req_uc;
+   logic [(`PA_WIDTH-1):0]     n_port1_req_addr;
+   logic [L1D_CL_LEN_BITS-1:0] n_port1_req_store_data;
+   logic [3:0] 		       n_port1_req_opcode;
+   logic [`LG_MRQ_ENTRIES:0]   n_port1_req_tag;
+
+   logic 		       n_port2_req_valid;
+   logic 		       n_port2_req_uc;
+   logic [(`PA_WIDTH-1):0]     n_port2_req_addr;
+   logic [L1D_CL_LEN_BITS-1:0] n_port2_req_store_data;
+   logic [3:0] 		       n_port2_req_opcode;
+   logic [`LG_MRQ_ENTRIES:0]   n_port2_req_tag;
+
+   
+   
    wire 		       w_tlb_hit, w_tlb_dirty, w_tlb_writable, w_tlb_readable, 
 			       w_tlb_user, w_zero_page;
 
@@ -357,6 +378,8 @@ module nu_l1d(clk,
    assign mem_req_addr = r_mem_req_addr[31:0];
    assign mem_req_store_data = r_mem_req_store_data;
    assign mem_req_opcode = r_mem_req_opcode;
+   assign mem_req_tag = r_mem_req_tag;
+   
    assign mem_req_valid = r_mem_req_valid;
    assign mem_req_uc = r_mem_req_uc;
 
@@ -524,9 +547,22 @@ module nu_l1d(clk,
    wire w_cache_port1_hit = r_valid_out & (r_tag_out == r_cache_tag);
    wire w_req_port_free = r_got_req ? w_cache_port1_hit : 1'b1;
    
-   wire w_gen_early_req = t_push_miss & mem_rdy & !t_port2_hit_cache & 
-	!(r_hit_busy_addr2 | r_fwd_busy_addr2 | r_pop_busy_addr2 );
+   wire w_could_early_req = t_push_miss & mem_rdy & !t_port2_hit_cache & 
+	!(r_hit_busy_addr2 | r_fwd_busy_addr2 | r_pop_busy_addr2 ) &
+	(r_req2.is_store == 1'b0);
    
+   wire w_gen_early_req = w_could_early_req & (r_got_req ? w_cache_port1_hit : 1'b1);
+   wire w_early_rsp = mem_rsp_valid ? (mem_rsp_tag != (1 << `LG_MRQ_ENTRIES)) : 1'b0;
+
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if(mem_rsp_valid)
+   // 	  begin
+   // 	     $display("resp for tag %d at cycle %d", mem_rsp_tag, r_cycle);
+   // 	  end
+   //   end
+
+
    always_ff@(posedge clk)
      begin
 	if(reset)
@@ -537,14 +573,27 @@ module nu_l1d(clk,
 	  begin
 	     if(w_gen_early_req)
 	       begin
+		  $display("generating early memory request with tag %d at cycle %d",
+			   r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0], r_cycle);
 		  r_mq_inflight[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]] <= 1'b1;
 	       end
-	     if(t_pop_mq)
+	     if(w_early_rsp)
 	       begin
-		  r_mq_inflight[r_mq_head_ptr[`LG_MRQ_ENTRIES-1:0]] <= 1'b0;		  
+		  $display("early mem req returns for tag %d, addr %x at cycle %d", mem_rsp_tag, mem_rsp_addr, r_cycle);
+		  r_mq_inflight[mem_rsp_tag[`LG_MRQ_ENTRIES-1:0]] <= 1'b0;		  
 	       end
 	  end
      end // always_ff@ (posedge clk)
+
+   always_comb
+     begin
+	n_port2_req_valid = w_gen_early_req;
+	n_port2_req_uc = 1'b0;
+	n_port2_req_addr = r_req2.addr[`PA_WIDTH-1:0];
+	n_port2_req_store_data = r_mem_req_store_data;
+	n_port2_req_opcode = 4'd4;
+	n_port2_req_tag = {1'b0, r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]};
+     end
    
    always_ff@(posedge clk)
      begin
@@ -674,6 +723,7 @@ module nu_l1d(clk,
 	     r_mem_req_addr <= 'd0;
 	     r_mem_req_store_data <= 'd0;
 	     r_mem_req_opcode <= 'd0;
+	     r_mem_req_tag <= 'd0;
 	     r_core_mem_rsp_valid <= 1'b0;
 	     r_store_stalls <= 'd0;
 	     r_inhibit_write <= 1'b0;
@@ -727,6 +777,8 @@ module nu_l1d(clk,
 	     r_mem_req_addr <= n_mem_req_addr;
 	     r_mem_req_store_data <= n_mem_req_store_data;
 	     r_mem_req_opcode <= n_mem_req_opcode;
+	     r_mem_req_tag <= n_mem_req_tag;
+	     
 	     r_core_mem_rsp_valid <= n_core_mem_rsp_valid;
 	     r_store_stalls <= n_store_stalls;
 	     r_inhibit_write <= n_inhibit_write;
@@ -752,7 +804,7 @@ module nu_l1d(clk,
 
    always_comb
      begin
-	t_array_wr_addr = mem_rsp_valid ? r_mem_req_addr[IDX_STOP-1:IDX_START] : r_cache_idx;
+	t_array_wr_addr = mem_rsp_valid ? mem_rsp_addr[IDX_STOP-1:IDX_START] : r_cache_idx;
 	t_array_wr_data = mem_rsp_valid ? mem_rsp_load_data : t_store_shift;
 	t_array_wr_en = (mem_rsp_valid) | t_wr_array;
      end
@@ -762,8 +814,8 @@ module nu_l1d(clk,
       .clk(clk),
       .rd_addr0(t_cache_idx),
       .rd_addr1(t_cache_idx2),
-      .wr_addr(r_mem_req_addr[IDX_STOP-1:IDX_START]),
-      .wr_data(r_mem_req_addr[`PA_WIDTH-1:IDX_STOP]),
+      .wr_addr(mem_rsp_addr[IDX_STOP-1:IDX_START]),
+      .wr_data(mem_rsp_addr[`PA_WIDTH-1:IDX_STOP]),
       .wr_en(mem_rsp_valid),
       .rd_data0(r_tag_out),
       .rd_data1(r_tag_out2)
@@ -791,6 +843,8 @@ module nu_l1d(clk,
      begin
 	if(mem_rsp_valid && t_wr_array)
 	  begin
+	     $display("write port conflict, state %d, n_state %d",
+		      r_state, n_state);
 	     $stop();
 	  end
 	// if(t_wr_array)
@@ -820,7 +874,7 @@ module nu_l1d(clk,
 	  end
 	else if(mem_rsp_valid)
 	  begin
-	     t_dirty_wr_addr = r_mem_req_addr[IDX_STOP-1:IDX_START];
+	     t_dirty_wr_addr = mem_rsp_addr[IDX_STOP-1:IDX_START];
 	     t_write_dirty_en = 1'b1;
 	  end
 	else if(t_wr_array)
@@ -858,7 +912,7 @@ module nu_l1d(clk,
 	  end
 	else if(mem_rsp_valid)
 	  begin
-	     t_valid_wr_addr = r_mem_req_addr[IDX_STOP-1:IDX_START];
+	     t_valid_wr_addr = mem_rsp_addr[IDX_STOP-1:IDX_START];
 	     t_valid_value = !r_inhibit_write;
 	     t_write_valid_en = 1'b1;
 	  end
@@ -1412,11 +1466,13 @@ module nu_l1d(clk,
 	t_tlb_xlat_replay = 1'b0;
 	core_store_data_ack = 1'b0;
 	
-	n_mem_req_valid = 1'b0;
-	n_mem_req_uc = 1'b0;
-	n_mem_req_addr = r_mem_req_addr;
-	n_mem_req_store_data = r_mem_req_store_data;
-	n_mem_req_opcode = r_mem_req_opcode;
+	n_port1_req_valid = 1'b0;
+	n_port1_req_uc = 1'b0;
+	n_port1_req_addr = r_mem_req_addr;
+	n_port1_req_store_data = r_mem_req_store_data;
+	n_port1_req_opcode = r_mem_req_opcode;
+	n_port1_req_tag = r_mem_req_tag;
+	
 	t_pop_mq = 1'b0;
 	
 	n_core_mem_rsp_valid = t_core_mem_rsp_valid;
@@ -1495,26 +1551,27 @@ module nu_l1d(clk,
 			 n_inhibit_write = 1'b1;
 			 if(r_hit_busy_addr && r_is_retry || !r_hit_busy_addr)
 			   begin
-			      n_mem_req_addr = {r_tag_out,r_cache_idx,4'd0};
-			      n_mem_req_opcode = MEM_SW;
-			      n_mem_req_store_data = t_data;
+			      n_port1_req_addr = {r_tag_out,r_cache_idx,4'd0};
+			      n_port1_req_opcode = MEM_SW;
+			      n_port1_req_store_data = t_data;
 			      n_inhibit_write = 1'b1;
 			      t_miss_idx = r_cache_idx;
 			      t_miss_addr = r_req.addr;
-
+			      n_port1_req_tag = (1 << `LG_MRQ_ENTRIES);	
+		      
 			      n_lock_cache = 1'b1;
 			      if((rr_cache_idx == r_cache_idx) && rr_last_wr)
 				begin
 				   //$display("inflight write to line, must wait");
 				   t_cache_idx = r_cache_idx;
 				   n_state = WAIT_INJECT_RELOAD;
-				   n_mem_req_valid = 1'b0;				   
+				   n_port1_req_valid = 1'b0;				   
 				end
 			      else
 				begin
 				   //$display("no wait");
 				   n_state = INJECT_RELOAD;				   
-				   n_mem_req_valid = 1'b1;
+				   n_port1_req_valid = 1'b1;
 				end
 			   end // if (!t_stall_for_busy)
 		      end
@@ -1526,31 +1583,35 @@ module nu_l1d(clk,
 			 begin
 			    t_miss_idx = r_cache_idx;
 			    t_miss_addr = r_req.addr;		       
-
 			    t_cache_idx = r_cache_idx;
 			    
 			    if((rr_cache_idx == r_cache_idx) && rr_last_wr)
 			      begin
-				 n_mem_req_addr = {r_tag_out,r_cache_idx,4'd0};
+				 n_port1_req_addr = {r_tag_out,r_cache_idx,4'd0};
 				 n_lock_cache = 1'b1;
-				 n_mem_req_opcode = MEM_SW;
+				 n_port1_req_opcode = MEM_SW;
+				 n_port1_req_tag = (1 << `LG_MRQ_ENTRIES);
 				 n_state = WAIT_INJECT_RELOAD;
-				 n_mem_req_valid = 1'b0;
+				 n_port1_req_valid = 1'b0;
 			      end                                                             
 			    else
 			      begin
 				 n_lock_cache = 1'b0;
-				 n_mem_req_addr = {r_req.addr[`PA_WIDTH-1:`LG_L1D_CL_LEN], 4'd0};
-				 n_mem_req_opcode = MEM_LW;				 
+				 n_port1_req_addr = {r_req.addr[`PA_WIDTH-1:`LG_L1D_CL_LEN], 4'd0};
+				 n_port1_req_opcode = MEM_LW;
+				 n_port1_req_tag = (1 << `LG_MRQ_ENTRIES);
 				 n_state = INJECT_RELOAD;
-				 n_mem_req_valid = 1'b1;
+				 n_port1_req_valid = 1'b1;
 			      end
 			 end // if (r_hit_busy_addr && r_is_retry || !r_hit_busy_addr || r_lock_cache)
 		       else
 			 begin
+			    $display("r_valid_out = %b r_dirty_out = %b r_tag_out = %x r_cache_tag = %x r_req.uncachable = %b cycle %d",
+				     r_valid_out, r_dirty_out, r_tag_out, r_cache_tag, r_req.uncachable, r_cycle);
+			    
 			    $stop();
 			 end
-		    end // else: !if(r_valid_out && r_dirty_out && (r_tag_out != r_cache_tag)...
+		    end // else: !if(r_valid_out && r_dirty_out && (r_tag_out != r_cache_tag) && !r_req.uncachable)
 		 end // if (r_got_req)
 	       else if(n_pending_tlb_miss)
 		 begin
@@ -1563,12 +1624,10 @@ module nu_l1d(clk,
 	       
 	       if(!mem_q_empty && !t_got_miss && !r_lock_cache && !n_pending_tlb_miss)
 		 begin		    
-		    if(!t_mh_block)
+		    if(!t_mh_block & (|r_mq_inflight == 1'b0) /*&& (r_mq_inflight[r_mq_head_ptr[`LG_MRQ_ENTRIES-1:0]] == 1'b0) */ )
 		      begin
-
 			 //$display("replaying mem op, early req %b", 
 			 //r_mq_inflight[r_mq_head_ptr[`LG_MRQ_ENTRIES-1:0]]);
-			 
 			 if(t_mem_head.is_store || t_mem_head.is_atomic)
 			   begin
 			      if(w_st_amo_grad && (core_store_data_valid ? (t_mem_head.rob_ptr == core_store_data.rob_ptr) : 1'b0) )
@@ -1631,16 +1690,17 @@ module nu_l1d(clk,
 	    end // case: ACTIVE
 	  WAIT_INJECT_RELOAD:
 	    begin
-	       n_mem_req_valid = 1'b1;
+	       n_port1_req_valid = 1'b1;
 	       n_state = INJECT_RELOAD;
-	       n_mem_req_store_data = t_data;
+	       n_port1_req_store_data = t_data;
 	    end
 	  INJECT_RELOAD:
 	    begin
-	       if(mem_rsp_valid)
+	       if(mem_rsp_valid && (mem_rsp_tag == (1 << `LG_MRQ_ENTRIES)))
 		 begin
 		    n_state = HANDLE_RELOAD;
 		    n_inhibit_write = 1'b0;
+		    //$display("reload, got tag %b", mem_rsp_tag);
 		 end
 	    end
 	  HANDLE_RELOAD:
@@ -1656,12 +1716,12 @@ module nu_l1d(clk,
 	  FLUSH_CL:
 	    if(r_dirty_out & w_flush_hit)
 	      begin
-		 n_mem_req_addr = {r_tag_out,r_cache_idx,4'd0};
-		 n_mem_req_opcode = MEM_SW;
-		 n_mem_req_store_data = t_data;
+		 n_port1_req_addr = {r_tag_out,r_cache_idx,4'd0};
+		 n_port1_req_opcode = MEM_SW;
+		 n_port1_req_store_data = t_data;
 		 n_state = FLUSH_CL_WAIT;
 		 n_inhibit_write = 1'b1;
-		 n_mem_req_valid = 1'b1;	       
+		 n_port1_req_valid = 1'b1;	       
 	      end
 	    else
 	      begin
@@ -1699,12 +1759,12 @@ module nu_l1d(clk,
 		 end
 	       else
 		 begin
-		    n_mem_req_addr = {r_tag_out,r_cache_idx,4'd0};
-		    n_mem_req_opcode = MEM_SW;
-		    n_mem_req_store_data = t_data;
+		    n_port1_req_addr = {r_tag_out,r_cache_idx,4'd0};
+		    n_port1_req_opcode = MEM_SW;
+		    n_port1_req_store_data = t_data;
 		    n_state = (r_cache_idx == (L1D_NUM_SETS-1)) ? FLUSH_CACHE_LAST_WAIT : FLUSH_CACHE_WAIT;
 		    n_inhibit_write = 1'b1;
-		    n_mem_req_valid = 1'b1;
+		    n_port1_req_valid = 1'b1;
 		 end // else: !if(r_valid_out && !r_dirty_out)
 	    end // case: FLUSH_CACHE
 	  FLUSH_CACHE_LAST_WAIT:
@@ -1829,5 +1889,33 @@ module nu_l1d(clk,
      end // always_comb
    
 
+   always_comb
+     begin
+	n_mem_req_valid = n_port1_req_valid;
+	n_mem_req_uc = n_port1_req_uc;
+	n_mem_req_addr = n_port1_req_addr;
+	n_mem_req_store_data = n_port1_req_store_data;
+	n_mem_req_opcode = n_port1_req_opcode;
+	n_mem_req_tag = n_port1_req_tag;
+	if(n_port2_req_valid)
+	  begin
+	     n_mem_req_valid = n_port2_req_valid;
+	     n_mem_req_uc = n_port2_req_uc;
+	     n_mem_req_addr = n_port2_req_addr;
+	     n_mem_req_store_data = n_port2_req_store_data;
+	     n_mem_req_opcode = n_port2_req_opcode;
+	     n_mem_req_tag = n_port2_req_tag;
+	  end
+     end
+
+   always_ff@(negedge clk)
+     begin
+	if(n_port1_req_valid && n_port2_req_valid)
+	  begin
+	     $display("two requests - main state %d, next state %d", r_state, n_state);
+	     $stop();
+	  end
+     end
+   
 endmodule // l1d
 

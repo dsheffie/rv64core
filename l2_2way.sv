@@ -11,9 +11,11 @@ module l2_2way(clk,
 	  l1d_addr,
 	  l1i_addr,
 	  l1d_opcode,
+	  l1d_tag,
 	  l1d_rsp_valid,
 	  l1i_rsp_valid,
-	  
+	  l1d_rsp_tag,
+	  l1d_rsp_addr,
 	  l1i_flush_req,
 	  l1d_flush_req,
 
@@ -75,8 +77,13 @@ module l2_2way(clk,
    input logic [(`PA_WIDTH-1):0] l1d_addr;
    input logic [(`PA_WIDTH-1):0] l1i_addr;   
    input logic [3:0] 		l1d_opcode;
+   input logic [`LG_MRQ_ENTRIES:0] l1d_tag;
+   
    output logic l1d_rsp_valid;
    output logic l1i_rsp_valid;
+   output logic [`LG_MRQ_ENTRIES:0] l1d_rsp_tag;
+   output logic [`PA_WIDTH-1:0]     l1d_rsp_addr;
+   
    
    input logic l1i_flush_req;
    input logic l1d_flush_req;
@@ -156,7 +163,7 @@ module l2_2way(clk,
    
    
    logic [`PA_WIDTH-1:0]    n_addr, r_addr;
-   logic [`PA_WIDTH-1:0] 	 n_saveaddr, r_saveaddr;
+   logic [`PA_WIDTH-1:0]    n_saveaddr, r_saveaddr;
    
    logic [3:0] 		   n_opcode, r_opcode;
 
@@ -168,6 +175,7 @@ module l2_2way(clk,
    logic 		   r_l1i_rsp_valid, n_l1i_rsp_valid;
    logic [(1 << (`LG_L1D_CL_LEN+3)) - 1:0] 	   r_rsp_data, n_rsp_data;
    logic [(1 << (`LG_L1D_CL_LEN+3)) - 1:0] 	   r_store_data, n_store_data;
+   logic [`LG_MRQ_ENTRIES:0] 			   r_l1d_rsp_tag, n_l1d_rsp_tag;
    
    logic 		   r_reload, n_reload;
    
@@ -216,6 +224,8 @@ module l2_2way(clk,
    
    assign l1d_rsp_valid = r_l1d_rsp_valid;
    assign l1i_rsp_valid = r_l1i_rsp_valid;
+   assign l1d_rsp_tag = r_l1d_rsp_tag;
+   assign l1d_rsp_addr = r_saveaddr;
    
    assign l1_mem_load_data = r_rsp_data;
    assign l1_mem_req_ack = r_req_ack;
@@ -327,6 +337,7 @@ module l2_2way(clk,
 	     r_rsp_data <= 'd0;
 	     r_l1d_rsp_valid <= 1'b0;
 	     r_l1i_rsp_valid <= 1'b0;
+	     r_l1d_rsp_tag <= 'd0;
 	     r_reload <= 1'b0;
 	     r_req_ack <= 1'b0;
 	     r_store_data <= 'd0;
@@ -355,6 +366,7 @@ module l2_2way(clk,
 	     r_mark_pte <= n_mark_pte;
 	     r_mmu_rsp_data <= n_mmu_rsp_data;
 	     r_mmu_rsp_valid <= n_mmu_rsp_valid;
+	     r_l1d_rsp_tag <= n_l1d_rsp_tag;
 	     r_mem_mark_rsp_valid <= n_mem_mark_rsp_valid;
 	     r_state <= n_state;
 	     r_flush_state <= n_flush_state;
@@ -530,6 +542,7 @@ module l2_2way(clk,
       logic [(`PA_WIDTH-1):0] addr;
       logic [127:0] 	      store_data;
       logic [3:0] 	      opcode;
+      logic [`LG_MRQ_ENTRIES:0] tag;
    } queue_t;
    
    localparam N_MQ_ENTRIES = (1<<`LG_MRQ_ENTRIES);
@@ -543,6 +556,7 @@ module l2_2way(clk,
 	t_l1d.addr = l1d_addr;
 	t_l1d.opcode = l1d_opcode;
 	t_l1d.store_data = l1_mem_req_store_data;
+	t_l1d.tag = l1d_tag;
 	t_l1dq = r_mem_q[r_l1d_head_ptr[`LG_MRQ_ENTRIES-1:0]];
      end
    
@@ -624,10 +638,8 @@ module l2_2way(clk,
 
 	t_wr_last = 1'b0;
 	
-	
 	t_wr_d0 = 1'b0;
 	t_wr_d1 = 1'b0;
-	
 	
 	t_idx = r_idx;
 	n_tag = r_tag;
@@ -649,7 +661,8 @@ module l2_2way(clk,
 	n_rsp_data = r_rsp_data;
 	n_l1i_rsp_valid = 1'b0;
 	n_l1d_rsp_valid = 1'b0;	
-
+	n_l1d_rsp_tag = r_l1d_rsp_tag;
+	
 	n_reload = r_reload;
 	n_store_data = r_store_data;
 	n_flush_req = r_flush_req | t_l2_flush_req;
@@ -763,7 +776,7 @@ module l2_2way(clk,
 			 n_store_data = t_l1dq.store_data;
 			 n_opcode = t_l1dq.opcode;
 			 n_l1d_req = 1'b0;
-			 
+			 n_l1d_rsp_tag = t_l1dq.tag;
 			 if(t_l1dq.opcode == MEM_SW)
 			   begin
 			      n_l1d_rsp_valid = 1'b1;
@@ -796,7 +809,7 @@ module l2_2way(clk,
 			      n_store_data = t_l1dq.store_data;
 			      n_opcode = t_l1dq.opcode;
 			      n_l1d_req = 1'b0;
-
+			      n_l1d_rsp_tag = t_l1dq.tag;
 			      if(t_l1dq.opcode == MEM_SW)
 				begin
 				   n_l1d_rsp_valid = 1'b1;
