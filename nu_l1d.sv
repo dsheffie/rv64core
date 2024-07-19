@@ -15,7 +15,7 @@ import "DPI-C" function void wr_log(input longint pc,
 				    int 		   is_atomic);
 `endif
 
-//`define VERBOSE_L1D 1
+`define VERBOSE_L1D 1
 
 module nu_l1d(clk, 
 	   reset,
@@ -546,21 +546,31 @@ module nu_l1d(clk,
    /* logic to check if memory request port is free */
    wire w_cache_port1_hit = r_valid_out & (r_tag_out == r_cache_tag);
    wire w_req_port_free = r_got_req ? w_cache_port1_hit : 1'b1;
+
+   wire	w_port2_dirty_miss = r_valid_out2 && r_dirty_out2 && (r_tag_out2 != w_tlb_pa[`PA_WIDTH-1:IDX_STOP]);
+   wire	w_port2_hit_cache = r_valid_out2 && (r_tag_out2 == w_tlb_pa[`PA_WIDTH-1:IDX_STOP]);
    
    wire w_could_early_req = t_push_miss & mem_rdy & !t_port2_hit_cache & 
 	!(r_hit_busy_addr2 | r_fwd_busy_addr2 | r_pop_busy_addr2 ) &
-	(r_req2.is_store == 1'b0);
+	!(r_req2.is_store|r_req2.is_atomic) &
+	!w_port2_dirty_miss;
    
    wire w_gen_early_req = w_could_early_req & (r_got_req ? w_cache_port1_hit : 1'b1);
    wire w_early_rsp = mem_rsp_valid ? (mem_rsp_tag != (1 << `LG_MRQ_ENTRIES)) : 1'b0;
 
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if(mem_rsp_valid)
-   // 	  begin
-   // 	     $display("resp for tag %d at cycle %d", mem_rsp_tag, r_cycle);
-   // 	  end
-   //   end
+    // always_ff@(negedge clk)
+    //   begin
+    // 	 if(mem_rsp_valid)
+    // 	   begin
+    // 	      $display("resp for tag %d, addr %x, data %x at cycle %d",
+    // 		       mem_rsp_tag, mem_rsp_addr, mem_rsp_load_data, r_cycle);
+    // 	   end
+    // 	 if(mem_req_valid)
+    // 	   begin
+    // 	      $display("req for tag %d, line %x at cycle %d, opcode %d",
+    // 		       mem_req_tag, mem_req_addr[IDX_STOP-1:IDX_START], r_cycle, mem_req_opcode);
+    // 	   end
+    //   end
 
 
    always_ff@(posedge clk)
@@ -573,13 +583,13 @@ module nu_l1d(clk,
 	  begin
 	     if(w_gen_early_req)
 	       begin
-		  $display("generating early memory request with tag %d at cycle %d",
-			   r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0], r_cycle);
+		  //$display("generating early memory request with tag %d for pc %x at cycle %d",
+		  //r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0], r_req2.pc, r_cycle);
 		  r_mq_inflight[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]] <= 1'b1;
 	       end
 	     if(w_early_rsp)
 	       begin
-		  $display("early mem req returns for tag %d, addr %x at cycle %d", mem_rsp_tag, mem_rsp_addr, r_cycle);
+		  //$display("early mem req returns for tag %d, addr %x at cycle %d", mem_rsp_tag, mem_rsp_addr, r_cycle);
 		  r_mq_inflight[mem_rsp_tag[`LG_MRQ_ENTRIES-1:0]] <= 1'b0;		  
 	       end
 	  end
@@ -843,8 +853,8 @@ module nu_l1d(clk,
      begin
 	if(mem_rsp_valid && t_wr_array)
 	  begin
-	     $display("write port conflict, state %d, n_state %d",
-		      r_state, n_state);
+	     $display("write port conflict, state %d, n_state %d, r_req.pc %x",
+		      r_state, n_state, r_req.pc);
 	     $stop();
 	  end
 	// if(t_wr_array)
@@ -996,7 +1006,8 @@ module nu_l1d(clk,
      end
    
 
-   wire w_port2_hit_cache = r_valid_out2 && (r_tag_out2 == w_tlb_pa[`PA_WIDTH-1:IDX_STOP]);
+
+
    
    always_comb
      begin
@@ -1301,7 +1312,7 @@ module nu_l1d(clk,
    logic t_core_mem_rsp_valid;
    wire	 w_got_reload_pf = page_walk_rsp_valid & page_walk_rsp.fault;
    wire  w_port2_rd_hit = t_port2_hit_cache && (!r_hit_busy_addr2) & (!r_pending_tlb_miss);
-   
+
    always_comb
      begin
 	t_core_mem_rsp.data = r_req.addr;
