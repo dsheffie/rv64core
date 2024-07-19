@@ -328,7 +328,10 @@ module
    logic [(`PA_WIDTH-1):0]		  l1d_mem_req_addr;
    logic [L1D_CL_LEN_BITS-1:0] 		  l1d_mem_req_store_data;
    logic [3:0] 				  l1d_mem_req_opcode;
-
+   logic [`LG_MRQ_ENTRIES:0] 		  l1d_mem_req_tag;
+   wire [`LG_MRQ_ENTRIES:0] 		  w_l1d_mem_rsp_tag;
+   wire [`PA_WIDTH-1:0] 		  w_l1d_mem_rsp_addr;
+   
    logic 				  l1i_mem_req_valid;
    logic [(`PA_WIDTH-1):0] 		  l1i_mem_req_addr;
    logic [3:0] 				  l1i_mem_req_opcode;
@@ -422,8 +425,10 @@ module
 	       .l1d_addr(l1d_mem_req_addr),
 	       .l1i_addr(l1i_mem_req_addr),
 	       .l1d_opcode(l1d_mem_req_opcode),
-
+               .l1d_tag(l1d_mem_req_tag),
 	       .l1d_rsp_valid(l1d_mem_rsp_valid),
+	       .l1d_rsp_tag(w_l1d_mem_rsp_tag),
+	       .l1d_rsp_addr(w_l1d_mem_rsp_addr),
 	       .l1i_rsp_valid(l1i_mem_rsp_valid),
 	       
 	       .l1i_flush_req(flush_req_l1i),
@@ -444,7 +449,7 @@ module
 
 	       .mem_rsp_valid(mem_rsp_valid),
 	       .mem_rsp_load_data(mem_rsp_load_data),
-
+		    
 	       .mmu_req_valid(w_mmu_req_valid),
 	       .mmu_req_addr(w_mmu_req_addr),
 	       .mmu_req_data(w_mmu_req_data),
@@ -507,16 +512,18 @@ module
 	       
 	       .core_mem_rsp_valid(core_mem_rsp_valid),
 	       .core_mem_rsp(core_mem_rsp),
-		  .mem_rdy(w_l2_l1d_rdy),
-	        .mem_req_valid(l1d_mem_req_valid),
-	        .mem_req_uc(l1d_mem_req_uc),
+	       .mem_rdy(w_l2_l1d_rdy),
+	       .mem_req_valid(l1d_mem_req_valid),
+	       .mem_req_uc(l1d_mem_req_uc),
 	       .mem_req_addr(l1d_mem_req_addr),
 	       .mem_req_store_data(l1d_mem_req_store_data),
+	       .mem_req_tag(l1d_mem_req_tag),
 	       .mem_req_opcode(l1d_mem_req_opcode),
 	       
 	       .mem_rsp_valid(l1d_mem_rsp_valid),
 	       .mem_rsp_load_data(w_l1_mem_load_data),
-
+	       .mem_rsp_tag(w_l1d_mem_rsp_tag),
+	       .mem_rsp_addr(w_l1d_mem_rsp_addr),
 	        .mtimecmp(w_mtimecmp),
 		.mtimecmp_val(w_mtimecmp_val),
 		 
