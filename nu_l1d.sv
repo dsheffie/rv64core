@@ -16,6 +16,7 @@ import "DPI-C" function void wr_log(input longint pc,
 				    int 		   is_atomic);
 `endif
 
+//`define DEBUG
 //`define VERBOSE_L1D 1
 
 module nu_l1d(clk, 
@@ -613,20 +614,21 @@ module nu_l1d(clk,
    wire w_gen_early_req = w_could_early_req & (r_got_req ? w_cache_port1_hit : 1'b1);
    wire w_early_rsp = mem_rsp_valid ? (mem_rsp_tag != (1 << `LG_MRQ_ENTRIES)) : 1'b0;
 
-    // always_ff@(negedge clk)
-    //   begin
-    // 	 if(mem_rsp_valid)
-    // 	   begin
-    // 	      $display("resp for tag %d, addr %x, data %x at cycle %d",
-    // 		       mem_rsp_tag, mem_rsp_addr, mem_rsp_load_data, r_cycle);
-    // 	   end
-    // 	 if(mem_req_valid)
-    // 	   begin
-    // 	      $display("req for tag %d, line %x at cycle %d, opcode %d",
-    // 		       mem_req_tag, mem_req_addr[IDX_STOP-1:IDX_START], r_cycle, mem_req_opcode);
-    // 	   end
-    //   end
-
+`ifdef DEBUG
+   always_ff@(negedge clk)
+     begin
+	if(mem_rsp_valid)
+	  begin
+	     $display("resp for tag %d, addr %x, data %x at cycle %d",
+		      mem_rsp_tag, mem_rsp_addr, mem_rsp_load_data, r_cycle);
+	  end
+	if(mem_req_valid)
+	  begin
+	     $display("req for tag %d, line %x at cycle %d, opcode %d",
+		      mem_req_tag, mem_req_addr[IDX_STOP-1:IDX_START], r_cycle, mem_req_opcode);
+	  end
+     end
+`endif
 
    always_ff@(posedge clk)
      begin
@@ -638,13 +640,17 @@ module nu_l1d(clk,
 	  begin
 	     if(w_gen_early_req)
 	       begin
-		  //$display("generating early memory request with tag %d for pc %x at cycle %d",
-		  //r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0], r_req2.pc, r_cycle);
+`ifdef DEBUG
+		  $display("generating early memory request with tag %d for pc %x addr %x at cycle %d",
+			   r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0], r_req2.pc, r_req2.addr[`PA_WIDTH-1:0], r_cycle);
+`endif
 		  r_mq_inflight[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]] <= 1'b1;
 	       end
 	     if(w_early_rsp)
 	       begin
-		  //$display("early mem req returns for tag %d, addr %x at cycle %d", mem_rsp_tag, mem_rsp_addr, r_cycle);
+`ifdef DEBUG
+		  $display("early mem req returns for tag %d, addr %x at cycle %d", mem_rsp_tag, mem_rsp_addr, r_cycle);
+`endif
 		  r_mq_inflight[mem_rsp_tag[`LG_MRQ_ENTRIES-1:0]] <= 1'b0;		  
 	       end
 	  end
@@ -928,16 +934,23 @@ module nu_l1d(clk,
 	  end	
      end // always_comb
 
+   
+
 `ifdef DEBUG
     always_ff@(negedge clk)
-     begin
-	if(t_array_wr_en & (t_array_wr_addr == 'he0))
+      begin
+	 if(t_mark_invalid & mem_rsp_valid | t_mark_invalid & t_wr_array | mem_rsp_valid & t_wr_array)
+	   begin
+	      $display("multiple actions to dirty in a cycle");
+	      $stop();
+	   end
+	if(t_array_wr_en)
 	  begin
 	     $display("writing %x with value %x t_dirty_value %b t_write_dirty_en %b mem_rsp_valid %b mem_rsp_tag %d mem_rsp_addr %x at cycle %d",
 		      t_array_wr_addr, t_array_wr_data, t_dirty_value, t_write_dirty_en, mem_rsp_valid, mem_rsp_tag, mem_rsp_addr, r_cycle);
 	  end
 
-	if(mem_req_valid & (mem_req_addr[11:4] == 'he0))
+	if(mem_req_valid)
 	  begin
 	     $display("mem req opcode %d store data %x, addr %x, tag %d, cycle %d", 
 		      mem_req_opcode, mem_req_store_data, mem_req_addr, mem_req_tag, r_cycle);
@@ -1196,7 +1209,7 @@ module nu_l1d(clk,
    wire w_match_link = ({r_req.addr[63:4], 4'd0} == r_link_reg) & r_link_reg_val;
    always_comb
      begin
-	t_data = mem_rsp_valid ? mem_rsp_load_data : 
+	t_data = /* mem_rsp_valid ? mem_rsp_load_data : */
 		 (r_got_req && r_must_forward) ? r_array_wr_data : 
 		 r_array_out;
 	
@@ -1458,6 +1471,10 @@ module nu_l1d(clk,
 	       end // if (r_req2.is_store)
 	     else if(w_port2_rd_hit)
 	       begin
+`ifdef DEBUG
+		  $display("load on port2 hit cache for pc %x, addr %x, got data %x", r_req2.pc, r_req2.addr, t_rsp_data2[`M_WIDTH-1:0]);
+		  
+`endif
 		  t_core_mem_rsp.data = t_rsp_data2[`M_WIDTH-1:0];
                   t_core_mem_rsp.dst_valid = t_rsp_dst_valid2;
                   t_core_mem_rsp_valid = 1'b1;
@@ -1626,6 +1643,10 @@ module nu_l1d(clk,
 			      n_core_mem_rsp_valid = 1'b1;
 			      if(t_core_mem_rsp_valid) $stop();
 			      n_core_mem_rsp.has_cause = r_req.spans_cacheline;
+
+`ifdef DEBUG
+			      $display("load on port1 hit cache for pc %x, addr %x, got data %x, cycle %d", r_req.pc, r_req.addr, t_rsp_data[`M_WIDTH-1:0], r_cycle);
+`endif
 			   end // else: !if(r_req.is_store)
 		      end // if (r_valid_out && (r_tag_out == r_cache_tag))
 		    else if(r_valid_out && r_dirty_out && (r_tag_out != r_cache_tag) && !r_req.uncachable)

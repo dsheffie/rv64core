@@ -20,7 +20,6 @@ module
 		   l1d_state,
 		   l2_state,
 		   mmu_state,
-		   n_inflight,
 		   memq_empty,
 		   putchar_fifo_out,
 		   putchar_fifo_empty,
@@ -94,8 +93,6 @@ module
    output logic [7:0] putchar_fifo_out;
    output logic       putchar_fifo_empty;
    input logic 	      putchar_fifo_pop;
-   
-   output logic [3:0] n_inflight;
    
    output logic	took_exc;
    output logic	paging_active;
