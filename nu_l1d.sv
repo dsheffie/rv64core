@@ -15,7 +15,7 @@ import "DPI-C" function void wr_log(input longint pc,
 				    int 		   is_atomic);
 `endif
 
-`define VERBOSE_L1D 1
+//`define VERBOSE_L1D 1
 
 module nu_l1d(clk, 
 	   reset,
@@ -605,7 +605,8 @@ module nu_l1d(clk,
    wire w_could_early_req = t_push_miss & mem_rdy & !t_port2_hit_cache & 
 	!(r_hit_busy_addr2 | r_fwd_busy_addr2 | r_pop_busy_addr2 ) &
 	!(r_req2.is_store|r_req2.is_atomic) &
-	!w_port2_dirty_miss;
+	!w_port2_dirty_miss &
+	r_last_wr && (r_cache_idx == r_req2.addr[IDX_STOP-1:IDX_START]);
    
    wire w_gen_early_req = w_could_early_req & (r_got_req ? w_cache_port1_hit : 1'b1);
    wire w_early_rsp = mem_rsp_valid ? (mem_rsp_tag != (1 << `LG_MRQ_ENTRIES)) : 1'b0;
@@ -1166,8 +1167,7 @@ module nu_l1d(clk,
 		    r_req.op == MEM_AMOD ? t_amo64_data : (r_req.op == MEM_AMOW ? {{32{t_amo32_data[31]}},t_amo32_data} : r_req.data), 
 		    r_req.is_atomic ? 32'd1 : 32'd0);
 `ifdef VERBOSE_L1D			    
-	     
-	      if(r_req.is_atomic)
+	     if(r_req.is_atomic)
 	        $display("firing atomic for pc %x addr %x with data %x t_shift %x, at cycle %d for rob ptr %d, r_cache_idx %d", 
 	     		 r_req.pc, r_req.addr, r_req.data, t_shift, r_cycle, r_req.rob_ptr, r_cache_idx);
 `endif	     
@@ -1455,6 +1455,20 @@ module nu_l1d(clk,
 `ifdef VERILATOR
    always_ff@(negedge clk)
      begin
+	// if(t_array_wr_en & (t_array_wr_addr == 'he0))
+	//   begin
+	//      $display("writing %x to array at cycle %d", t_array_wr_data, r_cycle);
+	//   end
+	// if(r_got_req2 & (r_req2.addr[11:4] == 'he0))
+	//   begin
+	//      $display("write = %b addr %x pc %x to line e0 at cycle %d, dirty %b, valid %b, hit %b, push miss %b, w_gen_early_req = %b",
+	// 	      r_req2.is_store, r_req2.addr, r_req2.pc, r_cycle, r_dirty_out2, r_valid_out2, w_port2_hit_cache, t_push_miss, w_gen_early_req);
+	//   end
+	// if(mem_rsp_valid & (mem_rsp_addr[11:4] == 'he0))
+	//   begin
+	//      $display("reply for line e0, data %x, addr %x", mem_rsp_load_data, mem_rsp_addr);
+	//   end
+	
 	if(r_got_req2)
 	  begin
 	     log_l1d(r_req2.is_store & w_port2_rd_hit ? 32'd1 : 32'd0,
