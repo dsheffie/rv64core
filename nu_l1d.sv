@@ -928,6 +928,7 @@ module nu_l1d(clk,
 	  end	
      end // always_comb
 
+`ifdef DEBUG
     always_ff@(negedge clk)
      begin
 	if(t_array_wr_en & (t_array_wr_addr == 'he0))
@@ -961,7 +962,7 @@ module nu_l1d(clk,
 	// 	      (r_got_req && r_must_forward));
 	//   end
      end
-
+`endif
    
    
    ram2r1w #(.WIDTH(1), .LG_DEPTH(`LG_L1D_NUM_SETS)) dc_dirty
