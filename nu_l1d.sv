@@ -3,7 +3,8 @@
 `include "uop.vh"
 
 `ifdef VERILATOR
-import "DPI-C" function void log_l1d(input int is_st_hit,
+import "DPI-C" function void log_l1d(input int gen_early_req,
+				     input int is_st_hit,
 				     input int is_ld_hit,
 				     input int is_hit_under_miss);
    
@@ -606,7 +607,8 @@ module nu_l1d(clk,
 	!(r_hit_busy_addr2 | r_fwd_busy_addr2 | r_pop_busy_addr2 ) &
 	!(r_req2.is_store|r_req2.is_atomic) &
 	!w_port2_dirty_miss &
-	r_last_wr && (r_cache_idx == r_req2.addr[IDX_STOP-1:IDX_START]);
+	(r_last_wr ? (r_cache_idx != r_req2.addr[IDX_STOP-1:IDX_START]) : 1'b1) &
+	(n_last_wr ? (t_cache_idx != r_req2.addr[IDX_STOP-1:IDX_START]) : 1'b1);
    
    wire w_gen_early_req = w_could_early_req & (r_got_req ? w_cache_port1_hit : 1'b1);
    wire w_early_rsp = mem_rsp_valid ? (mem_rsp_tag != (1 << `LG_MRQ_ENTRIES)) : 1'b0;
@@ -829,10 +831,11 @@ module nu_l1d(clk,
 	     rr_is_retry <= r_is_retry;
 	     rr_did_reload <= r_did_reload;
 	     
+	     r_last_wr <= n_last_wr;	     
 	     rr_last_wr <= r_last_wr;
 	     r_wr_array <= t_wr_array;
 	     r_got_non_mem <= t_got_non_mem;
-	     r_last_wr <= n_last_wr;
+
 	     r_last_wr2 <= n_last_wr2;
 	     r_state <= n_state;
 	     r_mem_req_valid <= n_mem_req_valid;
@@ -902,29 +905,7 @@ module nu_l1d(clk,
    logic t_write_dirty_en;
    logic [`LG_L1D_NUM_SETS-1:0] t_dirty_wr_addr;
 
-   always_ff@(negedge clk)
-     begin
-	if(mem_rsp_valid && t_wr_array)
-	  begin
-	     $display("write port conflict, state %d, n_state %d, r_req.pc %x, resp tag %d",
-		      r_state, n_state, r_req.pc, mem_rsp_tag);
-	     $stop();
-	  end
-	// if(t_wr_array)
-	//   begin
-	//      $display("pc %x op %d rob ptr %d: t_array_data = %x, t_data = %x, t_store_shift = %x, mem_rsp_valid = %b, fwd = %b",
-	// 	      r_req.pc,
-	// 	      r_req.op,
-	// 	      r_req.rob_ptr,
-	// 	      t_array_data,
-	// 	      t_data,
-	// 	      t_store_shift,
-	// 	      mem_rsp_valid, 
-	// 	      (r_got_req && r_must_forward));
-	//   end
-     end
-			 
-	     
+  				     
    
    always_comb
      begin
@@ -945,7 +926,43 @@ module nu_l1d(clk,
 	     t_dirty_value = 1'b1;
 	     t_write_dirty_en = 1'b1;
 	  end	
+     end // always_comb
+
+    always_ff@(negedge clk)
+     begin
+	if(t_array_wr_en & (t_array_wr_addr == 'he0))
+	  begin
+	     $display("writing %x with value %x t_dirty_value %b t_write_dirty_en %b mem_rsp_valid %b mem_rsp_tag %d mem_rsp_addr %x at cycle %d",
+		      t_array_wr_addr, t_array_wr_data, t_dirty_value, t_write_dirty_en, mem_rsp_valid, mem_rsp_tag, mem_rsp_addr, r_cycle);
+	  end
+
+	if(mem_req_valid & (mem_req_addr[11:4] == 'he0))
+	  begin
+	     $display("mem req opcode %d store data %x, addr %x, tag %d, cycle %d", 
+		      mem_req_opcode, mem_req_store_data, mem_req_addr, mem_req_tag, r_cycle);
+	  end
+	
+	if(mem_rsp_valid && t_wr_array)
+	  begin
+	     $display("write port conflict, state %d, n_state %d, r_req.pc %x, resp tag %d",
+		      r_state, n_state, r_req.pc, mem_rsp_tag);
+	     $stop();
+	  end
+	// if(t_wr_array)
+	//   begin
+	//      $display("pc %x op %d rob ptr %d: t_array_data = %x, t_data = %x, t_store_shift = %x, mem_rsp_valid = %b, fwd = %b",
+	// 	      r_req.pc,
+	// 	      r_req.op,
+	// 	      r_req.rob_ptr,
+	// 	      t_array_data,
+	// 	      t_data,
+	// 	      t_store_shift,
+	// 	      mem_rsp_valid, 
+	// 	      (r_got_req && r_must_forward));
+	//   end
      end
+
+   
    
    ram2r1w #(.WIDTH(1), .LG_DEPTH(`LG_L1D_NUM_SETS)) dc_dirty
      (
@@ -1455,23 +1472,10 @@ module nu_l1d(clk,
 `ifdef VERILATOR
    always_ff@(negedge clk)
      begin
-	// if(t_array_wr_en & (t_array_wr_addr == 'he0))
-	//   begin
-	//      $display("writing %x to array at cycle %d", t_array_wr_data, r_cycle);
-	//   end
-	// if(r_got_req2 & (r_req2.addr[11:4] == 'he0))
-	//   begin
-	//      $display("write = %b addr %x pc %x to line e0 at cycle %d, dirty %b, valid %b, hit %b, push miss %b, w_gen_early_req = %b",
-	// 	      r_req2.is_store, r_req2.addr, r_req2.pc, r_cycle, r_dirty_out2, r_valid_out2, w_port2_hit_cache, t_push_miss, w_gen_early_req);
-	//   end
-	// if(mem_rsp_valid & (mem_rsp_addr[11:4] == 'he0))
-	//   begin
-	//      $display("reply for line e0, data %x, addr %x", mem_rsp_load_data, mem_rsp_addr);
-	//   end
-	
 	if(r_got_req2)
 	  begin
-	     log_l1d(r_req2.is_store & w_port2_rd_hit ? 32'd1 : 32'd0,
+	     log_l1d(w_gen_early_req ? 32'd1 : 32'd0,
+		     r_req2.is_store & w_port2_rd_hit ? 32'd1 : 32'd0,
 		     ((r_req2.is_store==1'b0) & w_port2_rd_hit) ? 32'd1 : 32'd0,
 		     ((r_req2.is_store==1'b0) & w_port2_rd_hit & (r_state != ACTIVE)) ? 32'd1 : 32'd0);
 	  end
