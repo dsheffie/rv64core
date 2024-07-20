@@ -66,10 +66,10 @@ module nu_l1d(clk,
 	   mem_req_store_data, 
 	   mem_req_opcode,
 	   //reply from memory system
-	   mem_rsp_valid,
-	   mem_rsp_load_data,
-	   mem_rsp_tag,
-	   mem_rsp_addr,	      
+	   l2_rsp_valid,
+	   l2_rsp_load_data,
+	   l2_rsp_tag,
+	   l2_rsp_addr,	      
 	   mtimecmp,
 	   mtimecmp_val,
 	   cache_accesses,
@@ -134,10 +134,10 @@ module nu_l1d(clk,
    output logic [`LG_MRQ_ENTRIES:0]   mem_req_tag;
    output logic [3:0] 			  mem_req_opcode;
 
-   input logic 				  mem_rsp_valid;
-   input logic [L1D_CL_LEN_BITS-1:0] 	  mem_rsp_load_data;
-   input logic [`LG_MRQ_ENTRIES:0] 	  mem_rsp_tag;
-   input logic [`PA_WIDTH-1:0] 		  mem_rsp_addr;
+   input logic 				  l2_rsp_valid;
+   input logic [L1D_CL_LEN_BITS-1:0] 	  l2_rsp_load_data;
+   input logic [`LG_MRQ_ENTRIES:0] 	  l2_rsp_tag;
+   input logic [`PA_WIDTH-1:0] 		  l2_rsp_addr;
    
 
    output logic [63:0]			  mtimecmp;
@@ -168,13 +168,9 @@ module nu_l1d(clk,
    
    logic 				  r_got_req, r_last_wr, n_last_wr;
    logic 				  r_wr_array;
-   
    logic 				  r_got_req2, r_last_wr2, n_last_wr2;
-   
    logic 				  rr_got_req, rr_last_wr, rr_is_retry, rr_did_reload;
-
    logic 				  r_lock_cache, n_lock_cache;
-
    logic 				  n_l2_probe_ack, r_l2_probe_ack;
    assign l2_probe_ack = r_l2_probe_ack;
    
@@ -266,6 +262,62 @@ module nu_l1d(clk,
    logic [`LG_MRQ_ENTRIES:0] r_mq_tail_ptr, n_mq_tail_ptr;
    logic [`LG_MRQ_ENTRIES:0] t_mq_tail_ptr_plus_one;
 
+   typedef struct 	     packed {
+      logic [(`PA_WIDTH-1):0] addr;
+      logic [127:0] 	      data;
+      logic [`LG_MRQ_ENTRIES:0] tag;
+   } queue_t;
+   
+   queue_t r_l2q[N_MQ_ENTRIES-1:0];
+   logic [`LG_MRQ_ENTRIES:0] r_l2q_head_ptr, n_l2q_head_ptr;
+   logic [`LG_MRQ_ENTRIES:0] r_l2q_tail_ptr, n_l2q_tail_ptr;
+
+   wire 		     w_l2q_empty = (r_l2q_tail_ptr == r_l2q_head_ptr);
+   
+   always_ff@(posedge clk)
+     begin
+	if(reset)
+	  begin
+	     r_l2q_head_ptr <= 'd0;
+	     r_l2q_tail_ptr <= 'd0;
+	  end
+	else
+	  begin
+	     r_l2q_head_ptr <= n_l2q_head_ptr;	     
+	     r_l2q_tail_ptr <= n_l2q_tail_ptr;
+	  end
+     end // always_ff@ (posedge clk)
+
+   wire 				  mem_rsp_valid = r_got_req & r_req.is_store ? 1'b0 : !w_l2q_empty;   
+   always_comb
+     begin
+	n_l2q_head_ptr = r_l2q_head_ptr;
+	n_l2q_tail_ptr = r_l2q_tail_ptr;
+	if(l2_rsp_valid)
+	  begin
+	     n_l2q_tail_ptr = r_l2q_tail_ptr + 'd1;
+	  end
+	if(mem_rsp_valid)
+	  begin
+	     n_l2q_head_ptr = r_l2q_head_ptr + 'd1;
+	  end
+     end
+
+   always_ff@(posedge clk)
+     begin
+	if(l2_rsp_valid)
+	  begin
+	     r_l2q[r_l2q_tail_ptr[`LG_MRQ_ENTRIES-1:0]].addr <= l2_rsp_addr;
+	     r_l2q[r_l2q_tail_ptr[`LG_MRQ_ENTRIES-1:0]].data <= l2_rsp_load_data;
+	     r_l2q[r_l2q_tail_ptr[`LG_MRQ_ENTRIES-1:0]].tag  <= l2_rsp_tag;
+	  end
+     end
+
+
+   wire [127:0] 			  mem_rsp_load_data = r_l2q[r_l2q_head_ptr[`LG_MRQ_ENTRIES-1:0]].data;
+   wire [`LG_MRQ_ENTRIES:0] 		  mem_rsp_tag =  r_l2q[r_l2q_head_ptr[`LG_MRQ_ENTRIES-1:0]].tag;
+   wire [`PA_WIDTH-1:0] 		  mem_rsp_addr =  r_l2q[r_l2q_head_ptr[`LG_MRQ_ENTRIES-1:0]].addr;		     
+      
    function logic [15:0] make_mask(mem_req_t r);
       logic [15:0]		  t_m, m;
       logic			  b,s,w,d;
@@ -853,8 +905,8 @@ module nu_l1d(clk,
      begin
 	if(mem_rsp_valid && t_wr_array)
 	  begin
-	     $display("write port conflict, state %d, n_state %d, r_req.pc %x",
-		      r_state, n_state, r_req.pc);
+	     $display("write port conflict, state %d, n_state %d, r_req.pc %x, resp tag %d",
+		      r_state, n_state, r_req.pc, mem_rsp_tag);
 	     $stop();
 	  end
 	// if(t_wr_array)
@@ -1375,6 +1427,7 @@ module nu_l1d(clk,
 	       end
 	     else if(r_req2.is_store)
 	       begin
+		  //$display("store miss at cycle %d", r_cycle);
 		  t_push_miss = 1'b1;
 		  t_incr_busy = 1'b1;
 		  n_stall_store = 1'b1;
