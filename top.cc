@@ -274,7 +274,7 @@ void wr_log(long long pc,
   if(not(enable_checker))
     return;
 
-  if(globals::log or 1) {
+  if(globals::log) {
     printf("pc %llx, addr %llx, data %llx, atomic %d, store queue entries %d\n",
 	   pc, addr, data, is_atomic,
 	   static_cast<int>(store_queue.size()));
