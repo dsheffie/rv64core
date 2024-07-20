@@ -6,8 +6,6 @@
 #define BRANCH_DEBUG 1
 #define CACHE_STATS 1
 
-static jmp_buf jenv;
-
 bool globals::syscall_emu = true;
 uint32_t globals::tohost_addr = 0;
 uint32_t globals::fromhost_addr = 0;
@@ -276,7 +274,7 @@ void wr_log(long long pc,
   if(not(enable_checker))
     return;
 
-  if(globals::log) {
+  if(globals::log or 1) {
     printf("pc %llx, addr %llx, data %llx, atomic %d, store queue entries %d\n",
 	   pc, addr, data, is_atomic,
 	   static_cast<int>(store_queue.size()));
@@ -641,21 +639,6 @@ static int buildArgcArgv(const char *filename, const char *sysArgs, char ***argv
   return (int)args.size();
 }
 
-
-static void catchUnixSignal(int sig) {
-  switch(sig)
-    {
-    case SIGINT:
-      std::cerr << KRED << "\ncaught SIGINT!\n" << KNRM;
-      s->brk = 1;
-      longjmp(jenv, 1);
-      break;
-    default:
-      break;
-    }
-
-}
-
 int main(int argc, char **argv) {
   static_assert(sizeof(itype) == 4, "itype must be 4 bytes");
   //std::fesetround(FE_TOWARDZERO);
@@ -766,9 +749,7 @@ int main(int argc, char **argv) {
   //signal(SIGINT, catchUnixSignal);
   
   double t0 = timestamp();
-  if(setjmp(jenv) > 0) {
-    goto sim_done;
-  }
+
   while(!Verilated::gotFinish() && (cycle < max_cycle) && (insns_retired < max_icnt)) {
     contextp->timeInc(1);  // 1 timeprecision periodd passes...    
 
@@ -1273,7 +1254,8 @@ int main(int argc, char **argv) {
     }
     ++cycle;
   }
- sim_done:
+
+
   tb->final();
   t0 = timestamp() - t0;
 

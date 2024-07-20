@@ -520,10 +520,11 @@ module
 	       .mem_req_tag(l1d_mem_req_tag),
 	       .mem_req_opcode(l1d_mem_req_opcode),
 	       
-	       .mem_rsp_valid(l1d_mem_rsp_valid),
-	       .mem_rsp_load_data(w_l1_mem_load_data),
-	       .mem_rsp_tag(w_l1d_mem_rsp_tag),
-	       .mem_rsp_addr(w_l1d_mem_rsp_addr),
+	       .l2_rsp_valid(l1d_mem_rsp_valid),
+	       .l2_rsp_load_data(w_l1_mem_load_data),
+	       .l2_rsp_tag(w_l1d_mem_rsp_tag),
+	       .l2_rsp_addr(w_l1d_mem_rsp_addr),
+		  
 	        .mtimecmp(w_mtimecmp),
 		.mtimecmp_val(w_mtimecmp_val),
 		 
