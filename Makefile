@@ -5,7 +5,7 @@ OBJ = top.o verilated.o verilated_vcd_c.o loadelf.o interpret.o disassemble.o he
 SV_SRC = core_l1d_l1i.sv core.sv exec.sv decode_riscv.sv shiftregbit.sv shift_right.sv mul.sv find_first_set.sv divider.sv l1d.sv l1i.sv machine.vh predecode.sv rob.vh uop.vh ram1r1w.sv ram2r1w.sv popcount.sv count_leading_zeros.sv fair_sched.sv csa.sv rf6r3w.sv reg_ram1rw.sv perfect_l1d.sv perfect_l1i.sv l2.sv l2_2way.sv mwidth_add.sv addsub.sv tlb.sv mmu.sv l1i_2way.sv nu_l1d.sv compute_pht_idx.sv
 
 ifeq ($(UNAME_S),Linux)
-	CXX = clang++-13 -flto
+	CXX = clang++-14 -flto
 	MAKE = make
 	VERILATOR_SRC = /home/dsheffie/local/share/verilator/include/verilated.cpp
 	VERILATOR_VCD = /home/dsheffie/local/share/verilator/include/verilated_vcd_c.cpp
