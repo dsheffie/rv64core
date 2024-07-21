@@ -609,7 +609,7 @@ module nu_l1d(clk,
 	!(r_req2.is_store|r_req2.is_atomic) &
 	!w_port2_dirty_miss &
 	(r_last_wr ? (r_cache_idx != r_req2.addr[IDX_STOP-1:IDX_START]) : 1'b1) &
-	(n_last_wr ? (t_cache_idx != r_req2.addr[IDX_STOP-1:IDX_START]) : 1'b1);
+	(n_last_wr ? (t_cache_idx != r_req2.addr[IDX_STOP-1:IDX_START]) : 1'b1) & 1'b0;
    
    wire w_gen_early_req = w_could_early_req & (r_got_req ? w_cache_port1_hit : 1'b1);
    wire w_early_rsp = mem_rsp_valid ? (mem_rsp_tag != (1 << `LG_MRQ_ENTRIES)) : 1'b0;
@@ -1433,8 +1433,7 @@ module nu_l1d(clk,
 	     if(drain_ds_complete || r_req2.op == MEM_NOP)
 	       begin
 		  t_core_mem_rsp.dst_valid = r_req2.dst_valid;
-		  t_core_mem_rsp.has_cause = r_req2.has_cause;
-		  t_core_mem_rsp.cause = r_req2.cause;
+		  t_core_mem_rsp.has_cause = r_req2.spans_cacheline;
 		  t_core_mem_rsp.addr = r_req2.addr;
 		  t_core_mem_rsp_valid = 1'b1;
 	       end
@@ -1492,6 +1491,13 @@ module nu_l1d(clk,
      begin
 	if(r_got_req2)
 	  begin
+ `ifdef DEBUG
+	     $display("triage new op for pc %x, addr %x at cycle %d w_port2_rd_hit %b drain_ds %b, nop %b, has cause %b push miss %b", 
+		      r_req2.pc, r_req2.addr, r_cycle,
+		      w_port2_rd_hit, drain_ds_complete , r_req2.op == MEM_NOP, 
+		      r_req2.has_cause,
+		      t_push_miss);
+ `endif
 	     log_l1d(w_gen_early_req ? 32'd1 : 32'd0,
 		     r_req2.is_store & w_port2_rd_hit ? 32'd1 : 32'd0,
 		     ((r_req2.is_store==1'b0) & w_port2_rd_hit) ? 32'd1 : 32'd0,
@@ -1974,15 +1980,17 @@ module nu_l1d(clk,
 	     n_tlb_addr = core_mem_va_req.addr;
 	     n_last_wr2 = core_mem_va_req.is_store;
 	    
+`ifdef DEBUG
+	     $display("ingest new op at cycle %d pc %x rob ptr %d addr %x r_state = %d, n_state = %d, idx2 %d, miss idx = %d old ack %b, mem_rsp_valid = %b",
+	      	      r_cycle,
+	      	      core_mem_va_req.pc,
+	      	      core_mem_va_req.rob_ptr,
+	      	      {core_mem_va_req.addr[63:4],4'd0},
+	      	      r_state, n_state, t_cache_idx2, r_miss_idx,
+	      	      t_old_ack,
+		      mem_rsp_valid);
+`endif // unmatched `else, `elsif or `endif
 	     
-	     // $display("cycle %d pc %x rob ptr %d addr %x r_state = %d, n_state = %d, idx2 %d, miss idx = %d old ack %b, mem_rsp_valid = %b",
-	     // 	      r_cycle,
-	     // 	      core_mem_va_req.pc,
-	     // 	      core_mem_va_req.rob_ptr,
-	     // 	      {core_mem_va_req.addr[63:4],4'd0},
-	     // 	      r_state, n_state, t_cache_idx2, r_miss_idx,
-	     // 	      t_old_ack,mem_rsp_valid);
-
 	     if(r_state != ACTIVE && (r_miss_idx ==t_cache_idx2))
 	       begin
 		  $stop();

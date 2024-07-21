@@ -849,7 +849,7 @@ module core(clk,
    
    always_ff@(negedge clk)
      begin
-	if(r_watchdog >= 64'd10000)
+	if(r_watchdog > 64'd10000)
 	  begin 
 	     $display("cycle %d : state = %d, alu complete %b, mem complete %b,head_ptr %d, complete %b,  can_retire_rob_head %b, head pc %x, empty %b, full %b, bob full %b", 
 		      r_cycle,
@@ -866,10 +866,11 @@ module core(clk,
 	     
 	     for(logic [`LG_ROB_ENTRIES:0] i = r_rob_head_ptr; i != (r_rob_tail_ptr); i=i+1)
 	       begin
-		  $display("\trob entry %d, pc %x, insn %x complete %b, sd complete %b, is br %b, faulted %b, cause %d, fetched at %d, done at %d",
+		  $display("\trob entry %d, pc %x, insn %x addr %x complete %b, sd complete %b, is br %b, faulted %b, cause %d, fetched at %d, done at %d",
 			   i[`LG_ROB_ENTRIES-1:0], 
 			   r_rob[i[`LG_ROB_ENTRIES-1:0]].pc,
-			   r_rob[i[`LG_ROB_ENTRIES-1:0]].raw_insn, 
+			   r_rob[i[`LG_ROB_ENTRIES-1:0]].raw_insn,
+			   r_rob_addr[i[`LG_ROB_ENTRIES-1:0]],
 			   r_rob_complete[i[`LG_ROB_ENTRIES-1:0]],
 			   r_rob_sd_complete[i[`LG_ROB_ENTRIES-1:0]],
 			   r_rob[i[`LG_ROB_ENTRIES-1:0]].is_br,
@@ -1286,7 +1287,7 @@ module core(clk,
 	       //if(r_irq)
 	       //begin
 	       //$display("took fault for %x with cause %d at cycle %d, priv %d, tval %x, irq %b, epc %x, cycle %d", 
-	       //t_rob_head.pc, t_rob_head.cause, r_cycle, priv, n_tval, r_irq, r_epc, r_cycle);
+	       //	t_rob_head.pc, t_rob_head.cause, r_cycle, priv, n_tval, r_irq, r_epc, r_cycle);
 	       //end
 	       
 	       t_bump_rob_head = 1'b1;
@@ -1295,6 +1296,8 @@ module core(clk,
 		    n_flush_req_l1i = 1'b1;
 		    n_flush_req_l1d = 1'b1;
 		    n_state = FLUSH_FOR_HALT;
+		    n_pending_badva = t_rob_head.cause == MISALIGNED_FETCH;
+		    n_pending_ii =  t_rob_head.cause == ILLEGAL_INSTRUCTION;
 		 end
 	       else
 		 begin
