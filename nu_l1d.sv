@@ -608,8 +608,9 @@ module nu_l1d(clk,
 	!(r_hit_busy_addr2 | r_fwd_busy_addr2 | r_pop_busy_addr2 ) &
 	!(r_req2.is_store|r_req2.is_atomic) &
 	!w_port2_dirty_miss &
+	(rr_last_wr ? (rr_cache_idx !=  r_req2.addr[IDX_STOP-1:IDX_START]) : 1'b1) &
 	(r_last_wr ? (r_cache_idx != r_req2.addr[IDX_STOP-1:IDX_START]) : 1'b1) &
-	(n_last_wr ? (t_cache_idx != r_req2.addr[IDX_STOP-1:IDX_START]) : 1'b1) & 1'b0;
+	(n_last_wr ? (t_cache_idx != r_req2.addr[IDX_STOP-1:IDX_START]) : 1'b1);
    
    wire w_gen_early_req = w_could_early_req & (r_got_req ? w_cache_port1_hit : 1'b1);
    wire w_early_rsp = mem_rsp_valid ? (mem_rsp_tag != (1 << `LG_MRQ_ENTRIES)) : 1'b0;
@@ -624,8 +625,8 @@ module nu_l1d(clk,
 	  end
 	if(mem_req_valid)
 	  begin
-	     $display("req for tag %d, line %x at cycle %d, opcode %d",
-		      mem_req_tag, mem_req_addr[IDX_STOP-1:IDX_START], r_cycle, mem_req_opcode);
+	     $display("req for tag %d, line %x at cycle %d, opcode %d, r_last_wr = %b",
+		      mem_req_tag, mem_req_addr[IDX_STOP-1:IDX_START], r_cycle, mem_req_opcode, r_last_wr);
 	  end
      end
 `endif
@@ -641,8 +642,8 @@ module nu_l1d(clk,
 	     if(w_gen_early_req)
 	       begin
 `ifdef DEBUG
-		  $display("generating early memory request with tag %d for pc %x addr %x at cycle %d",
-			   r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0], r_req2.pc, r_req2.addr[`PA_WIDTH-1:0], r_cycle);
+		  $display("generating early memory request with tag %d for pc %x addr %x at cycle %d, r_last_wr = %b, rr_last_wr = %b",
+			   r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0], r_req2.pc, r_req2.addr[`PA_WIDTH-1:0], r_cycle, r_last_wr, rr_last_wr);
 `endif
 		  r_mq_inflight[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]] <= 1'b1;
 	       end
@@ -944,12 +945,20 @@ module nu_l1d(clk,
 	      $display("multiple actions to dirty in a cycle");
 	      $stop();
 	   end
-	if(t_array_wr_en)
+	 
+	if(t_wr_array)
 	  begin
-	     $display("writing %x with value %x t_dirty_value %b t_write_dirty_en %b mem_rsp_valid %b mem_rsp_tag %d mem_rsp_addr %x at cycle %d",
+	     $display("store  to line %x with value %x t_dirty_value %b t_write_dirty_en %b at cycle %d",
+		      t_array_wr_addr, t_array_wr_data, t_dirty_value, t_write_dirty_en, r_cycle);
+	  end
+
+	 if(mem_rsp_valid)
+	  begin
+	     $display("reload to line %x with value %x t_dirty_value %b t_write_dirty_en %b at cycle %d",
 		      t_array_wr_addr, t_array_wr_data, t_dirty_value, t_write_dirty_en, mem_rsp_valid, mem_rsp_tag, mem_rsp_addr, r_cycle);
 	  end
 
+	 
 	if(mem_req_valid)
 	  begin
 	     $display("mem req opcode %d store data %x, addr %x, tag %d, cycle %d", 
@@ -1092,6 +1101,7 @@ module nu_l1d(clk,
 
 
 
+   wire [`LG_L1D_CL_LEN+2:0] w_shift_amt2 = {r_req2.addr[`LG_L1D_CL_LEN-1:0], 3'd0};
    
    always_comb
      begin
@@ -1100,7 +1110,7 @@ module nu_l1d(clk,
 	t_rsp_dst_valid2 = 1'b0;
 	t_rsp_data2 = 'd0;
 
-	t_shift_2 = t_data2 >> {r_req2.addr[`LG_L1D_CL_LEN-1:0], 3'd0};
+	t_shift_2 = t_data2 >> w_shift_amt2;
 
 	
 	case(r_req2.op)
@@ -1471,7 +1481,9 @@ module nu_l1d(clk,
 	     else if(w_port2_rd_hit)
 	       begin
 `ifdef DEBUG
-		  $display("load on port2 hit cache for pc %x, addr %x, got data %x", r_req2.pc, r_req2.addr, t_rsp_data2[`M_WIDTH-1:0]);
+		  $display("cycle %d load on port2 hit cache for pc %x, addr %x, got data %x, t_data2 = %x, t_shift_2 = %x, shift = %d", 
+			   r_cycle, r_req2.pc, r_req2.addr, t_rsp_data2[`M_WIDTH-1:0], t_data2, t_shift_2, w_shift_amt2[6:3]);
+		  
 		  
 `endif
 		  t_core_mem_rsp.data = t_rsp_data2[`M_WIDTH-1:0];
