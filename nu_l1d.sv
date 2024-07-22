@@ -606,7 +606,8 @@ module nu_l1d(clk,
    
    wire w_could_early_req = t_push_miss & mem_rdy & !t_port2_hit_cache & 
 	!(r_hit_busy_addr2 | r_fwd_busy_addr2 | r_pop_busy_addr2 ) &
-	!(r_req2.is_store|r_req2.is_atomic) &
+	r_req2.is_load &
+	w_tlb_hit &
 	!w_port2_dirty_miss &
 	(rr_last_wr ? (rr_cache_idx !=  r_req2.addr[IDX_STOP-1:IDX_START]) : 1'b1) &
 	(r_last_wr ? (r_cache_idx != r_req2.addr[IDX_STOP-1:IDX_START]) : 1'b1) &
@@ -940,6 +941,15 @@ module nu_l1d(clk,
 `ifdef DEBUG
     always_ff@(negedge clk)
       begin
+	 if(t_got_req2)
+	   begin
+	      $display("ingest t_cache_idx2 = %x at cycle %d", t_cache_idx2, r_cycle);
+	   end
+	 if(t_replay_req2)
+	   begin
+	      $display("replay t_cache_idx2 = %x at cycle %d", t_cache_idx2, r_cycle);
+	   end	 
+	 
 	 if(t_mark_invalid & mem_rsp_valid | t_mark_invalid & t_wr_array | mem_rsp_valid & t_wr_array)
 	   begin
 	      $display("multiple actions to dirty in a cycle");
@@ -955,15 +965,24 @@ module nu_l1d(clk,
 	 if(mem_rsp_valid)
 	  begin
 	     $display("reload to line %x with value %x t_dirty_value %b t_write_dirty_en %b at cycle %d",
-		      t_array_wr_addr, t_array_wr_data, t_dirty_value, t_write_dirty_en, mem_rsp_valid, mem_rsp_tag, mem_rsp_addr, r_cycle);
+		      t_array_wr_addr, t_array_wr_data, t_dirty_value, t_write_dirty_en, mem_rsp_valid, mem_rsp_tag, r_cycle);
 	  end
 
 	 
-	if(mem_req_valid)
+	if(mem_req_valid & (mem_req_opcode == 4'd4))
 	  begin
-	     $display("mem req opcode %d store data %x, addr %x, tag %d, cycle %d", 
-		      mem_req_opcode, mem_req_store_data, mem_req_addr, mem_req_tag, r_cycle);
+	     $display("mem req opcode %d addr %x, tag %d, cycle %d", 
+		      mem_req_opcode, mem_req_addr, mem_req_tag, r_cycle);
 	  end
+
+
+	if(mem_req_valid & (mem_req_opcode == 4'd7))
+	  begin
+	     $display("mem req opcode %d addr %x data %x, tag %d, cycle %d", 
+		      mem_req_opcode, mem_req_addr, mem_req_store_data, mem_req_tag, r_cycle);
+	  end
+
+	 	 
 	
 	if(mem_rsp_valid && t_wr_array)
 	  begin
@@ -1504,11 +1523,20 @@ module nu_l1d(clk,
 	if(r_got_req2)
 	  begin
  `ifdef DEBUG
-	     $display("triage new op for pc %x, addr %x at cycle %d w_port2_rd_hit %b drain_ds %b, nop %b, has cause %b push miss %b", 
+	     $display("triage new op for pc %x, addr %x at cycle %d dirty %b valid %b w_port2_rd_hit %b drain_ds %b, nop %b, has cause %b push miss %b, store %b load %b ll %b atomic %b, tlb store exec %b, pending tlb miss %b flush %b, tlb hit %b", 
 		      r_req2.pc, r_req2.addr, r_cycle,
+		      r_dirty_out2, r_valid_out2,
 		      w_port2_rd_hit, drain_ds_complete , r_req2.op == MEM_NOP, 
 		      r_req2.has_cause,
-		      t_push_miss);
+		      t_push_miss,
+		      r_req2.is_store,
+		      r_req2.is_load,
+		      r_req2.is_ll,
+		      r_req2.is_atomic,
+		      w_tlb_st_exc,
+		      r_pending_tlb_miss,
+		      drain_ds_complete || r_req2.op == MEM_NOP,
+		      w_tlb_hit);
  `endif
 	     log_l1d(w_gen_early_req ? 32'd1 : 32'd0,
 		     r_req2.is_store & w_port2_rd_hit ? 32'd1 : 32'd0,
@@ -1979,6 +2007,15 @@ module nu_l1d(clk,
 	     n_req2.cause = (r_req2.is_store | r_req2.is_atomic) ? 
 			    STORE_PAGE_FAULT : LOAD_PAGE_FAULT;
 	  end
+	else if(t_replay_req2)
+	  begin
+	     t_cache_idx2 = r_req2.addr[IDX_STOP-1:IDX_START];
+	     t_cache_tag2 = r_req2.addr[`PA_WIDTH-1:IDX_STOP];
+	     t_got_req2 = 1'b1;
+	     t_tlb_xlat = 1'b1;
+	     n_tlb_addr = r_req2.addr;
+	     n_last_wr2 = r_req2.is_store;
+	  end
         else if(t_accept)
 	  begin
 	     //if(r_state != ACTIVE) $stop();
@@ -1993,8 +2030,10 @@ module nu_l1d(clk,
 	     n_last_wr2 = core_mem_va_req.is_store;
 	    
 `ifdef DEBUG
-	     $display("ingest new op at cycle %d pc %x rob ptr %d addr %x r_state = %d, n_state = %d, idx2 %d, miss idx = %d old ack %b, mem_rsp_valid = %b",
+	     $display("ingest new op at cycle %d atomic %b, ll %b pc %x rob ptr %d addr %x r_state = %d, n_state = %d, idx2 %d, miss idx = %d old ack %b, mem_rsp_valid = %b",
 	      	      r_cycle,
+		      core_mem_va_req.is_atomic,
+		      core_mem_va_req.is_ll,
 	      	      core_mem_va_req.pc,
 	      	      core_mem_va_req.rob_ptr,
 	      	      {core_mem_va_req.addr[63:4],4'd0},
