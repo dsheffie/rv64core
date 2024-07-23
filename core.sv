@@ -839,7 +839,7 @@ module core(clk,
      end
 `endif
    
-//`define DUMP_ROB
+`define DUMP_ROB
 `ifdef DUMP_ROB
    logic [63:0] r_watchdog;
    always_ff@(posedge clk)
@@ -849,7 +849,7 @@ module core(clk,
    
    always_ff@(negedge clk)
      begin
-	if(r_watchdog > 64'd10000)
+	if(r_watchdog > 64'd1000000)
 	  begin 
 	     $display("cycle %d : state = %d, alu complete %b, mem complete %b,head_ptr %d, complete %b,  can_retire_rob_head %b, head pc %x, empty %b, full %b, bob full %b", 
 		      r_cycle,
@@ -879,8 +879,9 @@ module core(clk,
 			   r_rob[i[`LG_ROB_ENTRIES-1:0]].fetch_cycle,
 			   r_rob[i[`LG_ROB_ENTRIES-1:0]].complete_cycle
 			   );
-	       end
-	  end
+	       end // for (logic [`LG_ROB_ENTRIES:0] i = r_rob_head_ptr; i != (r_rob_tail_ptr); i=i+1)
+	     $stop();
+	  end // if (r_watchdog > 64'd1000000)
      end // always_ff@ (negedge clk)
 `endif
 

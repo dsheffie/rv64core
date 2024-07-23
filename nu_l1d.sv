@@ -604,7 +604,7 @@ module nu_l1d(clk,
    wire	w_port2_dirty_miss = r_valid_out2 && r_dirty_out2 && (r_tag_out2 != w_tlb_pa[`PA_WIDTH-1:IDX_STOP]);
    wire	w_port2_hit_cache = r_valid_out2 && (r_tag_out2 == w_tlb_pa[`PA_WIDTH-1:IDX_STOP]);
    
-   wire w_could_early_req = t_push_miss & mem_rdy & !t_port2_hit_cache & 
+   wire w_could_early_req = t_push_miss & mem_rdy & !t_port2_hit_cache &
 	!(r_hit_busy_addr2 | r_fwd_busy_addr2 | r_pop_busy_addr2 ) &
 	r_req2.is_load &
 	w_tlb_hit &
@@ -1462,7 +1462,8 @@ module nu_l1d(clk,
 	     if(drain_ds_complete || r_req2.op == MEM_NOP)
 	       begin
 		  t_core_mem_rsp.dst_valid = r_req2.dst_valid;
-		  t_core_mem_rsp.has_cause = r_req2.spans_cacheline;
+		  t_core_mem_rsp.has_cause = r_req2.has_cause;
+		  t_core_mem_rsp.cause = r_req2.cause;
 		  t_core_mem_rsp.addr = r_req2.addr;
 		  t_core_mem_rsp_valid = 1'b1;
 	       end
@@ -1492,7 +1493,7 @@ module nu_l1d(clk,
 		  n_stall_store = 1'b1;
 		  //ack early
 		  t_core_mem_rsp.dst_valid = 1'b0;
-		  t_core_mem_rsp_valid = 1'b1;
+		  t_core_mem_rsp_valid = 1'b1;		 
 		  t_core_mem_rsp.has_cause = r_req2.spans_cacheline;
 		  t_core_mem_rsp.mark_page_dirty = w_tlb_st_not_dirty;
 		  t_core_mem_rsp.addr = r_req2.addr;
