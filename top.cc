@@ -245,16 +245,26 @@ void start_log(int l) {
 }
 
 static uint64_t log_l1d_accesses = 0;
+static uint64_t log_l1d_push_miss = 0;
+static uint64_t log_l1d_push_miss_hit_inflight = 0;
 static uint64_t log_l1d_early_reqs = 0;
 static uint64_t log_l1d_is_ld_hit = 0;
 static uint64_t log_l1d_is_st_hit = 0;
 static uint64_t log_l1d_is_hit_under_miss = 0;
 
 void log_l1d(int is_early_req,
+	     int is_push_miss,
+	     int is_push_miss_hit_inflight,
 	     int is_st_hit,
 	     int is_ld_hit,
 	     int is_hit_under_miss) {
   log_l1d_accesses++;
+  if(is_push_miss) {
+    log_l1d_push_miss++;
+  }
+  if(is_push_miss_hit_inflight) {
+    log_l1d_push_miss_hit_inflight++;
+  }
   if(is_early_req) {
     log_l1d_early_reqs++;
   }
@@ -1517,11 +1527,13 @@ int main(int argc, char **argv) {
     std::cout << "l1d accesses = " << tb->l1d_cache_accesses << "\n";
 
 
-    std::cout << "log_l1d_accesses = " << log_l1d_accesses << "\n";
-    std::cout << "log_l1d_early_reqs = " << log_l1d_early_reqs << "\n";
-    std::cout << "log_l1d_is_ld_hit = " << log_l1d_is_ld_hit << "\n";
-    std::cout << "log_l1d_is_st_hit = " << log_l1d_is_st_hit << "\n";
-    std::cout << "log_l1d_is_hit_under_miss = " << log_l1d_is_hit_under_miss << "\n";
+    std::cout << "log_l1d_accesses               = " << log_l1d_accesses << "\n";
+    std::cout << "log_l1d_push_miss              = " <<log_l1d_push_miss << "\n";
+    std::cout << "log_l1d_push_miss_hit_inflight = " << log_l1d_push_miss_hit_inflight << "\n";
+    std::cout << "log_l1d_early_reqs             = " << log_l1d_early_reqs << "\n";
+    std::cout << "log_l1d_is_ld_hit              = " << log_l1d_is_ld_hit << "\n";
+    std::cout << "log_l1d_is_st_hit              = " << log_l1d_is_st_hit << "\n";
+    std::cout << "log_l1d_is_hit_under_miss      = " << log_l1d_is_hit_under_miss << "\n";
 
     double tip_cycles = 0.0;
     for(auto &p : tip_map) {
