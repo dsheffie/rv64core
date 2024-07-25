@@ -4,6 +4,8 @@
 
 `ifdef VERILATOR
 import "DPI-C" function void log_l1d(input int gen_early_req,
+				     input int push_miss,
+				     input int push_miss_hit_inflight,
 				     input int is_st_hit,
 				     input int is_ld_hit,
 				     input int is_hit_under_miss);
@@ -1540,6 +1542,8 @@ module nu_l1d(clk,
 		      w_tlb_hit);
  `endif
 	     log_l1d(w_gen_early_req ? 32'd1 : 32'd0,
+		     t_push_miss & r_req2.is_load ? 32'd1 : 32'0,
+		     t_push_miss & r_req2.is_load & (r_hit_busy_addr2 | r_fwd_busy_addr2 | r_pop_busy_addr2) ? 32'd1 : 32'd0,
 		     r_req2.is_store & w_port2_rd_hit ? 32'd1 : 32'd0,
 		     ((r_req2.is_store==1'b0) & w_port2_rd_hit) ? 32'd1 : 32'd0,
 		     ((r_req2.is_store==1'b0) & w_port2_rd_hit & (r_state != ACTIVE)) ? 32'd1 : 32'd0);
