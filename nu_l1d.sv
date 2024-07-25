@@ -350,6 +350,8 @@ module nu_l1d(clk,
    
    logic [N_MQ_ENTRIES-1:0] r_mq_addr_valid;
    logic [N_MQ_ENTRIES-1:0] r_mq_inflight;
+   logic [IDX_STOP-IDX_START-1:0] r_last_early;
+   logic			  r_last_early_valid;
    
    logic [IDX_STOP-IDX_START-1:0] r_mq_addr[N_MQ_ENTRIES-1:0];
    logic [15:0]			  r_mq_mask[N_MQ_ENTRIES-1:0];
@@ -605,9 +607,12 @@ module nu_l1d(clk,
 
    wire	w_port2_dirty_miss = r_valid_out2 && r_dirty_out2 && (r_tag_out2 != w_tlb_pa[`PA_WIDTH-1:IDX_STOP]);
    wire	w_port2_hit_cache = r_valid_out2 && (r_tag_out2 == w_tlb_pa[`PA_WIDTH-1:IDX_STOP]);
+
+   
    
    wire w_could_early_req = t_push_miss & mem_rdy & !t_port2_hit_cache &
-	!(r_hit_busy_addr2 | r_fwd_busy_addr2 | r_pop_busy_addr2 ) &
+	(r_last_early_valid ? (r_last_early != r_req2.addr[IDX_STOP-1:IDX_START]) : 1'b1) &
+	!(r_hit_busy_line2 | r_fwd_busy_addr2 | r_pop_busy_addr2 ) &
 	r_req2.is_load &
 	w_tlb_hit &
 	!w_port2_dirty_miss &
@@ -618,6 +623,13 @@ module nu_l1d(clk,
    wire w_gen_early_req = w_could_early_req & (r_got_req ? w_cache_port1_hit : 1'b1);
    wire w_early_rsp = mem_rsp_valid ? (mem_rsp_tag != (1 << `LG_MRQ_ENTRIES)) : 1'b0;
 
+
+   always_ff@(posedge clk)
+     begin
+	r_last_early_valid <= reset ? 1'b0 : w_gen_early_req;
+	r_last_early <= r_req2.addr[IDX_STOP-1:IDX_START];
+     end
+   
 `ifdef DEBUG
    always_ff@(negedge clk)
      begin
@@ -644,9 +656,22 @@ module nu_l1d(clk,
 	  begin
 	     if(w_gen_early_req)
 	       begin
+`ifdef VERILATOR
+		  for(integer i = 0; i < N_MQ_ENTRIES; i=i+1)
+		    begin
+		       if(r_mq_addr_valid[i] & (r_mq_addr[i] == r_req2.addr[IDX_STOP-1:IDX_START]))
+			 begin
+			    $display("line %x already in flight for entry %d", r_mq_addr[i], i);
+			    $stop();
+			 end
+		    end
+`endif
+		  
 `ifdef DEBUG
-		  $display("generating early memory request with tag %d for pc %x addr %x at cycle %d, r_last_wr = %b, rr_last_wr = %b",
-			   r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0], r_req2.pc, r_req2.addr[`PA_WIDTH-1:0], r_cycle, r_last_wr, rr_last_wr);
+
+		  $display("generating early memory request with tag %d for pc %x addr %x at cycle %d, r_last_wr = %b, rr_last_wr = %b, line %x",
+			   r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0], r_req2.pc, r_req2.addr[`PA_WIDTH-1:0], r_cycle, r_last_wr, rr_last_wr, r_req2.addr[IDX_STOP-1:IDX_START]);
+		  
 `endif
 		  r_mq_inflight[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]] <= 1'b1;
 	       end
@@ -696,10 +721,12 @@ module nu_l1d(clk,
 	  begin
 	     if(t_push_miss)
 	       begin
+		  //$display("entry %d will be valid at cycle %d", r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0], r_cycle+'d1);
 		  r_mq_addr_valid[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]] <= 1'b1;
 	       end
 	     if(t_pop_mq)
 	       begin
+		  //$display("entry %d will be clear at cycle %d", r_mq_head_ptr[`LG_MRQ_ENTRIES-1:0], r_cycle+'d1);
 		  r_mq_addr_valid[r_mq_head_ptr[`LG_MRQ_ENTRIES-1:0]] <= 1'b0;		  
 	       end
 	  end
@@ -709,11 +736,11 @@ module nu_l1d(clk,
    logic [N_MQ_ENTRIES-1:0] r_hit_busy_addrs;
    logic 		   r_hit_busy_addr;
    
-   wire [N_MQ_ENTRIES-1:0] w_hit_busy_addrs2;
+   wire [N_MQ_ENTRIES-1:0] w_hit_busy_addrs2, w_hit_busy_line2;
    wire [N_MQ_ENTRIES-1:0] w_addr_intersect;
    
    logic [N_MQ_ENTRIES-1:0] r_hit_busy_addrs2;
-   logic 		   r_hit_busy_addr2, r_hit_busy_word_addr2;
+   logic		    r_hit_busy_addr2, r_hit_busy_line2;
 
    wire [N_MQ_ENTRIES-1:0] w_unaligned_in_mq;
    logic 		   r_any_unaligned;
@@ -722,12 +749,12 @@ module nu_l1d(clk,
    generate
       for(genvar i = 0; i < N_MQ_ENTRIES; i=i+1)
 	begin
-	   assign w_hit_busy_addrs[i] = (t_pop_mq && r_mq_head_ptr[`LG_MRQ_ENTRIES-1:0] == i) ? 1'b0 :
-					r_mq_addr_valid[i] ? r_mq_addr[i] == t_cache_idx : 
-					1'b0;
+	   assign w_hit_busy_addrs[i] = (t_pop_mq && r_mq_head_ptr[`LG_MRQ_ENTRIES-1:0] == i) ? 1'b0 : 
+					r_mq_addr_valid[i] ? r_mq_addr[i] == t_cache_idx : 1'b0;
 
 	   assign w_addr_intersect[i] = (|(r_mq_mask[i] & t_req_mask));
 	   assign w_hit_busy_addrs2[i] = r_mq_addr_valid[i] ? (r_mq_addr[i] == t_cache_idx2)&w_addr_intersect[i] : 1'b0;
+	   assign w_hit_busy_line2[i] = r_mq_addr_valid[i] ? (r_mq_addr[i] == t_cache_idx2) : 1'b0;
 	   assign w_unaligned_in_mq[i] = r_mq_addr_valid[i] ? r_mq_is_unaligned[i] : 1'b0;
 	end
    endgenerate
@@ -735,7 +762,8 @@ module nu_l1d(clk,
    always_ff@(posedge clk)
      begin
 	r_hit_busy_addr <= reset ? 1'b0 : |w_hit_busy_addrs;
-	r_hit_busy_addr2 <= reset ? 1'b0 : |w_hit_busy_addrs2;	
+	r_hit_busy_addr2 <= reset ? 1'b0 : |w_hit_busy_addrs2;
+	r_hit_busy_line2 <= reset ? 1'b0 : |w_hit_busy_line2;
 	r_fwd_busy_addr2 <=  reset ? 1'b0 : (t_push_miss & (t_cache_idx2 == r_cache_idx2));
 	r_pop_busy_addr2 <= reset ? 1'b0 : t_pop_mq;
 	r_hit_busy_addrs <= t_got_req ? w_hit_busy_addrs : {{N_MQ_ENTRIES{1'b1}}};
@@ -1526,7 +1554,8 @@ module nu_l1d(clk,
 	if(r_got_req2)
 	  begin
  `ifdef DEBUG
-	     $display("triage new op for pc %x, addr %x at cycle %d dirty %b valid %b w_port2_rd_hit %b drain_ds %b, nop %b, has cause %b push miss %b, store %b load %b ll %b atomic %b, tlb store exec %b, pending tlb miss %b flush %b, tlb hit %b", 
+	     $display("triage new op for r_hit_busy_addr = %b, pc %x, addr %x at cycle %d dirty %b valid %b w_port2_rd_hit %b drain_ds %b, nop %b, has cause %b push miss %b, store %b load %b ll %b atomic %b, tlb store exec %b, pending tlb miss %b flush %b, tlb hit %b",
+		      r_hit_busy_line2,
 		      r_req2.pc, r_req2.addr, r_cycle,
 		      r_dirty_out2, r_valid_out2,
 		      w_port2_rd_hit, drain_ds_complete , r_req2.op == MEM_NOP, 
@@ -1543,7 +1572,7 @@ module nu_l1d(clk,
  `endif
 	     log_l1d(w_gen_early_req ? 32'd1 : 32'd0,
 		     t_push_miss & r_req2.is_load ? 32'd1 : 32'0,
-		     t_push_miss & r_req2.is_load & (r_hit_busy_addr2 | r_fwd_busy_addr2 | r_pop_busy_addr2) ? 32'd1 : 32'd0,
+		     t_push_miss & r_req2.is_load & (r_hit_busy_line2 | r_fwd_busy_addr2 | r_pop_busy_addr2) ? 32'd1 : 32'd0,
 		     r_req2.is_store & w_port2_rd_hit ? 32'd1 : 32'd0,
 		     ((r_req2.is_store==1'b0) & w_port2_rd_hit) ? 32'd1 : 32'd0,
 		     ((r_req2.is_store==1'b0) & w_port2_rd_hit & (r_state != ACTIVE)) ? 32'd1 : 32'd0);
@@ -1779,7 +1808,7 @@ module nu_l1d(clk,
 	       
 	       if(!mem_q_empty && !t_got_miss && !r_lock_cache && !n_pending_tlb_miss)
 		 begin		    
-		    if(!t_mh_block & (|r_mq_inflight == 1'b0) /*&& (r_mq_inflight[r_mq_head_ptr[`LG_MRQ_ENTRIES-1:0]] == 1'b0) */ )
+		    if(!t_mh_block & (r_mq_inflight[r_mq_head_ptr[`LG_MRQ_ENTRIES-1:0]] == 1'b0)  )
 		      begin
 			 //$display("replaying mem op, early req %b", 
 			 //r_mq_inflight[r_mq_head_ptr[`LG_MRQ_ENTRIES-1:0]]);
@@ -2045,6 +2074,14 @@ module nu_l1d(clk,
 	      	      r_state, n_state, t_cache_idx2, r_miss_idx,
 	      	      t_old_ack,
 		      mem_rsp_valid);
+		  for(integer i = 0; i < N_MQ_ENTRIES; i=i+1)
+		    begin
+		       if(r_mq_addr_valid[i])
+			 begin
+			    $display("\tline %x already in flight for entry %d", r_mq_addr[i], i);
+			 end
+		    end
+	     
 `endif // unmatched `else, `elsif or `endif
 	     
 	     if(r_state != ACTIVE && (r_miss_idx ==t_cache_idx2))
