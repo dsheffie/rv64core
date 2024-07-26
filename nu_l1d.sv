@@ -745,16 +745,20 @@ module nu_l1d(clk,
    wire [N_MQ_ENTRIES-1:0] w_unaligned_in_mq;
    logic 		   r_any_unaligned;
    logic		   r_fwd_busy_addr2, r_pop_busy_addr2;
+
    
    generate
       for(genvar i = 0; i < N_MQ_ENTRIES; i=i+1)
 	begin
+	   
 	   assign w_hit_busy_addrs[i] = (t_pop_mq && r_mq_head_ptr[`LG_MRQ_ENTRIES-1:0] == i) ? 1'b0 : 
 					r_mq_addr_valid[i] ? r_mq_addr[i] == t_cache_idx : 1'b0;
 
 	   assign w_addr_intersect[i] = (|(r_mq_mask[i] & t_req_mask));
-	   assign w_hit_busy_addrs2[i] = r_mq_addr_valid[i] ? (r_mq_addr[i] == t_cache_idx2)&w_addr_intersect[i] : 1'b0;
+	   
 	   assign w_hit_busy_line2[i] = r_mq_addr_valid[i] ? (r_mq_addr[i] == t_cache_idx2) : 1'b0;
+	   assign w_hit_busy_addrs2[i] = w_hit_busy_line2[i] & w_addr_intersect[i];
+
 	   assign w_unaligned_in_mq[i] = r_mq_addr_valid[i] ? r_mq_is_unaligned[i] : 1'b0;
 	end
    endgenerate
@@ -1489,13 +1493,23 @@ module nu_l1d(clk,
 		  n_pending_tlb_zero_page = 1'b0;
 	       end
 	     
-	     if(drain_ds_complete || r_req2.op == MEM_NOP)
+	     if(drain_ds_complete)
 	       begin
 		  t_core_mem_rsp.dst_valid = r_req2.dst_valid;
 		  t_core_mem_rsp.has_cause = r_req2.has_cause;
 		  t_core_mem_rsp.cause = r_req2.cause;
 		  t_core_mem_rsp.addr = r_req2.addr;
 		  t_core_mem_rsp_valid = 1'b1;
+	       end
+	     else if(r_req2.op == MEM_NOP)
+	       begin
+		  if(r_req2.spans_cacheline == 1'b0)
+		    $stop();
+		  t_core_mem_rsp.dst_valid = r_req2.dst_valid;
+		  t_core_mem_rsp.has_cause = 1'b1;
+		  t_core_mem_rsp.cause = MISALIGNED_FETCH;
+		  t_core_mem_rsp.addr = r_req2.addr;
+		  t_core_mem_rsp_valid = 1'b1;		  
 	       end
 	     else if(!w_tlb_hit)
 	       begin
@@ -1554,7 +1568,8 @@ module nu_l1d(clk,
 	if(r_got_req2)
 	  begin
  `ifdef DEBUG
-	     $display("triage new op for r_hit_busy_addr = %b, pc %x, addr %x at cycle %d dirty %b valid %b w_port2_rd_hit %b drain_ds %b, nop %b, has cause %b push miss %b, store %b load %b ll %b atomic %b, tlb store exec %b, pending tlb miss %b flush %b, tlb hit %b",
+	     
+	     $display("triage new op for r_hit_busy_addr = %b, pc %x, addr %x at cycle %d dirty %b valid %b w_port2_rd_hit %b drain_ds %b, nop %b, has cause %b push miss %b, store %b load %b ll %b atomic %b, tlb store exec %b, pending tlb miss %b flush %b, tlb hit %b, spans cacheline %b",
 		      r_hit_busy_line2,
 		      r_req2.pc, r_req2.addr, r_cycle,
 		      r_dirty_out2, r_valid_out2,
@@ -1568,7 +1583,11 @@ module nu_l1d(clk,
 		      w_tlb_st_exc,
 		      r_pending_tlb_miss,
 		      drain_ds_complete || r_req2.op == MEM_NOP,
-		      w_tlb_hit);
+		      w_tlb_hit,
+		      r_req2.spans_cacheline);
+
+	     //if(r_req2.spans_cacheline) $stop();
+	     
  `endif
 	     log_l1d(w_gen_early_req ? 32'd1 : 32'd0,
 		     t_push_miss & r_req2.is_load ? 32'd1 : 32'0,
