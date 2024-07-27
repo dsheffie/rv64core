@@ -10,6 +10,8 @@ import "DPI-C" function void log_l1d(input int gen_early_req,
 				     input int is_ld_hit,
 				     input int is_hit_under_miss);
    
+import "DPI-C" function void log_l1d_miss(input int dirty);
+
    
 import "DPI-C" function void wr_log(input longint pc,
 				    input int 		   rob_ptr,
@@ -73,6 +75,7 @@ module nu_l1d(clk,
 	   l2_rsp_valid,
 	   l2_rsp_load_data,
 	   l2_rsp_tag,
+	   l2_rsp_writeback,
 	   l2_rsp_addr,	      
 	   mtimecmp,
 	   mtimecmp_val,
@@ -142,6 +145,7 @@ module nu_l1d(clk,
    input logic [L1D_CL_LEN_BITS-1:0] 	  l2_rsp_load_data;
    input logic [`LG_MRQ_ENTRIES:0] 	  l2_rsp_tag;
    input logic [`PA_WIDTH-1:0] 		  l2_rsp_addr;
+   input logic				  l2_rsp_writeback;
    
 
    output logic [63:0]			  mtimecmp;
@@ -237,7 +241,8 @@ module nu_l1d(clk,
    logic 				  t_tlb_xlat,t_tlb_xlat_replay;
    logic 				  n_pending_tlb_miss, r_pending_tlb_miss;
    logic				  n_pending_tlb_zero_page, r_pending_tlb_zero_page;
-   logic 				  t_got_miss;
+   logic 				  t_got_miss, t_dirty_miss;
+   
    logic 				  t_push_miss;
    
    logic 				  t_mh_block, t_cm_block, t_cm_block2,
@@ -255,6 +260,16 @@ module nu_l1d(clk,
    logic 				  r_q_priority, n_q_priority;
    
    logic 				  n_core_mem_rsp_valid, r_core_mem_rsp_valid;
+
+   typedef struct packed {
+      logic [(`PA_WIDTH-1):0] addr;
+      logic [127:0] 	      data;
+   } sb_t;
+   
+   logic [`LG_SB_ENTRIES:0] r_sb_head_ptr, n_sb_head_ptr;
+   logic [`LG_SB_ENTRIES:0] r_sb_tail_ptr, n_sb_tail_ptr;
+   logic [(1<<(`LG_SB_ENTRIES)-1):0] r_sb_valid;
+   
    
    mem_rsp_t n_core_mem_rsp, r_core_mem_rsp;
       
@@ -270,6 +285,7 @@ module nu_l1d(clk,
       logic [(`PA_WIDTH-1):0] addr;
       logic [127:0] 	      data;
       logic [`LG_MRQ_ENTRIES:0] tag;
+      logic			writeback;
    } queue_t;
    
    queue_t r_l2q[N_MQ_ENTRIES-1:0];
@@ -284,15 +300,31 @@ module nu_l1d(clk,
 	  begin
 	     r_l2q_head_ptr <= 'd0;
 	     r_l2q_tail_ptr <= 'd0;
+	     r_sb_head_ptr <= 'd0;
+	     r_sb_tail_ptr <= 'd0;
 	  end
 	else
 	  begin
 	     r_l2q_head_ptr <= n_l2q_head_ptr;	     
 	     r_l2q_tail_ptr <= n_l2q_tail_ptr;
+	     r_sb_head_ptr <= n_sb_head_ptr;
+	     r_sb_tail_ptr <= n_sb_tail_ptr;	     
 	  end
      end // always_ff@ (posedge clk)
 
-   wire 				  mem_rsp_valid = r_got_req & r_req.is_store ? 1'b0 : !w_l2q_empty;   
+   wire w_sb_empty = r_sb_head_ptr==r_sb_tail_ptr;
+   
+   
+   wire  mem_rsp_valid = r_got_req & r_req.is_store ? 1'b0 : !w_l2q_empty;
+
+   always_comb
+     begin
+	n_sb_head_ptr = r_sb_head_ptr;
+	n_sb_tail_ptr = r_sb_tail_ptr;	
+
+     end
+   
+   
    always_comb
      begin
 	n_l2q_head_ptr = r_l2q_head_ptr;
@@ -314,6 +346,8 @@ module nu_l1d(clk,
 	     r_l2q[r_l2q_tail_ptr[`LG_MRQ_ENTRIES-1:0]].addr <= l2_rsp_addr;
 	     r_l2q[r_l2q_tail_ptr[`LG_MRQ_ENTRIES-1:0]].data <= l2_rsp_load_data;
 	     r_l2q[r_l2q_tail_ptr[`LG_MRQ_ENTRIES-1:0]].tag  <= l2_rsp_tag;
+	     r_l2q[r_l2q_tail_ptr[`LG_MRQ_ENTRIES-1:0]].writeback <= l2_rsp_writeback;
+	     //$display("got l2 reply, writeback bit %b", l2_rsp_writeback);
 	  end
      end
 
@@ -321,6 +355,17 @@ module nu_l1d(clk,
    wire [127:0] 			  mem_rsp_load_data = r_l2q[r_l2q_head_ptr[`LG_MRQ_ENTRIES-1:0]].data;
    wire [`LG_MRQ_ENTRIES:0] 		  mem_rsp_tag =  r_l2q[r_l2q_head_ptr[`LG_MRQ_ENTRIES-1:0]].tag;
    wire [`PA_WIDTH-1:0] 		  mem_rsp_addr =  r_l2q[r_l2q_head_ptr[`LG_MRQ_ENTRIES-1:0]].addr;		     
+
+   wire					  mem_rsp_reload = mem_rsp_valid & 
+					  (r_l2q[r_l2q_head_ptr[`LG_MRQ_ENTRIES-1:0]].writeback == 1'b0);
+
+   //always_ff@(negedge clk)
+   //begin
+   //if(mem_rsp_valid & !mem_rsp_reload)
+   //	  begin
+   //$stop();
+   //end
+   //end
       
    function logic [15:0] make_mask(mem_req_t r);
       logic [15:0]		  t_m, m;
@@ -610,17 +655,24 @@ module nu_l1d(clk,
 
    
    
-   wire w_could_early_req = t_push_miss & mem_rdy & !t_port2_hit_cache &
+   wire w_could_early_req_any = t_push_miss & mem_rdy & !t_port2_hit_cache &
 	(r_last_early_valid ? (r_last_early != r_req2.addr[IDX_STOP-1:IDX_START]) : 1'b1) &
 	!(r_hit_busy_line2 | r_fwd_busy_addr2 | r_pop_busy_addr2 ) &
-	r_req2.is_load &
+	(r_req2.is_load | r_req.is_store) &
 	w_tlb_hit &
-	!w_port2_dirty_miss &
 	(rr_last_wr ? (rr_cache_idx !=  r_req2.addr[IDX_STOP-1:IDX_START]) : 1'b1) &
 	(r_last_wr ? (r_cache_idx != r_req2.addr[IDX_STOP-1:IDX_START]) : 1'b1) &
 	(n_last_wr ? (t_cache_idx != r_req2.addr[IDX_STOP-1:IDX_START]) : 1'b1);
+
+
+   wire	w_could_early_req = !w_port2_dirty_miss & w_could_early_req_any;
+
    
    wire w_gen_early_req = w_could_early_req & (r_got_req ? w_cache_port1_hit : 1'b1);
+
+
+
+   
    wire w_early_rsp = mem_rsp_valid ? (mem_rsp_tag != (1 << `LG_MRQ_ENTRIES)) : 1'b0;
 
 
@@ -912,9 +964,9 @@ module nu_l1d(clk,
 
    always_comb
      begin
-	t_array_wr_addr = mem_rsp_valid ? mem_rsp_addr[IDX_STOP-1:IDX_START] : r_cache_idx;
-	t_array_wr_data = mem_rsp_valid ? mem_rsp_load_data : t_store_shift;
-	t_array_wr_en = (mem_rsp_valid) | t_wr_array;
+	t_array_wr_addr = mem_rsp_reload ? mem_rsp_addr[IDX_STOP-1:IDX_START] : r_cache_idx;
+	t_array_wr_data = mem_rsp_reload ? mem_rsp_load_data : t_store_shift;
+	t_array_wr_en = (mem_rsp_reload) | t_wr_array;
      end
    
  ram2r1w #(.WIDTH(N_TAG_BITS), .LG_DEPTH(`LG_L1D_NUM_SETS)) dc_tag
@@ -924,7 +976,7 @@ module nu_l1d(clk,
       .rd_addr1(t_cache_idx2),
       .wr_addr(mem_rsp_addr[IDX_STOP-1:IDX_START]),
       .wr_data(mem_rsp_addr[`PA_WIDTH-1:IDX_STOP]),
-      .wr_en(mem_rsp_valid),
+      .wr_en(mem_rsp_reload),
       .rd_data0(r_tag_out),
       .rd_data1(r_tag_out2)
       );
@@ -958,7 +1010,7 @@ module nu_l1d(clk,
 	  begin
 	     t_write_dirty_en = 1'b1;	     
 	  end
-	else if(mem_rsp_valid)
+	else if(mem_rsp_reload)
 	  begin
 	     t_dirty_wr_addr = mem_rsp_addr[IDX_STOP-1:IDX_START];
 	     t_write_dirty_en = 1'b1;
@@ -1503,11 +1555,16 @@ module nu_l1d(clk,
 	       end
 	     else if(r_req2.op == MEM_NOP)
 	       begin
-		  if(r_req2.spans_cacheline == 1'b0)
-		    $stop();
+		  if(r_req2.spans_cacheline)
+		    begin
+		       t_core_mem_rsp.cause = MISALIGNED_FETCH;
+		    end
+		  else
+		    begin
+		       t_core_mem_rsp.cause = r_req2.cause;
+		    end
 		  t_core_mem_rsp.dst_valid = r_req2.dst_valid;
 		  t_core_mem_rsp.has_cause = 1'b1;
-		  t_core_mem_rsp.cause = MISALIGNED_FETCH;
 		  t_core_mem_rsp.addr = r_req2.addr;
 		  t_core_mem_rsp_valid = 1'b1;		  
 	       end
@@ -1658,7 +1715,7 @@ module nu_l1d(clk,
 	
 	
 	t_got_miss = 1'b0;
-
+	t_dirty_miss = 1'b0;
 	
 	n_req = r_req;
 
@@ -1751,6 +1808,7 @@ module nu_l1d(clk,
 		    else if(r_valid_out && r_dirty_out && (r_tag_out != r_cache_tag) && !r_req.uncachable)
 		      begin
 			 t_got_miss = 1'b1;
+			 t_dirty_miss = 1'b1;			 
 			 n_inhibit_write = 1'b1;
 			 if(r_hit_busy_addr && r_is_retry || !r_hit_busy_addr)
 			   begin
@@ -1794,6 +1852,7 @@ module nu_l1d(clk,
 				 n_lock_cache = 1'b1;
 				 n_port1_req_opcode = MEM_SW;
 				 n_port1_req_tag = (1 << `LG_MRQ_ENTRIES);
+				 t_dirty_miss = 1'b1;			 				 
 				 n_state = WAIT_INJECT_RELOAD;
 				 n_port1_req_valid = 1'b0;
 			      end                                                             
@@ -2132,14 +2191,20 @@ module nu_l1d(clk,
 	  end
      end
 
+`ifdef VERILATOR
    always_ff@(negedge clk)
      begin
+	if(t_got_miss)
+	  begin
+	     log_l1d_miss({31'd0, t_dirty_miss});
+	  end
 	if(n_port1_req_valid && n_port2_req_valid)
 	  begin
 	     $display("two requests - main state %d, next state %d", r_state, n_state);
 	     $stop();
 	  end
      end
+`endif
    
 endmodule // l1d
 

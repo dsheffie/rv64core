@@ -16,6 +16,7 @@ module l2_2way(clk,
 	  l1i_rsp_valid,
 	  l1d_rsp_tag,
 	  l1d_rsp_addr,
+	  l1d_rsp_writeback,
 	  l1i_flush_req,
 	  l1d_flush_req,
 
@@ -83,8 +84,8 @@ module l2_2way(clk,
    output logic l1i_rsp_valid;
    output logic [`LG_MRQ_ENTRIES:0] l1d_rsp_tag;
    output logic [`PA_WIDTH-1:0]     l1d_rsp_addr;
-   
-   
+   output logic			    l1d_rsp_writeback;
+      
    input logic l1i_flush_req;
    input logic l1d_flush_req;
    input logic l1i_flush_complete;
@@ -226,6 +227,7 @@ module l2_2way(clk,
    assign l1i_rsp_valid = r_l1i_rsp_valid;
    assign l1d_rsp_tag = r_l1d_rsp_tag;
    assign l1d_rsp_addr = r_saveaddr;
+   assign l1d_rsp_writeback = (r_opcode == 4'd7);
    
    assign l1_mem_load_data = r_rsp_data;
    assign l1_mem_req_ack = r_req_ack;

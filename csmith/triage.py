@@ -44,17 +44,17 @@ if __name__ == '__main__':
 
         if badva:
             badvas.append(test)
-            t = test.split('.')
-            pathlib.Path.unlink(test)
-            pathlib.Path.unlink(t[0] +'.' + t[1])
+            #t = test.split('.')
+            #pathlib.Path.unlink(test)
+            #pathlib.Path.unlink(t[0] +'.' + t[1])
             
         if not(succeed) and not(failed) and not(badva):
             timeout.append(test)
             if zero_disp_loop:
                 zero_disp_loops = zero_disp_loops + 1
-            t = test.split('.')
-            pathlib.Path.unlink(test)
-            pathlib.Path.unlink(t[0] +'.' + t[1])
+            #t = test.split('.')
+            #pathlib.Path.unlink(test)
+            #pathlib.Path.unlink(t[0] +'.' + t[1])
                 
     print('%d zero displacement loops' % zero_disp_loops)
     failures.sort()

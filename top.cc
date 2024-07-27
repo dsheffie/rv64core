@@ -252,6 +252,17 @@ static uint64_t log_l1d_is_ld_hit = 0;
 static uint64_t log_l1d_is_st_hit = 0;
 static uint64_t log_l1d_is_hit_under_miss = 0;
 
+static uint64_t log_l1d_misses = 0;
+static uint64_t log_l1d_dirty_misses = 0;
+
+void log_l1d_miss(int is_dirty) {
+  ++log_l1d_misses;
+  if(is_dirty) {
+    ++log_l1d_dirty_misses;
+  }
+}
+
+
 void log_l1d(int is_early_req,
 	     int is_push_miss,
 	     int is_push_miss_hit_inflight,
@@ -1527,6 +1538,8 @@ int main(int argc, char **argv) {
     std::cout << "l1d accesses = " << tb->l1d_cache_accesses << "\n";
 
 
+    std::cout << "log_l1d_misses                 = " << log_l1d_misses << "\n";
+    std::cout << "log_l1d_dirty_misses           = " << log_l1d_dirty_misses <<"\n";
     std::cout << "log_l1d_accesses               = " << log_l1d_accesses << "\n";
     std::cout << "log_l1d_push_miss              = " <<log_l1d_push_miss << "\n";
     std::cout << "log_l1d_push_miss_hit_inflight = " << log_l1d_push_miss_hit_inflight << "\n";
