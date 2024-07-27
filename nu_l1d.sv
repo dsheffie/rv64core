@@ -266,10 +266,12 @@ module nu_l1d(clk,
       logic [127:0] 	      data;
    } sb_t;
 
-   sb_t [(1<<(`LG_SB_ENTRIES)-1):0] r_sb;   
+   localparam		      N_SB_ENTRIES = 1<<(`LG_SB_ENTRIES);
+   
+   sb_t [(N_SB_ENTRIES-1):0] r_sb;   
    logic [`LG_SB_ENTRIES:0] r_sb_head_ptr, n_sb_head_ptr;
    logic [`LG_SB_ENTRIES:0] r_sb_tail_ptr, n_sb_tail_ptr;
-   logic [(1<<(`LG_SB_ENTRIES)-1):0] r_sb_valid;
+   logic [(N_SB_ENTRIES-1):0] r_sb_valid;
    
    
    mem_rsp_t n_core_mem_rsp, r_core_mem_rsp;
@@ -316,6 +318,8 @@ module nu_l1d(clk,
    wire w_sb_empty = r_sb_head_ptr==r_sb_tail_ptr;
    wire w_sb_full =  (r_sb_head_ptr!=r_sb_tail_ptr) & 
 	(r_sb_head_ptr[`LG_SB_ENTRIES-1:0] == r_sb_tail_ptr[`LG_SB_ENTRIES-1:0]);
+
+
    
    wire  mem_rsp_valid = r_got_req & r_req.is_store ? 1'b0 : !w_l2q_empty;
 
@@ -329,6 +333,24 @@ module nu_l1d(clk,
 	  end
      end
 
+
+   
+   always_ff@(posedge clk)
+     begin
+	if(reset)
+	  begin
+	     r_sb_valid <= 'd0;
+	  end
+	else
+	  begin
+	     if(t_push_sb)
+	       begin
+		  r_sb_valid[r_sb_tail_ptr[`LG_SB_ENTRIES-1:0]] <= 1'b1;
+	       end
+	  end // else: !if(reset)
+     end // always_ff@ (posedge clk)
+   
+
    always_ff@(posedge clk)
      begin
 	if(t_push_sb)
@@ -337,6 +359,18 @@ module nu_l1d(clk,
 	     r_sb[r_sb_tail_ptr[`LG_SB_ENTRIES-1:0]].addr <= n_port1_req_addr;
 	  end
      end
+
+   wire [N_SB_ENTRIES-1:0] w_sb_port1_hit, w_sb_port2_hit;
+   
+   generate
+      for(genvar i = 0; i < N_SB_ENTRIES; i=i+1)
+	begin
+	   assign w_sb_port1_hit[i] = r_sb_valid[i] ? (r_sb[i].addr[IDX_STOP-1:IDX_START] == t_cache_idx) : 1'b0;
+	   assign w_sb_port2_hit[i] = r_sb_valid[i] ? (r_sb[i].addr[IDX_STOP-1:IDX_START] == t_cache_idx2) : 1'b0;
+	end
+   endgenerate
+
+   
    
    always_comb
      begin
