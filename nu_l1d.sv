@@ -241,7 +241,7 @@ module nu_l1d(clk,
    logic 				  t_tlb_xlat,t_tlb_xlat_replay;
    logic 				  n_pending_tlb_miss, r_pending_tlb_miss;
    logic				  n_pending_tlb_zero_page, r_pending_tlb_zero_page;
-   logic 				  t_got_miss, t_dirty_miss;
+   logic 				  t_got_miss, t_dirty_miss, t_push_sb;
    
    logic 				  t_push_miss;
    
@@ -265,7 +265,8 @@ module nu_l1d(clk,
       logic [(`PA_WIDTH-1):0] addr;
       logic [127:0] 	      data;
    } sb_t;
-   
+
+   sb_t [(1<<(`LG_SB_ENTRIES)-1):0] r_sb;   
    logic [`LG_SB_ENTRIES:0] r_sb_head_ptr, n_sb_head_ptr;
    logic [`LG_SB_ENTRIES:0] r_sb_tail_ptr, n_sb_tail_ptr;
    logic [(1<<(`LG_SB_ENTRIES)-1):0] r_sb_valid;
@@ -313,7 +314,8 @@ module nu_l1d(clk,
      end // always_ff@ (posedge clk)
 
    wire w_sb_empty = r_sb_head_ptr==r_sb_tail_ptr;
-   
+   wire w_sb_full =  (r_sb_head_ptr!=r_sb_tail_ptr) & 
+	(r_sb_head_ptr[`LG_SB_ENTRIES-1:0] == r_sb_tail_ptr[`LG_SB_ENTRIES-1:0]);
    
    wire  mem_rsp_valid = r_got_req & r_req.is_store ? 1'b0 : !w_l2q_empty;
 
@@ -321,9 +323,20 @@ module nu_l1d(clk,
      begin
 	n_sb_head_ptr = r_sb_head_ptr;
 	n_sb_tail_ptr = r_sb_tail_ptr;	
-
+	if(t_push_sb)
+	  begin
+	     n_sb_tail_ptr = r_sb_tail_ptr + 'd1;	
+	  end
      end
-   
+
+   always_ff@(posedge clk)
+     begin
+	if(t_push_sb)
+	  begin
+	     r_sb[r_sb_tail_ptr[`LG_SB_ENTRIES-1:0]].data <= t_data;
+	     r_sb[r_sb_tail_ptr[`LG_SB_ENTRIES-1:0]].addr <= n_port1_req_addr;
+	  end
+     end
    
    always_comb
      begin
@@ -602,10 +615,10 @@ module nu_l1d(clk,
 	
 	mem_q_empty = (r_mq_head_ptr == r_mq_tail_ptr);
 	
-	mem_q_full = (r_mq_head_ptr != r_mq_tail_ptr) &&
+	mem_q_full = (r_mq_head_ptr != r_mq_tail_ptr) &
 		     (r_mq_head_ptr[`LG_MRQ_ENTRIES-1:0] == r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]);
 	
-	mem_q_almost_full = (r_mq_head_ptr != t_mq_tail_ptr_plus_one) &&
+	mem_q_almost_full = (r_mq_head_ptr != t_mq_tail_ptr_plus_one) &
 			    (r_mq_head_ptr[`LG_MRQ_ENTRIES-1:0] == t_mq_tail_ptr_plus_one[`LG_MRQ_ENTRIES-1:0]);
 	
 	
@@ -697,7 +710,7 @@ module nu_l1d(clk,
 	  end
      end
 `endif
-
+   
    always_ff@(posedge clk)
      begin
 	if(reset)
@@ -1118,11 +1131,24 @@ module nu_l1d(clk,
 	  begin
 	     t_write_valid_en = 1'b1;
 	  end
+	else if(t_push_sb)
+	  begin
+	     t_write_valid_en = 1'b1;
+	     t_valid_wr_addr = n_port1_req_addr[IDX_STOP-1:IDX_START];
+	     //$display("marking line %x as not valid at cycle %d", 
+	     //t_valid_wr_addr, r_cycle);
+	  end
 	else if(mem_rsp_valid)
 	  begin
 	     t_valid_wr_addr = mem_rsp_addr[IDX_STOP-1:IDX_START];
 	     t_valid_value = !r_inhibit_write;
 	     t_write_valid_en = 1'b1;
+	     // $display("mem_rsp_valid, addr %x, tag %d, line %x as %b at cycle %d",
+	     // 	      mem_rsp_addr,
+	     // 	      mem_rsp_tag,		      
+	     // 	      t_valid_wr_addr,
+	     // 	      t_valid_value,
+	     // 	      r_cycle);	     
 	  end
      end // always_comb
       
@@ -1716,6 +1742,7 @@ module nu_l1d(clk,
 	
 	t_got_miss = 1'b0;
 	t_dirty_miss = 1'b0;
+	t_push_sb = 1'b0;
 	
 	n_req = r_req;
 
@@ -1801,7 +1828,8 @@ module nu_l1d(clk,
 			      n_core_mem_rsp.has_cause = r_req.spans_cacheline;
 
 `ifdef DEBUG
-			      $display("load on port1 hit cache for pc %x, addr %x, got data %x, cycle %d", r_req.pc, r_req.addr, t_rsp_data[`M_WIDTH-1:0], r_cycle);
+			      $display("load on port1 hit cache for pc %x, addr %x, got data %x, cycle %d", 
+				       r_req.pc, r_req.addr, t_rsp_data[`M_WIDTH-1:0], r_cycle);
 `endif
 			   end // else: !if(r_req.is_store)
 		      end // if (r_valid_out && (r_tag_out == r_cache_tag))
@@ -1831,6 +1859,7 @@ module nu_l1d(clk,
 			      else
 				begin
 				   //$display("no wait");
+				   t_push_sb = 1'b1;
 				   n_state = INJECT_RELOAD;				   
 				   n_port1_req_valid = 1'b1;
 				end
@@ -1952,6 +1981,7 @@ module nu_l1d(clk,
 	    end // case: ACTIVE
 	  WAIT_INJECT_RELOAD:
 	    begin
+	       t_push_sb = 1'b1;
 	       n_port1_req_valid = 1'b1;
 	       n_state = INJECT_RELOAD;
 	       n_port1_req_store_data = t_data;
