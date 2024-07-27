@@ -327,6 +327,7 @@ module
    logic [3:0] 				  l1d_mem_req_opcode;
    logic [`LG_MRQ_ENTRIES:0] 		  l1d_mem_req_tag;
    wire [`LG_MRQ_ENTRIES:0] 		  w_l1d_mem_rsp_tag;
+   wire					  w_l1d_mem_rsp_writeback;
    wire [`PA_WIDTH-1:0] 		  w_l1d_mem_rsp_addr;
    
    logic 				  l1i_mem_req_valid;
@@ -425,9 +426,10 @@ module
                .l1d_tag(l1d_mem_req_tag),
 	       .l1d_rsp_valid(l1d_mem_rsp_valid),
 	       .l1d_rsp_tag(w_l1d_mem_rsp_tag),
+	       .l1d_rsp_writeback(w_l1d_mem_rsp_writeback),	       		    
 	       .l1d_rsp_addr(w_l1d_mem_rsp_addr),
 	       .l1i_rsp_valid(l1i_mem_rsp_valid),
-	       
+
 	       .l1i_flush_req(flush_req_l1i),
 	       .l1d_flush_req(flush_req_l1d),
 	       .l1i_flush_complete(l1i_flush_complete),
@@ -521,6 +523,7 @@ module
 	       .l2_rsp_load_data(w_l1_mem_load_data),
 	       .l2_rsp_tag(w_l1d_mem_rsp_tag),
 	       .l2_rsp_addr(w_l1d_mem_rsp_addr),
+	       .l2_rsp_writeback(w_l1d_mem_rsp_writeback),
 		  
 	        .mtimecmp(w_mtimecmp),
 		.mtimecmp_val(w_mtimecmp_val),

@@ -53,6 +53,8 @@
 
 `define LG_MDQ_ENTRIES 3
 
+`define LG_SB_ENTRIES 2
+
 /* mem retry queue */
 `define LG_MRQ_ENTRIES 3
 
