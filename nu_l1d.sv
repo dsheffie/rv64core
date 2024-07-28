@@ -2324,7 +2324,7 @@ module nu_l1d(clk,
      end // always_comb
 
 
-      always_comb
+   always_comb
      begin
 	n_eb_head_ptr = r_eb_head_ptr;
 	n_eb_tail_ptr = r_eb_tail_ptr;	
