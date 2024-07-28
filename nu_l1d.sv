@@ -265,14 +265,14 @@ module nu_l1d(clk,
    typedef struct packed {
       logic [(`PA_WIDTH-1):0] addr;
       logic [127:0] 	      data;
-   } sb_t;
+   } eb_t;
 
-   localparam		      N_SB_ENTRIES = 1<<(`LG_SB_ENTRIES);
+   localparam		      N_EB_ENTRIES = 1<<(`LG_EB_ENTRIES);
    
-   sb_t [(N_SB_ENTRIES-1):0] r_sb;   
-   logic [`LG_SB_ENTRIES:0] r_sb_head_ptr, n_sb_head_ptr;
-   logic [`LG_SB_ENTRIES:0] r_sb_tail_ptr, n_sb_tail_ptr;
-   logic [(N_SB_ENTRIES-1):0] r_sb_valid;
+   eb_t [(N_EB_ENTRIES-1):0] r_sb;   
+   logic [`LG_EB_ENTRIES:0] r_eb_head_ptr, n_eb_head_ptr;
+   logic [`LG_EB_ENTRIES:0] r_eb_tail_ptr, n_eb_tail_ptr;
+   logic [(N_EB_ENTRIES-1):0] r_eb_valid;
    
    
    mem_rsp_t n_core_mem_rsp, r_core_mem_rsp;
@@ -304,21 +304,21 @@ module nu_l1d(clk,
 	  begin
 	     r_l2q_head_ptr <= 'd0;
 	     r_l2q_tail_ptr <= 'd0;
-	     r_sb_head_ptr <= 'd0;
-	     r_sb_tail_ptr <= 'd0;
+	     r_eb_head_ptr <= 'd0;
+	     r_eb_tail_ptr <= 'd0;
 	  end
 	else
 	  begin
 	     r_l2q_head_ptr <= n_l2q_head_ptr;	     
 	     r_l2q_tail_ptr <= n_l2q_tail_ptr;
-	     r_sb_head_ptr <= n_sb_head_ptr;
-	     r_sb_tail_ptr <= n_sb_tail_ptr;	     
+	     r_eb_head_ptr <= n_eb_head_ptr;
+	     r_eb_tail_ptr <= n_eb_tail_ptr;	     
 	  end
      end // always_ff@ (posedge clk)
 
-   wire w_sb_empty = r_sb_head_ptr==r_sb_tail_ptr;
-   wire w_sb_full =  (r_sb_head_ptr!=r_sb_tail_ptr) & 
-	(r_sb_head_ptr[`LG_SB_ENTRIES-1:0] == r_sb_tail_ptr[`LG_SB_ENTRIES-1:0]);
+   wire w_eb_empty = r_eb_head_ptr==r_eb_tail_ptr;
+   wire w_eb_full =  (r_eb_head_ptr!=r_eb_tail_ptr) & 
+	(r_eb_head_ptr[`LG_EB_ENTRIES-1:0] == r_eb_tail_ptr[`LG_EB_ENTRIES-1:0]);
 
 
    
@@ -331,17 +331,17 @@ module nu_l1d(clk,
      begin
 	if(reset)
 	  begin
-	     r_sb_valid <= 'd0;
+	     r_eb_valid <= 'd0;
 	  end
 	else
 	  begin
 	     if(t_push_sb)
 	       begin
-		  r_sb_valid[r_sb_tail_ptr[`LG_SB_ENTRIES-1:0]] <= 1'b1;
+		  r_eb_valid[r_eb_tail_ptr[`LG_EB_ENTRIES-1:0]] <= 1'b1;
 	       end
 	     if(t_pop_sb)
 	       begin
-		  r_sb_valid[r_sb_head_ptr[`LG_SB_ENTRIES-1:0]] <= 1'b0;
+		  r_eb_valid[r_eb_head_ptr[`LG_EB_ENTRIES-1:0]] <= 1'b0;
 	       end
 	  end // else: !if(reset)
      end // always_ff@ (posedge clk)
@@ -351,23 +351,23 @@ module nu_l1d(clk,
      begin
 	if(t_push_sb)
 	  begin
-	     r_sb[r_sb_tail_ptr[`LG_SB_ENTRIES-1:0]].data <= t_data;
-	     r_sb[r_sb_tail_ptr[`LG_SB_ENTRIES-1:0]].addr <= n_port1_req_addr;
+	     r_sb[r_eb_tail_ptr[`LG_EB_ENTRIES-1:0]].data <= t_data;
+	     r_sb[r_eb_tail_ptr[`LG_EB_ENTRIES-1:0]].addr <= n_port1_req_addr;
 	  end
      end
 
-   wire [N_SB_ENTRIES-1:0] w_sb_port1_hits, w_sb_port2_hits;
+   wire [N_EB_ENTRIES-1:0] w_eb_port1_hits, w_eb_port2_hits;
    
    generate
-      for(genvar i = 0; i < N_SB_ENTRIES; i=i+1)
+      for(genvar i = 0; i < N_EB_ENTRIES; i=i+1)
 	begin
-	   assign w_sb_port1_hits[i] = r_sb_valid[i] ? (r_sb[i].addr[IDX_STOP-1:IDX_START] == t_mem_head.addr[IDX_STOP-1:IDX_START]) : 1'b0;
-	   assign w_sb_port2_hits[i] = r_sb_valid[i] ? (r_sb[i].addr[IDX_STOP-1:IDX_START] == t_cache_idx2) : 1'b0;
+	   assign w_eb_port1_hits[i] = r_eb_valid[i] ? (r_sb[i].addr[IDX_STOP-1:IDX_START] == t_mem_head.addr[IDX_STOP-1:IDX_START]) : 1'b0;
+	   assign w_eb_port2_hits[i] = r_eb_valid[i] ? (r_sb[i].addr[IDX_STOP-1:IDX_START] == t_cache_idx2) : 1'b0;
 	end
    endgenerate
 
-   wire w_sb_port1_hit = |w_sb_port1_hits;
-   wire	w_sb_port2_hit = |w_sb_port2_hits;
+   wire w_eb_port1_hit = |w_eb_port1_hits;
+   wire	w_eb_port2_hit = |w_eb_port2_hits;
 
    
    always_comb
@@ -1977,7 +1977,7 @@ module nu_l1d(clk,
 
 	       /* not qualified on r_got_req */
 	       if(!mem_q_empty && !t_got_miss && !r_lock_cache && !n_pending_tlb_miss 
-		  &!w_sb_port1_hit & !w_sb_full)
+		  &!w_eb_port1_hit & !w_eb_full)
 		 begin		    
 		    if(!t_mh_block & (r_mq_inflight[r_mq_head_ptr[`LG_MRQ_ENTRIES-1:0]] == 1'b0)  )
 		      begin
@@ -2052,7 +2052,7 @@ module nu_l1d(clk,
 	    end
 	  CLEAR_DIRTY:
 	    begin
-	       //$display("now in clear dirty state..., sb empty %b sb full %b", w_sb_empty, w_sb_full);
+	       //$display("now in clear dirty state..., sb empty %b sb full %b", w_eb_empty, w_eb_full);
 	       t_cache_idx = r_req.addr[IDX_STOP-1:IDX_START];
 	       t_cache_tag = r_req.addr[`PA_WIDTH-1:IDX_STOP];
 	       n_last_wr = r_req.is_store;
@@ -2194,7 +2194,7 @@ module nu_l1d(clk,
 	//if(t_push_sb)
 	//begin
 	//$display("--> pushing addr %x, data %x to sb entry %d at cycle %d", 
-	//n_port1_req_addr, t_addr, r_sb_tail_ptr[`LG_SB_ENTRIES-1:0], r_cycle);
+	//n_port1_req_addr, t_addr, r_eb_tail_ptr[`LG_EB_ENTRIES-1:0], r_cycle);
 	// end
       if(t_push_miss && mem_q_full)
 	begin
@@ -2310,13 +2310,13 @@ module nu_l1d(clk,
 	       end
 	     n_mem_req_tag = n_port2_req_tag;
 	  end
-	else if(!(n_port1_req_valid|n_port2_req_valid) & !w_sb_empty)
+	else if(!(n_port1_req_valid|n_port2_req_valid) & !w_eb_empty)
 	  begin
 	     t_pop_sb = 1'b1;
 	     n_mem_req_valid = 1'b1;
 	     n_mem_req_uc = 1'b0;
-	     n_mem_req_addr = r_sb[r_sb_head_ptr[`LG_SB_ENTRIES-1:0]].addr;
-	     n_mem_req_store_data = r_sb[r_sb_head_ptr[`LG_SB_ENTRIES-1:0]].data;
+	     n_mem_req_addr = r_sb[r_eb_head_ptr[`LG_EB_ENTRIES-1:0]].addr;
+	     n_mem_req_store_data = r_sb[r_eb_head_ptr[`LG_EB_ENTRIES-1:0]].data;
 	     n_mem_req_opcode = MEM_SW;
 	     n_mem_req_tag = {1'b1, {`LG_MRQ_ENTRIES{1'b1}}};
 	     //$display("--> write buffer using memory buffer at cycle %d with tag %x", 
@@ -2327,15 +2327,15 @@ module nu_l1d(clk,
 
       always_comb
      begin
-	n_sb_head_ptr = r_sb_head_ptr;
-	n_sb_tail_ptr = r_sb_tail_ptr;	
+	n_eb_head_ptr = r_eb_head_ptr;
+	n_eb_tail_ptr = r_eb_tail_ptr;	
 	if(t_push_sb)
 	  begin
-	     n_sb_tail_ptr = r_sb_tail_ptr + 'd1;	
+	     n_eb_tail_ptr = r_eb_tail_ptr + 'd1;	
 	  end
 	if(t_pop_sb)
 	  begin
-	     n_sb_head_ptr = r_sb_head_ptr + 'd1;	
+	     n_eb_head_ptr = r_eb_head_ptr + 'd1;	
 	  end
      end
 
