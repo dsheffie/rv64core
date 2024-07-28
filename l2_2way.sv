@@ -628,6 +628,9 @@ module l2_2way(clk,
    wire w_pick_l1i = (w_l1i_req & w_l1d_req) ? r_last_gnt : w_l1i_req;
    wire w_pick_l1d = (w_l1i_req & w_l1d_req) ? !r_last_gnt : w_l1d_req;   
 
+   logic t_can_accept_txn;
+   
+   
    always_comb
      begin
 	n_rsp_data = w_hit ? w_d : r_rsp_data;
@@ -639,6 +642,10 @@ module l2_2way(clk,
 	
 	t_d0 = mem_rsp_load_data[127:0];
 	t_d1 = mem_rsp_load_data[127:0];	
+	
+	n_l1i_rsp_valid = 1'b0;
+	
+	t_can_accept_txn = 1'b0;
 	
 	//n_mmu_rsp_data = r_mmu_rsp_data;	
 	if(w_hit)
@@ -655,10 +662,10 @@ module l2_2way(clk,
 		       t_d1 = w_updated_pte;
 		       n_mem_mark_rsp_valid = 1'b1;		       
 		    end
-		  //else if(r_last_gnt)
-		  //begin
-		  //n_l1d_rsp_valid  = 1'b1;
-		  //end
+		  else if(r_last_gnt == 1'b0)
+		    begin
+		       n_l1i_rsp_valid  = 1'b1;
+		    end
 		  //else
 		  //begin
 		  //n_l1i_rsp_valid  = 1'b1;
@@ -739,7 +746,7 @@ module l2_2way(clk,
 	n_mmu_mark_accessed = r_mmu_mark_accessed;
 	
 	n_wb1 = r_wb1;
-	n_l1i_rsp_valid = 1'b0;
+	//n_l1i_rsp_valid = 1'b0;
 	n_l1d_rsp_valid = 1'b0;
 	
 	case(r_state)
@@ -887,7 +894,7 @@ module l2_2way(clk,
 			   end
 			 else
 			   begin
-			      n_l1i_rsp_valid  = 1'b1;
+			      //n_l1i_rsp_valid  = 1'b1;
 			      n_state = IDLE;			      
 			   end
 		      end
