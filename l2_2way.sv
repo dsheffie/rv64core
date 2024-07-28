@@ -1,4 +1,8 @@
 `include "machine.vh"
+`ifdef VERILATOR
+
+`endif
+
 
 module l2_2way(clk,
 	  reset,
@@ -610,6 +614,9 @@ module l2_2way(clk,
    //r_l1d_req | l1d_req;
    wire	w_mmu_req = r_mmu_req | t_probe_mmu_req_valid;
    wire w_mem_mark_valid = mem_mark_valid | r_mmu_mark_req;
+
+   wire w_pick_l1i = (w_l1i_req & w_l1d_req) ? r_last_gnt : w_l1i_req;
+   wire w_pick_l1d = (w_l1i_req & w_l1d_req) ? !r_last_gnt : w_l1d_req;   
    
    always_comb
      begin
@@ -753,7 +760,7 @@ module l2_2way(clk,
 		 end
 	       else if(w_l1d_req | w_l1i_req)
 		 begin
-		    if(w_l1i_req & (!w_l1d_req))
+		    if(w_pick_l1i)
 		      begin
 			 //$display("accepting i-side, addr=%x", l1i_addr);			 
 			 n_last_gnt = 1'b0;			 
@@ -766,9 +773,8 @@ module l2_2way(clk,
 			 n_l1i_req = 1'b0;
 			 t_gnt_l1i = 1'b1;
 		      end
-		    else if((!w_l1i_req) & w_l1d_req)
+		    else if(w_pick_l1d)
 		      begin
-			 //$display("accepting d-side, addr = %x, store=%b", l1d_addr, l1d_opcode == MEM_SW);
 			 n_last_gnt = 1'b1;
 			 t_idx = t_l1dq.addr[LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN];			 
 			 n_tag = t_l1dq.addr[(`PA_WIDTH-1):LG_L2_LINES+`LG_L2_CL_LEN];
@@ -784,40 +790,6 @@ module l2_2way(clk,
 			      n_l1d_rsp_valid = 1'b1;
 			   end
 			 t_gnt_l1d = 1'b1;
-		      end
-		    else
-		      begin
-			 if(r_last_gnt)
-			   begin
-			      //$display("accepting i-side, addr=%x", l1i_addr);			 			      
-			      n_last_gnt = 1'b0;			 
-			      t_idx = l1i_addr[LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN];			 			      
-			      n_tag = l1i_addr[(`PA_WIDTH-1):LG_L2_LINES+`LG_L2_CL_LEN];
-			      n_last_l1i_addr = l1i_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN];
-			      n_addr = {l1i_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
-			      n_saveaddr = {l1i_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
-			      n_opcode = MEM_LW;
-			      n_l1i_req = 1'b0;	
-			      t_gnt_l1i = 1'b1;
-			   end
-			 else
-			   begin
-			      n_last_gnt = 1'b1;
-			      t_idx = t_l1dq.addr[LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN];			 
-			      n_tag = t_l1dq.addr[(`PA_WIDTH-1):LG_L2_LINES+`LG_L2_CL_LEN];
-			      n_addr = {t_l1dq.addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
-			      n_last_l1d_addr = t_l1dq.addr[(`PA_WIDTH-1):`LG_L2_CL_LEN];			 
-			      n_saveaddr = {t_l1dq.addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
-			      n_store_data = t_l1dq.store_data;
-			      n_opcode = t_l1dq.opcode;
-			      n_l1d_req = 1'b0;
-			      n_l1d_rsp_tag = t_l1dq.tag;
-			      if(t_l1dq.opcode == MEM_SW)
-				begin
-				   n_l1d_rsp_valid = 1'b1;
-				end
-			      t_gnt_l1d = 1'b1;
-			   end
 		      end
 		    n_req_ack = 1'b1;
 		    n_state = CHECK_VALID_AND_TAG;
