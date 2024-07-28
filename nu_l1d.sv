@@ -242,7 +242,7 @@ module nu_l1d(clk,
    logic 				  n_pending_tlb_miss, r_pending_tlb_miss;
    logic				  n_pending_tlb_zero_page, r_pending_tlb_zero_page;
    logic				  t_got_miss, t_dirty_miss;
-   logic				  t_pop_sb, t_push_sb;
+   logic				  t_pop_eb, t_push_eb;
    
    logic 				  t_push_miss;
    
@@ -335,11 +335,11 @@ module nu_l1d(clk,
 	  end
 	else
 	  begin
-	     if(t_push_sb)
+	     if(t_push_eb)
 	       begin
 		  r_eb_valid[r_eb_tail_ptr[`LG_EB_ENTRIES-1:0]] <= 1'b1;
 	       end
-	     if(t_pop_sb)
+	     if(t_pop_eb)
 	       begin
 		  r_eb_valid[r_eb_head_ptr[`LG_EB_ENTRIES-1:0]] <= 1'b0;
 	       end
@@ -349,7 +349,7 @@ module nu_l1d(clk,
 
    always_ff@(posedge clk)
      begin
-	if(t_push_sb)
+	if(t_push_eb)
 	  begin
 	     r_sb[r_eb_tail_ptr[`LG_EB_ENTRIES-1:0]].data <= t_data;
 	     r_sb[r_eb_tail_ptr[`LG_EB_ENTRIES-1:0]].addr <= n_port1_req_addr;
@@ -361,7 +361,7 @@ module nu_l1d(clk,
    generate
       for(genvar i = 0; i < N_EB_ENTRIES; i=i+1)
 	begin
-	   assign w_eb_port1_hits[i] = r_eb_valid[i] ? (r_sb[i].addr[IDX_STOP-1:IDX_START] == t_mem_head.addr[IDX_STOP-1:IDX_START]) : 1'b0;
+	   assign w_eb_port1_hits[i] = r_eb_valid[i] ? (r_sb[i].addr[`PA_WIDTH-1:IDX_START] == t_mem_head.addr[`PA_WIDTH-1:IDX_START]) : 1'b0;
 	   assign w_eb_port2_hits[i] = r_eb_valid[i] ? (r_sb[i].addr[IDX_STOP-1:IDX_START] == t_cache_idx2) : 1'b0;
 	end
    endgenerate
@@ -1077,7 +1077,7 @@ module nu_l1d(clk,
 	  begin
 	     t_write_dirty_en = 1'b1;	     
 	  end
-	else if(t_push_sb)
+	else if(t_push_eb)
 	  begin
 	     t_dirty_wr_addr = n_port1_req_addr[IDX_STOP-1:IDX_START];	     
 	     t_write_dirty_en = 1'b1;
@@ -1190,7 +1190,7 @@ module nu_l1d(clk,
 	  begin
 	     t_write_valid_en = 1'b1;
 	  end
-	else if(t_push_sb)
+	else if(t_push_eb)
 	  begin
 	     t_write_valid_en = 1'b1;
 	     t_valid_wr_addr = n_port1_req_addr[IDX_STOP-1:IDX_START];
@@ -1802,7 +1802,7 @@ module nu_l1d(clk,
 	
 	t_got_miss = 1'b0;
 	t_dirty_miss = 1'b0;
-	t_push_sb = 1'b0;
+	t_push_eb = 1'b0;
 	
 	n_req = r_req;
 
@@ -1919,7 +1919,7 @@ module nu_l1d(clk,
 			      else
 				begin
 				   //$display("no wait");
-				   t_push_sb = 1'b1;
+				   t_push_eb = 1'b1;
 				   n_state = CLEAR_DIRTY;				   
 				end
 			   end // if (!t_stall_for_busy)
@@ -1974,10 +1974,9 @@ module nu_l1d(clk,
 		    n_page_walk_gnt = 1'b0;
 		    n_page_walk_req_valid = 1'b1;
 		 end
-
+	       
 	       /* not qualified on r_got_req */
-	       if(!mem_q_empty && !t_got_miss && !r_lock_cache && !n_pending_tlb_miss 
-		  &!w_eb_port1_hit & !w_eb_full)
+	       if(!mem_q_empty && !t_got_miss && !r_lock_cache && !n_pending_tlb_miss &!w_eb_port1_hit & !w_eb_full)
 		 begin		    
 		    if(!t_mh_block & (r_mq_inflight[r_mq_head_ptr[`LG_MRQ_ENTRIES-1:0]] == 1'b0)  )
 		      begin
@@ -2046,7 +2045,7 @@ module nu_l1d(clk,
 	    end // case: ACTIVE
 	  WAIT_INJECT_RELOAD:
 	    begin
-	       t_push_sb = 1'b1;
+	       t_push_eb = 1'b1;
 	       n_state = CLEAR_DIRTY;
 	       n_port1_req_store_data = t_data;
 	    end
@@ -2134,7 +2133,7 @@ module nu_l1d(clk,
 		    n_state = (r_cache_idx == (L1D_NUM_SETS-1)) ? FLUSH_CACHE_LAST_WAIT : FLUSH_CACHE_WAIT;
 		    n_inhibit_write = 1'b1;
 		    //n_port1_req_valid = 1'b1;
-		    t_push_sb = 1'b1;
+		    t_push_eb = 1'b1;
 		    
 		 end // else: !if(r_valid_out && !r_dirty_out)
 	    end // case: FLUSH_CACHE
@@ -2191,7 +2190,8 @@ module nu_l1d(clk,
 
    always_ff@(negedge clk)
      begin
-	//if(t_push_sb)
+	
+	//if(t_push_eb)
 	//begin
 	//$display("--> pushing addr %x, data %x to sb entry %d at cycle %d", 
 	//n_port1_req_addr, t_addr, r_eb_tail_ptr[`LG_EB_ENTRIES-1:0], r_cycle);
@@ -2276,8 +2276,7 @@ module nu_l1d(clk,
 			 end
 		    end
 	     
-`endif // unmatched `else, `elsif or `endif
-	     
+`endif //  `ifdef DEBUG
 	     if(r_state != ACTIVE && (r_miss_idx ==t_cache_idx2))
 	       begin
 		  $stop();
@@ -2296,7 +2295,7 @@ module nu_l1d(clk,
 	n_mem_req_store_data = n_port1_req_store_data;
 	n_mem_req_opcode = n_port1_req_opcode;
 	n_mem_req_tag = n_port1_req_tag;
-	t_pop_sb = 1'b0;
+	t_pop_eb = 1'b0;
 	if(n_port2_req_valid)
 	  begin
 	     n_mem_req_valid = n_port2_req_valid;
@@ -2312,7 +2311,7 @@ module nu_l1d(clk,
 	  end
 	else if(!(n_port1_req_valid|n_port2_req_valid) & !w_eb_empty)
 	  begin
-	     t_pop_sb = 1'b1;
+	     t_pop_eb = 1'b1;
 	     n_mem_req_valid = 1'b1;
 	     n_mem_req_uc = 1'b0;
 	     n_mem_req_addr = r_sb[r_eb_head_ptr[`LG_EB_ENTRIES-1:0]].addr;
@@ -2329,11 +2328,11 @@ module nu_l1d(clk,
      begin
 	n_eb_head_ptr = r_eb_head_ptr;
 	n_eb_tail_ptr = r_eb_tail_ptr;	
-	if(t_push_sb)
+	if(t_push_eb)
 	  begin
 	     n_eb_tail_ptr = r_eb_tail_ptr + 'd1;	
 	  end
-	if(t_pop_sb)
+	if(t_pop_eb)
 	  begin
 	     n_eb_head_ptr = r_eb_head_ptr + 'd1;	
 	  end
@@ -2343,6 +2342,15 @@ module nu_l1d(clk,
 `ifdef VERILATOR
    always_ff@(negedge clk)
      begin
+	//if(w_eb_full)
+	//begin
+	//$display("eviction buffer full at cycle %d", r_cycle);
+	//end
+	//if(!w_eb_empty)
+	//begin
+	//$display("eviction buffer not empty at cycle %d", r_cycle);
+	//end
+	
 	if(t_got_miss)
 	  begin
 	     log_l1d_miss({31'd0, t_dirty_miss});
