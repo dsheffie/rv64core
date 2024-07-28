@@ -1194,8 +1194,8 @@ module nu_l1d(clk,
 	  begin
 	     t_write_valid_en = 1'b1;
 	     t_valid_wr_addr = n_port1_req_addr[IDX_STOP-1:IDX_START];
-	     $display("marking line %x as not valid at cycle %d", 
-		      t_valid_wr_addr, r_cycle);
+	     //$display("marking line %x as not valid at cycle %d", 
+	     //t_valid_wr_addr, r_cycle);
 	  end
 	else if(mem_rsp_reload)
 	  begin
