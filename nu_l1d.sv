@@ -241,7 +241,8 @@ module nu_l1d(clk,
    logic 				  t_tlb_xlat,t_tlb_xlat_replay;
    logic 				  n_pending_tlb_miss, r_pending_tlb_miss;
    logic				  n_pending_tlb_zero_page, r_pending_tlb_zero_page;
-   logic 				  t_got_miss, t_dirty_miss, t_push_sb;
+   logic				  t_got_miss, t_dirty_miss;
+   logic				  t_pop_sb, t_push_sb;
    
    logic 				  t_push_miss;
    
@@ -323,15 +324,6 @@ module nu_l1d(clk,
    
    wire  mem_rsp_valid = r_got_req & r_req.is_store ? 1'b0 : !w_l2q_empty;
 
-   always_comb
-     begin
-	n_sb_head_ptr = r_sb_head_ptr;
-	n_sb_tail_ptr = r_sb_tail_ptr;	
-	if(t_push_sb)
-	  begin
-	     n_sb_tail_ptr = r_sb_tail_ptr + 'd1;	
-	  end
-     end
 
 
    
@@ -347,6 +339,10 @@ module nu_l1d(clk,
 	       begin
 		  r_sb_valid[r_sb_tail_ptr[`LG_SB_ENTRIES-1:0]] <= 1'b1;
 	       end
+	     if(t_pop_sb)
+	       begin
+		  r_sb_valid[r_sb_head_ptr[`LG_SB_ENTRIES-1:0]] <= 1'b0;
+	       end
 	  end // else: !if(reset)
      end // always_ff@ (posedge clk)
    
@@ -360,17 +356,19 @@ module nu_l1d(clk,
 	  end
      end
 
-   wire [N_SB_ENTRIES-1:0] w_sb_port1_hit, w_sb_port2_hit;
+   wire [N_SB_ENTRIES-1:0] w_sb_port1_hits, w_sb_port2_hits;
    
    generate
       for(genvar i = 0; i < N_SB_ENTRIES; i=i+1)
 	begin
-	   assign w_sb_port1_hit[i] = r_sb_valid[i] ? (r_sb[i].addr[IDX_STOP-1:IDX_START] == t_cache_idx) : 1'b0;
-	   assign w_sb_port2_hit[i] = r_sb_valid[i] ? (r_sb[i].addr[IDX_STOP-1:IDX_START] == t_cache_idx2) : 1'b0;
+	   assign w_sb_port1_hits[i] = r_sb_valid[i] ? (r_sb[i].addr[IDX_STOP-1:IDX_START] == t_mem_head.addr[IDX_STOP-1:IDX_START]) : 1'b0;
+	   assign w_sb_port2_hits[i] = r_sb_valid[i] ? (r_sb[i].addr[IDX_STOP-1:IDX_START] == t_cache_idx2) : 1'b0;
 	end
    endgenerate
 
-   
+   wire w_sb_port1_hit = |w_sb_port1_hits;
+   wire	w_sb_port2_hit = |w_sb_port2_hits;
+
    
    always_comb
      begin
@@ -446,6 +444,8 @@ module nu_l1d(clk,
    logic			  r_last_early_valid;
    
    logic [IDX_STOP-IDX_START-1:0] r_mq_addr[N_MQ_ENTRIES-1:0];
+   logic [31:0]			  r_mq_dbg_addr[N_MQ_ENTRIES-1:0];
+   
    logic [15:0]			  r_mq_mask[N_MQ_ENTRIES-1:0];
    
    logic [`M_WIDTH-1:0] 	  r_mq_full_addr[N_MQ_ENTRIES-1:0];
@@ -465,6 +465,7 @@ module nu_l1d(clk,
 			     ACTIVE, //2
                              INJECT_RELOAD, //3
 			     WAIT_INJECT_RELOAD, //4
+                             CLEAR_DIRTY, //3			     			     
                              FLUSH_CACHE, //5
                              FLUSH_CACHE_WAIT, //6
 			     FLUSH_CACHE_LAST_WAIT, //7
@@ -505,6 +506,8 @@ module nu_l1d(clk,
    logic [3:0] 		       n_port2_req_opcode;
    logic [`LG_MRQ_ENTRIES:0]   n_port2_req_tag;
 
+
+   
    
    
    wire 		       w_tlb_hit, w_tlb_dirty, w_tlb_writable, w_tlb_readable, 
@@ -677,7 +680,7 @@ module nu_l1d(clk,
 		  
 		  r_rob_inflight[r_req2.rob_ptr] <= 1'b1;
 	       end
-	     if(r_got_req && r_valid_out && (r_tag_out == r_cache_tag) && !r_req.uncachable)
+	     if(r_got_req && r_valid_out && (r_tag_out == r_cache_tag) )
 	       begin
 		  //$display("rob entry %d leaves at cycle %d", r_req.rob_ptr, r_cycle);
 		  if(r_rob_inflight[r_req.rob_ptr] == 1'b0) 
@@ -695,6 +698,8 @@ module nu_l1d(clk,
 
    /* logic to check if memory request port is free */
    wire w_cache_port1_hit = r_valid_out & (r_tag_out == r_cache_tag);
+   wire	w_cache_port1_clean_miss = !r_valid_out;
+   
    wire w_req_port_free = r_got_req ? w_cache_port1_hit : 1'b1;
 
    wire	w_port2_dirty_miss = r_valid_out2 && r_dirty_out2 && (r_tag_out2 != w_tlb_pa[`PA_WIDTH-1:IDX_STOP]);
@@ -739,8 +744,19 @@ module nu_l1d(clk,
 	  end
 	if(mem_req_valid)
 	  begin
-	     $display("req for tag %d, line %x at cycle %d, opcode %d, r_last_wr = %b",
-		      mem_req_tag, mem_req_addr[IDX_STOP-1:IDX_START], r_cycle, mem_req_opcode, r_last_wr);
+	     // if(mem_req_opcode == MEM_SW && (mem_req_tag !=  {1'b1, {`LG_MRQ_ENTRIES{1'b1}}}) && (r_state == ACTIVE))
+	     // begin
+	     // 	$display("generating store but tag is %d, n_port2_req_valid = %b, n_port1_req_valid = %b, r_state = %d, n_state = %d, r_cycle = %d", 
+	     // 		 n_mem_req_tag, n_port2_req_valid, n_port1_req_valid, r_state, n_state, r_cycle);
+	     // 	$stop();
+	     // end
+		
+	     $display("req for tag %d, line %x at cycle %d, opcode %d, r_last_wr = %b, rr_last_wr = %b, r_state = %d",
+		      mem_req_tag, 
+		      mem_req_addr[IDX_STOP-1:IDX_START], 
+		      r_cycle, 
+		      mem_req_opcode, r_last_wr, rr_last_wr,
+		      r_state);
 	  end
      end
 `endif
@@ -755,19 +771,7 @@ module nu_l1d(clk,
 	  begin
 	     if(w_gen_early_req)
 	       begin
-`ifdef VERILATOR
-		  for(integer i = 0; i < N_MQ_ENTRIES; i=i+1)
-		    begin
-		       if(r_mq_addr_valid[i] & (r_mq_addr[i] == r_req2.addr[IDX_STOP-1:IDX_START]))
-			 begin
-			    $display("line %x already in flight for entry %d", r_mq_addr[i], i);
-			    $stop();
-			 end
-		    end
-`endif
-		  
 `ifdef DEBUG
-
 		  $display("generating early memory request with tag %d for pc %x addr %x at cycle %d, r_last_wr = %b, rr_last_wr = %b, line %x",
 			   r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0], r_req2.pc, r_req2.addr[`PA_WIDTH-1:0], r_cycle, r_last_wr, rr_last_wr, r_req2.addr[IDX_STOP-1:IDX_START]);
 		  
@@ -800,6 +804,8 @@ module nu_l1d(clk,
 	  begin
 	     r_mem_q[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0] ] <= t_req2_pa;
 	     r_mq_addr[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]] <= r_req2.addr[IDX_STOP-1:IDX_START];
+	     r_mq_dbg_addr[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]] <= w_tlb_pa[31:0];	     
+
 	     r_mq_mask[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]] <= t_mq_mask & {16{r_req2.is_store}};	     
 	     r_mq_op[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]] <= r_req2.op;
 	     r_mq_is_load[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]] <= r_req2.is_load;
@@ -877,6 +883,18 @@ module nu_l1d(clk,
 
 
 
+   // always_ff@(negedge clk)
+   //   begin
+   // 	for(integer i = 0; i < N_MQ_ENTRIES; i=i+1)
+   // 	  begin
+   // 	     if(w_hit_busy_addrs[i])
+   // 	       begin
+   // 		  $display("t_cache_idx %x matches entry %d, full addr %x, cycle %d", 
+   // 			   t_cache_idx, i, r_mq_dbg_addr[i], r_cycle);
+   // 	       end
+   // 	  end
+   //   end
+    
 
 
    always_ff@(posedge clk)
@@ -919,9 +937,11 @@ module nu_l1d(clk,
 	     rr_is_retry <= 1'b0;
 	     rr_did_reload <= 1'b0;
 	     rr_last_wr <= 1'b0;
+	     r_last_wr <= 1'b0;
+	     
 	     r_wr_array <= 1'b0;
 	     r_got_non_mem <= 1'b0;
-	     r_last_wr <= 1'b0;
+
 	     r_last_wr2 <= 1'b0;
 	     r_state <= INITIALIZE;
 	     r_mem_req_valid <= 1'b0;
@@ -1057,6 +1077,11 @@ module nu_l1d(clk,
 	  begin
 	     t_write_dirty_en = 1'b1;	     
 	  end
+	else if(t_push_sb)
+	  begin
+	     t_dirty_wr_addr = n_port1_req_addr[IDX_STOP-1:IDX_START];	     
+	     t_write_dirty_en = 1'b1;
+	  end	
 	else if(mem_rsp_reload)
 	  begin
 	     t_dirty_wr_addr = mem_rsp_addr[IDX_STOP-1:IDX_START];
@@ -1091,7 +1116,7 @@ module nu_l1d(clk,
 	 
 	if(t_wr_array)
 	  begin
-	     $display("store  to line %x with value %x t_dirty_value %b t_write_dirty_en %b at cycle %d",
+	     $display("store to line %x with value %x t_dirty_value %b t_write_dirty_en %b at cycle %d",
 		      t_array_wr_addr, t_array_wr_data, t_dirty_value, t_write_dirty_en, r_cycle);
 	  end
 
@@ -1117,7 +1142,7 @@ module nu_l1d(clk,
 
 	 	 
 	
-	if(mem_rsp_valid && t_wr_array)
+	if(mem_rsp_reload && t_wr_array)
 	  begin
 	     $display("write port conflict, state %d, n_state %d, r_req.pc %x, resp tag %d",
 		      r_state, n_state, r_req.pc, mem_rsp_tag);
@@ -1169,10 +1194,10 @@ module nu_l1d(clk,
 	  begin
 	     t_write_valid_en = 1'b1;
 	     t_valid_wr_addr = n_port1_req_addr[IDX_STOP-1:IDX_START];
-	     //$display("marking line %x as not valid at cycle %d", 
-	     //t_valid_wr_addr, r_cycle);
+	     $display("marking line %x as not valid at cycle %d", 
+		      t_valid_wr_addr, r_cycle);
 	  end
-	else if(mem_rsp_valid)
+	else if(mem_rsp_reload)
 	  begin
 	     t_valid_wr_addr = mem_rsp_addr[IDX_STOP-1:IDX_START];
 	     t_valid_value = !r_inhibit_write;
@@ -1388,7 +1413,7 @@ module nu_l1d(clk,
 		 (r_got_req && r_must_forward) ? r_array_wr_data : 
 		 r_array_out;
 	
-	t_hit_cache =  r_got_req & w_cache_port1_hit & (r_state == ACTIVE) & (r_req.uncachable==1'b0);
+	t_hit_cache =  r_got_req & w_cache_port1_hit & (r_state == ACTIVE);
 	t_array_data = 'd0;
 	t_wr_array = 1'b0;
 	t_wr_store = 1'b0;
@@ -1597,7 +1622,6 @@ module nu_l1d(clk,
 	     t_core_mem_rsp.rob_ptr = r_req2.rob_ptr;
 	     t_core_mem_rsp.dst_ptr = r_req2.dst_ptr;
 	     t_req2_pa.addr = {32'd0, w_tlb_pa};
-	     t_req2_pa.uncachable = 1'b0;
 	     
 	     if(r_pending_tlb_miss)
 	       begin
@@ -1717,7 +1741,9 @@ module nu_l1d(clk,
 `endif
     
      
-   wire w_got_hit = r_got_req ? w_cache_port1_hit & (!r_req.uncachable) : 1'b1;
+   wire w_got_hit = r_got_req ? w_cache_port1_hit : 1'b1;
+   
+   wire	w_got_clean_miss = r_got_req ? w_cache_port1_clean_miss : 1'b0;   
    
    wire	w_mh_block = r_got_req && r_last_wr && (r_cache_idx == t_mem_head.addr[IDX_STOP-1:IDX_START] );
 
@@ -1850,6 +1876,8 @@ module nu_l1d(clk,
 	    begin
 	       if(r_got_req)
 		 begin
+		    //$display("---> port1 addr %x for pc %x, rob_ptr %d", r_req.addr, r_req.pc, r_req.rob_ptr);
+		    
 		    if(w_got_hit)
 		      begin /* valid cacheline - hit in cache */
 			 t_reset_graduated = r_req.is_store;
@@ -1866,8 +1894,8 @@ module nu_l1d(clk,
 				       r_req.pc, r_req.addr, t_rsp_data[`M_WIDTH-1:0], r_cycle);
 `endif
 			   end // else: !if(r_req.is_store)
-		      end // if (r_valid_out && (r_tag_out == r_cache_tag))
-		    else if(r_valid_out && r_dirty_out && (r_tag_out != r_cache_tag) && !r_req.uncachable)
+		      end // if (w_got_hit)
+		    else if(r_valid_out && r_dirty_out && (r_tag_out != r_cache_tag) )
 		      begin
 			 t_got_miss = 1'b1;
 			 t_dirty_miss = 1'b1;			 
@@ -1880,22 +1908,19 @@ module nu_l1d(clk,
 			      n_inhibit_write = 1'b1;
 			      t_miss_idx = r_cache_idx;
 			      t_miss_addr = r_req.addr;
-			      n_port1_req_tag = (1 << `LG_MRQ_ENTRIES);	
-		      
+			      //$display("lock cache at cycle %d (case 1)", r_cycle);
 			      n_lock_cache = 1'b1;
 			      if((rr_cache_idx == r_cache_idx) && rr_last_wr)
 				begin
 				   //$display("inflight write to line, must wait");
 				   t_cache_idx = r_cache_idx;
 				   n_state = WAIT_INJECT_RELOAD;
-				   n_port1_req_valid = 1'b0;				   
 				end
 			      else
 				begin
 				   //$display("no wait");
 				   t_push_sb = 1'b1;
-				   n_state = INJECT_RELOAD;				   
-				   n_port1_req_valid = 1'b1;
+				   n_state = CLEAR_DIRTY;				   
 				end
 			   end // if (!t_stall_for_busy)
 		      end
@@ -1912,15 +1937,16 @@ module nu_l1d(clk,
 			    if((rr_cache_idx == r_cache_idx) && rr_last_wr)
 			      begin
 				 n_port1_req_addr = {r_tag_out,r_cache_idx,4'd0};
+				 //$display("lock cache at cycle %d (case 2)", r_cycle);				 
 				 n_lock_cache = 1'b1;
 				 n_port1_req_opcode = MEM_SW;
 				 n_port1_req_tag = (1 << `LG_MRQ_ENTRIES);
 				 t_dirty_miss = 1'b1;			 				 
 				 n_state = WAIT_INJECT_RELOAD;
-				 n_port1_req_valid = 1'b0;
 			      end                                                             
 			    else
 			      begin
+				 //$display("unlock cache at cycle %d", r_cycle);				 
 				 n_lock_cache = 1'b0;
 				 n_port1_req_addr = {r_req.addr[`PA_WIDTH-1:`LG_L1D_CL_LEN], 4'd0};
 				 n_port1_req_opcode = MEM_LW;
@@ -1931,12 +1957,16 @@ module nu_l1d(clk,
 			 end // if (r_hit_busy_addr && r_is_retry || !r_hit_busy_addr || r_lock_cache)
 		       else
 			 begin
-			    $display("r_valid_out = %b r_dirty_out = %b r_tag_out = %x r_cache_tag = %x r_req.uncachable = %b cycle %d",
-				     r_valid_out, r_dirty_out, r_tag_out, r_cache_tag, r_req.uncachable, r_cycle);
+			    
+			    $display("r_valid_out = %b r_dirty_out = %b r_tag_out = %x r_cache_tag = %x line %x cycle %d",
+				     r_valid_out, r_dirty_out, r_tag_out, r_cache_tag, r_cache_idx, r_cycle);
+			    $display("r_hit_busy_addr %b,  r_is_retry  %b r_hit_busy_addr %b r_lock_cache %b",
+				     r_hit_busy_addr, r_is_retry, r_hit_busy_addr, r_lock_cache);
 			    
 			    $stop();
 			 end
-		    end // else: !if(r_valid_out && r_dirty_out && (r_tag_out != r_cache_tag) && !r_req.uncachable)
+		    end // else: !if(r_valid_out && r_dirty_out && (r_tag_out != r_cache_tag) )
+		    
 		 end // if (r_got_req)
 	       else if(n_pending_tlb_miss)
 		 begin
@@ -1946,8 +1976,8 @@ module nu_l1d(clk,
 		 end
 
 	       /* not qualified on r_got_req */
-	       
-	       if(!mem_q_empty && !t_got_miss && !r_lock_cache && !n_pending_tlb_miss)
+	       if(!mem_q_empty && !t_got_miss && !r_lock_cache && !n_pending_tlb_miss 
+		  &!w_sb_port1_hit & !w_sb_full)
 		 begin		    
 		    if(!t_mh_block & (r_mq_inflight[r_mq_head_ptr[`LG_MRQ_ENTRIES-1:0]] == 1'b0)  )
 		      begin
@@ -1966,6 +1996,7 @@ module nu_l1d(clk,
 				   t_addr = t_mem_head.addr;
 				   t_got_req = 1'b1;
 				   n_is_retry = 1'b1;
+				   //$display("accepting store to line %x at cycle %d, data %x", t_cache_idx, r_cycle, n_req.data);
 				   n_last_wr = 1'b1;
 				end // if (t_mem_head.rob_ptr == head_of_rob_ptr)
 			      else if(drain_ds_complete && dead_rob_mask[t_mem_head.rob_ptr])
@@ -2016,13 +2047,24 @@ module nu_l1d(clk,
 	  WAIT_INJECT_RELOAD:
 	    begin
 	       t_push_sb = 1'b1;
-	       n_port1_req_valid = 1'b1;
-	       n_state = INJECT_RELOAD;
+	       n_state = CLEAR_DIRTY;
 	       n_port1_req_store_data = t_data;
+	    end
+	  CLEAR_DIRTY:
+	    begin
+	       //$display("now in clear dirty state..., sb empty %b sb full %b", w_sb_empty, w_sb_full);
+	       t_cache_idx = r_req.addr[IDX_STOP-1:IDX_START];
+	       t_cache_tag = r_req.addr[`PA_WIDTH-1:IDX_STOP];
+	       n_last_wr = r_req.is_store;
+	       t_got_req = 1'b1;
+	       t_addr  = r_req.addr;
+	       n_did_reload = 1'b1;
+	       n_state = ACTIVE;
+	       
 	    end
 	  INJECT_RELOAD:
 	    begin
-	       if(mem_rsp_valid && (mem_rsp_tag == (1 << `LG_MRQ_ENTRIES)))
+	       if(mem_rsp_reload && (mem_rsp_tag == (1 << `LG_MRQ_ENTRIES)))
 		 begin
 		    n_state = HANDLE_RELOAD;
 		    n_inhibit_write = 1'b0;
@@ -2088,9 +2130,12 @@ module nu_l1d(clk,
 		    n_port1_req_addr = {r_tag_out,r_cache_idx,4'd0};
 		    n_port1_req_opcode = MEM_SW;
 		    n_port1_req_store_data = t_data;
+		    n_port1_req_tag = {1'b1, {`LG_MRQ_ENTRIES{1'b1}}};		    
 		    n_state = (r_cache_idx == (L1D_NUM_SETS-1)) ? FLUSH_CACHE_LAST_WAIT : FLUSH_CACHE_WAIT;
 		    n_inhibit_write = 1'b1;
-		    n_port1_req_valid = 1'b1;
+		    //n_port1_req_valid = 1'b1;
+		    t_push_sb = 1'b1;
+		    
 		 end // else: !if(r_valid_out && !r_dirty_out)
 	    end // case: FLUSH_CACHE
 	  FLUSH_CACHE_LAST_WAIT:
@@ -2143,8 +2188,14 @@ module nu_l1d(clk,
 	endcase // case r_state
      end // always_comb
 
+
    always_ff@(negedge clk)
      begin
+	//if(t_push_sb)
+	//begin
+	//$display("--> pushing addr %x, data %x to sb entry %d at cycle %d", 
+	//n_port1_req_addr, t_addr, r_sb_tail_ptr[`LG_SB_ENTRIES-1:0], r_cycle);
+	// end
       if(t_push_miss && mem_q_full)
 	begin
 	   $display("attempting to push to a full memory queue");
@@ -2155,7 +2206,8 @@ module nu_l1d(clk,
 	   $display("attempting to pop an empty memory queue");
 	   $stop();
 	  end
-     end
+     end // always_ff@ (negedge clk)
+
 
    wire w_reload_line = ((core_mem_va_req.addr[IDX_STOP-1:IDX_START] == r_miss_idx) & (r_state != ACTIVE)) | 
 	((core_mem_va_req.addr[IDX_STOP-1:IDX_START] == t_miss_idx) & t_got_miss);
@@ -2218,7 +2270,7 @@ module nu_l1d(clk,
 		      mem_rsp_valid);
 		  for(integer i = 0; i < N_MQ_ENTRIES; i=i+1)
 		    begin
-		       if(r_mq_addr_valid[i])
+		       if(r_mq_addr_valid[i] & r_mq_inflight[i])
 			 begin
 			    $display("\tline %x already in flight for entry %d", r_mq_addr[i], i);
 			 end
@@ -2244,6 +2296,7 @@ module nu_l1d(clk,
 	n_mem_req_store_data = n_port1_req_store_data;
 	n_mem_req_opcode = n_port1_req_opcode;
 	n_mem_req_tag = n_port1_req_tag;
+	t_pop_sb = 1'b0;
 	if(n_port2_req_valid)
 	  begin
 	     n_mem_req_valid = n_port2_req_valid;
@@ -2251,9 +2304,41 @@ module nu_l1d(clk,
 	     n_mem_req_addr = n_port2_req_addr;
 	     n_mem_req_store_data = n_port2_req_store_data;
 	     n_mem_req_opcode = n_port2_req_opcode;
+	     if(n_mem_req_opcode == 4'd7)
+	       begin
+		  $stop();
+	       end
 	     n_mem_req_tag = n_port2_req_tag;
 	  end
+	else if(!(n_port1_req_valid|n_port2_req_valid) & !w_sb_empty)
+	  begin
+	     t_pop_sb = 1'b1;
+	     n_mem_req_valid = 1'b1;
+	     n_mem_req_uc = 1'b0;
+	     n_mem_req_addr = r_sb[r_sb_head_ptr[`LG_SB_ENTRIES-1:0]].addr;
+	     n_mem_req_store_data = r_sb[r_sb_head_ptr[`LG_SB_ENTRIES-1:0]].data;
+	     n_mem_req_opcode = MEM_SW;
+	     n_mem_req_tag = {1'b1, {`LG_MRQ_ENTRIES{1'b1}}};
+	     //$display("--> write buffer using memory buffer at cycle %d with tag %x", 
+	     //r_cycle, n_mem_req_tag);	     
+	  end
+     end // always_comb
+
+
+      always_comb
+     begin
+	n_sb_head_ptr = r_sb_head_ptr;
+	n_sb_tail_ptr = r_sb_tail_ptr;	
+	if(t_push_sb)
+	  begin
+	     n_sb_tail_ptr = r_sb_tail_ptr + 'd1;	
+	  end
+	if(t_pop_sb)
+	  begin
+	     n_sb_head_ptr = r_sb_head_ptr + 'd1;	
+	  end
      end
+
 
 `ifdef VERILATOR
    always_ff@(negedge clk)
