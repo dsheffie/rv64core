@@ -806,7 +806,7 @@ module l2_2way(clk,
 		    t_wr_last = 1'b1;
 		    t_last = w_hit0 ? 1'b0 : 1'b1;
 		    //$display("hit, hit 0 = %b, hit 1 = %b, r_addr %x", w_hit0, w_hit1, r_addr);
-		    if(r_opcode == 4'd4)
+		    if(r_opcode == MEM_LW)
 		      begin			 
 			 n_rsp_data = w_d;
 			 if(r_mmu)
@@ -846,7 +846,7 @@ module l2_2way(clk,
 			 //$display("cycle %d : ack'd for address %x, n_l1i_req = %b, n_l1d_req = %b, n_l1i_rsp_valid =%b, n_l1d_rsp_valid = %b", 
 			 //r_cycle, r_addr, n_l1i_req, n_l1d_req, n_l1i_rsp_valid,n_l1d_rsp_valid);			 
 		      end
-		    else if(r_opcode == 4'd7)
+		    else if(r_opcode == MEM_SW)
 		      begin
 			 t_wr_dirty0 = w_hit0;
 			 t_wr_dirty1 = w_hit1;			 
