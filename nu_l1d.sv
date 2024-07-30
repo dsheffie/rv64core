@@ -792,7 +792,7 @@ module nu_l1d(clk,
      begin
 	n_port2_req_valid = w_gen_early_req;
 	n_port2_req_uc = 1'b0;
-	n_port2_req_addr = r_req2.addr[`PA_WIDTH-1:0];
+	n_port2_req_addr = w_tlb_pa[`PA_WIDTH-1:0];
 	n_port2_req_store_data = r_mem_req_store_data;
 	n_port2_req_opcode = 4'd4;
 	n_port2_req_tag = {1'b0, r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]};
