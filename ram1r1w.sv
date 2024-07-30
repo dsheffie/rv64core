@@ -20,6 +20,13 @@ module ram1r1w(clk, rd_addr, wr_addr, wr_data, wr_en, rd_data);
      end
 `endif
 
+   //always_ff@(negedge clk)
+   //begin
+   //if(wr_en & (rd_addr == wr_addr))
+   //begin
+   //$display("read and write to same loc (%x)", rd_addr);
+   //end
+   //end
    
    always_ff@(posedge clk)
      begin

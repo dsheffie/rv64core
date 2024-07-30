@@ -765,6 +765,7 @@ module nu_l1d(clk,
 	     $display("resp for tag %d, addr %x, data %x at cycle %d",
 		      mem_rsp_tag, mem_rsp_addr, mem_rsp_load_data, r_cycle);
 	  end
+	
 	if(mem_req_valid)
 	  begin
 	     // if(mem_req_opcode == MEM_SW && (mem_req_tag !=  {1'b1, {`LG_MRQ_ENTRIES{1'b1}}}) && (r_state == ACTIVE))
@@ -804,7 +805,8 @@ module nu_l1d(clk,
 	     if(w_early_rsp)
 	       begin
 `ifdef DEBUG
-		  $display("early mem req returns for tag %d, addr %x at cycle %d", mem_rsp_tag, mem_rsp_addr, r_cycle);
+		  $display("early mem req returns for tag %d, addr %x at cycle %d, can write cache %b", 
+			   mem_rsp_tag, mem_rsp_addr, r_cycle, mem_rsp_reload);
 `endif
 		  r_mq_inflight[mem_rsp_tag[`LG_MRQ_ENTRIES-1:0]] <= 1'b0;		  
 	       end
@@ -815,7 +817,7 @@ module nu_l1d(clk,
      begin
 	n_port2_req_valid = w_gen_early_req;
 	n_port2_req_uc = 1'b0;
-	n_port2_req_addr = r_req2.addr[`PA_WIDTH-1:0];
+	n_port2_req_addr = w_tlb_pa[`PA_WIDTH-1:0];
 	n_port2_req_store_data = r_mem_req_store_data;
 	n_port2_req_opcode = 4'd4;
 	n_port2_req_tag = {1'b0, r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]};
@@ -1122,14 +1124,14 @@ module nu_l1d(clk,
 `ifdef DEBUG
     always_ff@(negedge clk)
       begin
-	 if(t_got_req2)
-	   begin
-	      $display("ingest t_cache_idx2 = %x at cycle %d", t_cache_idx2, r_cycle);
-	   end
-	 if(t_replay_req2)
-	   begin
-	      $display("replay t_cache_idx2 = %x at cycle %d", t_cache_idx2, r_cycle);
-	   end	 
+	 // if(t_got_req2)
+	 //   begin
+	 //      $display("ingest t_cache_idx2 = %x at cycle %d", t_cache_idx2, r_cycle);
+	 //   end
+	 // if(t_replay_req2)
+	 //   begin
+	 //      $display("replay t_cache_idx2 = %x at cycle %d", t_cache_idx2, r_cycle);
+	 //   end	 
 	 
 	 if(t_mark_invalid & mem_rsp_valid | t_mark_invalid & t_wr_array | mem_rsp_valid & t_wr_array)
 	   begin
@@ -1861,6 +1863,11 @@ module nu_l1d(clk,
 	n_core_mem_rsp.has_cause = t_core_mem_rsp.has_cause;
 	n_core_mem_rsp.mark_page_dirty = t_core_mem_rsp.mark_page_dirty;
 	n_core_mem_rsp.cause = t_core_mem_rsp.cause;
+`ifdef ENABLE_CYCLE_ACCOUNTING
+	n_core_mem_rsp.l1d_pass1_cycle = t_core_mem_rsp.l1d_pass1_cycle;//r_req.l1d_pass1_cycle;
+	n_core_mem_rsp.l1d_pass2_cycle = t_core_mem_rsp.l1d_pass2_cycle;//r_req.l1d_pass2_cycle;	
+`endif
+
 	
 	n_store_stalls = r_store_stalls;
 
@@ -1922,9 +1929,12 @@ module nu_l1d(clk,
 			      n_core_mem_rsp_valid = 1'b1;
 			      if(t_core_mem_rsp_valid) $stop();
 			      n_core_mem_rsp.has_cause = r_req.spans_cacheline;
-
+`ifdef ENABLE_CYCLE_ACCOUNTING			      
+			      n_core_mem_rsp.l1d_pass2_cycle = {32'd0, r_cycle};
+`endif
+			      
 `ifdef DEBUG
-			      $display("load on port1 hit cache for pc %x, addr %x, got data %x, cycle %d", 
+			      $display("hit on port1 for pc %x, addr %x, got data %x, cycle %d", 
 				       r_req.pc, r_req.addr, t_rsp_data[`M_WIDTH-1:0], r_cycle);
 `endif
 			   end // else: !if(r_req.is_store)
@@ -1934,6 +1944,9 @@ module nu_l1d(clk,
 			 t_got_miss = 1'b1;
 			 t_dirty_miss = 1'b1;			 
 			 n_inhibit_write = 1'b1;
+			 //$display("dirty miss on port1 for pc %x, addr %x, cycle %d", 
+			 //r_req.pc, r_req.addr, r_cycle);
+			 
 			 if(r_hit_busy_addr && r_is_retry || !r_hit_busy_addr)
 			   begin
 			      n_port1_req_addr = {r_tag_out,r_cache_idx,4'd0};
@@ -1961,7 +1974,16 @@ module nu_l1d(clk,
 		  else
 		    begin
 		       t_got_miss = 1'b1;
-		       n_inhibit_write = 1'b0;	
+		       n_inhibit_write = 1'b0;
+		       //$display("clean miss on port1 for pc %x, addr %x, cycle %d", 
+		       //r_req.pc, r_req.addr, r_cycle);
+		       //$display("clean miss bits r_valid_out = %b r_dirty_out = %b r_tag_out = %x r_cache_tag = %x line %x cycle %d",
+		       //r_valid_out, r_dirty_out, r_tag_out, r_cache_tag, r_cache_idx, r_cycle);
+		       if(r_cache_idx != r_req.addr[IDX_STOP-1:IDX_START])
+			 begin
+			    $stop();
+			 end
+		       
 		       if(r_hit_busy_addr && r_is_retry || !r_hit_busy_addr || r_lock_cache)
 			 begin
 			    t_miss_idx = r_cache_idx;
@@ -2049,7 +2071,9 @@ module nu_l1d(clk,
 			      n_is_retry = 1'b1;
 			      t_got_rd_retry = 1'b1;
 			   end // else: !if(t_mem_head.is_store || t_mem_head.is_atomic)
-		      end
+		      end // if (!t_mh_block & (r_mq_inflight[r_mq_head_ptr[`LG_MRQ_ENTRIES-1:0]] == 1'b0)  )
+		    //if(t_got_req) $display("starting replay for idx %x, tag %x at cycle %d", t_cache_idx, t_cache_tag, r_cycle);
+		    
 		 end // if (!mem_q_empty && !t_got_miss && !r_lock_cache && !n_pending_tlb_miss)
 	       
 	       
