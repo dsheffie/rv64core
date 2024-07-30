@@ -1,5 +1,8 @@
 `include "machine.vh"
 `ifdef VERILATOR
+import "DPI-C" function void log_l2(input int addr, 
+				    input int	write,
+				    input int	hit);
 
 `endif
 
@@ -289,6 +292,14 @@ module l2_2way(clk,
 
    always_ff@(negedge clk)
      begin
+// `ifdef VERILATOR
+// 	if(r_state == CHECK_VALID_AND_TAG)
+// 	  begin
+// 	     log_l2(r_addr,
+// 		    {31'd0, (r_opcode==MEM_SW)},
+// 		    {31'd0, w_hit});
+// 	  end
+// `endif
 	if(w_hit & r_state != CHECK_VALID_AND_TAG)
 	  $stop();
      end
@@ -859,7 +870,6 @@ module l2_2way(clk,
 	    end // case: IDLE
 	  CHECK_VALID_AND_TAG:
 	    begin
-	       //load hit
 	       if(w_hit)
 		 begin
 		    n_reload = 1'b0;

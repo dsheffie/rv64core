@@ -68,6 +68,10 @@ obj_dir/Vcore_l1d_l1i__ALL.a : $(SV_SRC)
 gen_html : gen_html.cc pipeline_record.hh
 	$(CXX) -MMD $(CXXFLAGS) gen_html.cc $(LIBS) -o gen_html
 
+pipe_to_txt : pipe_to_txt.cc pipeline_record.hh
+	$(CXX) -MMD $(CXXFLAGS) pipe_to_txt.cc $(LIBS) -o pipe_to_txt
+
+
 -include $(DEP)
 
 

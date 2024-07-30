@@ -21,6 +21,8 @@ import "DPI-C" function void record_alloc(input int rob_full,
 import "DPI-C" function void record_retirement(input longint pc,
 					       input longint fetch_cycle,
 					       input longint alloc_cycle,
+					       input longint l1d_port1_cycle,
+					       input longint l1d_port2_cycle, 
 					       input longint complete_cycle,
 					       input longint retire_cycle,
 					       input int     retire_val,
@@ -772,6 +774,8 @@ module core(clk,
 			       { {(64-`M_WIDTH){1'b0}},t_rob_head.pc},
    			       t_rob_head.fetch_cycle,
    			       t_rob_head.alloc_cycle,
+			       t_rob_head.l1d_pass1_cycle,
+			       t_rob_head.l1d_pass2_cycle,			       
    			       t_rob_head.complete_cycle,
    			       r_cycle,
 			       t_rob_head.valid_dst ? 32'd1 : 32'd0,
@@ -789,6 +793,8 @@ module core(clk,
 			       { {(64-`M_WIDTH){1'b0}},t_rob_next_head.pc},
    			       t_rob_next_head.fetch_cycle,
    			       t_rob_next_head.alloc_cycle,
+			       t_rob_next_head.l1d_pass1_cycle,
+			       t_rob_next_head.l1d_pass2_cycle,			       			       
    			       t_rob_next_head.complete_cycle,
    			       r_cycle,
 			       t_rob_next_head.valid_dst ? 32'd1 : 32'd0,
@@ -1557,6 +1563,8 @@ module core(clk,
 	     t_rob_tail.alloc_cycle = r_cycle;
 	     t_rob_tail.raw_insn = t_alloc_uop.raw_insn;
 	     t_rob_tail.complete_cycle = 'd0;
+	     t_rob_tail.l1d_pass1_cycle = 'd0;
+	     t_rob_tail.l1d_pass2_cycle = 'd0;	     
 `endif	     
 	     if(t_uop.dst_valid)
 	       begin
@@ -1608,6 +1616,8 @@ module core(clk,
 	     t_rob_next_tail.alloc_cycle = r_cycle;
 	     t_rob_next_tail.raw_insn = t_alloc_uop2.raw_insn;
 	     t_rob_next_tail.complete_cycle = 'd0;
+	     t_rob_next_tail.l1d_pass1_cycle = 'd0;
+	     t_rob_next_tail.l1d_pass2_cycle = 'd0;	     	     
 `endif
 
 	     if(t_uop2.dst_valid)
@@ -1787,6 +1797,8 @@ module core(clk,
 		  r_rob[core_mem_rsp.rob_ptr].mark_page_dirty <= core_mem_rsp.mark_page_dirty;
 `ifdef ENABLE_CYCLE_ACCOUNTING
 		  r_rob[core_mem_rsp.rob_ptr].complete_cycle <= r_cycle;
+		  r_rob[core_mem_rsp.rob_ptr].l1d_pass1_cycle <= core_mem_rsp.l1d_pass1_cycle;
+		  r_rob[core_mem_rsp.rob_ptr].l1d_pass2_cycle <= core_mem_rsp.l1d_pass2_cycle;		  
 `endif	    	     	     
 	       end
 	  end

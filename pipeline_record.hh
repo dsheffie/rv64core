@@ -24,6 +24,7 @@ public:
   std::string disasm;
   uint64_t pc;
   uint64_t fetch_cycle, alloc_cycle, complete_cycle, retire_cycle;
+  uint64_t l1d_port1_cycle, l1d_port2_cycle;
   bool faulted;
   friend class boost::serialization::access;
   template<class Archive>
@@ -33,6 +34,8 @@ public:
     ar & pc;
     ar & fetch_cycle;
     ar & alloc_cycle;
+    ar & l1d_port1_cycle;
+    ar & l1d_port2_cycle;
     ar & complete_cycle;
     ar & retire_cycle;
     ar & faulted;
@@ -43,14 +46,18 @@ public:
 		  uint64_t pc,
 		  uint64_t fetch_cycle,
 		  uint64_t alloc_cycle,
+		  uint64_t l1d_port1_cycle,
+		  uint64_t l1d_port2_cycle,
 		  uint64_t complete_cycle,
 		  uint64_t retire_cycle,
 		  bool faulted) :
     uuid(uuid), disasm(disasm), pc(pc), fetch_cycle(fetch_cycle), alloc_cycle(alloc_cycle),
+    l1d_port1_cycle(l1d_port1_cycle), l1d_port2_cycle(l1d_port2_cycle),
     complete_cycle(complete_cycle), retire_cycle(retire_cycle),
     faulted(faulted) {}
   pipeline_record() :
     uuid(~0UL), disasm(""), pc(0), fetch_cycle(0), alloc_cycle(0),
+    l1d_port1_cycle(0), l1d_port2_cycle(0),
     complete_cycle(0), retire_cycle(0), faulted(false) {}
 
   friend std::ostream &operator<<(std::ostream &out, const pipeline_record &r) {
@@ -106,11 +113,14 @@ public:
 	      uint64_t pc,
 	      uint64_t fetch_cycle,
 	      uint64_t alloc_cycle,
+	      uint64_t l1d_port1_cycle,
+	      uint64_t l1d_port2_cycle,
 	      uint64_t complete_cycle,
 	      uint64_t retire_cycle,
 	      bool faulted) {
-    records.emplace_back(uuid, disasm, pc, fetch_cycle, alloc_cycle, complete_cycle,
-			 retire_cycle, faulted);
+    records.emplace_back(uuid, disasm, pc, fetch_cycle, alloc_cycle,
+			 l1d_port1_cycle, l1d_port2_cycle,
+			 complete_cycle,retire_cycle, faulted);
   }
 };
 

@@ -244,6 +244,20 @@ void start_log(int l) {
   trace_retirement |= (l!=0);
 }
 
+static bool enable_early = false;
+
+int enable_early_req() {
+  return enable_early;
+}
+
+void log_l2(int addr, int write, int hit) {
+  std::cout << std::hex << addr << std::dec
+    //<< "," << cycle
+	    << "," << write 
+	    << "," << hit
+	    << "\n";
+}
+
 static uint64_t log_l1d_accesses = 0;
 static uint64_t log_l1d_push_miss = 0;
 static uint64_t log_l1d_push_miss_hit_inflight = 0;
@@ -263,13 +277,15 @@ void log_l1d_miss(int is_dirty) {
 }
 
 
-void log_l1d(int is_early_req,
+void log_l1d(int paddr,
+	     int is_early_req,
 	     int is_push_miss,
 	     int is_push_miss_hit_inflight,
 	     int is_st_hit,
 	     int is_ld_hit,
 	     int is_hit_under_miss) {
   log_l1d_accesses++;
+  
   if(is_push_miss) {
     log_l1d_push_miss++;
   }
@@ -546,6 +562,8 @@ static int pl_regs[32] = {0};
 void record_retirement(long long pc,
 		       long long fetch_cycle,
 		       long long alloc_cycle,
+		       long long l1d_port1_cycle,
+		       long long l1d_port2_cycle,
 		       long long complete_cycle,
 		       long long retire_cycle,
 		       int retire_reg_val,
@@ -626,7 +644,9 @@ void record_retirement(long long pc,
       disasm += " EA :  " + ss.str();
     }
 
-    pl->append(record_insns_retired, disasm, pc, fetch_cycle, alloc_cycle, complete_cycle, retire_cycle, faulted);
+    pl->append(record_insns_retired, disasm, pc, fetch_cycle, alloc_cycle,
+	       l1d_port1_cycle, l1d_port2_cycle,
+	       complete_cycle, retire_cycle, faulted);
   }
   ++record_insns_retired;
 }
@@ -702,6 +722,7 @@ int main(int argc, char **argv) {
       ("maxicnt", po::value<uint64_t>(&max_icnt)->default_value(1UL<<50), "maximum icnt")
       ("trace,t", po::value<bool>(&trace_retirement)->default_value(false), "trace retired instruction stream")
       ("starttrace,s", po::value<uint64_t>(&start_trace_at)->default_value(~0UL), "start tracing retired instructions")
+      ("early,e", po::value<bool>(&enable_early)->default_value(false), "enable early loads")
       ; 
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);
@@ -1555,6 +1576,8 @@ int main(int argc, char **argv) {
     std::cout << "tip cycles  = " << tip_cycles << "\n";
     dump_histo("tip.txt", tip_map, s);    
     out.close();
+
+
   }
   else {
     std::cout << "instructions retired = " << insns_retired << "\n";

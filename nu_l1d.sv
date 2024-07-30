@@ -3,7 +3,10 @@
 `include "uop.vh"
 
 `ifdef VERILATOR
-import "DPI-C" function void log_l1d(input int gen_early_req,
+import "DPI-C" function int enable_early_req();
+
+import "DPI-C" function void log_l1d(input int paddrr,
+				     input int gen_early_req,
 				     input int push_miss,
 				     input int push_miss_hit_inflight,
 				     input int is_st_hit,
@@ -19,6 +22,8 @@ import "DPI-C" function void wr_log(input longint pc,
 				    input longint unsigned data, 
 				    int 		   is_atomic);
 `endif
+
+
 
 //`define DEBUG
 //`define VERBOSE_L1D 1
@@ -704,8 +709,6 @@ module nu_l1d(clk,
 
    wire	w_port2_dirty_miss = r_valid_out2 && r_dirty_out2 && (r_tag_out2 != w_tlb_pa[`PA_WIDTH-1:IDX_STOP]);
    wire	w_port2_hit_cache = r_valid_out2 && (r_tag_out2 == w_tlb_pa[`PA_WIDTH-1:IDX_STOP]);
-
-   
    
    wire w_could_early_req_any = t_push_miss & mem_rdy & !t_port2_hit_cache &
 	(r_last_early_valid ? (r_last_early != r_req2.addr[IDX_STOP-1:IDX_START]) : 1'b1) &
@@ -719,8 +722,28 @@ module nu_l1d(clk,
 
    wire	w_could_early_req = !w_port2_dirty_miss & w_could_early_req_any;
 
+   logic t_en_early_req;
+`ifdef VERILATOR
+   logic r_enable_early_req;
+   always_ff@(negedge clk)
+     begin
+	if(r_cycle == 'd0)
+	  begin
+	     r_enable_early_req <= (enable_early_req() == 32'd1);
+	  end
+     end
+`endif
    
-   wire w_gen_early_req = w_could_early_req & (r_got_req ? w_cache_port1_hit : 1'b1);
+   always_comb
+     begin
+	t_en_early_req = 1'b1;
+`ifdef VERILATOR
+	t_en_early_req = r_enable_early_req;
+`endif
+     end
+   
+   
+   wire w_gen_early_req = w_could_early_req & (r_got_req ? w_cache_port1_hit : 1'b1) & t_en_early_req;
 
 
 
@@ -1608,6 +1631,11 @@ module nu_l1d(clk,
 	t_core_mem_rsp.cause = MISALIGNED_FETCH;
 	t_core_mem_rsp_valid = 1'b0;
 
+`ifdef ENABLE_CYCLE_ACCOUNTING
+	t_core_mem_rsp.l1d_pass1_cycle = r_req.l1d_pass1_cycle;
+	t_core_mem_rsp.l1d_pass2_cycle = r_req.l1d_pass2_cycle;	
+`endif
+	
 	t_incr_busy = 1'b0;
 	n_stall_store = 1'b0;
 	
@@ -1622,7 +1650,9 @@ module nu_l1d(clk,
 	     t_core_mem_rsp.rob_ptr = r_req2.rob_ptr;
 	     t_core_mem_rsp.dst_ptr = r_req2.dst_ptr;
 	     t_req2_pa.addr = {32'd0, w_tlb_pa};
-	     
+`ifdef ENABLE_CYCLE_ACCOUNTING
+	     t_req2_pa.l1d_pass1_cycle = {32'd0, r_cycle};
+`endif	     
 	     if(r_pending_tlb_miss)
 	       begin
 		  n_pending_tlb_miss = 1'b0;
@@ -1695,6 +1725,9 @@ module nu_l1d(clk,
                   t_core_mem_rsp.dst_valid = t_rsp_dst_valid2;
                   t_core_mem_rsp_valid = 1'b1;
 		  t_core_mem_rsp.has_cause = r_req2.spans_cacheline;
+`ifdef ENABLE_CYCLE_ACCOUNTING
+		  t_core_mem_rsp.l1d_pass1_cycle = {32'd0, r_cycle};
+`endif
 	       end
 	     else
 	       begin
@@ -1730,7 +1763,8 @@ module nu_l1d(clk,
 	     //if(r_req2.spans_cacheline) $stop();
 	     
  `endif
-	     log_l1d(w_gen_early_req ? 32'd1 : 32'd0,
+	     log_l1d(w_tlb_pa,
+		     w_gen_early_req ? 32'd1 : 32'd0,
 		     t_push_miss & r_req2.is_load ? 32'd1 : 32'0,
 		     t_push_miss & r_req2.is_load & (r_hit_busy_line2 | r_fwd_busy_addr2 | r_pop_busy_addr2) ? 32'd1 : 32'd0,
 		     r_req2.is_store & w_port2_rd_hit ? 32'd1 : 32'd0,

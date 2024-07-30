@@ -48,6 +48,8 @@ typedef struct packed {
 `ifdef ENABLE_CYCLE_ACCOUNTING
    logic [63:0] 	    fetch_cycle;
    logic [63:0] 	    alloc_cycle;
+   logic [63:0] 	    l1d_pass1_cycle;
+   logic [63:0] 	    l1d_pass2_cycle;   
    logic [63:0] 	    complete_cycle;
    logic [31:0]		    raw_insn;
 `endif
@@ -96,7 +98,9 @@ typedef struct packed {
    logic [`M_WIDTH-1:0]        data;
    logic [`M_WIDTH-1:0]        pc;
 `ifdef ENABLE_CYCLE_ACCOUNTING
-   logic [63:0] 	    fetch_cycle;
+   logic [63:0] 	       fetch_cycle;
+   logic [63:0] 	       l1d_pass1_cycle;
+   logic [63:0] 	       l1d_pass2_cycle;      
 `endif
 
 `ifdef VERILATOR
@@ -130,6 +134,10 @@ typedef struct packed {
    cause_t		       cause;
    logic		       has_cause;
    logic		       mark_page_dirty;
+`ifdef ENABLE_CYCLE_ACCOUNTING
+   logic [63:0] 	    l1d_pass1_cycle;
+   logic [63:0] 	    l1d_pass2_cycle;   
+`endif   
 } mem_rsp_t;
 
 typedef struct packed {
