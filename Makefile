@@ -62,7 +62,7 @@ verilated_vcd_c.o: $(VERILATOR_VCD)
 	$(CXX) -MMD $(CXXFLAGS) -c $< 
 
 obj_dir/Vcore_l1d_l1i__ALL.a : $(SV_SRC)
-	$(VERILATOR) --trace -cc core_l1d_l1i.sv
+	$(VERILATOR) --trace --trace-depth 1 -cc core_l1d_l1i.sv
 	$(MAKE) OPT_FAST="-O3 -flto" -C obj_dir -f Vcore_l1d_l1i.mk
 
 gen_html : gen_html.cc pipeline_record.hh

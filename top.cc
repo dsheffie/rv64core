@@ -801,7 +801,8 @@ int main(int argc, char **argv) {
   }
   s->pc = ss->pc;
   //signal(SIGINT, catchUnixSignal);
-  
+
+  vluint64_t dump_time = 0;
   double t0 = timestamp();
 
   while(!Verilated::gotFinish() && (cycle < max_cycle) && (insns_retired < max_icnt)) {
@@ -809,8 +810,7 @@ int main(int argc, char **argv) {
 
     tb->clk = 1;
     tb->eval();
-    m_trace->dump(static_cast<int>(10*cycle + 0));    
-
+    m_trace->dump(dump_time++);    
     
     if(kernel_panicd) {
       break;
@@ -1293,8 +1293,8 @@ int main(int argc, char **argv) {
     tb->clk = 0;
     tb->eval();
 
-    m_trace->dump(static_cast<int>(10*cycle + 5));
-    m_trace->flush();
+    m_trace->dump(dump_time++);
+
     
     if(got_mem_req) {
       got_mem_req = false;
@@ -1314,7 +1314,7 @@ int main(int argc, char **argv) {
     }
     ++cycle;
   }
-
+  m_trace->flush();
 
   tb->final();
   t0 = timestamp() - t0;
