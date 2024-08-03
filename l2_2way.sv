@@ -7,15 +7,11 @@
 module l2_2way(clk,
 	  reset,
 	  l2_state,
+	  l1d_req_valid,
 	  l1d_req,
 	  l1d_rdy,     
 	  l1i_req,
-	  l1d_uc,
-	  
-	  l1d_addr,
 	  l1i_addr,
-	  l1d_opcode,
-	  l1d_tag,
 	  l1d_rsp_valid,
 	  l1i_rsp_valid,
 	  l1d_rsp_tag,
@@ -31,7 +27,6 @@ module l2_2way(clk,
 
 	  //l1 -> l2
 	  l1_mem_req_ack,
-	  l1_mem_req_store_data,
 
 	  //l2 -> l1
 	  l1_mem_load_data,
@@ -74,15 +69,12 @@ module l2_2way(clk,
    input logic reset;
    output logic [3:0] l2_state;
    
-   input logic l1d_req;
-   output logic	l1d_rdy;
+   input logic l1d_req_valid;
+   input       l1d_req_t l1d_req;
    
+   output logic	l1d_rdy;
    input logic l1i_req;
-   input logic l1d_uc;
-   input logic [(`PA_WIDTH-1):0] l1d_addr;
    input logic [(`PA_WIDTH-1):0] l1i_addr;   
-   input logic [3:0] 		l1d_opcode;
-   input logic [`LG_MRQ_ENTRIES:0] l1d_tag;
    
    output logic l1d_rsp_valid;
    output logic l1i_rsp_valid;
@@ -98,7 +90,6 @@ module l2_2way(clk,
    output logic flush_complete;
 
    output logic l1_mem_req_ack;
-   input logic [(1 << (`LG_L1D_CL_LEN+3)) - 1 :0] l1_mem_req_store_data;
 
    output logic 				  l2_probe_val;
    output logic [(`PA_WIDTH-1):0]		  l2_probe_addr;
@@ -553,26 +544,17 @@ module l2_2way(clk,
 	  end
      end
 
-   /* fifo for l1d */
-   typedef struct packed {
-      logic [(`PA_WIDTH-1):0] addr;
-      logic [127:0] 	      store_data;
-      logic [3:0] 	      opcode;
-      logic [`LG_MRQ_ENTRIES:0] tag;
-   } queue_t;
    
    localparam N_MQ_ENTRIES = (1<<`LG_MRQ_ENTRIES);
-   queue_t r_mem_q[N_MQ_ENTRIES-1:0];
+   l1d_req_t r_mem_q[N_MQ_ENTRIES-1:0];
+   
    logic [`LG_MRQ_ENTRIES:0] r_l1d_head_ptr, n_l1d_head_ptr;
    logic [`LG_MRQ_ENTRIES:0] r_l1d_tail_ptr, n_l1d_tail_ptr;
-   queue_t t_l1d, t_l1dq;
+   l1d_req_t t_l1dq;
    
    always_comb
      begin
-	t_l1d.addr = l1d_addr;
-	t_l1d.opcode = l1d_opcode;
-	t_l1d.store_data = l1_mem_req_store_data;
-	t_l1d.tag = l1d_tag;
+	
 	t_l1dq = r_mem_q[r_l1d_head_ptr[`LG_MRQ_ENTRIES-1:0]];
      end
    
@@ -599,9 +581,9 @@ module l2_2way(clk,
 
    always_ff@(posedge clk)
      begin
-	if(l1d_req)
+	if(l1d_req_valid)
 	  begin
-	     r_mem_q[r_l1d_tail_ptr[`LG_MRQ_ENTRIES-1:0]] <= t_l1d;
+	     r_mem_q[r_l1d_tail_ptr[`LG_MRQ_ENTRIES-1:0]] <= l1d_req;
 	  end
      end
    
@@ -609,7 +591,7 @@ module l2_2way(clk,
      begin
 	n_l1d_head_ptr = r_l1d_head_ptr;
 	n_l1d_tail_ptr = r_l1d_tail_ptr;	
-	if(l1d_req)
+	if(l1d_req_valid)
 	  begin
 	     n_l1d_tail_ptr = r_l1d_tail_ptr + 'd1;
 	  end
@@ -684,7 +666,7 @@ module l2_2way(clk,
      begin
 	n_last_gnt = r_last_gnt;
 	n_l1i_req = r_l1i_req | l1i_req;
-	n_l1d_req = r_l1d_req | l1d_req;
+	n_l1d_req = r_l1d_req | l1d_req_valid;
 	n_mmu_req = r_mmu_req | t_probe_mmu_req_valid;
 	n_mmu_mark_req = mem_mark_valid | r_mmu_mark_req;
 	n_req = r_req;
@@ -840,7 +822,7 @@ module l2_2way(clk,
 			 n_addr = {t_l1dq.addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
 			 n_last_l1d_addr = t_l1dq.addr[(`PA_WIDTH-1):`LG_L2_CL_LEN];			 
 			 n_saveaddr = {t_l1dq.addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
-			 n_store_data = t_l1dq.store_data;
+			 n_store_data = t_l1dq.data;
 			 n_opcode = t_l1dq.opcode;
 			 n_l1d_req = 1'b0;
 			 n_l1d_rsp_tag = t_l1dq.tag;
