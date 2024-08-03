@@ -695,6 +695,7 @@ int main(int argc, char **argv) {
   std::string log_name = "log.txt";
   std::string pushout_name = "pushout.txt";
   std::string branch_name = "branch_info.txt";
+  std::string vcd_name;
   uint64_t heartbeat = 1UL<<36, start_trace_at = ~0UL;
   uint64_t max_cycle = 0, max_icnt = 0, mem_lat = 1;
   uint64_t last_store_addr = 0, last_load_addr = 0, last_addr = 0;
@@ -723,7 +724,8 @@ int main(int argc, char **argv) {
       ("maxicnt", po::value<uint64_t>(&max_icnt)->default_value(1UL<<50), "maximum icnt")
       ("trace,t", po::value<bool>(&trace_retirement)->default_value(false), "trace retired instruction stream")
       ("starttrace,s", po::value<uint64_t>(&start_trace_at)->default_value(~0UL), "start tracing retired instructions")
-      ("early,e", po::value<bool>(&enable_early)->default_value(false), "enable early loads")
+      ("early,e", po::value<bool>(&enable_early)->default_value(true), "enable early loads")
+      ("vcd", po::value<std::string>(&vcd_name), "vcd filename")
       ; 
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);
@@ -763,10 +765,11 @@ int main(int argc, char **argv) {
   globals::sysArgc = buildArgcArgv(rv32_binary.c_str(),sysArgs.c_str(),&globals::sysArgv);
   initCapstone();
   std::unique_ptr<Vcore_l1d_l1i> tb(new Vcore_l1d_l1i);
-
-  m_trace = new VerilatedVcdC;
-  tb->trace(m_trace, 99);
-  m_trace->open("rv64.vcd");
+  if(vcd_name.size() != 0) {
+    m_trace = new VerilatedVcdC;
+    tb->trace(m_trace, 99);
+    m_trace->open(vcd_name.c_str());
+  }
 
   
   uint64_t last_match_pc = 0;
@@ -810,7 +813,9 @@ int main(int argc, char **argv) {
 
     tb->clk = 1;
     tb->eval();
-    m_trace->dump(dump_time++);    
+    if(m_trace) {
+      m_trace->dump(dump_time++);
+    }
     
     if(kernel_panicd) {
       break;
@@ -1293,7 +1298,9 @@ int main(int argc, char **argv) {
     tb->clk = 0;
     tb->eval();
 
-    m_trace->dump(dump_time++);
+    if(m_trace) {
+      m_trace->dump(static_cast<vluint64_t>(2*cycle+1));
+    }
 
     
     if(got_mem_req) {
@@ -1314,7 +1321,10 @@ int main(int argc, char **argv) {
     }
     ++cycle;
   }
-  m_trace->flush();
+
+  if(m_trace) {
+    m_trace->flush();
+  }
 
   tb->final();
   t0 = timestamp() - t0;
@@ -1601,7 +1611,10 @@ int main(int argc, char **argv) {
 	    << " insns per second\n";
 
 
-  m_trace->close();
+  if(m_trace) {
+    m_trace->close();
+    delete m_trace;
+  }
 
   dump_histo("supervisor.txt", supervisor_histo);
   
