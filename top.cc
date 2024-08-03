@@ -1299,7 +1299,7 @@ int main(int argc, char **argv) {
     tb->eval();
 
     if(m_trace) {
-      m_trace->dump(static_cast<vluint64_t>(2*cycle+1));
+      m_trace->dump(dump_time++);
     }
 
     
