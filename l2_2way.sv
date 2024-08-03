@@ -1,7 +1,5 @@
 `include "machine.vh"
-`ifdef VERILATOR
-
-`endif
+`include "rob.vh"
 
 
 module l2_2way(clk,
