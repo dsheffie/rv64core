@@ -31,7 +31,7 @@ ifeq ($(UNAME_S),Darwin)
 	VERILATOR_VCD = /Users/dsheffie/local/share/verilator/include/verilated_vcd_c.cpp
 	VERILATOR_DPI_INC = /Users/dsheffie/local/share/verilator/include/vltstd/
 	VERILATOR = /Users/dsheffie/local/bin/verilator
-	EXTRA_LD = -L/opt/local/lib -lboost_program_options-mt -lboost_serialization-mt -lcapstone
+	EXTRA_LD = -L/opt/local/lib -lboost_program_options-mt -lboost_serialization-mt -lcapstone -undefined dynamic_lookup
 endif
 
 OPT = -O3 -g -std=c++14 -fomit-frame-pointer
@@ -62,7 +62,7 @@ verilated_vcd_c.o: $(VERILATOR_VCD)
 	$(CXX) -MMD $(CXXFLAGS) -c $< 
 
 obj_dir/Vcore_l1d_l1i__ALL.a : $(SV_SRC)
-	$(VERILATOR) --x-assign unique -cc core_l1d_l1i.sv
+	$(VERILATOR) --trace -cc core_l1d_l1i.sv
 	$(MAKE) OPT_FAST="-O3 -flto" -C obj_dir -f Vcore_l1d_l1i.mk
 
 gen_html : gen_html.cc pipeline_record.hh

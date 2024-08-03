@@ -2,6 +2,10 @@
 `include "rob.vh"
 `include "uop.vh"
 
+//`define DEBUG
+//`define VERBOSE_L1D 1
+
+
 `ifdef VERILATOR
 import "DPI-C" function int enable_early_req();
 
@@ -25,8 +29,6 @@ import "DPI-C" function void wr_log(input longint pc,
 
 
 
-//`define DEBUG
-//`define VERBOSE_L1D 1
 
 module nu_l1d(clk, 
 	   reset,

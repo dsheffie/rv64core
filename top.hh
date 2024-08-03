@@ -26,6 +26,7 @@
 #include <fcntl.h>
 #include <fenv.h>
 #include <verilated.h>
+#include <verilated_vcd_c.h>
 #include "Vcore_l1d_l1i.h"
 #include "loadelf.hh"
 #include "helper.hh"

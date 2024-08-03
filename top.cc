@@ -685,6 +685,7 @@ static int buildArgcArgv(const char *filename, const char *sysArgs, char ***argv
 }
 
 int main(int argc, char **argv) {
+
   static_assert(sizeof(itype) == 4, "itype must be 4 bytes");
   //std::fesetround(FE_TOWARDZERO);
   namespace po = boost::program_options; 
@@ -743,9 +744,10 @@ int main(int argc, char **argv) {
   memset(insns_delivered, 0, sizeof(uint64_t)*max_insns_per_cycle_hist_sz);
   
   uint32_t max_inflight = 0;
-
+  VerilatedVcdC	*m_trace = nullptr;
 
   const std::unique_ptr<VerilatedContext> contextp{new VerilatedContext};
+  Verilated::traceEverOn(true);  
   contextp->commandArgs(argc, argv);  
   s = new state_t;
   ss = new state_t;
@@ -761,6 +763,12 @@ int main(int argc, char **argv) {
   globals::sysArgc = buildArgcArgv(rv32_binary.c_str(),sysArgs.c_str(),&globals::sysArgv);
   initCapstone();
   std::unique_ptr<Vcore_l1d_l1i> tb(new Vcore_l1d_l1i);
+
+  m_trace = new VerilatedVcdC;
+  tb->trace(m_trace, 99);
+  m_trace->open("rv64.vcd");
+
+  
   uint64_t last_match_pc = 0;
   uint64_t last_retire = 0, last_check = 0, last_restart = 0;
   uint64_t last_retired_pc = 0, last_retired_fp_pc = 0;
@@ -801,7 +809,9 @@ int main(int argc, char **argv) {
 
     tb->clk = 1;
     tb->eval();
+    m_trace->dump(static_cast<int>(10*cycle + 0));    
 
+    
     if(kernel_panicd) {
       break;
     }
@@ -1282,6 +1292,10 @@ int main(int argc, char **argv) {
     
     tb->clk = 0;
     tb->eval();
+
+    m_trace->dump(static_cast<int>(10*cycle + 5));
+    m_trace->flush();
+    
     if(got_mem_req) {
       got_mem_req = false;
     }
@@ -1587,6 +1601,7 @@ int main(int argc, char **argv) {
 	    << " insns per second\n";
 
 
+  m_trace->close();
 
   dump_histo("supervisor.txt", supervisor_histo);
   

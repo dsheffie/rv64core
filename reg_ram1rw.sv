@@ -2,6 +2,7 @@ module reg_ram1rw(clk, addr, wr_data, wr_en, rd_data);
    input logic clk;
    parameter WIDTH = 1;
    parameter LG_DEPTH = 1;
+   
    input logic [LG_DEPTH-1:0] addr;
    input logic [WIDTH-1:0] wr_data;
    input logic 		      wr_en;
@@ -20,3 +21,5 @@ module reg_ram1rw(clk, addr, wr_data, wr_en, rd_data);
      end
    
 endmodule
+
+
