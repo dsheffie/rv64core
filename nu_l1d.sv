@@ -1741,7 +1741,8 @@ module nu_l1d(clk,
 `endif
     
      
-   wire w_got_hit = r_got_req ? w_cache_port1_hit : 1'b1;
+   wire w_got_hit_or_idle = r_got_req ? w_cache_port1_hit : 1'b1;
+   wire w_got_hit = r_got_req ? w_cache_port1_hit : 1'b0;
    
    wire	w_got_clean_miss = r_got_req ? w_cache_port1_clean_miss : 1'b0;   
    
@@ -1760,7 +1761,7 @@ module nu_l1d(clk,
 
 	t_cm_block_stall = t_cm_block && !(r_did_reload||r_is_retry);
 	
-	t_new_req = core_mem_va_req_valid && w_got_hit &&
+	t_new_req = core_mem_va_req_valid && w_got_hit_or_idle &&
 		    !(mem_q_almost_full|mem_q_full) && 
 		    !w_got_rd_retry &&
 		    !(r_last_wr2 && (r_cache_idx2 == core_mem_va_req.addr[IDX_STOP-1:IDX_START]) && !core_mem_va_req.is_store) &&
