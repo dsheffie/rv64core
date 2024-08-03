@@ -321,11 +321,9 @@ module
    logic 				  l1d_mem_req_ack;
    logic 				  l1d_mem_req_valid;
    logic				  l1d_mem_req_uc;
-   
-   logic [(`PA_WIDTH-1):0]		  l1d_mem_req_addr;
-   logic [L1D_CL_LEN_BITS-1:0] 		  l1d_mem_req_store_data;
-   logic [3:0] 				  l1d_mem_req_opcode;
-   logic [`LG_MRQ_ENTRIES:0] 		  l1d_mem_req_tag;
+
+   l1d_req_t l1d_mem_req;
+
    wire [`LG_MRQ_ENTRIES:0] 		  w_l1d_mem_rsp_tag;
    wire					  w_l1d_mem_rsp_writeback;
    wire [`PA_WIDTH-1:0] 		  w_l1d_mem_rsp_addr;
@@ -417,13 +415,11 @@ module
 	       .l2_probe_addr(w_l2_probe_addr),
 	       .l2_probe_ack(w_l2_probe_ack),
 	       .l1d_rdy(w_l2_l1d_rdy),
-	       .l1d_req(l1d_mem_req_valid),
-	       .l1d_uc(l1d_mem_req_uc),
+	       .l1d_req_valid(l1d_mem_req_valid),
+	       .l1d_req(l1d_mem_req),
 	       .l1i_req(l1i_mem_req_valid),
-	       .l1d_addr(l1d_mem_req_addr),
 	       .l1i_addr(l1i_mem_req_addr),
-	       .l1d_opcode(l1d_mem_req_opcode),
-               .l1d_tag(l1d_mem_req_tag),
+
 	       .l1d_rsp_valid(l1d_mem_rsp_valid),
 	       .l1d_rsp_tag(w_l1d_mem_rsp_tag),
 	       .l1d_rsp_writeback(w_l1d_mem_rsp_writeback),	       		    
@@ -438,11 +434,10 @@ module
 	       .flush_complete(w_l2_flush_complete),
 	       
 	       .l1_mem_req_ack(w_l1_mem_req_ack),
-	       .l1_mem_req_store_data(l1d_mem_req_store_data),
 	       .l1_mem_load_data(w_l1_mem_load_data),
 	       
 	       .mem_req_valid(mem_req_valid),
-		    .mem_req_addr(mem_req_addr),
+	       .mem_req_addr(mem_req_addr),
 	       .mem_req_store_data(mem_req_store_data),
 	       .mem_req_opcode(mem_req_opcode),
 
@@ -513,12 +508,7 @@ module
 	       .core_mem_rsp(core_mem_rsp),
 	       .mem_rdy(w_l2_l1d_rdy),
 	       .mem_req_valid(l1d_mem_req_valid),
-	       .mem_req_uc(l1d_mem_req_uc),
-	       .mem_req_addr(l1d_mem_req_addr),
-	       .mem_req_store_data(l1d_mem_req_store_data),
-	       .mem_req_tag(l1d_mem_req_tag),
-	       .mem_req_opcode(l1d_mem_req_opcode),
-	       
+	       .mem_req(l1d_mem_req),
 	       .l2_rsp_valid(l1d_mem_rsp_valid),
 	       .l2_rsp_load_data(w_l1_mem_load_data),
 	       .l2_rsp_tag(w_l1d_mem_rsp_tag),

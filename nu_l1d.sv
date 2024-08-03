@@ -66,11 +66,7 @@ module nu_l1d(clk,
 	   mem_rdy,
 	   //output to the memory system
 	   mem_req_valid,
-	   mem_req_uc,
-	   mem_req_addr,
-	   mem_req_tag,
-	   mem_req_store_data, 
-	   mem_req_opcode,
+	   mem_req,
 	   //reply from memory system
 	   l2_rsp_valid,
 	   l2_rsp_load_data,
@@ -135,11 +131,8 @@ module nu_l1d(clk,
    input logic mem_rdy;
    
    output logic mem_req_valid;
-   output logic	mem_req_uc;
-   output logic [(`PA_WIDTH-1):0] mem_req_addr;
-   output logic [L1D_CL_LEN_BITS-1:0] mem_req_store_data;
-   output logic [`LG_MRQ_ENTRIES:0]   mem_req_tag;
-   output logic [3:0] 			  mem_req_opcode;
+   output	l1d_req_t mem_req;
+   
 
    input logic 				  l2_rsp_valid;
    input logic [L1D_CL_LEN_BITS-1:0] 	  l2_rsp_load_data;
@@ -528,13 +521,20 @@ module nu_l1d(clk,
    
    logic [31:0] 			 r_cycle;
    assign flush_complete = r_flush_complete;
-   assign mem_req_addr = r_mem_req_addr[31:0];
-   assign mem_req_store_data = r_mem_req_store_data;
-   assign mem_req_opcode = r_mem_req_opcode;
-   assign mem_req_tag = r_mem_req_tag;
-   
+
    assign mem_req_valid = r_mem_req_valid;
-   assign mem_req_uc = r_mem_req_uc;
+   
+
+   always_comb
+     begin
+	mem_req.addr = r_mem_req_addr[31:0];
+	mem_req.data = r_mem_req_store_data;
+	mem_req.opcode = r_mem_req_opcode;
+	mem_req.tag = r_mem_req_tag;
+	mem_req.uncachable = r_mem_req_uc;
+	
+     end
+   
 
 `ifdef FOUR_CYCLE_L1D
    assign core_mem_rsp_valid = r_core_mem_rsp_valid;

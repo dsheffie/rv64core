@@ -106,6 +106,15 @@ typedef struct packed {
 } mem_req_t;
 
 typedef struct packed {
+   logic       uncachable;
+   logic [`PA_WIDTH-1:0] addr;
+   logic [`LG_MRQ_ENTRIES:0] tag;
+   logic [(1 << (`LG_L1D_CL_LEN + 3))-1:0] data;
+   logic [3:0]				   opcode;
+} l1d_req_t;
+
+
+typedef struct packed {
    logic [`LG_ROB_ENTRIES-1:0] rob_ptr;
    logic [`LG_PRF_ENTRIES-1:0] src_ptr;
 `ifdef ENABLE_CYCLE_ACCOUNTING
