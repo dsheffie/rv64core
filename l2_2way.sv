@@ -435,7 +435,6 @@ module l2_2way(clk,
 	       if(n_need_l1i | n_need_l1d)
 		 begin
 		    n_flush_state = WAIT_FOR_L1_FLUSH_DONE;
-		    //$display("-> got flush req at cycle %d, n_need_l1d = %b, n_need_l1i = %b", r_cycle, n_need_l1d, n_need_l1i);
 		 end
 	    end
 	  WAIT_FOR_L1_FLUSH_DONE:
@@ -646,10 +645,6 @@ module l2_2way(clk,
 		    begin
 		       n_l1i_rsp_valid  = 1'b1;
 		    end
-		  //else
-		  //begin
-		  //n_l1i_rsp_valid  = 1'b1;
-		  //end
 	       end // if (r_opcode == MEM_LW)
 	     else
 	       begin
@@ -824,10 +819,7 @@ module l2_2way(clk,
 			 n_opcode = t_l1dq.opcode;
 			 n_l1d_req = 1'b0;
 			 n_l1d_rsp_tag = t_l1dq.tag;
-			 if(t_l1dq.opcode == MEM_SW)
-			 begin
-			    n_l1d_rsp_valid = 1'b1;
-			 end
+
 			 t_gnt_l1d = 1'b1;
 		      end
 		    n_req_ack = 1'b1;
@@ -886,7 +878,8 @@ module l2_2way(clk,
 			 n_state = WAIT_STORE_IDLE;
 			 //n_cache_hits = r_cache_hits + 64'd1;			 
 			 t_wr_d0 = w_hit0;
-			 t_wr_d1 = w_hit1;			 
+			 t_wr_d1 = w_hit1;	
+			 n_l1d_rsp_valid = 1'b1;
 		      end
 		 end
 	       else
