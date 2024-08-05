@@ -532,7 +532,6 @@ module nu_l1d(clk,
 	mem_req.opcode = r_mem_req_opcode;
 	mem_req.tag = r_mem_req_tag;
 	mem_req.uncachable = r_mem_req_uc;
-	
      end
    
 
@@ -752,10 +751,12 @@ module nu_l1d(clk,
 	     // end
 		
 	     $display("req for tag %d, line %x at cycle %d, opcode %d, r_last_wr = %b, rr_last_wr = %b, r_state = %d",
-		      mem_req_tag, 
-		      mem_req_addr[IDX_STOP-1:IDX_START], 
+		      mem_req.tag, 
+		      mem_req.addr[IDX_STOP-1:IDX_START], 
 		      r_cycle, 
-		      mem_req_opcode, r_last_wr, rr_last_wr,
+		      mem_req.opcode, 
+		      r_last_wr, 
+		      rr_last_wr,
 		      r_state);
 	  end
      end
@@ -1127,17 +1128,17 @@ module nu_l1d(clk,
 	  end
 
 	 
-	if(mem_req_valid & (mem_req_opcode == 4'd4))
+	if(mem_req_valid & (mem_req.opcode == 4'd4))
 	  begin
 	     $display("mem req opcode %d addr %x, tag %d, cycle %d", 
-		      mem_req_opcode, mem_req_addr, mem_req_tag, r_cycle);
+		      mem_req.opcode, mem_req.addr, mem_req.tag, r_cycle);
 	  end
 
 
-	if(mem_req_valid & (mem_req_opcode == 4'd7))
+	if(mem_req_valid & (mem_req.opcode == 4'd7))
 	  begin
 	     $display("mem req opcode %d addr %x data %x, tag %d, cycle %d", 
-		      mem_req_opcode, mem_req_addr, mem_req_store_data, mem_req_tag, r_cycle);
+		      mem_req.opcode, mem_req.addr, mem_req.data, mem_req.tag, r_cycle);
 	  end
 
 	 	 
