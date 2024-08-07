@@ -674,6 +674,7 @@ int main(int argc, char **argv) {
   std::string log_name = "log.txt";
   std::string pushout_name = "pushout.txt";
   std::string branch_name = "branch_info.txt";
+  bool window;
   uint64_t heartbeat = 1UL<<36, start_trace_at = ~0UL;
   uint64_t max_cycle = 0, max_icnt = 0, mem_lat = 1;
   uint64_t last_store_addr = 0, last_load_addr = 0, last_addr = 0;
@@ -702,6 +703,7 @@ int main(int argc, char **argv) {
       ("maxicnt", po::value<uint64_t>(&max_icnt)->default_value(1UL<<50), "maximum icnt")
       ("trace,t", po::value<bool>(&trace_retirement)->default_value(false), "trace retired instruction stream")
       ("starttrace,s", po::value<uint64_t>(&start_trace_at)->default_value(~0UL), "start tracing retired instructions")
+      ("window,w", po::value<bool>(&window)->default_value(false), "report windowed ipc")
       ; 
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);
@@ -744,6 +746,7 @@ int main(int argc, char **argv) {
   uint64_t last_retire = 0, last_check = 0, last_restart = 0;
   uint64_t last_retired_pc = 0, last_retired_fp_pc = 0;
   uint64_t mismatches = 0, n_stores = 0, n_loads = 0;
+  uint64_t last_insns_retired = 0, last_cycle = 0;
   uint64_t n_branches = 0, n_mispredicts = 0, n_checks = 0, n_flush_cycles = 0;
   bool got_mem_req = false, got_mem_rsp = false, got_monitor = false, incorrect = false;
   bool got_putchar = false;
@@ -935,7 +938,11 @@ int main(int argc, char **argv) {
       }
 
       if(((insns_retired % heartbeat) == 0) or trace_retirement ) {
-
+	double w_ipc = static_cast<double>(insns_retired - last_insns_retired) / (cycle - last_cycle);
+	if(window) {
+	  last_insns_retired = insns_retired;
+	  last_cycle = cycle;
+	}
 	std::cout << "port a "
 		  << " cycle " << cycle
 		  << " "
@@ -945,7 +952,7 @@ int main(int argc, char **argv) {
 		  << " "
 		  << getAsmString(tb->retire_pc, tb->page_table_root, tb->paging_active)	  
 		  << std::fixed
-		  << ", " << static_cast<double>(insns_retired) / cycle << " IPC "
+		  << ", " << w_ipc << " IPC "
 		  << ", insns_retired "
 		  << insns_retired
 		  << ", mem pki "
@@ -963,6 +970,11 @@ int main(int argc, char **argv) {
 	++insns_retired;
 	last_retired_pc = tb->retire_pc;	
 	if(((insns_retired % heartbeat) == 0) or trace_retirement ) {
+	  double w_ipc = static_cast<double>(insns_retired - last_insns_retired) / (cycle - last_cycle);
+	  if(window) {
+	    last_insns_retired = insns_retired;
+	    last_cycle = cycle;
+	  }
 	  std::cout << "port b "
 		    << " cycle " << cycle
 		    << " "
@@ -972,7 +984,7 @@ int main(int argc, char **argv) {
 		    << " "
 		    << getAsmString(tb->retire_two_pc, tb->page_table_root, tb->paging_active)	  	    
 		    << std::fixed
-		    << ", " << static_cast<double>(insns_retired) / cycle << " IPC "	    
+		    << ", " << w_ipc << " IPC "	    
 		    << ", insns_retired "
 		    << insns_retired
 		    << ", mem pki "
