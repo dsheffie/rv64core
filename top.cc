@@ -1,7 +1,7 @@
 #include "top.hh"
 #include <signal.h>
 #include <setjmp.h>
-
+#include "inst_record.hh"
 
 #define BRANCH_DEBUG 1
 #define CACHE_STATS 1
@@ -674,7 +674,7 @@ int main(int argc, char **argv) {
   std::string log_name = "log.txt";
   std::string pushout_name = "pushout.txt";
   std::string branch_name = "branch_info.txt";
-  bool window;
+  bool window, retiretrace = false;
   uint64_t heartbeat = 1UL<<36, start_trace_at = ~0UL;
   uint64_t max_cycle = 0, max_icnt = 0, mem_lat = 1;
   uint64_t last_store_addr = 0, last_load_addr = 0, last_addr = 0;
@@ -775,6 +775,10 @@ int main(int argc, char **argv) {
   }
   s->pc = ss->pc;
   //signal(SIGINT, catchUnixSignal);
+
+  std::cout << "creating a retire trace\n";
+  retire_trace rt;
+  std::cout << "retire trace created\n";
   
   double t0 = timestamp();
 
@@ -867,13 +871,32 @@ int main(int argc, char **argv) {
       cycles_in_faulted++;
     }
 
+    if(tb->retire_valid and retiretrace) {
+      uint64_t pa = tb->retire_pc;
+      if(tb->paging_active) {
+	pa = translate(pa, tb->page_table_root, true, false);
+      }      
+      if(pa < (1UL<<32)) {
+	rt.get_records().emplace_back(pa,*reinterpret_cast<uint32_t*>(&s->mem[pa]));
+      }
+      
+    }
+    
+    if(tb->retire_two_valid and retiretrace) {
+      uint64_t pa = tb->retire_two_pc;
+      if(tb->paging_active) {
+	pa = translate(pa, tb->page_table_root, true, false);
+      }      
+      rt.get_records().emplace_back(pa,*reinterpret_cast<uint32_t*>(&s->mem[pa]));
+    }
+
     if(tb->retire_valid and ((tb->retire_pc >> 63) & 1)) {
       supervisor_histo[tb->retire_pc]++;
     }
     
     if(tb->retire_two_valid and ((tb->retire_two_pc >> 63) & 1)) {
       supervisor_histo[tb->retire_two_pc]++;
-    }
+    }    
 
     
     if(tb->rob_empty) {
@@ -899,9 +922,7 @@ int main(int argc, char **argv) {
       uint64_t pa = tb->retire_pc;
       if(tb->paging_active) {
 	pa = translate(tb->retire_pc, tb->page_table_root, true, false);
-      }	
-      
-      tip_map[pa]+= 1.0 / total;
+      }
       if(tb->retire_two_valid) {
 	pa = tb->retire_two_pc;
 	if(tb->paging_active) {
@@ -910,8 +931,8 @@ int main(int argc, char **argv) {
 	tip_map[pa]+= 1.0 / total;
       }
     }
+    //printf("rt.get_records().size() = %zu\n", rt.get_records().size());
     
-
     if(tb->took_irq) {
       pending_irq = true;
     }
@@ -1567,6 +1588,14 @@ int main(int argc, char **argv) {
     std::cout << "tip cycles  = " << tip_cycles << "\n";
     dump_histo("tip.txt", tip_map, s);    
     out.close();
+
+    if(not(rt.empty())) {
+      std::ofstream ofs("retiretrace.dump");
+      boost::archive::binary_oarchive oa(ofs);
+      oa << rt;
+      std::cout << "rt.get_records().size() = " <<
+	rt.get_records().size() << "\n";
+    }
   }
   else {
     std::cout << "instructions retired = " << insns_retired << "\n";
