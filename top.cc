@@ -530,7 +530,7 @@ void record_fetch(int p1, int p2, int p3, int p4,
 }
 
 static std::map<int, uint64_t> mem_lat_map, fp_lat_map, non_mem_lat_map, mispred_lat_map;
-static std::map<int64_t, double> tip_map;
+static tip_record tip;
 
 int check_insn_bytes(long long pc, int data) {
   uint32_t insn = get_insn(pc, s);
@@ -674,6 +674,7 @@ int main(int argc, char **argv) {
   std::string log_name = "log.txt";
   std::string pushout_name = "pushout.txt";
   std::string branch_name = "branch_info.txt";
+  std::string retire_name;
   bool window, retiretrace = false;
   uint64_t heartbeat = 1UL<<36, start_trace_at = ~0UL;
   uint64_t max_cycle = 0, max_icnt = 0, mem_lat = 1;
@@ -681,6 +682,8 @@ int main(int argc, char **argv) {
   int misses_inflight = 0;
   std::map<uint64_t, uint64_t> pushout_histo;
   int64_t mem_reply_cycle = -1L;
+  std::map<int64_t, double> &tip_map = tip.m;
+  
   try {
     po::options_description desc("Options");
     desc.add_options() 
@@ -704,6 +707,7 @@ int main(int argc, char **argv) {
       ("trace,t", po::value<bool>(&trace_retirement)->default_value(false), "trace retired instruction stream")
       ("starttrace,s", po::value<uint64_t>(&start_trace_at)->default_value(~0UL), "start tracing retired instructions")
       ("window,w", po::value<bool>(&window)->default_value(false), "report windowed ipc")
+      ("retiretrace", po::value<std::string>(&retire_name), "retire trace filename")
       ; 
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);
@@ -718,6 +722,7 @@ int main(int argc, char **argv) {
 
   std::map<uint32_t, uint64_t> mispredicts;
 
+  retiretrace = retire_name.size() != -0;
     
   uint64_t inflight[32] = {0};
   uint64_t *insns_delivered = new uint64_t[max_insns_per_cycle_hist_sz];
@@ -872,22 +877,24 @@ int main(int argc, char **argv) {
     }
 
     if(tb->retire_valid and retiretrace) {
-      uint64_t pa = tb->retire_pc;
+      uint64_t va = tb->retire_pc;
+      uint64_t pa = va;
       if(tb->paging_active) {
-	pa = translate(pa, tb->page_table_root, true, false);
+	pa = translate(va, tb->page_table_root, true, false);
       }      
       if(pa < (1UL<<32)) {
-	rt.get_records().emplace_back(pa,*reinterpret_cast<uint32_t*>(&s->mem[pa]));
+	rt.get_records().emplace_back(pa,va,*reinterpret_cast<uint32_t*>(&s->mem[pa]));
       }
       
     }
     
     if(tb->retire_two_valid and retiretrace) {
-      uint64_t pa = tb->retire_two_pc;
+      uint64_t va = tb->retire_two_pc;
+      uint64_t pa = va;
       if(tb->paging_active) {
-	pa = translate(pa, tb->page_table_root, true, false);
+	pa = translate(va, tb->page_table_root, true, false);
       }      
-      rt.get_records().emplace_back(pa,*reinterpret_cast<uint32_t*>(&s->mem[pa]));
+      rt.get_records().emplace_back(pa,va,*reinterpret_cast<uint32_t*>(&s->mem[pa]));
     }
 
     if(tb->retire_valid and ((tb->retire_pc >> 63) & 1)) {
@@ -923,6 +930,8 @@ int main(int argc, char **argv) {
       if(tb->paging_active) {
 	pa = translate(tb->retire_pc, tb->page_table_root, true, false);
       }
+      tip_map[pa]+= 1.0 / total;
+      
       if(tb->retire_two_valid) {
 	pa = tb->retire_two_pc;
 	if(tb->paging_active) {
@@ -1590,11 +1599,16 @@ int main(int argc, char **argv) {
     out.close();
 
     if(not(rt.empty())) {
-      std::ofstream ofs("retiretrace.dump");
+      std::ofstream ofs(retire_name);
       boost::archive::binary_oarchive oa(ofs);
       oa << rt;
       std::cout << "rt.get_records().size() = " <<
 	rt.get_records().size() << "\n";
+    }
+    if(not(tip_map.empty())) {
+      std::ofstream ofs("tip.dump");
+      boost::archive::binary_oarchive oa(ofs);
+      oa << tip;
     }
   }
   else {

@@ -8,6 +8,7 @@
 
 #include <boost/serialization/serialization.hpp>
 #include <boost/serialization/list.hpp>
+#include <boost/serialization/map.hpp>
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/archive/binary_iarchive.hpp>
 
@@ -20,16 +21,27 @@
 
 struct inst_record {
   uint64_t pc;
+  uint64_t vpc;
   uint32_t inst;
   friend class boost::serialization::access;
   template<class Archive>
   void serialize(Archive & ar, const unsigned int version) {
     ar & pc;
+    ar & vpc;
     ar & inst;
   }
-  inst_record(uint64_t pc, uint32_t inst) :
-    pc(pc), inst(inst) {}
-  inst_record() : pc(0), inst(0) {}
+  inst_record(uint64_t pc, uint64_t vpc, uint32_t inst) :
+    pc(pc), vpc(vpc), inst(inst) {}
+  inst_record() : pc(0), vpc(0), inst(0) {}
+};
+
+struct tip_record {
+  std::map<int64_t, double> m;
+  friend class boost::serialization::access;  
+  template<class Archive>
+  void serialize(Archive & ar, const unsigned int version) {
+    ar & m;
+  }  
 };
 
 class retire_trace {
