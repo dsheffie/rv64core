@@ -704,11 +704,12 @@ module nu_l1d(clk,
    wire	w_port2_dirty_miss = r_valid_out2 && r_dirty_out2 && (r_tag_out2 != w_tlb_pa[`PA_WIDTH-1:IDX_STOP]);
    wire	w_port2_hit_cache = r_valid_out2 && (r_tag_out2 == w_tlb_pa[`PA_WIDTH-1:IDX_STOP]);
 
+   wire w_hit_pop = r_pop_busy_addr2 ? (r_cache_idx == r_req2.addr[IDX_STOP-1:IDX_START]) : 1'b0;
    
    
    wire w_could_early_req_any = t_push_miss & mem_rdy & !t_port2_hit_cache &
 	(r_last_early_valid ? (r_last_early != r_req2.addr[IDX_STOP-1:IDX_START]) : 1'b1) &
-	!(r_hit_busy_line2 | r_fwd_busy_addr2 | r_pop_busy_addr2 ) &
+	!(r_hit_busy_line2 | r_fwd_busy_addr2 | w_hit_pop ) &
 	(r_req2.is_load | r_req.is_store) &
 	w_tlb_hit &
 	(rr_last_wr ? (rr_cache_idx !=  r_req2.addr[IDX_STOP-1:IDX_START]) : 1'b1) &
@@ -721,6 +722,18 @@ module nu_l1d(clk,
    
    wire w_gen_early_req = w_could_early_req & (r_got_req ? w_cache_port1_hit : 1'b1);
 
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if(r_got_req2 & (r_req2.pc == 64'h800002ec))
+   // 	  begin
+   // 	     $display("t_push_miss = %b", t_push_miss);
+   // 	     $display("mem_rdy = %b", mem_rdy);
+   // 	     $display("t_port2_hit_cache = %b", t_port2_hit_cache);
+   // 	     $display("r_hit_busy_line2 = %b", r_hit_busy_line2);
+   // 	     $display("r_fwd_busy_addr2 = %b", r_fwd_busy_addr2);
+   // 	     $display("r_pop_busy_addr2 = %b, w_hit_pop = %b", r_pop_busy_addr2, w_hit_pop);
+   // 	  end
+   //   end
 
 
    
@@ -1711,10 +1724,13 @@ module nu_l1d(clk,
 	  begin
  `ifdef DEBUG
 	     
-	     $display("triage new op for r_hit_busy_addr = %b, pc %x, addr %x at cycle %d dirty %b valid %b w_port2_rd_hit %b drain_ds %b, nop %b, has cause %b push miss %b, store %b load %b ll %b atomic %b, tlb store exec %b, pending tlb miss %b flush %b, tlb hit %b, spans cacheline %b",
+	     $display("triage new op for r_hit_busy_addr = %b, pc %x, addr %x at cycle %d dirty %b valid %b w_port2_rd_hit %b drain_ds %b, nop %b, has cause %b push miss %b, store %b load %b ll %b atomic %b, tlb store exec %b, pending tlb miss %b flush %b, tlb hit %b, spans cacheline %b, early push %b, could push %b, early dirty %b",
 		      r_hit_busy_line2,
-		      r_req2.pc, r_req2.addr, r_cycle,
-		      r_dirty_out2, r_valid_out2,
+		      r_req2.pc,
+		      r_req2.addr, 
+		      r_cycle,
+		      r_dirty_out2, 
+		      r_valid_out2,
 		      w_port2_rd_hit, drain_ds_complete , r_req2.op == MEM_NOP, 
 		      r_req2.has_cause,
 		      t_push_miss,
@@ -1726,10 +1742,10 @@ module nu_l1d(clk,
 		      r_pending_tlb_miss,
 		      drain_ds_complete || r_req2.op == MEM_NOP,
 		      w_tlb_hit,
-		      r_req2.spans_cacheline);
-
-	     //if(r_req2.spans_cacheline) $stop();
-	     
+		      r_req2.spans_cacheline,
+		      w_gen_early_req,
+		      w_could_early_req_any,
+		      w_could_early_req);
  `endif
 	     log_l1d(w_gen_early_req ? 32'd1 : 32'd0,
 		     t_push_miss & r_req2.is_load ? 32'd1 : 32'0,
