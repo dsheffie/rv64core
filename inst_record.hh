@@ -35,30 +35,26 @@ struct inst_record {
   inst_record() : pc(0), vpc(0), inst(0) {}
 };
 
-struct tip_record {
-  std::map<int64_t, double> m;
-  friend class boost::serialization::access;  
-  template<class Archive>
-  void serialize(Archive & ar, const unsigned int version) {
-    ar & m;
-  }  
-};
-
 class retire_trace {
 public:
   std::list<inst_record> records;
+  std::map<int64_t, double> tip;
   friend class boost::serialization::access;  
   template<class Archive>
   void serialize(Archive & ar, const unsigned int version) {
     ar & records;
+    ar & tip;
   }
   retire_trace() {}
   bool empty() const {
      return records.empty();
   }
+  const std::list<inst_record> &get_records() const {
+    return records;
+  }
   std::list<inst_record> &get_records() {
     return records;
-  }  
+  }
 };
 
 #endif

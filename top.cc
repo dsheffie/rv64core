@@ -530,7 +530,6 @@ void record_fetch(int p1, int p2, int p3, int p4,
 }
 
 static std::map<int, uint64_t> mem_lat_map, fp_lat_map, non_mem_lat_map, mispred_lat_map;
-static tip_record tip;
 
 int check_insn_bytes(long long pc, int data) {
   uint32_t insn = get_insn(pc, s);
@@ -682,7 +681,8 @@ int main(int argc, char **argv) {
   int misses_inflight = 0;
   std::map<uint64_t, uint64_t> pushout_histo;
   int64_t mem_reply_cycle = -1L;
-  std::map<int64_t, double> &tip_map = tip.m;
+  retire_trace rt;
+  std::map<int64_t, double> &tip_map = rt.tip;
   
   try {
     po::options_description desc("Options");
@@ -781,10 +781,7 @@ int main(int argc, char **argv) {
   s->pc = ss->pc;
   //signal(SIGINT, catchUnixSignal);
 
-  std::cout << "creating a retire trace\n";
-  retire_trace rt;
-  std::cout << "retire trace created\n";
-  
+
   double t0 = timestamp();
 
   while(!Verilated::gotFinish() && (cycle < max_cycle) && (insns_retired < max_icnt)) {
@@ -1604,11 +1601,6 @@ int main(int argc, char **argv) {
       oa << rt;
       std::cout << "rt.get_records().size() = " <<
 	rt.get_records().size() << "\n";
-    }
-    if(not(tip_map.empty())) {
-      std::ofstream ofs("tip.dump");
-      boost::archive::binary_oarchive oa(ofs);
-      oa << tip;
     }
   }
   else {
