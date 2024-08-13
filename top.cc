@@ -683,6 +683,7 @@ int main(int argc, char **argv) {
   int64_t mem_reply_cycle = -1L;
   retire_trace rt;
   std::map<int64_t, double> &tip_map = rt.tip;
+  std::map<int64_t, uint64_t> insn_cnts;
   
   try {
     po::options_description desc("Options");
@@ -928,13 +929,14 @@ int main(int argc, char **argv) {
 	pa = translate(tb->retire_pc, tb->page_table_root, true, false);
       }
       tip_map[pa]+= 1.0 / total;
-      
+      insn_cnts[pa]++;
       if(tb->retire_two_valid) {
 	pa = tb->retire_two_pc;
 	if(tb->paging_active) {
 	  pa = translate(tb->retire_two_pc, tb->page_table_root, true, false);
 	}	
 	tip_map[pa]+= 1.0 / total;
+	insn_cnts[pa]++;
       }
     }
     //printf("rt.get_records().size() = %zu\n", rt.get_records().size());
@@ -1592,8 +1594,10 @@ int main(int argc, char **argv) {
       tip_cycles += p.second;
     }
     std::cout << "tip cycles  = " << tip_cycles << "\n";
-    dump_histo("tip.txt", tip_map, s);    
+    dump_tip("tip.txt", tip_map, insn_cnts, s);    
     out.close();
+
+    
 
     if(not(rt.empty())) {
       std::ofstream ofs(retire_name);
