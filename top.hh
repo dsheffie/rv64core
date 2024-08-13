@@ -210,6 +210,38 @@ static inline void dump_histo(const std::string &fname,
   out.close();
 }
 
+static inline void dump_tip(const std::string &fname,
+			    const std::map<int64_t, double> &tip,
+			    const std::map<int64_t, uint64_t> &icnt,
+			    const state_t *s) {
+  std::vector<std::pair<double,int64_t>> sorted_by_cnt;
+  for(auto &p : tip) {
+    sorted_by_cnt.emplace_back(p.second, p.first);
+  }
+  std::cout << "tip.size() = " << tip.size() << "\n";
+  std::cout << "icnt.size() = " << icnt.size() << "\n";
+  std::ofstream out(fname);
+  std::sort(sorted_by_cnt.begin(), sorted_by_cnt.end());
+  for(auto it = sorted_by_cnt.rbegin(), E = sorted_by_cnt.rend(); it != E; ++it) {
+    auto pc = it->second;
+    if(pc >= (1UL<<32))
+      continue;
+    uint32_t r_inst = *reinterpret_cast<uint32_t*>(&s->mem[pc]);
+    auto s = getAsmString(r_inst, it->second);
+    double avg = 0.0;
+    if(icnt.find(it->second) != icnt.end()) {
+      avg = (it->first) / icnt.at(it->second);
+    }
+    out << std::hex << it->second << ":"
+	<< s << ","
+	<< std::dec 
+	<< (it->first) << ","
+	<< avg
+	<< "\n";
+  }
+  out.close();
+}
+
 template<typename X, typename Y>
 static inline void dump_histo(const std::string &fname,
 			      const std::map<X,Y> &histo) {
