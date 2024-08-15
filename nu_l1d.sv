@@ -466,7 +466,8 @@ module nu_l1d(clk,
                              FLUSH_CL_WAIT, //9			     
                              HANDLE_RELOAD, //10
 			     TLB_RELOAD, //11
-			     TLB_TURNAROUND //12
+			     TLB_TURNAROUND, //12
+			     WAIT_FOR_CREDIT
                              } state_t;
 
    
@@ -706,8 +707,16 @@ module nu_l1d(clk,
 
    wire w_hit_pop = r_pop_busy_addr2 ? (r_cache_idx == r_req2.addr[IDX_STOP-1:IDX_START]) : 1'b0;
 
+   logic [`LG_MRQ_ENTRIES-1:0] r_mrq_credits, n_mrq_credits;
+   always_ff@(posedge clk)
+     begin
+	r_mrq_credits <= reset ? {`LG_MRQ_ENTRIES{1'b1}} : n_mrq_credits;
+     end
+
+   wire w_free_credit = (r_mrq_credits != 'd0);
+   wire	w_two_free_credits = (r_mrq_credits > 'd1);
    
-   wire w_could_early_req_any = t_push_miss & mem_rdy & !t_port2_hit_cache &
+   wire	w_could_early_req_any = t_push_miss & w_two_free_credits & !t_port2_hit_cache &
 	(r_last_early_valid ? (r_last_early != r_req2.addr[IDX_STOP-1:IDX_START]) : 1'b1) &
 	!(r_hit_busy_line2 | r_fwd_busy_addr2 | w_hit_pop ) &
 	(r_req2.is_load | r_req.is_store) &
@@ -1972,8 +1981,8 @@ module nu_l1d(clk,
 				 n_port1_req_opcode = MEM_LW;
 				 n_port1_req_tag = (1 << `LG_MRQ_ENTRIES);
 				 n_state = INJECT_RELOAD;
-				 n_port1_req_valid = 1'b1;
-			      end
+				 n_port1_req_valid = 1'b1;				 
+			      end // if (w_free_credit)
 			 end // if (r_hit_busy_addr && r_is_retry || !r_hit_busy_addr || r_lock_cache)
 		       else
 			 begin
@@ -1996,13 +2005,11 @@ module nu_l1d(clk,
 		 end
 	       
 	       /* not qualified on r_got_req */
-	       if(!mem_q_empty && !t_got_miss && !r_lock_cache && !n_pending_tlb_miss &!w_eb_port1_hit & !w_eb_full)
+	       if(!mem_q_empty & !t_got_miss & !r_lock_cache & !n_pending_tlb_miss &!w_eb_port1_hit & !w_eb_full & w_free_credit)
 		 begin		    
 		    if(!t_mh_block & (r_mq_inflight[r_mq_head_ptr[`LG_MRQ_ENTRIES-1:0]] == 1'b0)  )
 		      begin
-			 //$display("replaying mem op, early req %b", 
-			 //r_mq_inflight[r_mq_head_ptr[`LG_MRQ_ENTRIES-1:0]]);
-			 if(t_mem_head.is_store || t_mem_head.is_atomic)
+			 if(t_mem_head.is_store | t_mem_head.is_atomic)
 			   begin
 			      if(w_st_amo_grad && (core_store_data_valid ? (t_mem_head.rob_ptr == core_store_data.rob_ptr) : 1'b0) )
 				begin
@@ -2015,7 +2022,6 @@ module nu_l1d(clk,
 				   t_addr = t_mem_head.addr;
 				   t_got_req = 1'b1;
 				   n_is_retry = 1'b1;
-				   //$display("accepting store to line %x at cycle %d, data %x", t_cache_idx, r_cycle, n_req.data);
 				   n_last_wr = 1'b1;
 				end // if (t_mem_head.rob_ptr == head_of_rob_ptr)
 			      else if(drain_ds_complete && dead_rob_mask[t_mem_head.rob_ptr])
@@ -2063,6 +2069,14 @@ module nu_l1d(clk,
 		  n_state = FLUSH_CL;
 	       end
 	    end // case: ACTIVE
+	  WAIT_FOR_CREDIT:
+	    begin
+	       if(w_free_credit)
+		 begin
+		    n_state = INJECT_RELOAD;
+		    n_port1_req_valid = 1'b1;
+		 end
+	    end
 	  WAIT_INJECT_RELOAD:
 	    begin
 	       t_push_eb = 1'b1;
@@ -2329,7 +2343,7 @@ module nu_l1d(clk,
 	       end
 	     n_mem_req_tag = n_port2_req_tag;
 	  end
-	else if(!(n_port1_req_valid|n_port2_req_valid) & !w_eb_empty)
+	else if(!(n_port1_req_valid|n_port2_req_valid) & !w_eb_empty & w_free_credit)
 	  begin
 	     t_pop_eb = 1'b1;
 	     n_mem_req_valid = 1'b1;
@@ -2343,6 +2357,31 @@ module nu_l1d(clk,
 	  end
      end // always_comb
 
+   always_comb
+     begin
+	n_mrq_credits = r_mrq_credits;
+	if(n_mem_req_valid & !mem_rsp_valid)
+	  begin
+	     n_mrq_credits = r_mrq_credits - 'd1;
+	     if(r_mrq_credits == 'd0) 
+	       begin
+		  $display("trying to push with no free credits,  mem_rdy %b, w_gen_early_req %b", 
+			   mem_rdy, w_gen_early_req);
+		  $stop();
+	       end
+	  end
+	else if(!n_mem_req_valid & mem_rsp_valid)
+	  begin
+	     n_mrq_credits = r_mrq_credits + 'd1;
+	     if(n_mrq_credits == 'd0)
+	       begin
+		  $display("overflow!");
+		  $stop();
+	       end
+	  end
+     end // always_comb
+
+   
 
    always_comb
      begin
