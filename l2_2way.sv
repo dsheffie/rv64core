@@ -550,7 +550,6 @@ module l2_2way(clk,
    
    always_comb
      begin
-	
 	t_l1dq = r_mem_q[r_l1d_head_ptr[`LG_MRQ_ENTRIES-1:0]];
      end
    
@@ -570,16 +569,24 @@ module l2_2way(clk,
 
    wire w_l1d_full = (r_l1d_head_ptr != r_l1d_tail_ptr) &&
 		     (r_l1d_head_ptr[`LG_MRQ_ENTRIES-1:0] == r_l1d_tail_ptr[`LG_MRQ_ENTRIES-1:0]);
+
+   wire [`LG_MRQ_ENTRIES:0] w_l1d_tail_ptr_p1 = r_l1d_tail_ptr + 'd1;
+			    
+   wire	w_l1d_almost_full = (r_l1d_head_ptr != w_l1d_tail_ptr_p1) &&
+	(r_l1d_head_ptr[`LG_MRQ_ENTRIES-1:0] == w_l1d_tail_ptr_p1[`LG_MRQ_ENTRIES-1:0]);
+
    
    wire w_l1d_empty = (r_l1d_head_ptr == r_l1d_tail_ptr);
    
-   assign l1d_rdy = !w_l1d_full;
+   assign l1d_rdy = !w_l1d_almost_full;
+//!w_l1d_full;
 
    always_ff@(posedge clk)
      begin
 	if(l1d_req_valid)
 	  begin
 	     r_mem_q[r_l1d_tail_ptr[`LG_MRQ_ENTRIES-1:0]] <= l1d_req;
+	     if(w_l1d_full) $stop();
 	  end
      end
    
@@ -831,7 +838,6 @@ module l2_2way(clk,
 			 n_opcode = t_l1dq.opcode;
 			 n_l1d_req = 1'b0;
 			 n_l1d_rsp_tag = t_l1dq.tag;
-
 			 t_gnt_l1d = 1'b1;
 		      end
 		    n_req_ack = 1'b1;

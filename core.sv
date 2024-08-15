@@ -849,7 +849,7 @@ module core(clk,
    
    always_ff@(negedge clk)
      begin
-	if(r_watchdog > 64'd1000000)
+	if(r_watchdog > 64'd100000)
 	  begin 
 	     $display("cycle %d : state = %d, alu complete %b, mem complete %b,head_ptr %d, complete %b,  can_retire_rob_head %b, head pc %x, empty %b, full %b, bob full %b", 
 		      r_cycle,

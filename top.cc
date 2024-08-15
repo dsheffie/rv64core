@@ -1219,6 +1219,7 @@ int main(int argc, char **argv) {
       std::cout << "l2   state = " << static_cast<int>(tb->l2_state) << "\n";
       std::cout << "mmu  state = " << static_cast<int>(tb->mmu_state) << "\n";      
       std::cout << "core state = " << static_cast<int>(tb->core_state) << "\n";
+      std::cout << "rob  ptr   = " << static_cast<int>(tb->rob_ptr) << "\n";
       break;
     }
     if(tb->got_break) {

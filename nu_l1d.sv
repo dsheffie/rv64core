@@ -705,7 +705,7 @@ module nu_l1d(clk,
    wire	w_port2_hit_cache = r_valid_out2 && (r_tag_out2 == w_tlb_pa[`PA_WIDTH-1:IDX_STOP]);
 
    wire w_hit_pop = r_pop_busy_addr2 ? (r_cache_idx == r_req2.addr[IDX_STOP-1:IDX_START]) : 1'b0;
-   
+
    
    wire w_could_early_req_any = t_push_miss & mem_rdy & !t_port2_hit_cache &
 	(r_last_early_valid ? (r_last_early != r_req2.addr[IDX_STOP-1:IDX_START]) : 1'b1) &
@@ -737,8 +737,7 @@ module nu_l1d(clk,
 
 
    
-   wire w_early_rsp = mem_rsp_valid ? (mem_rsp_tag != (1 << `LG_MRQ_ENTRIES)) : 1'b0;
-
+   wire	w_early_rsp = mem_rsp_valid ? (mem_rsp_tag != (1 << `LG_MRQ_ENTRIES)) : 1'b0;
 
    always_ff@(posedge clk)
      begin
@@ -786,8 +785,11 @@ module nu_l1d(clk,
 	     if(w_gen_early_req)
 	       begin
 `ifdef DEBUG
-		  $display("generating early memory request with tag %d for pc %x addr %x at cycle %d, r_last_wr = %b, rr_last_wr = %b, line %x",
-			   r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0], r_req2.pc, r_req2.addr[`PA_WIDTH-1:0], r_cycle, r_last_wr, rr_last_wr, r_req2.addr[IDX_STOP-1:IDX_START]);
+		  $display("generating early memory request with tag %d for pc %x addr %x rob ptr %d at cycle %d, r_last_wr = %b, rr_last_wr = %b, line %x",
+			   r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0], r_req2.pc, 
+			   r_req2.addr[`PA_WIDTH-1:0],
+			   r_req2.rob_ptr,
+			   r_cycle, r_last_wr, rr_last_wr, r_req2.addr[IDX_STOP-1:IDX_START]);
 		  
 `endif
 		  r_mq_inflight[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]] <= 1'b1;

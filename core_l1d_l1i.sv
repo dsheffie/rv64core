@@ -20,6 +20,7 @@ module
 		   l1d_state,
 		   l2_state,
 		   mmu_state,
+		   rob_ptr,
 		   memq_empty,
 		   putchar_fifo_out,
 		   putchar_fifo_empty,
@@ -88,6 +89,7 @@ module
    output logic [3:0] l1d_state;
    output logic [3:0] l2_state;
    output logic [3:0] mmu_state;
+   output logic [`LG_ROB_ENTRIES-1:0] rob_ptr;
    
    output logic       memq_empty;
    output logic [7:0] putchar_fifo_out;
@@ -183,8 +185,11 @@ module
    logic [`LG_ROB_ENTRIES-1:0] 		  retired_rob_ptr_two;
    
 
-   logic 				  head_of_rob_ptr_valid;   
-   logic [`LG_ROB_ENTRIES-1:0] 		  head_of_rob_ptr;
+   logic				  head_of_rob_ptr_valid;   
+   wire [`LG_ROB_ENTRIES-1:0]		  w_head_of_rob_ptr;
+   
+   assign rob_ptr = w_head_of_rob_ptr;
+
 
    wire 				  flush_req_l1i, flush_req_l1d;
    logic 				  flush_cl_req;
@@ -484,7 +489,7 @@ module
 		 
 	       
 	       .head_of_rob_ptr_valid(head_of_rob_ptr_valid),
-	       .head_of_rob_ptr(head_of_rob_ptr),
+	       .head_of_rob_ptr(w_head_of_rob_ptr),
 	       .retired_rob_ptr_valid(retired_rob_ptr_valid),
 	       .retired_rob_ptr_two_valid(retired_rob_ptr_two_valid),
 	       .retired_rob_ptr(retired_rob_ptr),
@@ -648,7 +653,7 @@ module
 	     .drain_ds_complete(drain_ds_complete),
 	     .dead_rob_mask(dead_rob_mask),	     
 	     .head_of_rob_ptr_valid(head_of_rob_ptr_valid),	     
-	     .head_of_rob_ptr(head_of_rob_ptr),
+	     .head_of_rob_ptr(w_head_of_rob_ptr),
 	     .resume_pc(resume_pc),
 	     .ready_for_resume(ready_for_resume),  
 	     .flush_req_l1d(flush_req_l1d),
