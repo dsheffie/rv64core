@@ -466,8 +466,7 @@ module nu_l1d(clk,
                              FLUSH_CL_WAIT, //9			     
                              HANDLE_RELOAD, //10
 			     TLB_RELOAD, //11
-			     TLB_TURNAROUND, //12
-			     WAIT_FOR_CREDIT
+			     TLB_TURNAROUND //12
                              } state_t;
 
    
@@ -713,10 +712,11 @@ module nu_l1d(clk,
 	r_mrq_credits <= reset ? {`LG_MRQ_ENTRIES{1'b1}} : n_mrq_credits;
      end
 
-   wire w_free_credit = (r_mrq_credits != 'd0);
+   wire w_one_free_credit = (r_mrq_credits != 'd0);
    wire	w_two_free_credits = (r_mrq_credits > 'd1);
+   wire	w_three_free_credits = (r_mrq_credits > 'd2);
    
-   wire	w_could_early_req_any = t_push_miss & w_two_free_credits & !t_port2_hit_cache &
+   wire	w_could_early_req_any = t_push_miss & w_three_free_credits & !t_port2_hit_cache &
 	(r_last_early_valid ? (r_last_early != r_req2.addr[IDX_STOP-1:IDX_START]) : 1'b1) &
 	!(r_hit_busy_line2 | r_fwd_busy_addr2 | w_hit_pop ) &
 	(r_req2.is_load | r_req.is_store) &
@@ -2005,7 +2005,7 @@ module nu_l1d(clk,
 		 end
 	       
 	       /* not qualified on r_got_req */
-	       if(!mem_q_empty & !t_got_miss & !r_lock_cache & !n_pending_tlb_miss &!w_eb_port1_hit & !w_eb_full & w_free_credit)
+	       if(!mem_q_empty & !t_got_miss & !r_lock_cache & !n_pending_tlb_miss &!w_eb_port1_hit & !w_eb_full & w_two_free_credits)
 		 begin		    
 		    if(!t_mh_block & (r_mq_inflight[r_mq_head_ptr[`LG_MRQ_ENTRIES-1:0]] == 1'b0)  )
 		      begin
@@ -2069,14 +2069,6 @@ module nu_l1d(clk,
 		  n_state = FLUSH_CL;
 	       end
 	    end // case: ACTIVE
-	  WAIT_FOR_CREDIT:
-	    begin
-	       if(w_free_credit)
-		 begin
-		    n_state = INJECT_RELOAD;
-		    n_port1_req_valid = 1'b1;
-		 end
-	    end
 	  WAIT_INJECT_RELOAD:
 	    begin
 	       t_push_eb = 1'b1;
@@ -2343,7 +2335,7 @@ module nu_l1d(clk,
 	       end
 	     n_mem_req_tag = n_port2_req_tag;
 	  end
-	else if(!(n_port1_req_valid|n_port2_req_valid) & !w_eb_empty & w_free_credit)
+	else if(!(n_port1_req_valid|n_port2_req_valid) & !w_eb_empty & w_one_free_credit)
 	  begin
 	     t_pop_eb = 1'b1;
 	     n_mem_req_valid = 1'b1;
@@ -2365,8 +2357,8 @@ module nu_l1d(clk,
 	     n_mrq_credits = r_mrq_credits - 'd1;
 	     if(r_mrq_credits == 'd0) 
 	       begin
-		  $display("trying to push with no free credits,  mem_rdy %b, w_gen_early_req %b", 
-			   mem_rdy, w_gen_early_req);
+		  $display("trying to push with no free credits,  mem_rdy %b, w_gen_early_req %b, r_state = %d", 
+			   mem_rdy, w_gen_early_req, r_state);
 		  $stop();
 	       end
 	  end
