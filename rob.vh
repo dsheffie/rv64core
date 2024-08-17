@@ -50,6 +50,7 @@ typedef struct packed {
    logic [63:0] 	    alloc_cycle;
    logic [63:0] 	    complete_cycle;
    logic [31:0]		    raw_insn;
+   logic [63:0]		    uuid;
 `endif
    
 } rob_entry_t;
@@ -97,6 +98,7 @@ typedef struct packed {
    logic [`M_WIDTH-1:0]        pc;
 `ifdef ENABLE_CYCLE_ACCOUNTING
    logic [63:0] 	    fetch_cycle;
+   logic [63:0]		    uuid;   
 `endif
 
 `ifdef VERILATOR

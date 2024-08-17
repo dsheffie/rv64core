@@ -3112,6 +3112,7 @@ module exec(clk,
 `ifdef ENABLE_CYCLE_ACCOUNTING
 	t_mem_tail.fetch_cycle = mem_uq.fetch_cycle;
 	t_mem_tail.restart_id = r_restart_counter;
+	t_mem_tail.uuid = mem_uq.uuid;
 `endif
 	case(mem_uq.op)
 	  SB:

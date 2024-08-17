@@ -223,6 +223,7 @@ typedef struct packed {
    logic 		       is_cheap_int;
 `ifdef ENABLE_CYCLE_ACCOUNTING
    logic [63:0] 	    fetch_cycle;
+   logic [63:0]		    uuid;
    logic [31:0]		    raw_insn;   
 `endif   
 } uop_t;

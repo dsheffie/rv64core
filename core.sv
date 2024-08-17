@@ -7,6 +7,9 @@ import "DPI-C" function void record_faults(input int n_faults);
 import "DPI-C" function void record_branches(input int n_branches);
 import "DPI-C" function void start_log(input int startlog);
 
+import "DPI-C" function void alloc_uuid(input longint uuid);
+import "DPI-C" function void retire_uuid(input longint uuid);
+
 
 import "DPI-C" function void record_alloc(input int rob_full,
 					  input int alloc_one, 
@@ -1441,7 +1444,10 @@ module core(clk,
 	t_alloc_uop.srcB = w_rn_srcB_1;
 	t_alloc_uop2.srcA = w_rn_srcA_2;
 	t_alloc_uop2.srcB = w_rn_srcB_2;
-
+`ifdef ENABLE_CYCLE_ACCOUNTING	
+	t_alloc_uop.uuid = r_uuid;
+	t_alloc_uop2.uuid = r_uuid + 'd1;
+`endif
 	if(t_alloc)
 	  begin
 	     if(t_uop.dst_valid)
@@ -1461,7 +1467,8 @@ module core(clk,
 	     t_alloc_uop2.rob_ptr = r_rob_next_tail_ptr[`LG_ROB_ENTRIES-1:0];
 	  end
      end // always_comb
-  
+
+
    always_comb
      begin
 	t_free_reg = 1'b0;
@@ -1503,6 +1510,25 @@ module core(clk,
 	  end // if (t_retire)
 	
      end // always_comb
+
+`ifdef ENABLE_CYCLE_ACCOUNTING
+   logic [63:0] r_uuid;
+   always_ff@(posedge clk)
+     begin
+	if(reset)
+	  begin
+	     r_uuid <= 'd0;
+	  end
+	else if(t_alloc_two & t_alloc)
+	  begin
+	     r_uuid <= r_uuid + 'd2;
+	  end
+	else if(t_alloc)
+	  begin
+	     r_uuid <= r_uuid + 'd1;
+	  end
+     end
+`endif
    
    
    always_comb
@@ -1557,6 +1583,7 @@ module core(clk,
 	     t_rob_tail.alloc_cycle = r_cycle;
 	     t_rob_tail.raw_insn = t_alloc_uop.raw_insn;
 	     t_rob_tail.complete_cycle = 'd0;
+	     t_rob_tail.uuid = r_uuid;
 `endif	     
 	     if(t_uop.dst_valid)
 	       begin
@@ -1608,6 +1635,7 @@ module core(clk,
 	     t_rob_next_tail.alloc_cycle = r_cycle;
 	     t_rob_next_tail.raw_insn = t_alloc_uop2.raw_insn;
 	     t_rob_next_tail.complete_cycle = 'd0;
+	     t_rob_next_tail.uuid = r_uuid + 'd1;
 `endif
 
 	     if(t_uop2.dst_valid)
@@ -2330,5 +2358,32 @@ module core(clk,
 	       end
 	  end
      end // always_comb
+
+`ifdef ENABLE_CYCLE_ACCOUNTING
+   always_ff@(negedge clk)
+     begin
+	if(t_retire_two)
+	  begin
+	     retire_uuid(t_rob_head.uuid);	     
+	     retire_uuid(t_rob_next_head.uuid);
+	  end
+	else if(t_retire)
+	  begin
+	     retire_uuid(t_rob_head.uuid);
+	  end
+
+	if(t_alloc_two & t_alloc)
+	  begin
+	     alloc_uuid(r_uuid);
+	     alloc_uuid(r_uuid+1);	     
+	  end
+	else if(t_alloc)
+	  begin
+	     alloc_uuid(r_uuid);
+	  end
+	   
+     end
+`endif
+   
    
 endmodule
