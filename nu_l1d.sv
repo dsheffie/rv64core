@@ -353,8 +353,8 @@ module nu_l1d(clk,
    assign core_mem_rsp_valid = r_core_mem_rsp_valid;
    assign core_mem_rsp = r_core_mem_rsp;
 `else
-   assign core_mem_rsp_valid = r_core_mem_rsp_valid;
-   assign core_mem_rsp = r_core_mem_rsp;
+   assign core_mem_rsp_valid = n_core_mem_rsp_valid;
+   assign core_mem_rsp = n_core_mem_rsp;
 `endif
    assign cache_accesses = 'd0;
    assign cache_hits = 'd0;
