@@ -244,6 +244,25 @@ void start_log(int l) {
   trace_retirement |= (l!=0);
 }
 
+static std::list<long long> inflight_uuids;
+
+void alloc_uuid(long long uuid) {
+  inflight_uuids.push_back(uuid);
+}
+
+void retire_uuid(long long uuid) {
+  assert(not(inflight_uuids.empty()));
+
+  do {
+    uint64_t head = inflight_uuids.front();
+    inflight_uuids.pop_front();
+    if(head == uuid) {
+      break;
+    }
+  } while(true);
+}
+
+
 static uint64_t log_l1d_accesses = 0;
 static uint64_t log_l1d_push_miss = 0;
 static uint64_t log_l1d_push_miss_hit_inflight = 0;
