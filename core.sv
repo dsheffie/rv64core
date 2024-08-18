@@ -78,6 +78,7 @@ module core(clk,
 	    
 	    insn_ack_two,	    
 	    branch_pc,
+	    target_pc,
 	    branch_pc_valid,
 	    branch_fault,
 	    took_branch,
@@ -184,6 +185,7 @@ module core(clk,
    input logic 			 restart_ack;
    
    output logic [(`M_WIDTH-1):0] branch_pc;
+   output logic [(`M_WIDTH-1):0] target_pc;   
    output logic 		 branch_pc_valid;
    output logic 		 branch_fault;
    output logic 		 took_branch;
@@ -356,6 +358,8 @@ module core(clk,
    logic 		     n_restart_src_is_indirect, r_restart_src_is_indirect;
    
    logic [(`M_WIDTH-1):0]    n_branch_pc, r_branch_pc;
+   logic [(`M_WIDTH-1):0]    n_target_pc, r_target_pc;
+   
    logic 		     n_took_branch, r_took_branch;
    logic 		     n_branch_valid, r_branch_valid;
    logic 		     n_branch_fault,r_branch_fault;
@@ -533,6 +537,7 @@ module core(clk,
 
    
    assign branch_pc = r_branch_pc;
+   assign target_pc = r_target_pc;
    assign branch_pc_valid = r_branch_valid;
    assign branch_fault = r_branch_fault;
    assign branch_pht_idx = r_branch_pht_idx;
@@ -588,6 +593,7 @@ module core(clk,
 	     r_restart_src_pc <= 'd0;
 	     r_restart_src_is_indirect <= 1'b0;
 	     r_branch_pc <= 'd0;
+	     r_target_pc <= 'd0;
 	     r_took_branch <= 1'b0;
 	     r_branch_valid <= 1'b0;
 	     r_branch_fault <= 1'b0;
@@ -622,6 +628,7 @@ module core(clk,
 	     r_restart_src_pc <= n_restart_src_pc;
 	     r_restart_src_is_indirect <= n_restart_src_is_indirect;
 	     r_branch_pc <= n_branch_pc;
+	     r_target_pc <= n_target_pc;
 	     r_took_branch <= n_took_branch;
 	     r_branch_valid <= n_branch_valid;
 	     r_branch_fault <= n_branch_fault;
@@ -1477,8 +1484,9 @@ module core(clk,
 	t_free_reg_two_ptr = 'd0;
 	
 	n_retire_prf_free = r_retire_prf_free;
+	n_branch_pc = r_branch_pc;
+	n_target_pc = r_target_pc;
 	
-	n_branch_pc = {{HI_EBITS{1'b0}}, 32'd0};
 	n_took_branch = 1'b0;
 	n_branch_valid = 1'b0;
 	n_branch_fault = 1'b0;
@@ -1503,6 +1511,8 @@ module core(clk,
 	       end
 	     
 	     n_branch_pc = t_retire_two ? t_rob_next_head.pc : t_rob_head.pc;
+	     n_target_pc = t_retire_two ? t_rob_next_head.target_pc : t_rob_head.target_pc;
+	     
 	     n_took_branch = t_retire_two ? t_rob_next_head.take_br : t_rob_head.take_br;
 	     n_branch_valid = t_retire_two ? t_rob_next_head.is_br :  t_rob_head.is_br;
 	     n_branch_fault = t_rob_head.faulted & (t_rob_head.has_cause==1'b0);

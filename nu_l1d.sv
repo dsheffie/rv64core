@@ -813,6 +813,12 @@ module nu_l1d(clk,
 	  end
      end // always_ff@ (posedge clk)
 
+   wire w_mq_head_done = (r_mq_inflight[r_mq_head_ptr[`LG_MRQ_ENTRIES-1:0]] == 1'b0) ;/*| 
+	((r_mq_inflight[r_mq_head_ptr[`LG_MRQ_ENTRIES-1:0]] & 
+	  w_early_rsp & 
+	  (mem_rsp_tag[`LG_MRQ_ENTRIES-1:0] == r_mq_head_ptr[`LG_MRQ_ENTRIES-1:0])));*/
+   
+   
    always_comb
      begin
 	n_port2_req_valid = w_gen_early_req;
@@ -2007,7 +2013,7 @@ module nu_l1d(clk,
 	       /* not qualified on r_got_req */
 	       if(!mem_q_empty & !t_got_miss & !r_lock_cache & !n_pending_tlb_miss &!w_eb_port1_hit & !w_eb_full & w_two_free_credits)
 		 begin		    
-		    if(!t_mh_block & (r_mq_inflight[r_mq_head_ptr[`LG_MRQ_ENTRIES-1:0]] == 1'b0)  )
+		    if(!t_mh_block & w_mq_head_done  )
 		      begin
 			 if(t_mem_head.is_store | t_mem_head.is_atomic)
 			   begin

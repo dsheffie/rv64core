@@ -39,6 +39,7 @@ module l1i_2way(clk,
 	   retire_reg_valid,
 	   branch_pc_valid,
 	   branch_pc,
+           target_pc,
 	   took_branch,
 	   branch_fault,
 	   branch_pht_idx,
@@ -99,6 +100,7 @@ module l1i_2way(clk,
 
    input logic 			branch_pc_valid;
    input logic [`M_WIDTH-1:0] 	branch_pc;
+   input logic [`M_WIDTH-1:0] 	target_pc;   
    
    input logic 			took_branch;
    input logic 			branch_fault;
@@ -945,6 +947,7 @@ endfunction
      end
    
    compute_pht_idx cpi0 (.pc(n_cache_pc), .hist(r_spec_gbl_hist), .idx(n_pht_idx));
+   
    always_comb
      begin
 	t_retire_pht_idx = branch_pht_idx;
@@ -1265,9 +1268,9 @@ endfunction
 	  begin
 	     n_spec_gbl_hist = n_arch_gbl_hist;
 	  end
-	else if(t_update_spec_hist)
+	else if(t_update_spec_hist & t_take_br)
 	  begin
-	     n_spec_gbl_hist = {r_spec_gbl_hist[`GBL_HIST_LEN-2:0], t_take_br};
+	     n_spec_gbl_hist = {r_spec_gbl_hist[`GBL_HIST_LEN-3:0], 2'd0};
 	  end
      end // always_comb
 
@@ -1275,20 +1278,19 @@ endfunction
    always_comb
      begin
 	n_arch_gbl_hist = r_arch_gbl_hist;
-	if(branch_pc_valid)
+	if(branch_pc_valid & took_branch)
 	  begin
-	     n_arch_gbl_hist = {r_arch_gbl_hist[`GBL_HIST_LEN-2:0], took_branch};
+	     n_arch_gbl_hist = {r_arch_gbl_hist[`GBL_HIST_LEN-3:0], 2'd0};
 	  end
      end
 
-    // always_ff@(negedge clk)
-    //   begin
-    // 	if(n_restart_ack)
-    // 	  begin
-    // 	     $display("restart pc %x, paging enabled %b, r_state = %d, n_state = %d", 
-    // 		      n_pc, paging_active, r_state, n_state);
-    // 	  end
-    //   end
+    always_ff@(negedge clk)
+      begin
+     	if(branch_pc_valid)
+     	  begin
+	     $display("src %x, tgt %x, %b", branch_pc, target_pc, took_branch);
+	  end
+      end
    
    
    always_ff@(posedge clk)
