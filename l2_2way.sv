@@ -1,6 +1,9 @@
 `include "machine.vh"
 `include "rob.vh"
 
+`ifdef VERILATOR
+import "DPI-C" function void l1_to_l2_queue_occupancy(int e);
+`endif
 
 module l2_2way(clk,
 	  reset,
@@ -589,6 +592,39 @@ module l2_2way(clk,
 	     if(w_l1d_full) $stop();
 	  end
      end
+   
+`ifdef VERILATOR
+   logic [31:0] r_inflight, n_inflight;
+   always_ff@(posedge clk)
+     begin
+	if(reset)
+	  begin
+	     r_inflight <= 'd0;
+	  end
+	else
+	  begin
+	     r_inflight <= n_inflight;
+	  end
+     end // always_ff@ (negedge clk)
+
+   always_comb
+     begin
+	n_inflight = r_inflight;
+	if(l1d_req_valid)
+	  begin
+	     n_inflight = n_inflight + 'd1;
+	  end
+	if(t_gnt_l1d)
+	  begin
+	     n_inflight = n_inflight - 'd1;		  
+	  end
+     end // always_comb
+
+   always_ff@(negedge clk)
+     begin
+	l1_to_l2_queue_occupancy(r_inflight);
+     end
+`endif
    
    always_comb
      begin
