@@ -244,6 +244,11 @@ void start_log(int l) {
   trace_retirement |= (l!=0);
 }
 
+static std::map<int, uint64_t> l1_to_l2_dist;
+void l1_to_l2_queue_occupancy(int e) {
+  l1_to_l2_dist[e]++;
+}
+
 static std::list<long long> inflight_uuids;
 
 void alloc_uuid(long long uuid) {
@@ -1617,7 +1622,9 @@ int main(int argc, char **argv) {
     dump_tip("tip.txt", tip_map, insn_cnts, s);    
     out.close();
 
-    
+    for(auto &p : l1_to_l2_dist) {
+      std::cout << p.first << "," << p.second << "\n";
+    }
 
     if(not(rt.empty())) {
       std::ofstream ofs(retire_name);
