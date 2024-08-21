@@ -245,8 +245,13 @@ void start_log(int l) {
 }
 
 static std::map<int, uint64_t> l1_to_l2_dist;
+static std::map<int, uint64_t> l2_state;
+
 void l1_to_l2_queue_occupancy(int e) {
   l1_to_l2_dist[e]++;
+}
+void record_l2_state(int s) {
+  l2_state[s]++;
 }
 
 static std::list<long long> inflight_uuids;
@@ -1622,10 +1627,33 @@ int main(int argc, char **argv) {
     dump_tip("tip.txt", tip_map, insn_cnts, s);    
     out.close();
 
+    uint64_t total_ticks = 0;
     for(auto &p : l1_to_l2_dist) {
       std::cout << p.first << "," << p.second << "\n";
+      total_ticks += p.second;
+    }
+    std::cout << "total_ticks = " << total_ticks << "\n";
+    const char* l2_state_names[] = {
+      "INITIALIZE",
+      "IDLE",
+      "CHECK_VALID_AND_TAG",
+      "CLEAN_RELOAD",
+      "DIRTY_STORE",
+      "STORE_TURNAROUND",
+      "WAIT_CLEAN_RELOAD",
+      "WAIT_STORE_IDLE",
+      "FLUSH_STORE",
+      "FLUSH_STORE_WAY2",
+      "FLUSH_WAIT",
+      "FLUSH_TRIAGE",
+      "UPDATE_PTE"
+    };
+    
+    for(auto &p : l2_state) {
+      std::cout << l2_state_names[p.first] << "," << p.second << "\n";
     }
 
+    
     if(not(rt.empty())) {
       std::ofstream ofs(retire_name);
       boost::archive::binary_oarchive oa(ofs);

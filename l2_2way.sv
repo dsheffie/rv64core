@@ -3,6 +3,7 @@
 
 `ifdef VERILATOR
 import "DPI-C" function void l1_to_l2_queue_occupancy(int e);
+import "DPI-C" function void record_l2_state(int s);
 `endif
 
 module l2_2way(clk,
@@ -162,6 +163,9 @@ module l2_2way(clk,
    
    
    logic [`PA_WIDTH-1:0]    n_addr, r_addr;
+   logic [`PA_WIDTH-1:0]    n_wb_addr, r_wb_addr;
+   logic		    n_need_wb, r_need_wb;
+   
    logic [`PA_WIDTH-1:0]    n_saveaddr, r_saveaddr;
    
    logic [3:0] 		   n_opcode, r_opcode;
@@ -176,7 +180,6 @@ module l2_2way(clk,
    logic [(1 << (`LG_L1D_CL_LEN+3)) - 1:0] 	   r_store_data, n_store_data;
    logic [`LG_MRQ_ENTRIES:0] 			   r_l1d_rsp_tag, n_l1d_rsp_tag;
    
-   logic 		   r_reload, n_reload;
    
    typedef enum logic  {
 			     WAIT_FOR_FLUSH,
@@ -190,16 +193,16 @@ module l2_2way(clk,
    
    
    typedef enum 	logic [4:0] {
-				     INITIALIZE,
-				     IDLE,
-				     CHECK_VALID_AND_TAG,
-				     CLEAN_RELOAD,
-				     DIRTY_STORE,
-				     STORE_TURNAROUND,
-				     WAIT_CLEAN_RELOAD,
-				     WAIT_STORE_IDLE,
-				     FLUSH_STORE,
-				     FLUSH_STORE_WAY2,
+				     INITIALIZE = 'd0,
+				     IDLE = 'd1,
+				     CHECK_VALID_AND_TAG = 'd2,
+				     CLEAN_RELOAD = 'd3, 
+				     DIRTY_STORE = 'd4, 
+				     STORE_TURNAROUND, //5
+				     WAIT_CLEAN_RELOAD, //6
+				     WAIT_STORE_IDLE, //7
+				     FLUSH_STORE, //8
+				     FLUSH_STORE_WAY2, //9
 				     FLUSH_WAIT,
 				     FLUSH_TRIAGE,
 				     UPDATE_PTE
@@ -249,34 +252,6 @@ module l2_2way(clk,
    logic		t_last, t_wr_last;
    wire			w_last;
 
-   reg_ram1rw #(.WIDTH(1), .LG_DEPTH(LG_L2_LINES)) last_ram
-     (.clk(clk), .addr(t_idx), .wr_data(t_last), .wr_en(t_wr_last), .rd_data(w_last));      
-
-   /* 1st way */
-   reg_ram1rw #(.WIDTH(128), .LG_DEPTH(LG_L2_LINES)) data_ram0
-     (.clk(clk), .addr(t_idx), .wr_data(t_d0), .wr_en(t_wr_d0), .rd_data(w_d0));
-      
-   reg_ram1rw #(.WIDTH(TAG_BITS), .LG_DEPTH(LG_L2_LINES)) tag_ram0
-     (.clk(clk), .addr(t_idx), .wr_data(r_tag), .wr_en(t_wr_tag0), .rd_data(w_tag0));   
-   
-   reg_ram1rw #(.WIDTH(1), .LG_DEPTH(LG_L2_LINES)) valid_ram0
-     (.clk(clk), .addr(t_idx), .wr_data(t_valid), .wr_en(t_wr_valid0), .rd_data(w_valid0));   
-
-   reg_ram1rw #(.WIDTH(1), .LG_DEPTH(LG_L2_LINES)) dirty_ram0
-     (.clk(clk), .addr(t_idx), .wr_data(t_dirty), .wr_en(t_wr_dirty0), .rd_data(w_dirty0));   
-
-   /* 2nd way */
-   reg_ram1rw #(.WIDTH(128), .LG_DEPTH(LG_L2_LINES)) data_ram1
-     (.clk(clk), .addr(t_idx), .wr_data(t_d0), .wr_en(t_wr_d1), .rd_data(w_d1));
-      
-   reg_ram1rw #(.WIDTH(TAG_BITS), .LG_DEPTH(LG_L2_LINES)) tag_ram1
-     (.clk(clk), .addr(t_idx), .wr_data(r_tag), .wr_en(t_wr_tag1), .rd_data(w_tag1));   
-   
-   reg_ram1rw #(.WIDTH(1), .LG_DEPTH(LG_L2_LINES)) valid_ram1
-     (.clk(clk), .addr(t_idx), .wr_data(t_valid), .wr_en(t_wr_valid1), .rd_data(w_valid1));   
-
-   reg_ram1rw #(.WIDTH(1), .LG_DEPTH(LG_L2_LINES)) dirty_ram1
-     (.clk(clk), .addr(t_idx), .wr_data(t_dirty), .wr_en(t_wr_dirty1), .rd_data(w_dirty1));   
 
    
    
@@ -335,6 +310,8 @@ module l2_2way(clk,
 	     r_tag <= 'd0;
 	     r_opcode <= 4'd0;
 	     r_addr <= 'd0;
+	     r_wb_addr <= 'd0;
+	     r_need_wb <= 1'b0;
 	     r_saveaddr <= 'd0;
 	     r_mem_req <= 1'b0;
 	     r_mem_opcode <= 4'd0;
@@ -342,7 +319,6 @@ module l2_2way(clk,
 	     r_l1d_rsp_valid <= 1'b0;
 	     r_l1i_rsp_valid <= 1'b0;
 	     r_l1d_rsp_tag <= 'd0;
-	     r_reload <= 1'b0;
 	     r_req_ack <= 1'b0;
 	     r_store_data <= 'd0;
 	     r_flush_req <= 1'b0;
@@ -381,13 +357,14 @@ module l2_2way(clk,
 	     r_tag <= n_tag;
 	     r_opcode <= n_opcode;
 	     r_addr <= n_addr;
+	     r_wb_addr <= n_wb_addr;
+	     r_need_wb <= n_need_wb;
 	     r_saveaddr <= n_saveaddr;
 	     r_mem_req <= n_mem_req;
 	     r_mem_opcode <= n_mem_opcode;
 	     r_rsp_data <= n_rsp_data;
 	     r_l1d_rsp_valid <= n_l1d_rsp_valid;
 	     r_l1i_rsp_valid <= n_l1i_rsp_valid;
-	     r_reload <= n_reload;
 	     r_req_ack <= n_req_ack;
 	     r_store_data <= n_store_data;
 	     r_flush_req <= n_flush_req;
@@ -623,6 +600,7 @@ module l2_2way(clk,
    always_ff@(negedge clk)
      begin
 	l1_to_l2_queue_occupancy(r_inflight);
+	record_l2_state({27'd0, r_state});
      end
 `endif
    
@@ -701,7 +679,6 @@ module l2_2way(clk,
 	       end
 	  end
      end
-
    
    always_comb
      begin
@@ -737,6 +714,9 @@ module l2_2way(clk,
 	n_tag = r_tag;
 	n_opcode = r_opcode;
 	n_addr = r_addr;
+	n_wb_addr = r_wb_addr;
+	n_need_wb = r_need_wb;
+	
 	n_saveaddr = r_saveaddr;
 	
 	n_req_ack = 1'b0;
@@ -750,7 +730,6 @@ module l2_2way(clk,
 
 	n_l1d_rsp_tag = r_l1d_rsp_tag;
 	
-	n_reload = r_reload;
 	n_store_data = r_store_data;
 	n_flush_req = r_flush_req | t_l2_flush_req;
 
@@ -811,8 +790,18 @@ module l2_2way(clk,
 	       n_opcode = MEM_LW;
 	       n_store_data = r_store_data;
 	       n_last_idle = 1'b1;
- 
-	       if(n_flush_req)
+	       if(r_need_wb)
+		 begin
+		    //$display("performing writeback at cycle %d for address %x", 
+		    //r_cycle, r_wb_addr);			      		    
+		    n_mem_opcode = 4'd7; 
+		    n_mem_req = 1'b1;
+		    n_state = DIRTY_STORE;
+		    n_addr = r_wb_addr;
+		    n_mem_req = 1'b1;
+		    n_need_wb = 1'b0;
+		 end
+	       else if(n_flush_req)
 		 begin
 		    t_idx = 'd0;
 		    n_state = FLUSH_WAIT;
@@ -888,7 +877,6 @@ module l2_2way(clk,
 	       //load hit
 	       if(w_hit)
 		 begin
-		    n_reload = 1'b0;
 		    t_wr_last = 1'b1;
 		    t_last = w_hit0 ? 1'b0 : 1'b1;
 		    
@@ -916,7 +904,7 @@ module l2_2way(clk,
 			 else if(r_last_gnt)
 			   begin
 			      n_l1d_rsp_valid  = 1'b1;	
-			      if(w_l1d_req & !w_l1i_req & t_l1dq.opcode == MEM_LW /*& r_last_idle*/)
+			      if(w_l1d_req & !w_l1i_req & t_l1dq.opcode == MEM_LW & (r_need_wb==1'b0))
 				begin
 				   n_l1d = 1'b1;
 				   n_last_idle = 1'b1;
@@ -941,7 +929,7 @@ module l2_2way(clk,
 			 else
 			   begin
 			      //n_l1i_rsp_valid  = 1'b1;
-			      if(w_l1d_req & !w_l1i_req & t_l1dq.opcode == MEM_LW /*& r_last_idle*/)
+			      if(w_l1d_req & !w_l1i_req & t_l1dq.opcode == MEM_LW & (r_need_wb==1'b0))
 				begin
 				   n_l1d = 1'b1;
 				   n_last_idle = 1'b1;
@@ -987,38 +975,38 @@ module l2_2way(clk,
 			 if(w_dirty1)
 			   begin
 			      n_mem_req_store_data = w_d1;
-			      n_addr = {w_tag1, t_idx, {{`LG_L2_CL_LEN{1'b0}}}};
-			      n_mem_opcode = 4'd7; 
-			      n_mem_req = 1'b1;
-			      n_state = DIRTY_STORE;			 
+			      //n_addr = {w_tag1, t_idx, {{`LG_L2_CL_LEN{1'b0}}}};
+			      n_wb_addr = {w_tag1, t_idx, {{`LG_L2_CL_LEN{1'b0}}}};
+			      n_need_wb = 1'b1;
+			      //$display("wb needed at cycle %d for way 1, wb addr %x, addr %x, w_tag1 %x", r_cycle, 
+			      //n_wb_addr, r_addr, w_tag1);
+			      if(r_need_wb) $stop();		      
+			      //n_mem_opcode = 4'd7; 
+			      //n_mem_req = 1'b1;
+			      //n_state = DIRTY_STORE;			 
 			   end
-			 else //invalid or clean
-			   begin
-			      n_reload = 1'b1;
-			      n_state = CLEAN_RELOAD;
-			      n_mem_opcode = 4'd4; //load
-			      n_mem_req = 1'b1;
-			   end // else: !if(w_dirty1)
+			 n_state = CLEAN_RELOAD;
+			 n_mem_opcode = 4'd4; //load
+			 n_mem_req = 1'b1;
 		      end // if (n_replace)
 		    else
 		      begin
 			 if(w_dirty0)
 			   begin
 			      n_mem_req_store_data = w_d0;
-			      n_addr = {w_tag0, t_idx, {{`LG_L2_CL_LEN{1'b0}}}};
-			      n_mem_opcode = 4'd7; 
-			      n_mem_req = 1'b1;
-			      n_state = DIRTY_STORE;			 
+			      //n_addr = {w_tag0, t_idx, {{`LG_L2_CL_LEN{1'b0}}}};
+			      n_wb_addr = {w_tag0, t_idx, {{`LG_L2_CL_LEN{1'b0}}}};
+			      //$display("wb needed at cycle %d for way 0, wb addr %x, addr %x, w_tag0 %x", 
+			      //r_cycle, n_wb_addr, r_addr, w_tag0);			      
+			      n_need_wb = 1'b1;
+			      if(r_need_wb) $stop();
+			      //n_mem_opcode = 4'd7; 
+			      //n_mem_req = 1'b1;
+			     // n_state = DIRTY_STORE;			 
 			   end
-			 else //invalid or clean
-			   begin
-			      //if(r_reload)
-			      //$stop();
-			      n_reload = 1'b1;
-			      n_state = CLEAN_RELOAD;
-			      n_mem_opcode = 4'd4; //load
-			      n_mem_req = 1'b1;
-			   end
+			 n_state = CLEAN_RELOAD;
+			 n_mem_opcode = 4'd4; //load
+			 n_mem_req = 1'b1;
 		      end // else: !if(n_replace)
 		 end // else: !if(w_hit)
 	    end // case: CHECK_VALID_AND_TAG
@@ -1026,17 +1014,18 @@ module l2_2way(clk,
 	    begin
 	       if(mem_rsp_valid)
 		 begin
-		    n_addr = r_saveaddr;
-		    n_mem_opcode = 4'd4; //load
-		    n_state = STORE_TURNAROUND;
+		    //$stop();
+		    //n_addr = r_saveaddr;
+		    //n_mem_opcode = 4'd4; //load
+		    //n_state = STORE_TURNAROUND;
+		    n_state = IDLE;
 		    n_mem_req = 1'b0;		    
 		 end
 	    end // case: DIRTY_STORE
 	  STORE_TURNAROUND:
 	    begin
-	       n_state = CLEAN_RELOAD;
-	       n_reload = 1'b1;
-	       n_mem_req = 1'b1;		    
+	       n_state = IDLE;
+	       //n_mem_req = 1'b1;		    
 	    end
 	  CLEAN_RELOAD:
 	    begin
@@ -1044,14 +1033,21 @@ module l2_2way(clk,
 		 begin
 		    n_mem_req = 1'b0;
 		    t_valid = 1'b1;
+		    t_dirty = 1'b0;
 		    
 		    t_wr_valid0 = r_replace == 1'b0;
+		    t_wr_dirty0 = r_replace == 1'b0;
 		    t_wr_tag0 = r_replace == 1'b0;
 		    t_wr_d0 = r_replace ==  1'b0;
 		    
 		    t_wr_valid1 = r_replace == 1'b1;
+		    t_wr_dirty1 = r_replace == 1'b1;		    
 		    t_wr_tag1 = r_replace == 1'b1;
 		    t_wr_d1 = r_replace == 1'b1;
+
+		    //$display("clean reload at cycle %d, r_addr = %x, way0 %b, way1 %b, idx %x tag %x, addr %x", 
+		    //r_cycle, r_addr, t_wr_tag0, t_wr_tag1, r_tag, t_idx, {r_tag, t_idx, 4'd0});
+		    
 		    n_state = WAIT_CLEAN_RELOAD;
 		 end
 	    end // case: CLEAN_RELOAD
@@ -1161,5 +1157,58 @@ module l2_2way(clk,
 	  end // if (r_state == CHECK_VALID_AND_TAG)
      end
 
+   reg_ram1rw #(.WIDTH(1), .LG_DEPTH(LG_L2_LINES)) last_ram
+     (.clk(clk), .addr(t_idx), .wr_data(t_last), .wr_en(t_wr_last), .rd_data(w_last));      
+
+   /* 1st way */
+   reg_ram1rw #(.WIDTH(128), .LG_DEPTH(LG_L2_LINES)) data_ram0
+     (.clk(clk), .addr(t_idx), .wr_data(t_d0), .wr_en(t_wr_d0), .rd_data(w_d0));
+      
+   reg_ram1rw #(.WIDTH(TAG_BITS), .LG_DEPTH(LG_L2_LINES)) tag_ram0
+     (.clk(clk), .addr(t_idx), .wr_data(r_tag), .wr_en(t_wr_tag0), .rd_data(w_tag0));   
+   
+   reg_ram1rw #(.WIDTH(1), .LG_DEPTH(LG_L2_LINES)) valid_ram0
+     (.clk(clk), .addr(t_idx), .wr_data(t_valid), .wr_en(t_wr_valid0), .rd_data(w_valid0));   
+
+   reg_ram1rw #(.WIDTH(1), .LG_DEPTH(LG_L2_LINES)) dirty_ram0
+     (.clk(clk), .addr(t_idx), .wr_data(t_dirty), .wr_en(t_wr_dirty0), .rd_data(w_dirty0));   
+
+   /* 2nd way */
+   reg_ram1rw #(.WIDTH(128), .LG_DEPTH(LG_L2_LINES)) data_ram1
+     (.clk(clk), .addr(t_idx), .wr_data(t_d0), .wr_en(t_wr_d1), .rd_data(w_d1));
+      
+   reg_ram1rw #(.WIDTH(TAG_BITS), .LG_DEPTH(LG_L2_LINES)) tag_ram1
+     (.clk(clk), .addr(t_idx), .wr_data(r_tag), .wr_en(t_wr_tag1), .rd_data(w_tag1));   
+   
+   reg_ram1rw #(.WIDTH(1), .LG_DEPTH(LG_L2_LINES)) valid_ram1
+     (.clk(clk), .addr(t_idx), .wr_data(t_valid), .wr_en(t_wr_valid1), .rd_data(w_valid1));   
+
+   reg_ram1rw #(.WIDTH(1), .LG_DEPTH(LG_L2_LINES)) dirty_ram1
+     (.clk(clk), .addr(t_idx), .wr_data(t_dirty), .wr_en(t_wr_dirty1), .rd_data(w_dirty1));   
+
+
+   
+   // always_comb
+   //   begin
+   // 	if(r_addr != n_addr) $display("addr change at cycle %d %x -> %x state %d", r_cycle, r_addr, n_addr, r_state);
+	
+   // 	if(t_wr_tag0)
+   // 	  begin
+   // 	     $display("----> write tag %x to line %d at cycle %d for way 0 addr %x", r_tag, t_idx, r_cycle, {r_tag, t_idx, 4'd0});
+   // 	  end	
+   // 	if(t_wr_tag1)
+   // 	  begin
+   // 	     $display("----> write tag %x to line %d at cycle %d for way 1 addr %x", r_tag, t_idx, r_cycle, , {r_tag, t_idx, 4'd0});
+   // 	  end
+   //   end
+
+   // always_ff@(posedge clk)
+   //   begin
+   // 	if(r_state == CHECK_VALID_AND_TAG) 
+   // 	  begin
+   // 	     $display("w_hit = %b, r_addr = %x", w_hit, r_addr);
+   // 	  end
+   //   end
+   
    
 endmodule
