@@ -60,11 +60,11 @@ sources for you to plagiarize.
 
 // this many 12-bit words will be kept in the global history
 
-#define MAXHIST 591
+#define MAXHIST 232
 
 #define NGHIST_WORDS (MAXHIST / LOG_TABLE_SIZE + 1)
 
-static int history_lengths[] = {0, 3, 4, 6, 8, 10, 14, 19, 26, 36, 49, 67, 91, 125, 170, 232, 270, 305, MAXHIST};
+static int history_lengths[] = {0, 3, 4, 6, 8, 10, 14, 19, 26, 36, 49, 67, 91, 125, 170,  MAXHIST};
 
 #define NTABLES ((sizeof(history_lengths)/sizeof(history_lengths[0])))
 
