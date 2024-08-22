@@ -9,6 +9,9 @@ import "DPI-C" function void record_fetch(int push1, int push2, int push3, int p
 
 import "DPI-C" function int check_bad_fetch(longint pc, longint pa, int insn);
 
+import "DPI-C" function int hashed_perceptron_predict(longint pc, int key);
+import "DPI-C" function void hashed_perceptron_update(int key, longint pc, longint target, int taken);
+
 `endif
 
 
@@ -39,6 +42,7 @@ module l1i_2way(clk,
 	   retire_reg_valid,
 	   branch_pc_valid,
 	   branch_pc,
+           target_pc,
 	   took_branch,
 	   branch_fault,
 	   branch_pht_idx,
@@ -99,7 +103,7 @@ module l1i_2way(clk,
 
    input logic 			branch_pc_valid;
    input logic [`M_WIDTH-1:0] 	branch_pc;
-   
+   input logic [`M_WIDTH-1:0] 	target_pc;
    input logic 			took_branch;
    input logic 			branch_fault;
    
@@ -467,7 +471,9 @@ endfunction
    // 	     $display("cycle %d, hit 0 %b, hit 1 %b", r_cycle, w_hit0, w_hit1);
    // 	  end
    //   end
-   logic			r_reload, n_reload;   
+   logic			r_reload, n_reload;
+   logic			t_pp;
+   
    always_comb
      begin
 	n_page_fault = r_page_fault;
@@ -561,6 +567,7 @@ endfunction
 	n_init_pht_idx = r_init_pht_idx;
 	t_reload_tlb = 1'b0;
 	n_tlb_miss = 1'b0;
+	t_pp = 1'b0;
 	
 	case(r_state)
 	  INITIALIZE:
@@ -659,6 +666,10 @@ endfunction
 	       else if(t_hit && !fq_full)
 		 begin		    
 		    t_update_spec_hist = (t_pd != 4'd0);
+		    if(t_update_spec_hist)
+		      begin
+			 t_pp = hashed_perceptron_predict(r_cache_pc, {16'd0, r_pht_idx}) == 32'd1;
+		      end
 		    if(t_pd == 4'd5 || t_pd == 4'd3) /* jal and j */
 		      begin
 			 t_is_cflow = 1'b1;
@@ -667,7 +678,8 @@ endfunction
 			 n_pc = r_cache_pc + t_jal_simm;
 			 
 		      end
-		    else if(t_pd == 4'd1 && r_pht_out[1])
+		    //else if(t_pd == 4'd1 && r_pht_out[1])
+		    else if(t_pd == 4'd1 & t_pp)		    
 		      begin
 			 t_is_cflow = 1'b1;			 
 			 t_take_br = 1'b1;
@@ -944,7 +956,8 @@ endfunction
 	t_last_ram_value = w_hit1;
      end
    
-   compute_pht_idx cpi0 (.pc(n_cache_pc), .hist(r_spec_gbl_hist), .idx(n_pht_idx));
+   //compute_pht_idx cpi0 (.pc(n_cache_pc), .hist(r_spec_gbl_hist), .idx(n_pht_idx));
+   
    always_comb
      begin
 	t_retire_pht_idx = branch_pht_idx;
@@ -1001,6 +1014,20 @@ endfunction
 	    end
 	endcase // case (r_pht_update_out)
      end
+
+   always_comb
+     begin
+	n_pht_idx = r_pht_idx;
+	if(n_restart_ack)
+	  begin
+	     n_pht_idx = 'd0;
+	  end
+	else if(t_update_spec_hist)
+	  begin
+	     n_pht_idx = r_pht_idx + 'd1;
+	  end
+	
+     end
    
    always_ff@(posedge clk)
      begin
@@ -1014,7 +1041,6 @@ endfunction
 	  end
 	else
 	  begin
-	     
 	     r_pht_idx <= n_pht_idx;
 	     r_last_spec_gbl_hist <= r_spec_gbl_hist;
 	     r_pht_update <= branch_pc_valid;
@@ -1280,6 +1306,16 @@ endfunction
 	     n_arch_gbl_hist = {r_arch_gbl_hist[`GBL_HIST_LEN-2:0], took_branch};
 	  end
      end
+
+`ifdef VERILATOR
+   always_comb
+     begin
+	if(branch_pc_valid)
+	  begin
+	     hashed_perceptron_update({16'd0, branch_pht_idx}, branch_pc, target_pc, {31'd0, took_branch});
+	  end
+     end
+`endif
 
     // always_ff@(negedge clk)
     //   begin

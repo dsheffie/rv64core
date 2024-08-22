@@ -679,6 +679,8 @@ module l2_2way(clk,
 	       end
 	  end
      end
+
+   wire			w_wb_match = (r_need_wb) ? (r_addr == r_wb_addr) : 1'b0;
    
    always_comb
      begin

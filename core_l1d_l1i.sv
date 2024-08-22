@@ -107,6 +107,7 @@ module
    output logic 		ready_for_resume;
    
    output logic [(`M_WIDTH-1):0] branch_pc;
+   
    output logic 		 branch_pc_valid;
    output logic 		 branch_fault;
 
@@ -168,7 +169,7 @@ module
    logic [`LG_PHT_SZ-1:0] 	branch_pht_idx;
    logic 			took_branch;
 
-   logic [(`M_WIDTH-1):0] 	t_branch_pc;
+   logic [(`M_WIDTH-1):0] 	t_branch_pc, t_target_pc;
    logic 			t_branch_pc_valid;
    logic 			t_branch_fault;
    
@@ -610,6 +611,7 @@ module
 	      .retire_reg_valid(retire_reg_valid),	      
 	      .branch_pc_valid(t_branch_pc_valid),
 	      .branch_pc(t_branch_pc),
+              .target_pc(t_target_pc),
 	      .took_branch(took_branch),
 	      .branch_fault(t_branch_fault),
 	      .branch_pht_idx(branch_pht_idx),
@@ -670,6 +672,7 @@ module
 	     .insn_valid_two(insn_valid2),
 	     .insn_ack_two(insn_ack2),
 	     .branch_pc(t_branch_pc),
+             .target_pc(t_target_pc),	     
 	     .branch_pc_valid(t_branch_pc_valid),
 	     .branch_fault(t_branch_fault),
 	     .took_branch(took_branch),
