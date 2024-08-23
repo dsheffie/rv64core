@@ -500,7 +500,8 @@ module nu_l1d(clk,
    logic [`LG_MRQ_ENTRIES:0]   n_port2_req_tag;
 
 
-   
+   logic [63:0] r_cache_accesses, r_cache_hits,
+		n_cache_accesses, n_cache_hits;
    
    
    wire 		       w_tlb_hit, w_tlb_dirty, w_tlb_writable, w_tlb_readable, 
@@ -533,6 +534,7 @@ module nu_l1d(clk,
 	mem_req.tag = r_mem_req_tag;
 	mem_req.uncachable = r_mem_req_uc;
      end
+
    
 
 `ifdef FOUR_CYCLE_L1D
@@ -542,8 +544,8 @@ module nu_l1d(clk,
    assign core_mem_rsp_valid = n_core_mem_rsp_valid;
    assign core_mem_rsp = n_core_mem_rsp;
 `endif
-   assign cache_accesses = 'd0;
-   assign cache_hits = 'd0;
+   assign cache_accesses = r_cache_accesses;
+   assign cache_hits = r_cache_hits;
    
    
    assign page_walk_req_valid = r_page_walk_req_valid;
@@ -926,6 +928,12 @@ module nu_l1d(clk,
      begin
 	//r_array_wr_data <= t_array_wr_data;
 	r_array_wr_data <= t_array_data;
+     end
+
+   always_ff@(posedge clk)
+     begin
+	r_cache_accesses <= reset ? 64'd0 : n_cache_accesses;
+	r_cache_hits <= reset ? 64'd0 : n_cache_hits;
      end
   
    always_ff@(posedge clk)
@@ -1620,6 +1628,20 @@ module nu_l1d(clk,
    logic t_core_mem_rsp_valid;
    wire	 w_got_reload_pf = page_walk_rsp_valid & page_walk_rsp.fault;
    wire  w_port2_rd_hit = t_port2_hit_cache && (!r_hit_busy_addr2) & (!r_pending_tlb_miss);
+
+   always_comb
+     begin
+	n_cache_hits = r_cache_hits;
+	n_cache_accesses = r_cache_accesses;
+	if(r_got_req2)
+	  begin
+	     n_cache_accesses = r_cache_accesses + 64'd1;
+	  end
+	if(t_port2_hit_cache & !r_pending_tlb_miss)
+	  begin
+	     n_cache_hits = r_cache_hits + 64'd1;
+	  end
+     end
 
    always_comb
      begin
