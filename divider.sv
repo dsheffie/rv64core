@@ -3,6 +3,7 @@
 
 module divider(clk,
 	       reset,
+	       wb_slot_used,
 	       inA,
 	       inB,
 	       rob_ptr_in,
@@ -23,6 +24,7 @@ module divider(clk,
    localparam W2 = 2*W;
    input logic clk;
    input logic reset;
+   input logic wb_slot_used;
    input logic [`M_WIDTH-1:0] inA;
    input logic [`M_WIDTH-1:0] inB;
    
@@ -117,7 +119,7 @@ module divider(clk,
       .valid(t_valid), 
       .out(t_ss)
       );
-  
+
 			     
    always_comb
      begin
@@ -175,7 +177,7 @@ module divider(clk,
 		    n_R = {r_R[W2-2:0], 1'b0};
 		    t_bit = 1'b0;
 		    t_valid = 1'b1;
-		 end
+		 end // else: !if({r_R[W2-2:0], 1'b0} >= r_D)
 	       n_state = (r_idx == 'd0) ? PACK_OUTPUT : DIVIDE;
 	       n_idx = r_idx - 'd1;
 	       
