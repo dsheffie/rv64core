@@ -68,6 +68,7 @@ module divider(clk,
    logic [W-1:0]		    r_last_ss, n_last_ss;
    logic [W2-1:0]		    r_last_Y, n_last_Y;
    logic [W2-1:0]		    r_last_R, n_last_R;   
+   logic			    r_last_valid, n_last_valid;
    
    logic [W2-1:0] 		    r_Y, n_Y;
    logic [W2-1:0] 		    r_D, n_D, r_R, n_R;
@@ -103,6 +104,7 @@ module divider(clk,
 	     r_last_R <= 'd0;
 	     r_last_ss <= 'd0;
 	     r_last_signed <= 1'b0;
+	     r_last_valid <= 1'b0;
 	     r_idx <= 'd0;
 	     r_is_w <= 1'b0;
 	  end
@@ -126,6 +128,7 @@ module divider(clk,
 	     r_last_R <= n_last_R;
 	     r_last_ss <= n_last_ss;	     
 	     r_last_signed <= n_last_signed;
+	     r_last_valid <= n_last_valid;
 	     r_idx <= n_idx;
 	     r_is_w <= n_is_w;
 	  end
@@ -143,7 +146,8 @@ module divider(clk,
 		
    wire w_match_prev = (r_lastA == r_A) &
 	(r_lastB == r_B) & 
-	(r_last_signed == r_is_signed);
+	(r_last_signed == r_is_signed) &
+	r_last_valid;
    
    always_comb
      begin
@@ -166,6 +170,7 @@ module divider(clk,
 	n_last_Y = r_last_Y;
 	n_last_R = r_last_R;
 	n_last_ss = r_last_ss;
+	n_last_valid = r_last_valid;
 	
 	n_idx = r_idx;
 	t_bit = 1'b0;
@@ -221,6 +226,7 @@ module divider(clk,
 	       n_lastA = r_A;
 	       n_lastB = r_B;
 	       n_last_signed = r_is_signed;
+	       n_last_valid = 1'b1;
 	       n_Y[W-1:0] = t_ss;
 	       n_Y[W2-1:W] = n_R[W2-1:W];
 	       
