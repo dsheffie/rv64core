@@ -1706,7 +1706,9 @@ module exec(clk,
 	
 	
 	if(t_mul_complete & t_div_complete)
-	  $stop();
+	  begin
+	     $stop();
+	  end
 	
 	if(t_mul_complete & r_start_int & t_wr_int_prf)
 	  $stop();
@@ -1733,7 +1735,7 @@ module exec(clk,
    d64 (
 	.clk(clk), 
 	.reset(reset),
-	.wb_slot_used(r_start_int),
+	.wb_slot_used(r_start_int |  t_mul_complete),
 	.inA(w_divA),
 	.inB(w_divB),
 	.rob_ptr_in(int_uop.rob_ptr),
