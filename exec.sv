@@ -1733,7 +1733,7 @@ module exec(clk,
    d64 (
 	.clk(clk), 
 	.reset(reset),
-	.wb_slot_used(r_wb_bitvec[0]),
+	.wb_slot_used(r_start_int),
 	.inA(w_divA),
 	.inB(w_divB),
 	.rob_ptr_in(int_uop.rob_ptr),
