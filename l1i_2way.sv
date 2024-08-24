@@ -39,6 +39,7 @@ module l1i_2way(clk,
 	   retire_reg_valid,
 	   branch_pc_valid,
 	   branch_pc,
+	   target_pc,
 	   took_branch,
 	   branch_fault,
 	   branch_pht_idx,
@@ -99,6 +100,7 @@ module l1i_2way(clk,
 
    input logic 			branch_pc_valid;
    input logic [`M_WIDTH-1:0] 	branch_pc;
+   input logic [`M_WIDTH-1:0]	target_pc;   
    
    input logic 			took_branch;
    input logic 			branch_fault;
