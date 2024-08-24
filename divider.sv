@@ -44,10 +44,12 @@ module divider(clk,
    output logic        ready;
    output logic        complete;
    
-   typedef enum logic [1:0] {IDLE = 'd0,
+   typedef enum logic [2:0] {IDLE = 'd0,
 			     DIVIDE = 'd1,
 			     PACK_OUTPUT = 'd2,
-			     WAIT_FOR_WB = 'd3
+			     WAIT_FOR_WB = 'd3,
+			     CACHE_PACK_OUTPUT = 'd4,
+			     CACHE_WAIT_FOR_WB = 'd5
 			     } state_t;
 
    
@@ -61,6 +63,12 @@ module divider(clk,
    logic [`LG_PRF_ENTRIES-1:0] r_gpr_prf_ptr, n_gpr_prf_ptr;
 
    logic [W-1:0] 		    r_A, n_A, r_B, n_B;
+   logic [W-1:0]		    r_lastA, n_lastA, r_lastB, n_lastB;
+   logic			    r_last_signed, n_last_signed;
+   logic [W-1:0]		    r_last_ss, n_last_ss;
+   logic [W2-1:0]		    r_last_Y, n_last_Y;
+   logic [W2-1:0]		    r_last_R, n_last_R;   
+   
    logic [W2-1:0] 		    r_Y, n_Y;
    logic [W2-1:0] 		    r_D, n_D, r_R, n_R;
    logic [W-1:0] 		    t_ss;
@@ -89,6 +97,12 @@ module divider(clk,
 	     r_Y <= 'd0;
 	     r_D <= 'd0;
 	     r_R <= 'd0;
+	     r_lastA <= 64'd0;
+	     r_lastB <= 64'd0;
+	     r_last_Y <= 'd0;
+	     r_last_R <= 'd0;
+	     r_last_ss <= 'd0;
+	     r_last_signed <= 1'b0;
 	     r_idx <= 'd0;
 	     r_is_w <= 1'b0;
 	  end
@@ -106,6 +120,12 @@ module divider(clk,
 	     r_Y <= n_Y;
 	     r_D <= n_D;
 	     r_R <= n_R;
+	     r_lastA <= n_lastA;
+	     r_lastB <= n_lastB;
+	     r_last_Y <= n_last_Y;
+	     r_last_R <= n_last_R;
+	     r_last_ss <= n_last_ss;	     
+	     r_last_signed <= n_last_signed;
 	     r_idx <= n_idx;
 	     r_is_w <= n_is_w;
 	  end
@@ -120,7 +140,11 @@ module divider(clk,
       .out(t_ss)
       );
 
-			     
+		
+   wire w_match_prev = (r_lastA == r_A) &
+	(r_lastB == r_B) & 
+	(r_last_signed == r_is_signed);
+   
    always_comb
      begin
 	n_rob_ptr = r_rob_ptr;
@@ -135,6 +159,14 @@ module divider(clk,
 	n_Y = r_Y;
 	n_D = r_D;
 	n_R = r_R;
+	
+	n_lastA = r_lastA;
+	n_lastB = r_lastB;
+	n_last_signed = r_last_signed;
+	n_last_Y = r_last_Y;
+	n_last_R = r_last_R;
+	n_last_ss = r_last_ss;
+	
 	n_idx = r_idx;
 	t_bit = 1'b0;
 	t_valid = 1'b0;
@@ -178,15 +210,24 @@ module divider(clk,
 		    t_bit = 1'b0;
 		    t_valid = 1'b1;
 		 end // else: !if({r_R[W2-2:0], 1'b0} >= r_D)
-	       n_state = (r_idx == 'd0) ? PACK_OUTPUT : DIVIDE;
+	       n_state = w_match_prev ? CACHE_PACK_OUTPUT : 
+			 ((r_idx == 'd0) ? PACK_OUTPUT : DIVIDE);
 	       n_idx = r_idx - 'd1;
 	       
 	    end // case: DIVIDE
 	  PACK_OUTPUT:
 	    begin
-	       n_state = WAIT_FOR_WB;	       
+	       n_state = WAIT_FOR_WB;
+	       n_lastA = r_A;
+	       n_lastB = r_B;
+	       n_last_signed = r_is_signed;
 	       n_Y[W-1:0] = t_ss;
 	       n_Y[W2-1:W] = n_R[W2-1:W];
+	       
+	       n_last_Y = n_Y;
+	       n_last_R = n_R;
+	       n_last_ss = t_ss;
+	       
 	       if(r_is_signed && r_sign)
 		 begin
 		    n_Y[W-1:0] = (~t_ss) +'d1;
@@ -208,6 +249,36 @@ module divider(clk,
 	    begin
 	       complete =1'b1;
 	       n_state = IDLE;
+	    end
+	  CACHE_PACK_OUTPUT:
+	    begin
+	       n_Y = r_last_Y;
+	       n_R = r_last_R;
+	       if(r_is_signed && r_sign)
+		 begin
+		    n_Y[W-1:0] = (~r_last_ss) +'d1;
+		 end
+	       if(r_is_signed && r_rem_sign)
+		 begin
+		    n_Y[W2-1:W] = (~n_R[W2-1:W]) + 'd1;
+		 end
+	       if(r_is_rem_op)
+		 begin
+		    n_Y[W-1:0] = n_Y[W2-1:W];
+		 end
+	       if(r_is_w)
+		 begin
+		    n_Y = { {96{n_Y[31]}}, n_Y[31:0]};
+		 end
+	       n_state = CACHE_WAIT_FOR_WB;
+	    end // case: CACHE_PACK_OUTPUT
+	  CACHE_WAIT_FOR_WB:
+	    begin
+	       if(wb_slot_used == 1'b0)
+		 begin
+		    n_state = IDLE;
+		    complete = 1'b1;
+		 end
 	    end
 	  default:
 	    begin
