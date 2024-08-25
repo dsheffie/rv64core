@@ -46,10 +46,11 @@ module divider(clk,
    
    typedef enum logic [2:0] {IDLE = 'd0,
 			     DIVIDE = 'd1,
-			     PACK_OUTPUT = 'd2,
-			     WAIT_FOR_WB = 'd3,
-			     CACHE_PACK_OUTPUT = 'd4,
-			     CACHE_WAIT_FOR_WB = 'd5
+			     CLZ = 'd2,
+			     PACK_OUTPUT = 'd3,
+			     WAIT_FOR_WB = 'd4,
+			     CACHE_PACK_OUTPUT = 'd5,
+			     CACHE_WAIT_FOR_WB = 'd6
 			     } state_t;
 
    
@@ -75,8 +76,8 @@ module divider(clk,
    logic [W-1:0] 		    t_ss;
    logic			    r_is_w, n_is_w;
    
-   logic [LG_W-1:0] 		    r_idx, n_idx;
-   logic 			    t_bit,t_valid;
+   logic [LG_W:0] 		    r_idx, n_idx;
+   logic 			    t_bit,t_valid,t_clr;
 
    wire [W-1:0] 		    srcA = inA[W-1:0];
    wire [W-1:0] 		    srcB = inB[W-1:0];
@@ -134,20 +135,55 @@ module divider(clk,
 	  end
      end
 
-   shiftregbit #(.W(W)) 
-   ss(
-      .clk(clk), 
-      .reset(reset),
-      .b(t_bit),
-      .valid(t_valid), 
-      .out(t_ss)
-      );
+   //shiftregbit #(.W(W)) 
+   //ss(
+      //.clk(clk), 
+      //.reset(reset),
+      //.clear(t_clr),
+      //.b(t_bit),
+      //.valid(t_valid), 
+      //.out(t_ss)
+      //);
+
+   always_ff@(posedge clk)
+     begin
+	if(reset | t_clr)
+	  begin
+	     t_ss <= 'd0;
+	  end
+	else if(t_valid)
+	  begin
+	     t_ss <= t_ss | ( {{(W-1){1'b0}}, t_bit}  << r_idx);
+	  end
+     end
 
 		
    wire w_match_prev = (r_lastA == r_A) &
 	(r_lastB == r_B) & 
 	(r_last_signed == r_is_signed) &
-	r_last_valid;
+	r_last_valid & 1'b0;
+
+
+   wire [LG_W:0] w_clz_A;
+   count_leading_zeros #(.LG_N(LG_W)) clz0 (.in(r_A), .y(w_clz_A));
+   
+   
+   // always_ff@(posedge clk)
+   //   begin
+   // 	if(r_state == CLZ)
+   // 	  begin
+   // 	     $display("a = %x, b = %x, zero skip %d", r_A, r_B, 7'd64 - w_clz_A);
+   // 	  end
+   //   end
+
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if(r_state == DIVIDE)
+   // 	  begin
+   // 	     $display("r_idx %d : n_R %b %b", r_idx, n_R, t_bit);
+   // 	     $display("r_idx %d : n_D %b", r_idx, r_D);
+   // 	  end
+   //   end
    
    always_comb
      begin
@@ -174,6 +210,7 @@ module divider(clk,
 	
 	n_idx = r_idx;
 	t_bit = 1'b0;
+	t_clr = 1'b0;
 	t_valid = 1'b0;
 	n_is_w = r_is_w;
 	
@@ -187,12 +224,13 @@ module divider(clk,
 	unique case (r_state)
 	  IDLE:
 	    begin
+	       t_clr = 1'b1;
 	       n_is_w = is_w;
 	       n_rob_ptr = rob_ptr_in;
 	       n_gpr_prf_ptr = prf_ptr_in;
 	       n_is_rem_op = is_rem;
 	       n_is_signed = is_signed_div;
-	       n_state = start_div ? DIVIDE : IDLE;
+	       n_state = start_div ? CLZ : IDLE;
 	       n_idx = W-1;
 	       n_sign = srcA[W-1] ^ srcB[W-1];
 	       n_rem_sign = srcA[W-1];
@@ -200,6 +238,13 @@ module divider(clk,
 	       n_B = is_signed_div & srcB[W-1] ? ((~srcB) + 'd1) : srcB;
 	       n_D = {n_B, {W{1'b0}}};
 	       n_R = {{W{1'b0}}, n_A};
+	    end // case: IDLE
+	  CLZ:
+	    begin
+	       n_state = DIVIDE;
+	       n_idx = 7'd63 - w_clz_A;
+	       n_R = r_R << w_clz_A;
+	       //$display("w_clz_A = %d", w_clz_A);
 	    end
 	  DIVIDE:
 	    begin
@@ -222,7 +267,8 @@ module divider(clk,
 	    end // case: DIVIDE
 	  PACK_OUTPUT:
 	    begin
-	       n_state = WAIT_FOR_WB;
+	       n_state = CACHE_WAIT_FOR_WB;
+	       //WAIT_FOR_WB;
 	       n_lastA = r_A;
 	       n_lastB = r_B;
 	       n_last_signed = r_is_signed;

@@ -19,9 +19,10 @@ module dffen(q,d,clk,reset,en);
 endmodule // dff
 
 
-module shiftregbit(clk,reset,b,valid,out);
+module shiftregbit(clk,reset,clear,b,valid,out);
    input logic clk;
    input logic reset;
+   input logic clear;
    input logic b;
    input logic valid;
    parameter W = 32;
@@ -31,11 +32,11 @@ module shiftregbit(clk,reset,b,valid,out);
      begin : sr
 	if(i==0)
 	  begin
-	     dffen #(.N(1)) ff (.clk(clk), .reset(reset), .en(valid), .d(b), .q(out[0]));
+	     dffen #(.N(1)) ff (.clk(clk), .reset(reset|clear), .en(valid), .d(b), .q(out[0]));
 	  end
 	else
 	  begin
-	     dffen #(.N(1)) ff (.clk(clk), .reset(reset), .en(valid), .d(out[i-1]), .q(out[i]));	     
+	     dffen #(.N(1)) ff (.clk(clk), .reset(reset|clear), .en(valid), .d(out[i-1]), .q(out[i]));	     
 	  end
      end
 endmodule
