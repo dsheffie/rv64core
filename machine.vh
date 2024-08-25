@@ -60,7 +60,7 @@
 
 `define MUL_LAT 3
 
-`define DIV64_LAT 65
+`define DIV64_LAT 66
 `define MAX_LAT (`DIV64_LAT)
 
 
