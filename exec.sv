@@ -1735,6 +1735,7 @@ module exec(clk,
    d64 (
 	.clk(clk), 
 	.reset(reset),
+	.flush(ds_done),
 	.wb_slot_used(r_start_int |  t_mul_complete),
 	.inA(w_divA),
 	.inB(w_divB),
