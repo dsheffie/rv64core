@@ -3,6 +3,7 @@
 
 module divider(clk,
 	       reset,
+	       flush,
 	       wb_slot_used,
 	       inA,
 	       inB,
@@ -24,6 +25,7 @@ module divider(clk,
    localparam W2 = 2*W;
    input logic clk;
    input logic reset;
+   input logic flush;
    input logic wb_slot_used;
    input logic [`M_WIDTH-1:0] inA;
    input logic [`M_WIDTH-1:0] inB;
@@ -176,14 +178,13 @@ module divider(clk,
    // 	  end
    //   end
 
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if(r_state == DIVIDE)
-   // 	  begin
-   // 	     $display("r_idx %d : n_R %b %b", r_idx, n_R, t_bit);
-   // 	     $display("r_idx %d : n_D %b", r_idx, r_D);
-   // 	  end
-   //   end
+   //always_ff@(negedge clk)
+     //begin
+   //	if(r_state == DIVIDE & flush)
+   //begin
+   //$display("got flush while divider is active");
+   //end
+   // end
    
    always_comb
      begin
@@ -260,7 +261,7 @@ module divider(clk,
 		    t_bit = 1'b0;
 		    t_valid = 1'b1;
 		 end // else: !if({r_R[W2-2:0], 1'b0} >= r_D)
-	       n_state = w_match_prev ? CACHE_PACK_OUTPUT : 
+	       n_state = (w_match_prev|flush) ? CACHE_PACK_OUTPUT : 
 			 ((r_idx == 'd0) ? PACK_OUTPUT : DIVIDE);
 	       n_idx = r_idx - 'd1;
 	       
