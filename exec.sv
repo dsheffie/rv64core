@@ -2110,6 +2110,18 @@ module exec(clk,
 	       t_pc = t_take_br ? int_uop.rvimm : w_pc4;	       
 	       t_alu_valid = 1'b1;
 	    end
+	  CZEQZ:
+	    begin
+	       t_result = t_srcB == 64'd0 ? 64'd0 : t_srcA;
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;	       
+	    end
+	  CZNEZ:
+	    begin
+	       t_result = t_srcB != 64'd0 ? 64'd0 : t_srcA;
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;
+	    end
 	  BGE:
 	    begin
 	       t_take_br = $signed(t_srcA) >= $signed(t_srcB);
