@@ -1919,6 +1919,9 @@ module exec(clk,
       
    mwidth_add add3 (.A(int_uop.pc), .B(64'd4), .Y(w_pc4));
 
+   wire		       w_srcB_is_zero = (t_srcB == 64'd0);
+   
+   
    always_comb
      begin
 	t_sub = 1'b0;
@@ -2112,13 +2115,13 @@ module exec(clk,
 	    end
 	  CZEQZ:
 	    begin
-	       t_result = t_srcB == 64'd0 ? 64'd0 : t_srcA;
+	       t_result = w_srcB_is_zero ? 64'd0 : t_srcA;
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;	       
 	    end
 	  CZNEZ:
 	    begin
-	       t_result = t_srcB != 64'd0 ? 64'd0 : t_srcA;
+	       t_result = !w_srcB_is_zero ? 64'd0 : t_srcA;
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
