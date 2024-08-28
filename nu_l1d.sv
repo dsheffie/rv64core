@@ -2072,7 +2072,7 @@ module nu_l1d(clk,
 	       begin
 		  t_old_ack = 1'b1;
 	       end  
-	     else if(r_flush_req && mem_q_empty && !(r_got_req && r_last_wr))
+	     else if(r_flush_req && mem_q_empty && !(r_got_req && r_last_wr) && !w_eb_full)
 	       begin
 		  n_state = FLUSH_CACHE;
 		  if(!mem_q_empty) $stop();
