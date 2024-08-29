@@ -46,14 +46,16 @@
 `define LG_UQ_ENTRIES 3
 /* mem uop queue */
 `define LG_MEM_UQ_ENTRIES 3
+
 /* mem data queue */
-`define LG_MEM_DQ_ENTRIES 4
+`define LG_MEM_DQ_ENTRIES 3
+
 /* mem uop queue */
 `define LG_MQ_ENTRIES 2
 
 `define LG_MDQ_ENTRIES 3
 
-`define LG_EB_ENTRIES 2
+`define LG_EB_ENTRIES 1
 
 /* mem retry queue */
 `define LG_MRQ_ENTRIES 3
@@ -74,7 +76,7 @@
 `define LG_L1D_NUM_SETS 8
 `define LG_L1I_NUM_SETS 8
 
-`define LG_L2_NUM_SETS 13
+`define LG_L2_NUM_SETS 12
 
 `define M_WIDTH (1 << `LG_M_WIDTH)
 
