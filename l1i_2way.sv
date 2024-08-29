@@ -38,6 +38,7 @@ module l1i_2way(clk,
 	   retire_reg_data,
 	   retire_reg_valid,
 	   branch_pc_valid,
+	   branch_pc_is_indirect,
 	   branch_pc,
 	   target_pc,
 	   took_branch,
@@ -99,6 +100,7 @@ module l1i_2way(clk,
    input logic 			retire_reg_valid;
 
    input logic 			branch_pc_valid;
+   input logic			branch_pc_is_indirect;
    input logic [`M_WIDTH-1:0] 	branch_pc;
    input logic [`M_WIDTH-1:0]	target_pc;   
    
@@ -426,6 +428,13 @@ endfunction
      end // always_ff@ (posedge clk)
 
 
+   //always_ff@(negedge clk)
+   //begin
+   //if((restart_valid && restart_src_is_indirect))
+   //begin
+   //$display("cycle %d indirect branch at %x, target %x, pht %x", r_cycle, branch_pc, target_pc, branch_pht_idx[(`LG_BTB_SZ-1):0]);
+   //end
+   //end
    
    always_ff@(posedge clk)
      begin
@@ -433,15 +442,15 @@ endfunction
 	  begin
 	     r_btb[r_init_pht_idx[`LG_BTB_SZ-1:0]] <= 64'd0;
 	  end
-	else if(restart_valid && restart_src_is_indirect)
+	else if(branch_pc_is_indirect & branch_pc_valid)
 	  begin
-	     r_btb[restart_src_pc[(`LG_BTB_SZ+1):2]] <= restart_pc;
+	     r_btb[branch_pht_idx[(`LG_BTB_SZ-1):0]] <= target_pc;
 	  end	
      end // always_ff@ (posedge clk)
 
    always_ff@(posedge clk)
      begin
-	r_btb_pc <= reset ? 'd0 : r_btb[n_cache_pc[(`LG_BTB_SZ+1):2]];
+	r_btb_pc <= reset ? 'd0 : r_btb[n_pht_idx[(`LG_BTB_SZ-1):0]];
      end
 
 
@@ -676,6 +685,7 @@ endfunction
 			 t_is_cflow = 1'b1;			 
 			 t_take_br = 1'b1;
 			 t_is_call = (t_pd == 4'd6);
+			 //$display("cycle %d : btb pc %x for %x, pht idx %x", r_cycle, r_btb_pc, r_cache_pc, r_pht_idx);
 			 n_pc = r_btb_pc;
 		      end
 		    

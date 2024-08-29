@@ -171,6 +171,7 @@ module
 
    logic [(`M_WIDTH-1):0] 	t_branch_pc, t_target_pc;
    logic 			t_branch_pc_valid;
+   logic			t_branch_pc_is_indirect;
    logic 			t_branch_fault;
    
    assign branch_pc = t_branch_pc;
@@ -610,6 +611,7 @@ module
 	      .retire_reg_data(retire_reg_data),
 	      .retire_reg_valid(retire_reg_valid),	      
 	      .branch_pc_valid(t_branch_pc_valid),
+              .branch_pc_is_indirect(t_branch_pc_is_indirect),
 	      .branch_pc(t_branch_pc),
               .target_pc(t_target_pc),
 	      .took_branch(took_branch),
@@ -674,6 +676,7 @@ module
 	     .branch_pc(t_branch_pc),
              .target_pc(t_target_pc),	     
 	     .branch_pc_valid(t_branch_pc_valid),
+             .branch_pc_is_indirect(t_branch_pc_is_indirect),	     
 	     .branch_fault(t_branch_fault),
 	     .took_branch(took_branch),
 	     .branch_pht_idx(branch_pht_idx),

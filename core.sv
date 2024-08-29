@@ -80,6 +80,7 @@ module core(clk,
 	    branch_pc,
 	    target_pc,
 	    branch_pc_valid,
+	    branch_pc_is_indirect,	    
 	    branch_fault,
 	    took_branch,
 	    branch_pht_idx,
@@ -187,6 +188,8 @@ module core(clk,
    output logic [(`M_WIDTH-1):0] branch_pc;
    output logic [(`M_WIDTH-1):0] target_pc;
    output logic 		 branch_pc_valid;
+   output logic			 branch_pc_is_indirect;
+   
    output logic 		 branch_fault;
    output logic 		 took_branch;
    output logic [`LG_PHT_SZ-1:0] branch_pht_idx;
@@ -361,6 +364,8 @@ module core(clk,
    logic [(`M_WIDTH-1):0]    n_target_pc, r_target_pc;   
    logic 		     n_took_branch, r_took_branch;
    logic 		     n_branch_valid, r_branch_valid;
+   logic		     n_branch_pc_is_indirect, r_branch_pc_is_indirect;
+   
    logic 		     n_branch_fault,r_branch_fault;
    logic [`LG_PHT_SZ-1:0]    n_branch_pht_idx, r_branch_pht_idx;
          
@@ -536,7 +541,10 @@ module core(clk,
 
    
    assign branch_pc = r_branch_pc;
+   assign target_pc = r_target_pc;
    assign branch_pc_valid = r_branch_valid;
+   assign branch_pc_is_indirect = r_branch_pc_is_indirect;
+   
    assign branch_fault = r_branch_fault;
    assign branch_pht_idx = r_branch_pht_idx;
    
@@ -595,6 +603,7 @@ module core(clk,
 			    
 	     r_took_branch <= 1'b0;
 	     r_branch_valid <= 1'b0;
+	     r_branch_pc_is_indirect <= 1'b0;
 	     r_branch_fault <= 1'b0;
 	     r_branch_pht_idx <= 'd0;
 	     r_restart_valid <= 1'b0;
@@ -630,6 +639,7 @@ module core(clk,
 	     r_target_pc <= n_target_pc;
 	     r_took_branch <= n_took_branch;
 	     r_branch_valid <= n_branch_valid;
+	     r_branch_pc_is_indirect <= n_branch_pc_is_indirect;
 	     r_branch_fault <= n_branch_fault;
 	     r_branch_pht_idx <= n_branch_pht_idx;
 	     r_restart_valid <= n_restart_valid;
@@ -1013,7 +1023,7 @@ module core(clk,
 			 n_machine_clr = 1'b1;
 			 n_restart_pc = t_rob_head.target_pc;
 			 n_restart_src_pc = t_rob_head.pc;
-			 n_restart_src_is_indirect = t_rob_head.is_indirect && !t_rob_head.is_ret;
+			 n_restart_src_is_indirect = t_rob_head.is_indirect;
 			 n_take_br = t_rob_head.take_br;
 		      end // if (t_rob_head.faulted)
 		    else if(t_rob_head.mark_page_dirty)
@@ -1488,6 +1498,7 @@ module core(clk,
 	n_target_pc = r_target_pc;
 	n_took_branch = 1'b0;
 	n_branch_valid = 1'b0;
+	n_branch_pc_is_indirect = 1'b0;
 	n_branch_fault = 1'b0;
 	n_branch_pht_idx = 'd0;
 	
@@ -1515,6 +1526,9 @@ module core(clk,
 	     n_branch_valid = t_retire_two ? t_rob_next_head.is_br :  t_rob_head.is_br;
 	     n_branch_fault = t_rob_head.faulted & (t_rob_head.has_cause==1'b0);
 	     n_branch_pht_idx = t_retire_two ? t_rob_next_head.pht_idx : t_rob_head.pht_idx;
+	     n_branch_pc_is_indirect = t_retire_two ? 
+				       t_rob_next_head.is_indirect : 
+				       t_rob_head.is_indirect ;
 	  end // if (t_retire)
 	
      end // always_comb
