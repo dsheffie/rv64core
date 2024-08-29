@@ -160,7 +160,6 @@ module l1i_2way(clk,
    logic 				  r_take_br;
    
    logic [(`M_WIDTH-1):0] 		  r_btb[BTB_ENTRIES-1:0];
-   logic [BTB_ENTRIES-1:0] 		  r_btb_valid;
    
    
    logic [(4*WORDS_PER_CL)-1:0] 	  w_jump_out0, w_jump_out1;
@@ -427,22 +426,15 @@ endfunction
 	  end
      end // always_ff@ (posedge clk)
 
-   always_ff@(posedge clk)
-     begin
-	if(reset) 
-	  begin
-	     r_btb_valid <= 'd0;
-	  end
-	else if(restart_valid && restart_src_is_indirect)
-	  begin
-	     r_btb_valid[restart_src_pc[(`LG_BTB_SZ+1):2]] <= 1'b1;
-	  end
-     end // always_ff@ (posedge clk)
 
    
    always_ff@(posedge clk)
      begin
-	if(restart_valid && restart_src_is_indirect)
+	if(r_state == INIT_PHT)
+	  begin
+	     r_btb[r_init_pht_idx[`LG_BTB_SZ-1:0]] <= 64'd0;
+	  end
+	else if(restart_valid && restart_src_is_indirect)
 	  begin
 	     r_btb[restart_src_pc[(`LG_BTB_SZ+1):2]] <= restart_pc;
 	  end	
@@ -450,8 +442,7 @@ endfunction
 
    always_ff@(posedge clk)
      begin
-	r_btb_pc <= reset ? 'd0 : 
-		    r_btb_valid[n_cache_pc[(`LG_BTB_SZ+1):2]] ? r_btb[n_cache_pc[(`LG_BTB_SZ+1):2]] : 'd0;
+	r_btb_pc <= reset ? 'd0 : r_btb[n_cache_pc[(`LG_BTB_SZ+1):2]];
 	
      end
 
