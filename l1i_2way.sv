@@ -155,7 +155,6 @@ module l1i_2way(clk,
    
    logic [`LG_PHT_SZ-1:0] 		  n_pht_idx,r_pht_idx;
    logic [`LG_PHT_SZ-1:0] 		  r_pht_update_idx;
-   logic [`LG_PHT_SZ-1:0] 		  t_retire_pht_idx;
    
    logic 				  r_take_br;
    
@@ -443,7 +442,6 @@ endfunction
    always_ff@(posedge clk)
      begin
 	r_btb_pc <= reset ? 'd0 : r_btb[n_cache_pc[(`LG_BTB_SZ+1):2]];
-	
      end
 
 
@@ -938,10 +936,6 @@ endfunction
      end
    
    compute_pht_idx cpi0 (.pc(n_cache_pc), .hist(r_spec_gbl_hist), .idx(n_pht_idx));
-   always_comb
-     begin
-	t_retire_pht_idx = branch_pht_idx;
-     end
 
    
    always_comb
@@ -1011,7 +1005,7 @@ endfunction
 	     r_pht_idx <= n_pht_idx;
 	     r_last_spec_gbl_hist <= r_spec_gbl_hist;
 	     r_pht_update <= branch_pc_valid;
-	     r_pht_update_idx <= t_retire_pht_idx;
+	     r_pht_update_idx <= branch_pht_idx;
 	     r_take_br <= took_branch;
 	  end
      end // always_ff@
@@ -1079,7 +1073,7 @@ endfunction
      (
       .clk(clk),
       .rd_addr0(n_pht_idx),
-      .rd_addr1(t_retire_pht_idx),
+      .rd_addr1(branch_pht_idx),
       .wr_addr(t_init_pht ? r_init_pht_idx : r_pht_update_idx),
       .wr_data(t_init_pht ? 2'd1 : t_pht_val),
       .wr_en(t_init_pht || t_do_pht_wr),
