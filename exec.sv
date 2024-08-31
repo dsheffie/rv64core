@@ -1802,16 +1802,16 @@ module exec(clk,
 	n_mdq_tail_ptr = r_mdq_tail_ptr;
 	n_mdq_next_tail_ptr = r_mdq_next_tail_ptr;
 	
-	if(r_dq_ready)
-	  begin
-	     n_mdq_tail_ptr = r_mdq_tail_ptr + 'd1;
-	     n_mdq_next_tail_ptr = r_mdq_next_tail_ptr + 'd1;
-	  end
+	//if(r_dq_ready)
+	//begin
+	//n_mdq_tail_ptr = r_mdq_tail_ptr + 'd1;
+	//n_mdq_next_tail_ptr = r_mdq_next_tail_ptr + 'd1;
+	//end
 	
-	if(core_store_data_ack)
-	  begin
-	     n_mdq_head_ptr = r_mdq_head_ptr + 'd1;
-	  end
+	//if(core_store_data_ack)
+	//begin
+	//n_mdq_head_ptr = r_mdq_head_ptr + 'd1;
+	//end
 
 	core_store_data = r_mdq[r_mdq_head_ptr[`LG_MDQ_ENTRIES-1:0]];
 			       
