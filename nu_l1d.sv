@@ -311,6 +311,15 @@ module nu_l1d(clk,
 	  end
      end
 
+   logic r_core_store_data_ack;
+   logic [`LG_ROB_ENTRIES-1:0] r_rob_ptr;
+   
+   always_ff@(posedge clk)
+     begin
+	r_core_store_data_ack <= reset ? 1'b0 : core_store_data_ack;
+	r_rob_ptr <= reset ? 'd0 : t_mem_head.rob_ptr;
+     end
+   
    always_ff@(posedge clk)
      begin
 	if(reset|restart_complete)
@@ -321,9 +330,9 @@ module nu_l1d(clk,
 	  begin
 	     r_store_data_valid[nu_core_store_data_ptr] <= 1'b1;
 	  end
-	else if(core_store_data_ack)
+	else if(r_core_store_data_ack)
 	  begin
-	     r_store_data_valid[t_mem_head.rob_ptr] <= 1'b0;
+	     r_store_data_valid[r_rob_ptr] <= 1'b0;
 	  end
      end
    
@@ -943,15 +952,18 @@ module nu_l1d(clk,
 
    wire			    w_fwd_st_to_ld_data_avail = r_store_data_valid[r_mem_q[w_nmrq_hits_pos[`LG_MRQ_ENTRIES-1:0]].rob_ptr];
 							 
-   //always_ff@(posedge clk)
-    // begin
-   //if(t_push_miss & w_can_fwd_st_to_ld)
-   //begin
-   //$display("r_hit_busy_addrs2 = %b, w_nmrq_hits = %d, hit pos %d, hit addr %x, req addr %x, w_fwd_st_to_ld_data_avail = %b, store_data_valid = %b", 
-   //r_hit_busy_addrs2, w_nmrq_hits, w_nmrq_hits_pos, r_mem_q[w_nmrq_hits_pos[`LG_MRQ_ENTRIES-1:0]].addr, r_req2.addr, 
-   //w_fwd_st_to_ld_data_avail, core_store_data_valid );
-   //end
-   //end
+   // always_ff@(posedge clk)
+   //   begin
+   // 	if(t_push_miss & w_can_fwd_st_to_ld)
+   // 	  begin
+   // 	     $display("cycle %d r_hit_busy_addrs2 = %b, w_nmrq_hits = %d, rob entry %d, hit addr %x, req addr %x, w_fwd_st_to_ld_data_avail = %b, store_data_valid = %b", 
+   // 		      r_cycle,
+   // 		      r_hit_busy_addrs2, w_nmrq_hits, 
+   // 		      r_mem_q[w_nmrq_hits_pos[`LG_MRQ_ENTRIES-1:0]].rob_ptr,
+   // 		      r_mem_q[w_nmrq_hits_pos[`LG_MRQ_ENTRIES-1:0]].addr, r_req2.addr, 
+   // 		      w_fwd_st_to_ld_data_avail, core_store_data_valid );
+   // 	  end
+   // end
 
     
 
@@ -1775,10 +1787,10 @@ module nu_l1d(clk,
                   t_core_mem_rsp_valid = 1'b1;
 		  t_core_mem_rsp.has_cause = r_req2.spans_cacheline;
 	       end // if (w_port2_rd_hit)
-	     else if(w_can_fwd_st_to_ld & 1'b0)
+	     else if(w_can_fwd_st_to_ld & w_fwd_st_to_ld_data_avail)
 	       begin
-		  $display("forwarding store to load at cycle %d", r_cycle);
-		  t_core_mem_rsp.data = r_mem_q[w_nmrq_hits_pos[`LG_MRQ_ENTRIES-1:0]].data;
+		  //$display("forwarding store to load at cycle %d", r_cycle);
+		  t_core_mem_rsp.data = r_store_data[r_mem_q[w_nmrq_hits_pos[`LG_MRQ_ENTRIES-1:0]].rob_ptr];
                   t_core_mem_rsp.dst_valid = t_rsp_dst_valid2;
                   t_core_mem_rsp_valid = 1'b1;
 		  t_core_mem_rsp.has_cause = r_req2.spans_cacheline;
@@ -2076,6 +2088,8 @@ module nu_l1d(clk,
 			      if(w_st_amo_grad && /*(core_store_data_valid ? (t_mem_head.rob_ptr == core_store_data.rob_ptr) : 1'b0)*/
 				 r_store_data_valid[t_mem_head.rob_ptr] )
 				begin
+				   //$display("cycle %d, release store for rob ptr %d, address %x", 
+				   //r_cycle, t_mem_head.rob_ptr, t_mem_head.addr[`PA_WIDTH-1:0]);
 				   t_pop_mq = 1'b1;
 				   core_store_data_ack = 1'b1;
 				   n_req = t_mem_head;
