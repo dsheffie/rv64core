@@ -96,6 +96,10 @@ module core(clk,
 	    core_store_data_valid,
 	    core_store_data,
 	    core_store_data_ack,
+
+	    nu_core_store_data_valid,
+	    nu_core_store_data_ptr,
+	    nu_core_store_data_value,
 	    
 	    core_mem_rsp,
 	    core_mem_rsp_valid,
@@ -203,6 +207,11 @@ module core(clk,
    output logic  core_store_data_valid;
    output 	 mem_data_t core_store_data;
    input logic 	 core_store_data_ack;
+
+   output logic	 nu_core_store_data_valid;
+   output logic [`LG_ROB_ENTRIES-1:0] nu_core_store_data_ptr;
+   output logic [63:0] nu_core_store_data_value;
+   
   
    input 	 mem_rsp_t core_mem_rsp;
    input logic 	 core_mem_rsp_valid;
@@ -297,6 +306,12 @@ module core(clk,
 
    logic 				  t_core_store_data_ptr_valid;
    logic [`LG_ROB_ENTRIES-1:0] 		  t_core_store_data_ptr;
+   logic [63:0]				  t_core_store_data_value;
+
+
+   assign nu_core_store_data_valid = t_core_store_data_ptr_valid;
+   assign nu_core_store_data_ptr = t_core_store_data_ptr;
+   assign nu_core_store_data_value = t_core_store_data_value;
  		  
    logic 				  t_rob_head_complete, t_rob_next_head_complete;
    
@@ -1767,11 +1782,6 @@ module core(clk,
 	     if(t_core_store_data_ptr_valid)
 	       begin
 		  r_rob_sd_complete[t_core_store_data_ptr] <= 1'b1;
-		  //if(r_rob_complete[t_core_store_data_ptr] == 1'b0 && t_core_store_data_ptr == 'd5)
-		  //begin
-		  //$display("store data complete but rob isnt for entry %d at cycle %d, fetch cycle %d",
-		  //t_core_store_data_ptr, r_cycle,  r_rob[t_core_store_data_ptr].fetch_cycle);
-		  // end
 	       end
 	  end
      end // always_ff@ (posedge clk)
@@ -2251,6 +2261,7 @@ module core(clk,
 	   .core_store_data_ack(core_store_data_ack),
 	   .core_store_data_ptr_valid(t_core_store_data_ptr_valid),
 	   .core_store_data_ptr(t_core_store_data_ptr),
+	   .core_store_data_value(t_core_store_data_value),
 	   .mem_rsp_dst_ptr(core_mem_rsp.dst_ptr),
 	   .mem_rsp_dst_valid(core_mem_rsp.dst_valid),
 	   .mem_rsp_load_data(core_mem_rsp.data),
@@ -2261,6 +2272,9 @@ module core(clk,
 	   .counters(counters)
 	   );
 
+
+
+   
 
    always_ff@(posedge clk)
      begin

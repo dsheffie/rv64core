@@ -351,6 +351,11 @@ module
    wire [1:0]	w_priv;
    wire [63:0]	w_page_table_root;
 
+   wire		w_nu_core_store_data_valid;
+   wire [`LG_ROB_ENTRIES-1:0] w_nu_core_store_data_ptr;
+   wire [63:0]		      w_nu_core_store_data_value;
+
+   
    wire				    w_mmu_req_valid;
    wire				    w_mmu_req_store;
    wire [`PA_WIDTH-1:0]		    w_mmu_req_addr;
@@ -510,7 +515,12 @@ module
 	       .core_store_data_valid(core_store_data_valid),
 	       .core_store_data(core_store_data),
 	       .core_store_data_ack(core_store_data_ack),
-	       
+		  
+	       .nu_core_store_data_valid(w_nu_core_store_data_valid),
+ 	       .nu_core_store_data_ptr(w_nu_core_store_data_ptr),
+	       .nu_core_store_data_value(w_nu_core_store_data_value),
+		  
+		  
 	       .core_mem_rsp_valid(core_mem_rsp_valid),
 	       .core_mem_rsp(core_mem_rsp),
 	       .mem_rdy(w_l2_l1d_rdy),
@@ -693,6 +703,10 @@ module
 	     .core_store_data_valid(core_store_data_valid),
 	     .core_store_data(core_store_data),
 	     .core_store_data_ack(core_store_data_ack),
+
+	     .nu_core_store_data_valid(w_nu_core_store_data_valid),
+ 	     .nu_core_store_data_ptr(w_nu_core_store_data_ptr),
+	     .nu_core_store_data_value(w_nu_core_store_data_value),
 	     
 	     .core_mem_rsp_valid(core_mem_rsp_valid),
 	     .core_mem_rsp(core_mem_rsp),

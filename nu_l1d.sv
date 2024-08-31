@@ -59,6 +59,9 @@ module nu_l1d(clk,
 	   core_store_data_valid,
 	   core_store_data,
 	   core_store_data_ack,
+	   nu_core_store_data_valid,
+	   nu_core_store_data_ptr,
+	   nu_core_store_data_value,
 	   //outputs to core
 	   core_mem_va_req_ack,
 	   core_mem_rsp,
@@ -124,6 +127,10 @@ module nu_l1d(clk,
    input logic core_store_data_valid;
    input       mem_data_t core_store_data;
    output logic core_store_data_ack;
+
+   input logic	nu_core_store_data_valid;
+   input logic [`LG_ROB_ENTRIES-1:0] nu_core_store_data_ptr;
+   input logic [63:0]		     nu_core_store_data_value;
    
    output logic core_mem_va_req_ack;
    output 	mem_rsp_t core_mem_rsp;
@@ -290,6 +297,37 @@ module nu_l1d(clk,
    logic [`LG_MRQ_ENTRIES:0] r_l2q_tail_ptr, n_l2q_tail_ptr;
 
    wire 		     w_l2q_empty = (r_l2q_tail_ptr == r_l2q_head_ptr);
+   
+   localparam		     N_ROB_ENTRIES = (1<<`LG_ROB_ENTRIES);	     
+   logic [63:0]		     r_store_data[N_ROB_ENTRIES-1:0];
+   
+   logic [N_ROB_ENTRIES-1:0] r_store_data_valid;
+   
+   always_ff@(posedge clk)
+     begin
+	if(nu_core_store_data_valid)
+	  begin
+	     r_store_data[nu_core_store_data_ptr] <= nu_core_store_data_value;
+	  end
+     end
+
+   always_ff@(posedge clk)
+     begin
+	if(reset|restart_complete)
+	  begin
+	     r_store_data_valid <= 'd0;
+	  end
+	else if(nu_core_store_data_valid)
+	  begin
+	     r_store_data_valid[nu_core_store_data_ptr] <= 1'b1;
+	  end
+	else if(core_store_data_ack)
+	  begin
+	     r_store_data_valid[t_mem_head.rob_ptr] <= 1'b0;
+	  end
+     end
+   
+
    
    always_ff@(posedge clk)
      begin
@@ -571,7 +609,7 @@ module nu_l1d(clk,
 	  end
      end // always_ff@ (posedge clk)
 
-   localparam N_ROB_ENTRIES = (1<<`LG_ROB_ENTRIES);
+
    logic [1:0] r_graduated [N_ROB_ENTRIES-1:0];
    logic [N_ROB_ENTRIES-1:0] r_rob_inflight;
    
@@ -729,23 +767,7 @@ module nu_l1d(clk,
 
 
    wire	w_could_early_req = !w_port2_dirty_miss & w_could_early_req_any;
-
-   
    wire w_gen_early_req = w_could_early_req & (r_got_req ? w_cache_port1_hit : 1'b1);
-
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if(r_got_req2 & (r_req2.pc == 64'h800002ec))
-   // 	  begin
-   // 	     $display("t_push_miss = %b", t_push_miss);
-   // 	     $display("mem_rdy = %b", mem_rdy);
-   // 	     $display("t_port2_hit_cache = %b", t_port2_hit_cache);
-   // 	     $display("r_hit_busy_line2 = %b", r_hit_busy_line2);
-   // 	     $display("r_fwd_busy_addr2 = %b", r_fwd_busy_addr2);
-   // 	     $display("r_pop_busy_addr2 = %b, w_hit_pop = %b", r_pop_busy_addr2, w_hit_pop);
-   // 	  end
-   //   end
-
 
    
    wire	w_early_rsp = mem_rsp_valid ? (mem_rsp_tag != (1 << `LG_MRQ_ENTRIES)) : 1'b0;
@@ -882,7 +904,6 @@ module nu_l1d(clk,
    generate
       for(genvar i = 0; i < N_MQ_ENTRIES; i=i+1)
 	begin
-	   
 	   assign w_hit_busy_addrs[i] = (t_pop_mq && r_mq_head_ptr[`LG_MRQ_ENTRIES-1:0] == i) ? 1'b0 : 
 					r_mq_addr_valid[i] ? r_mq_addr[i] == t_cache_idx : 1'b0;
 
@@ -894,6 +915,7 @@ module nu_l1d(clk,
 	   assign w_unaligned_in_mq[i] = r_mq_addr_valid[i] ? r_mq_is_unaligned[i] : 1'b0;
 	end
    endgenerate
+
    
    always_ff@(posedge clk)
      begin
@@ -909,18 +931,28 @@ module nu_l1d(clk,
      end // always_ff@ (posedge clk)
 
 
+   wire [`LG_MRQ_ENTRIES:0] w_nmrq_hits, w_nmrq_hits_pos;
+   popcount#(.LG_N(`LG_MRQ_ENTRIES)) hits0 (.in(r_hit_busy_addrs2), .out(w_nmrq_hits));
+   count_leading_zeros #(.LG_N(`LG_MRQ_ENTRIES)) clz0 (.in(r_hit_busy_addrs2), .y(w_nmrq_hits_pos));
 
-   // always_ff@(negedge clk)
-   //   begin
-   // 	for(integer i = 0; i < N_MQ_ENTRIES; i=i+1)
-   // 	  begin
-   // 	     if(w_hit_busy_addrs[i])
-   // 	       begin
-   // 		  $display("t_cache_idx %x matches entry %d, full addr %x, cycle %d", 
-   // 			   t_cache_idx, i, r_mq_dbg_addr[i], r_cycle);
-   // 	       end
-   // 	  end
-   //   end
+   wire			    w_can_fwd_st_to_ld = r_hit_busy_addr2 & 
+			    (w_nmrq_hits=='d1) &
+			    r_req2.is_load &
+			    (r_mem_q[w_nmrq_hits_pos[`LG_MRQ_ENTRIES-1:0]].addr[`PA_WIDTH-1:0] == r_req2.addr[`PA_WIDTH-1:0]);
+
+
+   wire			    w_fwd_st_to_ld_data_avail = r_store_data_valid[r_mem_q[w_nmrq_hits_pos[`LG_MRQ_ENTRIES-1:0]].rob_ptr];
+							 
+   //always_ff@(posedge clk)
+    // begin
+   //if(t_push_miss & w_can_fwd_st_to_ld)
+   //begin
+   //$display("r_hit_busy_addrs2 = %b, w_nmrq_hits = %d, hit pos %d, hit addr %x, req addr %x, w_fwd_st_to_ld_data_avail = %b, store_data_valid = %b", 
+   //r_hit_busy_addrs2, w_nmrq_hits, w_nmrq_hits_pos, r_mem_q[w_nmrq_hits_pos[`LG_MRQ_ENTRIES-1:0]].addr, r_req2.addr, 
+   //w_fwd_st_to_ld_data_avail, core_store_data_valid );
+   //end
+   //end
+
     
 
 
@@ -1742,6 +1774,14 @@ module nu_l1d(clk,
                   t_core_mem_rsp.dst_valid = t_rsp_dst_valid2;
                   t_core_mem_rsp_valid = 1'b1;
 		  t_core_mem_rsp.has_cause = r_req2.spans_cacheline;
+	       end // if (w_port2_rd_hit)
+	     else if(w_can_fwd_st_to_ld & 1'b0)
+	       begin
+		  $display("forwarding store to load at cycle %d", r_cycle);
+		  t_core_mem_rsp.data = r_mem_q[w_nmrq_hits_pos[`LG_MRQ_ENTRIES-1:0]].data;
+                  t_core_mem_rsp.dst_valid = t_rsp_dst_valid2;
+                  t_core_mem_rsp_valid = 1'b1;
+		  t_core_mem_rsp.has_cause = r_req2.spans_cacheline;
 	       end
 	     else
 	       begin
@@ -2033,12 +2073,13 @@ module nu_l1d(clk,
 		      begin
 			 if(t_mem_head.is_store | t_mem_head.is_atomic)
 			   begin
-			      if(w_st_amo_grad && (core_store_data_valid ? (t_mem_head.rob_ptr == core_store_data.rob_ptr) : 1'b0) )
+			      if(w_st_amo_grad && /*(core_store_data_valid ? (t_mem_head.rob_ptr == core_store_data.rob_ptr) : 1'b0)*/
+				 r_store_data_valid[t_mem_head.rob_ptr] )
 				begin
 				   t_pop_mq = 1'b1;
 				   core_store_data_ack = 1'b1;
 				   n_req = t_mem_head;
-				   n_req.data = core_store_data.data;
+				   n_req.data = r_store_data[t_mem_head.rob_ptr];
 				   t_cache_idx = t_mem_head.addr[IDX_STOP-1:IDX_START];
 				   t_cache_tag = t_mem_head.addr[`PA_WIDTH-1:IDX_STOP];
 				   t_addr = t_mem_head.addr;

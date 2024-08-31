@@ -96,6 +96,7 @@ module exec(clk,
 	    //tell rob store data has been read
 	    core_store_data_ptr,
 	    core_store_data_ptr_valid,
+	    core_store_data_value,
 	    mem_rsp_dst_ptr,
 	    mem_rsp_dst_valid,
 	    mem_rsp_load_data,
@@ -170,7 +171,7 @@ module exec(clk,
    
    output logic [`LG_ROB_ENTRIES-1:0] core_store_data_ptr;
    output logic 		      core_store_data_ptr_valid;
-   
+   output logic [63:0]		      core_store_data_value;
    
    input logic [`LG_PRF_ENTRIES-1:0] mem_rsp_dst_ptr;
    input logic 			     mem_rsp_dst_valid;
@@ -3029,6 +3030,7 @@ module exec(clk,
 `endif
 	core_store_data_ptr = mem_dq.rob_ptr;
 	core_store_data_ptr_valid = r_dq_ready;
+	core_store_data_value = t_mem_srcB;
      end
 
    // always_ff@(negedge clk)
