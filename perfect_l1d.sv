@@ -24,12 +24,11 @@ import "DPI-C" function void wr_log(input longint pc,
 module perfect_l1d(clk, 
 	   reset,
 	   priv,
-           page_table_root,		   
+	   page_table_root,
 	   l2_probe_addr,
 	   l2_probe_val,
 	   l2_probe_ack,	   
 	   l1d_state,
-  	   n_inflight,
 	   restart_complete,
 	   paging_active,
 	   clear_tlb,
@@ -62,15 +61,16 @@ module perfect_l1d(clk,
 	   core_mem_va_req_ack,
 	   core_mem_rsp,
 	   core_mem_rsp_valid,
+	   mem_rdy,
 	   //output to the memory system
 	   mem_req_valid,
-	   mem_req_uc,
-	   mem_req_addr, 
-	   mem_req_store_data, 
-	   mem_req_opcode,
+	   mem_req,
 	   //reply from memory system
-	   mem_rsp_valid,
-	   mem_rsp_load_data,
+	   l2_rsp_valid,
+	   l2_rsp_load_data,
+	   l2_rsp_tag,
+	   l2_rsp_writeback,
+	   l2_rsp_addr,	      
 	   mtimecmp,
 	   mtimecmp_val,
 	   cache_accesses,
@@ -87,11 +87,10 @@ module perfect_l1d(clk,
    input logic [1:0] priv;
    input logic [63:0] page_table_root;
    input logic l2_probe_val;
-   input logic [(`M_WIDTH-1):0]	l2_probe_addr;
-   output logic 		l2_probe_ack;
+   input logic [(`PA_WIDTH-1):0] l2_probe_addr;
+   output logic			 l2_probe_ack;
    
    output logic [3:0] l1d_state;
-   output logic [3:0] n_inflight;
    input logic 	      restart_complete;
    input logic paging_active;
    input logic clear_tlb;
@@ -127,15 +126,18 @@ module perfect_l1d(clk,
    output logic core_mem_va_req_ack;
    output 	mem_rsp_t core_mem_rsp;
    output logic core_mem_rsp_valid;
-
+   input logic mem_rdy;
+   
    output logic mem_req_valid;
-   output logic	mem_req_uc;
-   output logic [(`M_WIDTH-1):0] mem_req_addr;
-   output logic [L1D_CL_LEN_BITS-1:0] mem_req_store_data;
-   output logic [3:0] 			  mem_req_opcode;
+   output	l1d_req_t mem_req;
+   
 
-   input logic 				  mem_rsp_valid;
-   input logic [L1D_CL_LEN_BITS-1:0] 	  mem_rsp_load_data;
+   input logic 				  l2_rsp_valid;
+   input logic [L1D_CL_LEN_BITS-1:0] 	  l2_rsp_load_data;
+   input logic [`LG_MRQ_ENTRIES:0] 	  l2_rsp_tag;
+   input logic [`PA_WIDTH-1:0] 		  l2_rsp_addr;
+   input logic				  l2_rsp_writeback;
+   
 
    output logic [63:0]			  mtimecmp;
    output logic				  mtimecmp_val;
@@ -145,7 +147,6 @@ module perfect_l1d(clk,
 
    output logic [63:0]			 tlb_accesses;
    output logic [63:0] 			 tlb_hits;
-
 
    assign page_walk_req_valid = 1'b0;
    always_ff@(posedge clk)
@@ -321,9 +322,6 @@ module perfect_l1d(clk,
    
    logic [31:0] 			 r_cycle;
    assign flush_complete = r_flush_complete;
-   assign mem_req_addr = r_mem_req_addr;
-   assign mem_req_store_data = r_mem_req_store_data;
-   assign mem_req_opcode = r_mem_req_opcode;
    assign mem_req_valid = r_mem_req_valid;
 
    assign core_mem_rsp_valid = n_core_mem_rsp_valid;
