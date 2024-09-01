@@ -76,7 +76,8 @@ module
 		   got_monitor,
 		   inflight,
 		   epc,
-		   restart_ack);
+		   restart_ack,
+		   priv);
 
    localparam L1D_CL_LEN = 1 << `LG_L1D_CL_LEN;
    localparam L1D_CL_LEN_BITS = 1 << (`LG_L1D_CL_LEN + 3);
@@ -160,7 +161,8 @@ module
    output logic [`LG_ROB_ENTRIES:0] 	  inflight;
    output logic [`M_WIDTH-1:0] 		  epc;
    output logic				  restart_ack;
-
+   output logic [1:0]			  priv;
+   
    logic [(`M_WIDTH-1):0] 	restart_pc;
    logic [(`M_WIDTH-1):0] 	restart_src_pc;
    logic 			restart_src_is_indirect;
@@ -350,7 +352,8 @@ module
    wire		w_mode64, w_paging_active;
    wire [1:0]	w_priv;
    wire [63:0]	w_page_table_root;
-
+   assign priv = w_priv;
+   
    wire				    w_mmu_req_valid;
    wire				    w_mmu_req_store;
    wire [`PA_WIDTH-1:0]		    w_mmu_req_addr;

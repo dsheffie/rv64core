@@ -713,6 +713,7 @@ int main(int argc, char **argv) {
   retire_trace rt;
   std::map<int64_t, double> &tip_map = rt.tip;
   std::map<int64_t, uint64_t> insn_cnts;
+  uint64_t priv[4] = {0};
   
   try {
     po::options_description desc("Options");
@@ -902,7 +903,10 @@ int main(int argc, char **argv) {
     if(tb->in_branch_recovery) {
       cycles_in_faulted++;
     }
-
+    if(tb->retire_valid) {
+      priv[tb->priv & 3] += tb->retire_valid + tb->retire_two_valid;
+    }
+    
     if(tb->retire_valid and retiretrace) {
       uint64_t va = tb->retire_pc;
       uint64_t pa = va;
@@ -1462,6 +1466,12 @@ int main(int argc, char **argv) {
     out << "fetch_slots = " << fetch_slots << "\n";
     out << "total_slots = " << (cycle*2) << "\n";
     out << "retire_slots = " << insns_retired << "\n";
+
+    out << "priv[0] = " << priv[0] << "\n";
+    out << "priv[1] = " << priv[1] << "\n";
+    out << "priv[2] = " << priv[2] << "\n";
+    out << "priv[3] = " << priv[3] << "\n";
+    
     double total_fetch_cap = 0.0;
 
   
