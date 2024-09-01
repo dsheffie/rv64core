@@ -5,6 +5,8 @@
 `ifdef VERILATOR
 import "DPI-C" function void record_faults(input int n_faults);
 import "DPI-C" function void record_branches(input int n_branches);
+import "DPI-C" function void record_exception_type(input int cause);
+
 import "DPI-C" function void start_log(input int startlog);
 
 import "DPI-C" function void alloc_uuid(input longint uuid);
@@ -853,6 +855,10 @@ module core(clk,
    
    always_ff@(negedge clk)
      begin
+	if(r_state == ARCH_FAULT)
+          begin
+	     record_exception_type({27'd0,t_rob_head.cause});
+	  end
 	record_faults(t_faults);
 	record_branches(t_branches);
      end

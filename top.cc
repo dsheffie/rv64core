@@ -1,3 +1,4 @@
+
 #include "top.hh"
 #include <signal.h>
 #include <setjmp.h>
@@ -84,6 +85,12 @@ static uint64_t l1d_stall_reasons[8] = {0};
 static bool enable_checker = true, use_checkpoint = false;
 static bool pending_fault = false;
 static uint64_t fault_start_cycle = 0;
+
+static uint64_t fault_counts[32] = {0};
+
+void record_exception_type(int fault_type) {
+  fault_counts[fault_type & 31]++;
+}
 
 void record_branches(int n_branches) {
   branch_distribution[n_branches]++;
@@ -1471,6 +1478,13 @@ int main(int argc, char **argv) {
     out << "priv[1] = " << priv[1] << "\n";
     out << "priv[2] = " << priv[2] << "\n";
     out << "priv[3] = " << priv[3] << "\n";
+
+    for(int i = 0; i < 32; i++) {
+      if(fault_counts[i] != 0) {
+	out << "fault_counts[" << i << "] = "
+	    << fault_counts[i] << "\n";
+      }
+    }
     
     double total_fetch_cap = 0.0;
 
