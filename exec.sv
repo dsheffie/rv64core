@@ -1802,16 +1802,16 @@ module exec(clk,
 	n_mdq_tail_ptr = r_mdq_tail_ptr;
 	n_mdq_next_tail_ptr = r_mdq_next_tail_ptr;
 	
-	//if(r_dq_ready)
-	//begin
-	//n_mdq_tail_ptr = r_mdq_tail_ptr + 'd1;
-	//n_mdq_next_tail_ptr = r_mdq_next_tail_ptr + 'd1;
-	//end
+	if(r_dq_ready)
+	begin
+	   n_mdq_tail_ptr = r_mdq_tail_ptr + 'd1;
+	   n_mdq_next_tail_ptr = r_mdq_next_tail_ptr + 'd1;
+	end
 	
-	//if(core_store_data_ack)
-	//begin
-	//n_mdq_head_ptr = r_mdq_head_ptr + 'd1;
-	//end
+	if(core_store_data_ack)
+	begin
+	   n_mdq_head_ptr = r_mdq_head_ptr + 'd1;
+	end
 
 	core_store_data = r_mdq[r_mdq_head_ptr[`LG_MDQ_ENTRIES-1:0]];
 			       
@@ -3032,43 +3032,6 @@ module exec(clk,
 	core_store_data_ptr_valid = r_dq_ready;
 	core_store_data_value = t_mem_srcB;
      end
-
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if(mem_rsp_dst_valid) $display("mem rsp ptr %d, r cycle %d", mem_rsp_dst_ptr, r_cycle);
-
-   // 	if(w_dq_ready & !t_pop_mem_dq)
-   // 	  begin
-   // 	     $display("dq rdy for src ptr %d dq_empty %b dq_clr %b next full %b full %b", 
-   // 		      t_mem_dq.src_ptr, t_mem_dq_empty, mem_dq_clr, mem_mdq_next_full, mem_mdq_full);
-   // 	  end
-	
-   // 	if(r_dq_ready)
-   // 	  $display("src ptr %d ready for rob ptr %d, r_cycle %d",
-   // 		   mem_dq.src_ptr, mem_dq.rob_ptr, r_cycle);
-
-   // 	if(t_push_two_dq)
-   // 	  begin
-   // 	     $display("push b src ptr %d, rob ptr %d at %d",
-   // 		      t_dq1.src_ptr, t_dq1.rob_ptr, r_cycle);
-   // 	     $display("push a src ptr %d, rob ptr %d at %d",
-   // 		      t_dq0.src_ptr, t_dq0.rob_ptr, r_cycle);
-   // 	  end
-   // 	else if(t_push_one_dq)
-   // 	  begin
-   // 	     if(uq_uop.is_mem && uq_uop.srcB_valid)
-   // 	       begin
-   // 		  $display("push a src ptr %d, rob ptr %d at %d",
-   // 			   t_dq0.src_ptr, t_dq0.rob_ptr, r_cycle);
-   // 	       end
-   // 	     else
-   // 	       begin
-   // 		  $display("push b src ptr %d, rob ptr %d at %d",
-   // 			   t_dq1.src_ptr, t_dq1.rob_ptr, r_cycle);
-   // 	       end
-   // 	  end
-   //   end // always_ff@ (negedge clk)
-   
    
    always_ff@(posedge clk)
      begin

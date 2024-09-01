@@ -303,20 +303,51 @@ module nu_l1d(clk,
    
    logic [N_ROB_ENTRIES-1:0] r_store_data_valid;
    
+
+   logic r_core_store_data_release, n_core_store_data_release;
+   logic [`LG_ROB_ENTRIES-1:0] r_rob_ptr;
+
+   
+   logic		       t_accept_new_store_data;
+   always_comb
+     begin
+	t_accept_new_store_data = 1'b0;
+	if(core_store_data_valid)
+	  begin
+	     t_accept_new_store_data = r_store_data_valid[core_store_data.rob_ptr] ? 1'b0 : 1'b1;
+	  end
+     end
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if(core_store_data_valid & !t_accept_new_store_data)
+   // 	begin
+   // 	   $display("cant accept entry %d", core_store_data.rob_ptr);
+   // 	end
+   // 	if(core_store_data_valid & t_accept_new_store_data)
+   // 	  begin
+   // 	     $display("cycle %d accepting entry %d", r_cycle, core_store_data.rob_ptr);
+   // 	  end
+   // 	if(drain_ds_complete)
+   // 	  begin
+   // 	     $display("drain ds complete at cycle %d", r_cycle);
+   // 	  end
+   // 	//$display("head of mem pointer %d", t_mem_head.rob_ptr);
+   //   end
+   
+   assign core_store_data_ack = t_accept_new_store_data;
+
    always_ff@(posedge clk)
      begin
-	if(nu_core_store_data_valid)
+	if(t_accept_new_store_data)
 	  begin
-	     r_store_data[nu_core_store_data_ptr] <= nu_core_store_data_value;
+	     r_store_data[core_store_data.rob_ptr] <= core_store_data.data;
 	  end
      end
 
-   logic r_core_store_data_ack;
-   logic [`LG_ROB_ENTRIES-1:0] r_rob_ptr;
    
    always_ff@(posedge clk)
      begin
-	r_core_store_data_ack <= reset ? 1'b0 : core_store_data_ack;
+	r_core_store_data_release <= reset ? 1'b0 : n_core_store_data_release;
 	r_rob_ptr <= reset ? 'd0 : t_mem_head.rob_ptr;
      end
    
@@ -326,17 +357,18 @@ module nu_l1d(clk,
 	  begin
 	     r_store_data_valid <= 'd0;
 	  end
-	else if(nu_core_store_data_valid)
-	  begin
-	     r_store_data_valid[nu_core_store_data_ptr] <= 1'b1;
+	else 
+	  begin 
+	     if(t_accept_new_store_data)
+	       begin
+		  r_store_data_valid[core_store_data.rob_ptr] <= 1'b1;
+	       end
+	     if(r_core_store_data_release)
+	       begin
+		  r_store_data_valid[r_rob_ptr] <= 1'b0;
+	       end
 	  end
-	else if(r_core_store_data_ack)
-	  begin
-	     r_store_data_valid[r_rob_ptr] <= 1'b0;
-	  end
-     end
-   
-
+     end // always_ff@ (posedge clk)
    
    always_ff@(posedge clk)
      begin
@@ -1789,7 +1821,7 @@ module nu_l1d(clk,
 	       end // if (w_port2_rd_hit)
 	     else if(w_can_fwd_st_to_ld & w_fwd_st_to_ld_data_avail)
 	       begin
-		  //$display("forwarding store to load at cycle %d", r_cycle);
+		  $display("forwarding store to load at cycle %d", r_cycle);
 		  t_core_mem_rsp.data = r_store_data[r_mem_q[w_nmrq_hits_pos[`LG_MRQ_ENTRIES-1:0]].rob_ptr];
                   t_core_mem_rsp.dst_valid = t_rsp_dst_valid2;
                   t_core_mem_rsp_valid = 1'b1;
@@ -1910,7 +1942,7 @@ module nu_l1d(clk,
 	n_req = r_req;
 
 	t_tlb_xlat_replay = 1'b0;
-	core_store_data_ack = 1'b0;
+	n_core_store_data_release = 1'b0;
 	
 	n_port1_req_valid = 1'b0;
 	n_port1_req_uc = 1'b0;
@@ -2088,10 +2120,10 @@ module nu_l1d(clk,
 			      if(w_st_amo_grad && /*(core_store_data_valid ? (t_mem_head.rob_ptr == core_store_data.rob_ptr) : 1'b0)*/
 				 r_store_data_valid[t_mem_head.rob_ptr] )
 				begin
-				   //$display("cycle %d, release store for rob ptr %d, address %x", 
-				   //r_cycle, t_mem_head.rob_ptr, t_mem_head.addr[`PA_WIDTH-1:0]);
+				   //$display("cycle %d, release store for rob ptr %d, address %x, data %x", 
+				   //r_cycle, t_mem_head.rob_ptr, t_mem_head.addr[`PA_WIDTH-1:0], r_store_data[t_mem_head.rob_ptr]);
 				   t_pop_mq = 1'b1;
-				   core_store_data_ack = 1'b1;
+				   n_core_store_data_release = 1'b1;				   
 				   n_req = t_mem_head;
 				   n_req.data = r_store_data[t_mem_head.rob_ptr];
 				   t_cache_idx = t_mem_head.addr[IDX_STOP-1:IDX_START];
