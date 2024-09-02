@@ -163,20 +163,20 @@ module divider(clk,
    wire w_match_prev = (r_lastA == r_A) &
 	(r_lastB == r_B) & 
 	(r_last_signed == r_is_signed) &
-	r_last_valid & 1'b0;
+	r_last_valid;
 
 
    wire [LG_W:0] w_clz_A;
    count_leading_zeros #(.LG_N(LG_W)) clz0 (.in(r_A), .y(w_clz_A));
    
    
-   // always_ff@(posedge clk)
-   //   begin
-   // 	if(r_state == CLZ)
-   // 	  begin
-   // 	     $display("a = %x, b = %x, zero skip %d", r_A, r_B, 7'd64 - w_clz_A);
-   // 	  end
-   //   end
+   //always_ff@(posedge clk)
+   //begin
+   //if(r_state == CLZ)
+   //begin
+   //$display("a = %x, b = %x, zero skip %d", r_A, r_B, 7'd64 - w_clz_A);
+   //end
+   //end
 
    //always_ff@(negedge clk)
      //begin
