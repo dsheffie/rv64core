@@ -2,6 +2,10 @@
 `include "rob.vh"
 `include "uop.vh"
 
+`ifdef VERILATOR
+import "DPI-C" function void log_mem_begin(input int r, input int s, input longint c);
+import "DPI-C" function void log_mem_end(input int r, input longint c);
+`endif
 
 //`define FPGA64_32
 
@@ -534,6 +538,25 @@ module
 	       .tlb_accesses(w_l1d_tlb_accesses)
 	       );
 
+`ifdef VERILATOR
+   logic [63:0] r_cycle;
+   always_ff@(posedge clk)
+     begin
+	r_cycle <= reset ? 'd0 : r_cycle + 'd1;
+     end
+   always_ff@(negedge clk)
+     begin
+	if(core_mem_req_valid)
+	  begin
+	     log_mem_begin({27'd0,core_mem_req.rob_ptr}, {31'd0, core_mem_req.is_store}, r_cycle);
+	  end
+	if(core_mem_rsp_valid)
+	  begin
+	     log_mem_end({27'd0, core_mem_rsp.rob_ptr}, r_cycle);
+	  end
+     end
+`endif
+   
    wire [63:0]			    w_l1i_page_walk_req_va;
    wire				    w_l1i_page_walk_req_valid;
    

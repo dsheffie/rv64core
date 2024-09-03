@@ -129,6 +129,21 @@ void record_l1d(int req, int ack, int ack_st, int blocked, int stall_reason) {
   l1d_stall_reasons[stall_reason&15]++;
 }
 
+uint64_t mem_table[32] = {0};
+bool is_store[32] = {false};
+
+void log_mem_begin(int r, int s, long long c) {
+  mem_table[r] = c;
+  is_store[r] = s;
+}
+
+void log_mem_end(int r, long long c) {
+  uint64_t cc = c - mem_table[r];
+  if(not(is_store[r])) {
+    std::cout << "cc = " << cc << "\n";
+  }
+}
+
 
 long long loadgpr(int gprid) {
   return s->gpr[gprid];
