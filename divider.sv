@@ -78,7 +78,7 @@ module divider(clk,
    logic [W-1:0] 		    t_ss;
    logic			    r_is_w, n_is_w;
    
-   logic [LG_W+1:0] 		    r_idx, n_idx;
+   logic [LG_W:0] 		    r_idx, n_idx;
    logic 			    t_bit,t_valid,t_clr;
 
    wire [W-1:0] 		    srcA = inA[W-1:0];
@@ -166,10 +166,9 @@ module divider(clk,
 	r_last_valid;
 
 
-   wire [LG_W+1:0] w_clz_R, w_clz_D;
-   count_leading_zeros #(.LG_N(LG_W+1)) clz0 (.in({r_R[W2-2:0], 1'b0}), .y(w_clz_R));
-   count_leading_zeros #(.LG_N(LG_W+1)) clz1 (.in(r_D), .y(w_clz_D));
-   wire [LG_W+1:0] w_clz_delta = w_clz_R - w_clz_D;
+   wire [LG_W:0] w_clz_A;
+   count_leading_zeros #(.LG_N(LG_W)) clz0 (.in(r_A), .y(w_clz_A));
+   
    
    //always_ff@(posedge clk)
    //begin
@@ -244,15 +243,9 @@ module divider(clk,
 	  CLZ:
 	    begin
 	       n_state = DIVIDE;
-	       if(w_clz_delta<='d64)
-		 begin
-		    //$display("w_clz_R = %d", w_clz_R);
-		    //$display("w_clz_D = %d", w_clz_D);
-		    n_R = r_R << (w_clz_R-w_clz_D);
-		    n_idx = r_idx - (w_clz_R-w_clz_D);
-		    //$display("n_idx = %x", n_idx);
-		    n_state = (n_idx == 8'hff) ? PACK_OUTPUT : DIVIDE;
-		 end
+	       n_idx = 7'd63 - w_clz_A;
+	       n_R = r_R << w_clz_A;
+	       //$display("w_clz_A = %d", w_clz_A);
 	    end
 	  DIVIDE:
 	    begin
