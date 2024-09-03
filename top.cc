@@ -808,6 +808,7 @@ int main(int argc, char **argv) {
   uint64_t last_retired_pc = 0, last_retired_fp_pc = 0;
   uint64_t mismatches = 0, n_stores = 0, n_loads = 0;
   uint64_t last_insns_retired = 0, last_cycle = 0;
+  uint64_t last_n_logged_loads = 0, last_total_load_lat = 0;
   uint64_t n_branches = 0, n_mispredicts = 0, n_checks = 0, n_flush_cycles = 0;
   bool got_mem_req = false, got_mem_rsp = false, got_monitor = false, incorrect = false;
   bool got_putchar = false;
@@ -1026,9 +1027,12 @@ int main(int argc, char **argv) {
 
       if(((insns_retired % heartbeat) == 0) or trace_retirement ) {
 	double w_ipc = static_cast<double>(insns_retired - last_insns_retired) / (cycle - last_cycle);
+	double w_lat = static_cast<double>(total_load_lat-last_n_logged_loads)/(n_logged_loads-last_n_logged_loads);	
 	if(window) {
 	  last_insns_retired = insns_retired;
 	  last_cycle = cycle;
+	  last_n_logged_loads = n_logged_loads;
+	  last_total_load_lat = total_load_lat;
 	}
 	std::cout << "port a "
 		  << " cycle " << cycle
@@ -1040,6 +1044,7 @@ int main(int argc, char **argv) {
 		  << getAsmString(tb->retire_pc, tb->page_table_root, tb->paging_active)	  
 		  << std::fixed
 		  << ", " << w_ipc << " IPC "
+		  << ", " << w_lat << " cyc "
 		  << ", insns_retired "
 		  << insns_retired
 		  << ", mem pki "
@@ -1058,9 +1063,12 @@ int main(int argc, char **argv) {
 	last_retired_pc = tb->retire_pc;	
 	if(((insns_retired % heartbeat) == 0) or trace_retirement ) {
 	  double w_ipc = static_cast<double>(insns_retired - last_insns_retired) / (cycle - last_cycle);
+	  double w_lat = static_cast<double>(total_load_lat-last_n_logged_loads)/(n_logged_loads-last_n_logged_loads);
 	  if(window) {
 	    last_insns_retired = insns_retired;
 	    last_cycle = cycle;
+	    last_n_logged_loads = n_logged_loads;
+	    last_total_load_lat = total_load_lat;
 	  }
 	  std::cout << "port b "
 		    << " cycle " << cycle
@@ -1071,7 +1079,8 @@ int main(int argc, char **argv) {
 		    << " "
 		    << getAsmString(tb->retire_two_pc, tb->page_table_root, tb->paging_active)	  	    
 		    << std::fixed
-		    << ", " << w_ipc << " IPC "	    
+		    << ", " << w_ipc << " IPC "
+		    << ", " << w_lat << " cyc "	    
 		    << ", insns_retired "
 		    << insns_retired
 		    << ", mem pki "
