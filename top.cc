@@ -130,17 +130,20 @@ void record_l1d(int req, int ack, int ack_st, int blocked, int stall_reason) {
 }
 
 uint64_t mem_table[32] = {0};
-bool is_store[32] = {false};
+bool is_load[32] = {false};
+uint64_t n_logged_loads = 0;
+uint64_t total_load_lat = 0;
 
-void log_mem_begin(int r, int s, long long c) {
+void log_mem_begin(int r, int l, long long c) {
   mem_table[r] = c;
-  is_store[r] = s;
+  is_load[r] = l;
 }
 
 void log_mem_end(int r, long long c) {
   uint64_t cc = c - mem_table[r];
-  if(not(is_store[r])) {
-    std::cout << "cc = " << cc << "\n";
+  if(is_load[r]) {
+    ++n_logged_loads;
+    total_load_lat += cc;
   }
 }
 
@@ -1494,6 +1497,11 @@ int main(int argc, char **argv) {
     out << "priv[2] = " << priv[2] << "\n";
     out << "priv[3] = " << priv[3] << "\n";
 
+    out << "avg load lat = "
+	<< static_cast<double>(total_load_lat)/n_logged_loads
+	<< " cycles\n";
+
+    
     for(int i = 0; i < 32; i++) {
       if(fault_counts[i] != 0) {
 	out << "fault_counts[" << i << "] = "
