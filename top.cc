@@ -1027,7 +1027,7 @@ int main(int argc, char **argv) {
 
       if(((insns_retired % heartbeat) == 0) or trace_retirement ) {
 	double w_ipc = static_cast<double>(insns_retired - last_insns_retired) / (cycle - last_cycle);
-	double w_lat = static_cast<double>(total_load_lat-last_n_logged_loads)/(n_logged_loads-last_n_logged_loads);	
+	double w_lat = static_cast<double>(total_load_lat-last_total_load_lat)/(n_logged_loads-last_n_logged_loads);	
 	if(window) {
 	  last_insns_retired = insns_retired;
 	  last_cycle = cycle;
@@ -1063,7 +1063,7 @@ int main(int argc, char **argv) {
 	last_retired_pc = tb->retire_pc;	
 	if(((insns_retired % heartbeat) == 0) or trace_retirement ) {
 	  double w_ipc = static_cast<double>(insns_retired - last_insns_retired) / (cycle - last_cycle);
-	  double w_lat = static_cast<double>(total_load_lat-last_n_logged_loads)/(n_logged_loads-last_n_logged_loads);
+	double w_lat = static_cast<double>(total_load_lat-last_total_load_lat)/(n_logged_loads-last_n_logged_loads);		  
 	  if(window) {
 	    last_insns_retired = insns_retired;
 	    last_cycle = cycle;
