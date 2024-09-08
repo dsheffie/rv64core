@@ -948,7 +948,8 @@ module core(clk,
 	
 	t_enough_iprfs = !((t_uop.dst_valid) && t_gpr_ffs_full);
 
-	t_enough_bob = t_uop.is_br ? !t_bob_full : 1'b1;
+	//t_enough_bob = t_uop.is_br ? !t_bob_full : 1'b1;
+	t_enough_bob = 1'b1;
 	
 	t_enough_next_iprfs = !((t_uop2.dst_valid) && t_gpr_ffs2_full);
 
