@@ -1078,12 +1078,13 @@ module core(clk,
 		      end // if (!t_dq_empty)
 		    t_retire = t_rob_head_complete & !t_arch_fault;
 		    t_retire_two = !t_rob_next_empty
-		    		   && !t_arch_fault
+		    		   && t_retire
+				   && !t_rob_head.faulted
 				   && !t_rob_head.mark_page_dirty
 		    		   && !t_rob_next_head.faulted 				    
 		    		   && t_rob_head_complete
-		    		   && t_rob_next_head_complete				    
-				   && !t_rob_head.is_br
+		    		   && t_rob_next_head_complete
+				   && (t_rob_head.is_br ? !t_rob_next_head.is_br : 1'b1)
 				   && !t_rob_next_head.is_ret
 				   && !t_rob_next_head.is_call;
 
@@ -1491,7 +1492,7 @@ module core(clk,
 	  end
      end // always_comb
 
-
+   logic t_next_head_br;
    always_comb
      begin
 	t_free_reg = 1'b0;
@@ -1508,6 +1509,8 @@ module core(clk,
 	n_branch_pc_is_indirect = 1'b0;
 	n_branch_fault = 1'b0;
 	n_branch_pht_idx = 'd0;
+
+	t_next_head_br = t_rob_next_head.is_br & t_retire_two;
 	
 	if(t_retire)
 	  begin
@@ -1527,13 +1530,13 @@ module core(clk,
 		  n_retire_prf_free[t_rob_next_head.old_pdst] = 1'b1;
 	       end
 	     
-	     n_branch_pc = t_retire_two ? t_rob_next_head.pc : t_rob_head.pc;
-	     n_target_pc = t_retire_two ? t_rob_next_head.target_pc : t_rob_head.target_pc;
-	     n_took_branch = t_retire_two ? t_rob_next_head.take_br : t_rob_head.take_br;
-	     n_branch_valid = t_retire_two ? t_rob_next_head.is_br :  t_rob_head.is_br;
+	     n_branch_pc = t_next_head_br ? t_rob_next_head.pc : t_rob_head.pc;
+	     n_target_pc = t_next_head_br ? t_rob_next_head.target_pc : t_rob_head.target_pc;
+	     n_took_branch = t_next_head_br ? t_rob_next_head.take_br : t_rob_head.take_br;
+	     n_branch_valid = t_next_head_br ? t_rob_next_head.is_br :  t_rob_head.is_br;
 	     n_branch_fault = t_rob_head.faulted & (t_rob_head.has_cause==1'b0);
-	     n_branch_pht_idx = t_retire_two ? t_rob_next_head.pht_idx : t_rob_head.pht_idx;
-	     n_branch_pc_is_indirect = t_retire_two ? 
+	     n_branch_pht_idx = t_next_head_br ? t_rob_next_head.pht_idx : t_rob_head.pht_idx;
+	     n_branch_pc_is_indirect = t_next_head_br ? 
 				       t_rob_next_head.is_indirect : 
 				       t_rob_head.is_indirect ;
 	  end // if (t_retire)
