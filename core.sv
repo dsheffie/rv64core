@@ -265,7 +265,6 @@ module core(clk,
    
    localparam N_PRF_ENTRIES = (1<<`LG_PRF_ENTRIES);
    localparam N_ROB_ENTRIES = (1<<`LG_ROB_ENTRIES);
-   localparam N_BOB_ENTRIES = (1<<`LG_BOB_ENTRIES);   
    localparam N_UQ_ENTRIES = (1<<`LG_UQ_ENTRIES);
    
    localparam N_DQ_ENTRIES = (1<<`LG_DQ_ENTRIES);
@@ -291,7 +290,6 @@ module core(clk,
    wire					  w_exec_clear_tlb;
    
    rob_entry_t r_rob[N_ROB_ENTRIES-1:0];   
-   bob_entry_t r_bob[N_BOB_ENTRIES-1:0];
    logic [63:0] r_rob_addr[N_ROB_ENTRIES-1:0];
    
    logic [N_ROB_ENTRIES-1:0] 		  r_rob_complete;
@@ -326,11 +324,6 @@ module core(clk,
    logic [`LG_ROB_ENTRIES:0] r_rob_next_tail_ptr, n_rob_next_tail_ptr;
    logic 		     t_rob_empty, t_rob_full, t_rob_next_full, t_rob_next_empty;
    
-   //bob
-   logic [`LG_BOB_ENTRIES:0] r_bob_head_ptr, n_bob_head_ptr;
-   logic [`LG_BOB_ENTRIES:0] r_bob_tail_ptr, n_bob_tail_ptr;
-   logic 		     t_bob_empty, t_bob_full;
-      
          
    logic [`LG_PRF_ENTRIES-1:0] r_alloc_rat[31:0];
    logic [`LG_PRF_ENTRIES-1:0] r_retire_rat[31:0];
@@ -350,7 +343,6 @@ module core(clk,
    logic 		     t_fold_uop, t_fold_uop2;
    
    logic 		     t_clr_dq;
-   logic 		     t_enough_bob;
    logic 		     t_enough_iprfs;
    logic 		     t_enough_next_iprfs;
    
@@ -876,7 +868,7 @@ module core(clk,
      begin
 	if(r_watchdog > 64'd100000)
 	  begin 
-	     $display("cycle %d : state = %d, alu complete %b, mem complete %b,head_ptr %d, complete %b,  can_retire_rob_head %b, head pc %x, empty %b, full %b, bob full %b", 
+	     $display("cycle %d : state = %d, alu complete %b, mem complete %b,head_ptr %d, complete %b,  can_retire_rob_head %b, head pc %x, empty %b, full %b", 
 		      r_cycle,
 		      r_state,
 		      t_complete_valid_1,
@@ -886,8 +878,7 @@ module core(clk,
 		      t_can_retire_rob_head,
 		      t_rob_head.pc,
 		      t_rob_empty, 
-		      t_rob_full,
-		      t_bob_full);
+		      t_rob_full);
 	     
 	     for(logic [`LG_ROB_ENTRIES:0] i = r_rob_head_ptr; i != (r_rob_tail_ptr); i=i+1)
 	       begin
@@ -948,8 +939,6 @@ module core(clk,
 	
 	t_enough_iprfs = !((t_uop.dst_valid) && t_gpr_ffs_full);
 
-	//t_enough_bob = t_uop.is_br ? !t_bob_full : 1'b1;
-	t_enough_bob = 1'b1;
 	
 	t_enough_next_iprfs = !((t_uop2.dst_valid) && t_gpr_ffs2_full);
 
@@ -1062,11 +1051,9 @@ module core(clk,
 					&& !r_pending_fault
 					&& !t_uq_full
 					&& !t_dq_empty					
-					&& t_enough_iprfs
-					&& t_enough_bob;
+					&& t_enough_iprfs;
 			      
 			      t_alloc_two = t_alloc
-					    && !t_uop.is_br
 					    && !t_uop2.serializing_op
 					    && !t_dq_next_empty 
 					    && !t_rob_next_full
@@ -1114,8 +1101,7 @@ module core(clk,
 				   && !t_uop.serializing_op
 				   && !t_uq_full
 				   && !t_dq_empty
-				   && t_enough_iprfs
-				   && t_enough_bob;
+				   && t_enough_iprfs;
 			 
 			 
 			 t_alloc_two = t_alloc
@@ -1124,7 +1110,6 @@ module core(clk,
 				       && !t_dq_next_empty 
 				       && !t_rob_next_full
 				       && !t_uq_next_full
-				       && t_enough_bob
 				       && t_enough_next_iprfs;
 
 		      end
@@ -1382,8 +1367,6 @@ module core(clk,
 	     r_rob_tail_ptr <= 'd0;
 	     r_rob_next_head_ptr <= 'd1;
 	     r_rob_next_tail_ptr <= 'd1;
-	     r_bob_head_ptr <= 'd0;
-	     r_bob_tail_ptr <= 'd0;
 	  end
 	else
 	  begin
@@ -1391,8 +1374,6 @@ module core(clk,
 	     r_rob_tail_ptr <= n_rob_tail_ptr;
 	     r_rob_next_head_ptr <= n_rob_next_head_ptr;
 	     r_rob_next_tail_ptr <= n_rob_next_tail_ptr;
-	     r_bob_head_ptr <= n_bob_head_ptr;
-	     r_bob_tail_ptr <= n_bob_tail_ptr;
 	  end
      end // always_ff@ (posedge clk)
 
@@ -1852,42 +1833,6 @@ module core(clk,
 	  end
      end // always_ff@ (posedge clk)
 
-   always_ff@(posedge clk)
-     begin
-	if(reset || t_clr_rob)
-	  begin
-	     for(integer i = 0; i < N_BOB_ENTRIES; i=i+1)
-	       begin
-		  r_bob[i].valid <= 1'b0;
-	       end
-	  end
-	else
-	  begin
-	     if(t_alloc && !t_alloc_two && t_uop.is_br)
-	       begin
-		  r_bob[r_bob_tail_ptr[`LG_BOB_ENTRIES-1:0]].valid <= 1'b1;
-		  r_bob[r_bob_tail_ptr[`LG_BOB_ENTRIES-1:0]].rob_ptr <= r_rob_tail_ptr[`LG_ROB_ENTRIES-1:0];
-		  //$display("case 1 push rob entry %d to bob loc %d", r_rob_tail_ptr[`LG_ROB_ENTRIES-1:0], r_bob_tail_ptr[`LG_BOB_ENTRIES-1:0]);
-	       end
-	     else if(t_alloc && t_alloc_two)
-	       begin
-		  if(t_uop.is_br && !t_uop2.is_br)
-		    begin
-		       r_bob[r_bob_tail_ptr[`LG_BOB_ENTRIES-1:0]].valid <= 1'b1;
-		       r_bob[r_bob_tail_ptr[`LG_BOB_ENTRIES-1:0]].rob_ptr <= r_rob_tail_ptr[`LG_ROB_ENTRIES-1:0];		       	
-		       //$display("case 2 push rob entry %d to bob loc %d, bob full %b", 
-		       //r_rob_tail_ptr[`LG_ROB_ENTRIES-1:0], r_bob_tail_ptr[`LG_BOB_ENTRIES-1:0],
-		       //t_bob_full);	       
-		    end
-		  else if(!t_uop.is_br && t_uop2.is_br)
-		    begin
-		       r_bob[r_bob_tail_ptr[`LG_BOB_ENTRIES-1:0]].valid <= 1'b1;
-		       r_bob[r_bob_tail_ptr[`LG_BOB_ENTRIES-1:0]].rob_ptr <= r_rob_next_tail_ptr[`LG_ROB_ENTRIES-1:0];
-		       //$display("case 3 push rob entry %d to bob loc %d", r_rob_tail_ptr[`LG_ROB_ENTRIES-1:0], r_bob_tail_ptr[`LG_BOB_ENTRIES-1:0]);		       
-		    end
-	       end
-	  end	
-     end // always_ff@ (posedge clk)
    
 
    
@@ -1986,8 +1931,6 @@ module core(clk,
 	n_rob_tail_ptr = r_rob_tail_ptr;
 	n_rob_next_head_ptr = r_rob_next_head_ptr;
 	n_rob_next_tail_ptr = r_rob_next_tail_ptr;
-	n_bob_head_ptr = r_bob_head_ptr;
-	n_bob_tail_ptr = r_bob_tail_ptr;
 	
 	//rob control 
 	if(t_clr_rob)
@@ -2020,44 +1963,6 @@ module core(clk,
 	       end
 	  end // else: !if(t_clr_rob)
 
-	//bob control
-	if(t_clr_rob)
-	  begin
-	     n_bob_head_ptr = 'd0;
-	     n_bob_tail_ptr = 'd0;
-	  end
-	else
-	  begin
-	     if(t_alloc && !t_alloc_two && t_uop.is_br)
-	       begin
-		  n_bob_tail_ptr = r_bob_tail_ptr + 'd1;
-	       end
-	     else if(t_alloc && t_alloc_two && (t_uop.is_br || t_uop2.is_br))
-	       begin
-		  n_bob_tail_ptr = r_bob_tail_ptr + 'd1;
-	       end
-
-	     //can only retire one branch per cycle
-	     if((t_retire || t_bump_rob_head) && t_rob_head.is_br)
-	       begin
-		  //$display("cycle %d popped head of bob, r_bob ptr =%d, rob ptr = %d",
-		  //r_cycle,
-		  //r_bob[r_bob_head_ptr[`LG_BOB_ENTRIES-1:0]].rob_ptr,
-		  //r_rob_head_ptr[`LG_ROB_ENTRIES-1:0]);
-		  n_bob_head_ptr = r_bob_head_ptr + 'd1;
-	       end
-	     else if(t_retire_two && t_rob_next_head.is_br)
-	       begin
-		  // $display("cycle %d popped head of bob, r_bob ptr =%d, rob ptr = %d",
-		  //r_cycle,
-		  //r_bob[r_bob_head_ptr[`LG_BOB_ENTRIES-1:0]].rob_ptr,
-		  //r_rob_head_ptr[`LG_ROB_ENTRIES-1:0]);
-		  n_bob_head_ptr = r_bob_head_ptr + 'd1;
-	       end
-	  end
-
-	
-	
 	
 	t_rob_empty = (r_rob_head_ptr == r_rob_tail_ptr);
 	t_rob_next_empty = (r_rob_next_head_ptr == r_rob_tail_ptr);
@@ -2065,8 +1970,6 @@ module core(clk,
 	t_rob_next_full = (r_rob_head_ptr[`LG_ROB_ENTRIES-1:0] == r_rob_next_tail_ptr[`LG_ROB_ENTRIES-1:0]) && (r_rob_head_ptr != r_rob_next_tail_ptr);
 
 
-	t_bob_empty = (r_bob_head_ptr == r_bob_tail_ptr);
-	t_bob_full = (r_bob_head_ptr[`LG_BOB_ENTRIES-1:0] == r_bob_tail_ptr[`LG_BOB_ENTRIES-1:0]) && (r_bob_head_ptr != r_bob_tail_ptr);
      end // always_comb
    
 
