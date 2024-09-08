@@ -260,12 +260,6 @@ module l2_2way(clk,
    wire			w_hit = (w_hit0 | w_hit1) & r_got_req;
    wire [127:0]		w_d = w_hit0 ? w_d0 : w_d1;
 
-   always_ff@(negedge clk)
-     begin
-	if(w_hit & r_state != CHECK_VALID_AND_TAG)
-	  $stop();
-     end
-   
 
 			
    
@@ -678,7 +672,34 @@ module l2_2way(clk,
 		  t_d1 = r_store_data;	
 	       end
 	  end
-     end
+     end // always_comb
+
+   
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if((r_state == CHECK_VALID_AND_TAG) & r_saveaddr[LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN] == 'd1765)
+   // 	  begin
+   // 	     if(w_hit)
+   // 	       begin
+   // 		  $display("hit  for addr %x, w_tag0 = %x, w_tag1 = %x, v0 %b, v1 %b, line %d, r_tag %x, t_last %b", 
+   // 			   r_saveaddr, w_tag0, w_tag1, 
+   // 			   w_valid0, w_valid1,
+   // 			   r_saveaddr[LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN],
+   // 			   r_tag,
+   // 			   t_last);
+   // 	       end
+   // 	     else
+   // 	       begin
+   // 		  $display("miss %b for addr %x, w_tag0 = %x, w_tag1 = %x, v0 %b, v1 %b, line %d, r_tag %x, w_last %b", 
+   // 			   n_replace, r_saveaddr, w_tag0, w_tag1, 
+   // 			   w_valid0, w_valid1,
+   // 			   r_saveaddr[LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN],
+   // 			   r_tag,
+   // 			   w_last);
+   // 	       end
+   // 	  end
+   //   end
+  
    
    always_comb
      begin
@@ -967,9 +988,13 @@ module l2_2way(clk,
 	       else
 		 begin
 		    n_cache_hits = r_cache_hits - 64'd1;
-		    n_replace = ~w_last;
-		    //$display("replace %b for addr %x", n_replace, r_saveaddr);
+		    n_replace = (w_valid0==1'b0 ? 1'b0 :
+				(w_valid1==1'b0 ? 1'b1 : 
+				~w_last));
 		    
+		    t_wr_last = 1'b1;
+		    t_last = n_replace;
+
 		    if(n_replace)
 		      begin
 			 if(w_dirty1)
