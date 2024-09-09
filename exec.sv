@@ -2,6 +2,9 @@
 `include "rob.vh"
 
 `ifdef VERILATOR
+import "DPI-C" function void record_sched(input int p);
+import "DPI-C" function void record_sched_alloc(input int p);
+
 import "DPI-C" function void csr_putchar(input byte x);
 import "DPI-C" function void csr_puttime(input longint mtime);
 import "DPI-C" function void term_sim();
@@ -1040,7 +1043,25 @@ module exec(clk,
 	end // for (genvar i = 0; i < N_INT_SCHED_ENTRIES; i=i+1)
    endgenerate
    
-
+   always_ff@(negedge clk)
+     begin
+	if(|w_alu_sched_oldest_ready2)
+	  begin
+	     record_sched(32'd1);
+	  end
+	if(|w_alu_sched_oldest_ready)
+	  begin
+	     record_sched(32'd0);
+	  end
+	if(t_pop_uq)
+	  begin
+	     record_sched_alloc(32'd0);
+	  end
+	if(t_pop_uq2)
+	  begin
+	     record_sched_alloc(32'd1);
+	  end
+     end
    
    // always_ff@(negedge clk)
    //   begin

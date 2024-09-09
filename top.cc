@@ -184,8 +184,15 @@ LOAD(mtval);
 LOAD(icnt);
 #undef LOAD
 
+uint64_t schedules[2] = {0};
+uint64_t schedules_alloc[2] = {0};
 
-
+void record_sched(int p) {
+  ++schedules[p&1];
+}
+void record_sched_alloc(int p) {
+  ++schedules_alloc[p&1];
+}
 
 void csr_putchar(char c) {
   if(c==0) std::cout << "\n";
@@ -1708,7 +1715,10 @@ int main(int argc, char **argv) {
     for(auto &p : l2_state) {
       std::cout << l2_state_names[p.first] << "," << p.second << "\n";
     }
-
+    std::cout << "port0 sched       " << schedules[0] << "\n";
+    std::cout << "port1 sched       " << schedules[1] << "\n";
+    std::cout << "port0 sched alloc " << schedules_alloc[0] << "\n";
+    std::cout << "port1 sched alloc " << schedules_alloc[1] << "\n";
     
     if(not(rt.empty())) {
       std::ofstream ofs(retire_name);
