@@ -699,7 +699,7 @@ endfunction
 			   begin
 			      t_push_insn = 1'b1;
 			   end // else: !if(t_first_branch == 'd2 && !fq_full2)
-		      end 
+		      end // if (!(t_is_cflow))
 		    else
 		      begin
 			 t_push_insn = 1'b1;
