@@ -456,35 +456,35 @@ endfunction
 
 	t_insn_idx = r_cache_pc[WORD_STOP-1:WORD_START];
 	
-	t_pd0 = select_pd(r_jump_out, 'd0);
-	t_pd1 = select_pd(r_jump_out, 'd1);
-	t_pd2 = select_pd(r_jump_out, 'd2);
-	t_pd3 = select_pd(r_jump_out, 'd3);
+	t_pd0 = select_pd(r_jump_out, t_insn_idx);
+	t_pd1 = select_pd(r_jump_out, t_insn_idx + 'd1);
+	t_pd2 = select_pd(r_jump_out, t_insn_idx + 'd2);
+	t_pd3 = select_pd(r_jump_out, t_insn_idx + 'd3);
 
 	t_insn_data  = select_cl32(r_ifetch_data, t_insn_idx);
 	t_insn_data2 = select_cl32(r_ifetch_data, t_insn_idx + 2'd1);
 	t_insn_data3 = select_cl32(r_ifetch_data, t_insn_idx + 2'd2);
 	t_insn_data4 = select_cl32(r_ifetch_data, t_insn_idx + 2'd3);
 
-	t_br3 = (select_pd(r_jump_out, 'd3) != 4'd0);
+	t_br3 = (t_pd3 != 4'd0);
 	
 	//& (select_pd(r_jump_out, 'd3) == 4'd1 ? t_first_taken[3] : 1'b1);
-	t_br2 = (select_pd(r_jump_out, 'd2) != 4'd0);
+	t_br2 = (t_pd2 != 4'd0);
 	
 	//& (select_pd(r_jump_out, 'd2) == 4'd1 ? t_first_taken[2] : 1'b1);
-	t_br1 = (select_pd(r_jump_out, 'd1) != 4'd0);
+	t_br1 = (t_pd1 != 4'd0);
 	//& (select_pd(r_jump_out, 'd1) == 4'd1 ? t_first_taken[1] : 1'b1);
 	
-	t_br0 = (select_pd(r_jump_out, 'd0) != 4'd0);
+	t_br0 = (t_pd0 != 4'd0);
 	//& (select_pd(r_jump_out, 'd0) == 4'd1 ? t_first_taken[0] : 1'b1);
 
 	t_branch_marker = {1'b1,t_br3,t_br2,t_br1,t_br0}  >> t_insn_idx;
 	
 	t_spec_branch_marker = ({1'b1,
-				 t_br3 & ((t_pd3 == 4'd1 & !fq_full4) ? r_pht_out_vec[7] : 1'b1),
-				 t_br2 & ((t_pd2 == 4'd1 & !fq_full4) ? r_pht_out_vec[5] : 1'b1),
-				 t_br1 & ((t_pd1 == 4'd1 & !fq_full4) ? r_pht_out_vec[3] : 1'b1),
-				 t_br0 & ((t_pd0 == 4'd1 & !fq_full4) ? r_pht_out_vec[1] : 1'b1)
+				 t_br3 & ((1'b0 & t_pd3 == 4'd1 & !fq_full4) ? r_pht_out_vec[7] : 1'b1),
+				 t_br2 & ((1'b0 & t_pd2 == 4'd1 & !fq_full4) ? r_pht_out_vec[5] : 1'b1),
+				 t_br1 & ((1'b0 & t_pd1 == 4'd1 & !fq_full4) ? r_pht_out_vec[3] : 1'b1),
+				 t_br0 & ((1'b0 & t_pd0 == 4'd1 & !fq_full4) ? r_pht_out_vec[1] : 1'b1)
 				} >> t_insn_idx);
 
 
@@ -626,14 +626,7 @@ endfunction
 	       else if(t_hit && !fq_full)
 		 begin		    
 		    t_update_spec_hist = (t_pd != 4'd0);
-		    $display("pc %x : %b , %b %b %b %b, %d, %d, pd = %d, offs = %x", 
-			     r_cache_pc, t_spec_branch_marker,
-			     t_br3, t_br2, t_br1, t_br0, 
-			     t_insn_idx, 
-			     t_first_branch,
-			     t_pd,
-			     t_br_offs);
-		    
+
 		    if(t_pd == 4'd5 || t_pd == 4'd3) /* jal and j */
 		      begin
 			 t_is_cflow = 1'b1;
@@ -728,7 +721,25 @@ endfunction
 			   end
 
 			    
+		      end // else: !if(t_is_cflow == 1'b0)
+
+		    
+		    $display("pc %x, cycle %d : %b, idx %d, first br %d, pd = %d, offs = %d, pht_out = %b", 
+			     r_cache_pc,
+			     r_cycle,
+			     t_spec_branch_marker,
+			     t_insn_idx, 
+			     t_first_branch,
+			     t_pd,
+			     t_br_offs,
+			     r_pht_out);
+		    if(t_is_cflow)
+		      begin
+			 $display("---> cycle %d, cache_pc %x, n_pc = %x", r_cycle, r_cache_pc, n_pc);
 		      end
+
+		    
+		    //if(r_cache_pc == 64'h80008678) $stop();		    
 		 end // if (t_hit && !fq_full)
 	       else if(t_hit && fq_full)
 		 begin
@@ -974,7 +985,6 @@ endfunction
 	  2'd3:
 	    t_pht_val_vec = {t_pht_val, r_pht_update_out[5:0]};
 	endcase // case (r_branch_pc[4:3])
-	
      end
    
    always_ff@(posedge clk)
@@ -1096,8 +1106,8 @@ endfunction
      begin
 	if(t_is_call)
 	  begin
-	     //$display("call at %x, place %x in pos %d of the rsb",
-	     //r_cache_pc, r_cache_pc + 'd4, r_spec_rs_tos);
+	     $display("call at %x, place %x in pos %d of the rsb",
+		      r_cache_pc, r_cache_pc + 'd4, r_spec_rs_tos);
 		 
 	     r_spec_return_stack[r_spec_rs_tos] <= r_cache_pc + 'd4;
 	  end

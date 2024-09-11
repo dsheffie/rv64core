@@ -610,7 +610,7 @@ module
    
    
    
-   perfect_l1i icache(
+   l1i_2way icache(
 	      .clk(clk),
 	      .reset(reset),
 	      .l1i_state(l1i_state),
