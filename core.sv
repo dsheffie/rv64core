@@ -1014,8 +1014,8 @@ module core(clk,
 			      n_restart_cycles = 'd1;
 			      n_restart_valid = 1'b1;
 			      t_bump_rob_head = 1'b1;
-			      $display("mispredicted %x, direction %b, new target %x", 
-				       t_rob_head.pc, t_rob_head.take_br, t_rob_head.target_pc);
+			      //			      $display("mispredicted %x, direction %b, new target %x", 
+			      //t_rob_head.pc, t_rob_head.take_br, t_rob_head.target_pc);
 			   end // else: !if(t_rob_head.is_ii)
 			 n_ds_done = 1'b1;
 			 n_machine_clr = 1'b1;
