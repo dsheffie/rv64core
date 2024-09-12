@@ -151,8 +151,11 @@ module l1i_2way(clk,
    wire [N_TAG_BITS-1:0]		  w_tag_out0, w_tag_out1;
 
    logic 				  r_pht_update;
-   logic [1:0] 				  r_pht_out, r_pht_update_out;
+   logic [1:0] 				  r_pht_out;
    logic [1:0] 				  t_pht_val;
+   logic [7:0]				  r_pht_out_vec, r_pht_update_out;
+   logic [7:0]				  t_pht_val_vec;
+   
    logic 				  t_do_pht_wr;
    
    logic [`LG_PHT_SZ-1:0] 		  n_pht_idx,r_pht_idx;
@@ -281,10 +284,10 @@ endfunction
    logic [31:0] 	  t_insn_data, t_insn_data2, t_insn_data3, t_insn_data4;
    logic [`M_WIDTH-1:0]   t_jal_simm, t_br_simm;
    logic 		  t_is_call, t_is_ret;
-   logic [2:0] 		  t_branch_cnt;
-   logic [4:0] 		  t_branch_marker, t_spec_branch_marker;
+   logic [4:0]		  t_spec_branch_marker;
    logic [2:0] 		  t_first_branch;
 
+   logic [63:0]		  r_branch_pc;   
    logic 		  t_init_pht, t_init_rsb;
    logic [`LG_PHT_SZ-1:0] r_init_pht_idx, n_init_pht_idx;
 
@@ -294,7 +297,9 @@ endfunction
    localparam SEXT = `M_WIDTH-16;
    insn_fetch_t t_insn, t_insn2, t_insn3, t_insn4;
    logic [3:0] t_pd;
-
+   logic [3:0] t_pd0, t_pd1, t_pd2, t_pd3;
+   logic       t_tcb0, t_tcb1, t_tcb2, t_tcb3;
+   
    
    logic [63:0] 	  r_cycle;
    always_ff@(posedge clk)
@@ -496,26 +501,33 @@ endfunction
 	
 	t_pd = select_pd(w_jump, t_insn_idx);
 
+	t_pd0 = select_pd(w_jump, 'd0);
+	t_pd1 = select_pd(w_jump, 'd1);
+	t_pd2 = select_pd(w_jump, 'd2);
+	t_pd3 = select_pd(w_jump, 'd3);	
+		
 	t_insn_data  = select_cl32(w_array, t_insn_idx);
 	t_insn_data2 = select_cl32(w_array, t_insn_idx + 2'd1);
 	t_insn_data3 = select_cl32(w_array, t_insn_idx + 2'd2);
 	t_insn_data4 = select_cl32(w_array, t_insn_idx + 2'd3);
 
+	r_pht_out = t_insn_idx == 2'd0 ? r_pht_out_vec[1:0] :
+		    t_insn_idx == 2'd1 ? r_pht_out_vec[3:2] :
+		    t_insn_idx == 2'd2 ? r_pht_out_vec[5:4] :
+		    r_pht_out_vec[7:6];
 
-	t_branch_marker = {1'b1,
-			   select_pd(w_jump, 'd3) != 4'd0,
-                           select_pd(w_jump, 'd2) != 4'd0,
-                           select_pd(w_jump, 'd1) != 4'd0,
-                           select_pd(w_jump, 'd0) != 4'd0
-                           } >> t_insn_idx;
-
+	t_tcb0 = (((t_pd0 == 4'd1) & (r_pht_out_vec[1]==1'b0)) | (t_pd0 == 4'd0))==1'b0;
+	t_tcb1 = (((t_pd1 == 4'd1) & (r_pht_out_vec[3]==1'b0)) | (t_pd1 == 4'd0))==1'b0;
+	t_tcb2 = (((t_pd2 == 4'd1) & (r_pht_out_vec[5]==1'b0)) | (t_pd2 == 4'd0))==1'b0;
+	t_tcb3 = (((t_pd3 == 4'd1) & (r_pht_out_vec[7]==1'b0)) | (t_pd3 == 4'd0))==1'b0;	
+	
 	t_spec_branch_marker = ({1'b1,
-				select_pd(w_jump, 'd3) != 4'd0,
-				select_pd(w_jump, 'd2) != 4'd0,
-				select_pd(w_jump, 'd1) != 4'd0,
-				select_pd(w_jump, 'd0) != 4'd0
-				} >> t_insn_idx) & 
-			       {4'b1111, !((t_pd == 4'd1) && !r_pht_out[1])};
+				 t_tcb3,
+				 t_tcb2,
+				 t_tcb1,
+				 t_tcb0
+				 } >> t_insn_idx);
+	
 
 	
 	t_first_branch = 'd7;
@@ -534,10 +546,6 @@ endfunction
 	    t_first_branch = 'd7;
 	endcase
 
-	t_branch_cnt = {2'd0, select_pd(w_jump, 'd0) != 4'd0} +
-		       {2'd0, select_pd(w_jump, 'd1) != 4'd0} +
-		       {2'd0, select_pd(w_jump, 'd2) != 4'd0} +
-		       {2'd0, select_pd(w_jump, 'd3) != 4'd0};
 	
 		
 	t_jal_simm = {{(11+PP){t_insn_data[31]}}, t_insn_data[31], t_insn_data[19:12], t_insn_data[20], t_insn_data[30:21], 1'b0};
@@ -657,7 +665,12 @@ endfunction
 		    //);
 		 end
 	       else if(t_hit && !fq_full)
-		 begin		    
+		 begin
+		    //if((|t_spec_branch_marker[3:0]) & (t_insn_idx == 'd0))
+		    //begin
+		    //$display("t_spec_branch_marker = %b", t_spec_branch_marker);
+		    //$display("r_cache_pc = %x", r_cache_pc);
+		    //end
 		    t_update_spec_hist = (t_pd != 4'd0);
 		    if(t_pd == 4'd5 || t_pd == 4'd3) /* jal and j */
 		      begin
@@ -665,7 +678,6 @@ endfunction
 			 t_take_br = 1'b1;
 			 t_is_call = (t_pd == 4'd5);
 			 n_pc = r_cache_pc + t_jal_simm;
-			 
 		      end
 		    else if(t_pd == 4'd1 && r_pht_out[1])
 		      begin
@@ -685,14 +697,17 @@ endfunction
 			 t_is_cflow = 1'b1;			 
 			 t_take_br = 1'b1;
 			 t_is_call = (t_pd == 4'd6);
-			 //$display("cycle %d : btb pc %x for %x, pht idx %x", r_cycle, r_btb_pc, r_cache_pc, r_pht_idx);
 			 n_pc = r_btb_pc;
 		      end
 		    
 		    n_resteer_bubble = t_is_cflow;
 		    
 		    //initial push multiple logic
-		    if(!(t_is_cflow))
+		    if(t_is_cflow)
+		      begin
+			 t_push_insn = 1'b1;
+		      end
+		    else
 		      begin
 			 if(t_first_branch == 'd4 && !fq_full4)
 			   begin
@@ -732,10 +747,6 @@ endfunction
 			   begin
 			      t_push_insn = 1'b1;
 			   end // else: !if(t_first_branch == 'd2 && !fq_full2)
-		      end 
-		    else
-		      begin
-			 t_push_insn = 1'b1;
 		      end
 		 end // if (t_hit && !fq_full)
 	       else if(t_hit && fq_full)
@@ -903,27 +914,27 @@ endfunction
 	t_insn2.insn_bytes = t_insn_data2;
 	t_insn2.page_fault = 1'b0;
 	t_insn2.pc = r_cache_pc + 'd4;
-	t_insn2.pred_target = 'd0;
-	t_insn2.pred = 1'b0;
-	t_insn2.pht_idx = 'd0;
+	t_insn2.pred_target = n_pc;
+	t_insn2.pred = t_take_br;
+	t_insn2.pht_idx = r_pht_idx;
 `ifdef	ENABLE_CYCLE_ACCOUNTING
 	t_insn2.fetch_cycle = r_cycle;
 `endif
 	t_insn3.insn_bytes = t_insn_data3;
 	t_insn3.page_fault = 1'b0;	
 	t_insn3.pc = r_cache_pc + 'd8;
-	t_insn3.pred_target = 'd0;
-	t_insn3.pred = 1'b0;
-	t_insn3.pht_idx = 'd0;
+	t_insn3.pred_target = n_pc;
+	t_insn3.pred = t_take_br;
+	t_insn3.pht_idx = r_pht_idx;
 `ifdef	ENABLE_CYCLE_ACCOUNTING
 	t_insn3.fetch_cycle = r_cycle;
 `endif
 	t_insn4.insn_bytes = t_insn_data4;
 	t_insn4.page_fault = 1'b0;	
 	t_insn4.pc = r_cache_pc + 'd12;
-	t_insn4.pred_target = 'd0;
-	t_insn4.pred = 1'b0;
-	t_insn4.pht_idx = 'd0;
+	t_insn4.pred_target = n_pc;
+	t_insn4.pred = t_take_br;
+	t_insn4.pht_idx = r_pht_idx;
 `ifdef	ENABLE_CYCLE_ACCOUNTING
 	t_insn4.fetch_cycle = r_cycle;
 `endif
@@ -945,7 +956,8 @@ endfunction
 	t_last_ram_value = w_hit1;
      end
    
-   compute_pht_idx cpi0 (.pc(n_cache_pc), .hist(r_spec_gbl_hist), .idx(n_pht_idx));
+   //compute_pht_idx cpi0 (.pc(n_cache_pc), .hist(r_spec_gbl_hist), .idx(n_pht_idx));
+   compute_pht_idx cpi0 (.pc({n_cache_pc[63:4], 4'd0}), .hist(r_spec_gbl_hist), .idx(n_pht_idx));   
 
    
    always_comb
@@ -959,13 +971,23 @@ endfunction
 	t_valid_ram_idx = mem_rsp_valid ? r_mem_req_addr[IDX_STOP-1:IDX_START] : r_cache_idx;
      end
 
-   
    always_comb
      begin
-	t_pht_val = r_pht_update_out;
+	t_pht_val = 'd0;
+	case(r_branch_pc[3:2])
+	  2'd0:
+	    t_pht_val = r_pht_update_out[1:0];
+	  2'd1:
+	    t_pht_val = r_pht_update_out[3:2];
+	  2'd2:
+	    t_pht_val = r_pht_update_out[5:4];
+	  2'd3:
+	    t_pht_val = r_pht_update_out[7:6];
+	endcase // case (r_branch_pc[4:3])
+	
 	t_do_pht_wr = r_pht_update;
 
-	case(r_pht_update_out)
+	case(t_pht_val)
 	  2'd0:
 	    begin
 	       if(r_take_br)
@@ -997,7 +1019,31 @@ endfunction
 		 end
 	    end
 	endcase // case (r_pht_update_out)
-     end
+	t_pht_val_vec = 8'd0;
+	case(r_branch_pc[3:2])
+	  2'd0:
+	    t_pht_val_vec = {r_pht_update_out[7:2], t_pht_val};
+	  2'd1:
+	    t_pht_val_vec = {r_pht_update_out[7:4], t_pht_val, r_pht_update_out[1:0]};
+	  2'd2:
+	    t_pht_val_vec = {r_pht_update_out[7:6], t_pht_val, r_pht_update_out[3:0]};
+	  2'd3:
+	    t_pht_val_vec = {t_pht_val, r_pht_update_out[5:0]};
+	endcase // case (r_branch_pc[4:3])
+     end // always_comb
+
+   //always_ff@(negedge clk)
+   //begin
+   //if(r_pht_update)
+   //begin
+   //$display("r_branch_addr %x, index %d, r_pht_update_out = %b, t_pht_val_vec = %b, r_take_br = %b, t_pht_val = %b", 
+   //r_branch_pc, 
+   //r_branch_pc[4:2], 
+   //r_pht_update_out,
+   //t_pht_val_vec,
+   //r_take_br,t_pht_val);
+   ///end
+   //end
    
    always_ff@(posedge clk)
      begin
@@ -1008,6 +1054,7 @@ endfunction
 	     r_pht_update <= 1'b0;
 	     r_pht_update_idx <= 'd0;
 	     r_take_br <= 1'b0;
+	     r_branch_pc <= 'd0;
 	  end
 	else
 	  begin
@@ -1017,6 +1064,7 @@ endfunction
 	     r_pht_update <= branch_pc_valid;
 	     r_pht_update_idx <= branch_pht_idx;
 	     r_take_br <= took_branch;
+	     r_branch_pc <= branch_pc;
 	  end
      end // always_ff@
 
@@ -1078,18 +1126,19 @@ endfunction
 	       );
 
    	  
-
-   ram2r1w #(.WIDTH(2), .LG_DEPTH(`LG_PHT_SZ) ) pht
+   ram2r1w #(.WIDTH(8), .LG_DEPTH(`LG_PHT_SZ) ) pht0
      (
       .clk(clk),
       .rd_addr0(n_pht_idx),
       .rd_addr1(branch_pht_idx),
       .wr_addr(t_init_pht ? r_init_pht_idx : r_pht_update_idx),
-      .wr_data(t_init_pht ? 2'd1 : t_pht_val),
+      .wr_data(t_init_pht ? 8'b01010101 : t_pht_val_vec),
       .wr_en(t_init_pht || t_do_pht_wr),
-      .rd_data0(r_pht_out),
+      .rd_data0(r_pht_out_vec),
       .rd_data1(r_pht_update_out)
       );
+
+   
          
    ram1r1w #(.WIDTH(1), .LG_DEPTH(`LG_L1I_NUM_SETS))
    valid_array0 (
