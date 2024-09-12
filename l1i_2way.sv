@@ -152,6 +152,7 @@ module l1i_2way(clk,
 
    logic 				  r_pht_update;
    logic [1:0] 				  r_pht_out;
+   logic [1:0]				  t_pht_out;
    logic [1:0] 				  t_pht_val;
    logic [7:0]				  r_pht_out_vec, r_pht_update_out;
    logic [7:0]				  t_pht_val_vec;
@@ -202,7 +203,7 @@ module l1i_2way(clk,
    logic [`GBL_HIST_LEN-1:0] 	     r_last_spec_gbl_hist;
    
 
-   logic [LG_WORDS_PER_CL-1:0] 	     t_insn_idx;
+   logic [LG_WORDS_PER_CL-1:0]	     t_insn_idx,t_branch_idx;
    
    logic [63:0] 			 n_cache_accesses, r_cache_accesses;
    logic [63:0] 			 n_cache_hits, r_cache_hits;
@@ -220,8 +221,41 @@ function logic [31:0] select_cl32(logic [L1I_CL_LEN_BITS-1:0] cl, logic[LG_WORDS
        w32 = cl[127:96];
    endcase // case (pos)
    return w32;
-endfunction
+endfunction // select_cl32
 
+function logic [63:0] select_jal_simm(logic [L1I_CL_LEN_BITS-1:0] cl, logic[LG_WORDS_PER_CL-1:0] pos);
+   localparam				 PP = (`M_WIDTH-32);   
+   logic [31:0] 			 w32;
+   case(pos)
+     2'd0:
+       w32 = cl[31:0];
+     2'd1:
+       w32 = cl[63:32];
+     2'd2:
+       w32 = cl[95:64];
+     2'd3:
+       w32 = cl[127:96];
+   endcase // case (pos)
+   return {{(11+PP){w32[31]}}, w32[31], w32[19:12], w32[20], w32[30:21], 1'b0};
+endfunction   
+
+function logic [63:0] select_br_simm(logic [L1I_CL_LEN_BITS-1:0] cl, logic[LG_WORDS_PER_CL-1:0] pos);
+   localparam				 PP = (`M_WIDTH-32);   
+   logic [31:0] 			 w32;
+   case(pos)
+     2'd0:
+       w32 = cl[31:0];
+     2'd1:
+       w32 = cl[63:32];
+     2'd2:
+       w32 = cl[95:64];
+     2'd3:
+       w32 = cl[127:96];
+   endcase // case (pos)
+   return {{(19+PP){w32[31]}}, w32[31], w32[7], w32[30:25], w32[11:8], 1'b0};
+endfunction   
+
+   
 function logic [2:0] select_pd(logic [11:0] cl, logic[LG_WORDS_PER_CL-1:0] pos);
    logic [2:0] j;
    case(pos)
@@ -253,6 +287,13 @@ endfunction
    logic [(`M_WIDTH-1):0] r_pc, n_pc, r_miss_pc, n_miss_pc;
    logic [(`M_WIDTH-1):0] r_cache_pc, n_cache_pc;
    logic [(`M_WIDTH-1):0] r_btb_pc;
+
+
+   wire [(`M_WIDTH-1):0]  w_cache_pc4 = r_cache_pc + 'd4;
+   wire [(`M_WIDTH-1):0]  w_cache_pc8 = r_cache_pc + 'd8;
+   wire [(`M_WIDTH-1):0]  w_cache_pc12 = r_cache_pc + 'd12;
+   wire [(`M_WIDTH-1):0]  w_cache_pc16 = r_cache_pc + 'd16;
+   wire [(`M_WIDTH-1):0]  w_cache_pc20 = r_cache_pc + 'd20;         
    
    
    state_t n_state, r_state;
@@ -279,13 +320,17 @@ endfunction
    logic 		  r_flush_req, n_flush_req;
    logic 		  r_flush_complete, n_flush_complete;
    logic 		  t_take_br, t_is_cflow;
+   logic		  t_take_br0, t_take_br1, t_take_br2, t_take_br3;
+   
    logic 		  t_update_spec_hist;
    
    logic [31:0] 	  t_insn_data, t_insn_data2, t_insn_data3, t_insn_data4;
    logic [`M_WIDTH-1:0]   t_jal_simm, t_br_simm;
    logic 		  t_is_call, t_is_ret;
    logic [4:0]		  t_spec_branch_marker;
+   logic [3:0]		  t_branch_marker;
    logic [2:0] 		  t_first_branch;
+   logic [2:0]		  t_taken_branch_idx;
 
    logic [63:0]		  r_branch_pc;   
    logic 		  t_init_pht, t_init_rsb;
@@ -516,7 +561,7 @@ endfunction
 		    t_insn_idx == 2'd1 ? r_pht_out_vec[3:2] :
 		    t_insn_idx == 2'd2 ? r_pht_out_vec[5:4] :
 		    r_pht_out_vec[7:6];
-
+	
 	t_tcb0 = (((t_pd0 == 3'd1) & (r_pht_out_vec[1]==1'b0)) | (t_pd0 == 3'd0))==1'b0;
 	t_tcb1 = (((t_pd1 == 3'd1) & (r_pht_out_vec[3]==1'b0)) | (t_pd1 == 3'd0))==1'b0;
 	t_tcb2 = (((t_pd2 == 3'd1) & (r_pht_out_vec[5]==1'b0)) | (t_pd2 == 3'd0))==1'b0;
@@ -530,6 +575,26 @@ endfunction
 				 } >> t_insn_idx);
 	
 
+	t_branch_marker = ({t_tcb3,
+			    t_tcb2,
+			    t_tcb1,
+			    t_tcb0
+			    } >> t_insn_idx);
+	
+
+	t_taken_branch_idx = 'd7;
+	casez(t_branch_marker)
+	  4'b???1:
+	    t_taken_branch_idx = 'd0;
+	  4'b??10:
+	    t_taken_branch_idx = 'd1;
+	  4'b?100:
+	    t_taken_branch_idx = 'd2;
+	  4'b1000:
+	    t_taken_branch_idx = 'd3;
+	  default:
+	    t_taken_branch_idx = 'd7;
+	endcase	
 	
 	t_first_branch = 'd0;
 	casez(t_spec_branch_marker)
@@ -547,7 +612,14 @@ endfunction
 	    t_first_branch = 'd7;
 	endcase
 
-	t_first_pd = select_pd(w_jump, t_first_branch[1:0]);
+	t_branch_idx = t_taken_branch_idx[1:0] + t_insn_idx;
+	t_pht_out = t_branch_idx=='d0 ? r_pht_out_vec[1:0] :
+		    t_branch_idx=='d1 ? r_pht_out_vec[3:2] :
+		    t_branch_idx=='d2 ? r_pht_out_vec[5:4] :
+		    r_pht_out_vec[7:6];
+	
+	t_first_pd = select_pd(w_jump, t_branch_idx);
+	
 		
 	t_jal_simm = {{(11+PP){t_insn_data[31]}}, t_insn_data[31], t_insn_data[19:12], t_insn_data[20], t_insn_data[30:21], 1'b0};
 	
@@ -561,6 +633,10 @@ endfunction
 	t_unaligned_fetch = 1'b0;
 	
 	t_take_br = 1'b0;
+	t_take_br0 = 1'b0;
+	t_take_br1 = 1'b0;
+	t_take_br2 = 1'b0;
+	t_take_br3 = 1'b0;	
 	t_is_cflow = 1'b0;
 	t_update_spec_hist = 1'b0;
 	t_is_call = 1'b0;
@@ -667,66 +743,165 @@ endfunction
 		 end
 	       else if(t_hit && !fq_full)
 		 begin
-		    // if( (|t_spec_branch_marker[3:0]) & (t_insn_idx == 'd0))
-		    // begin
-		    //    $display("t_spec_branch_marker = %b, first_branch = %d", 
-		    // 		t_spec_branch_marker, t_first_branch);
-		    //    $display("r_cache_pc = %x", r_cache_pc);
-		    //    $display("t_first_pd = %d", t_first_pd);
-		    // end
 
-		    t_update_spec_hist = (t_pd != 3'd0);
-		    
-		    if(t_pd == 3'd5 || t_pd == 3'd3) /* jal and j */
+		    if((t_taken_branch_idx == 'd3) & !fq_full4 & 1'b0)
 		      begin
-			 t_is_cflow = 1'b1;
-			 t_take_br = 1'b1;
-			 t_is_call = (t_pd == 3'd5);
-			 n_pc = r_cache_pc + t_jal_simm;
+			 t_update_spec_hist = 1'b1;
+			 t_push_insn4 = 1'b1;
+			 if(t_first_pd == 3'd5 || t_first_pd == 3'd3) /* jal and j */
+			   begin
+			      t_is_cflow = 1'b1;
+			      t_take_br = 1;
+			      t_is_call = (t_first_pd == 3'd5);
+			      n_pc = w_cache_pc12 + select_jal_simm(w_array, t_branch_idx); 
+			   end
+			 else if(t_first_pd == 3'd1)
+			   begin
+			      t_is_cflow = 1'b1;
+			      t_take_br = 1;
+			      n_pc = w_cache_pc12 + select_br_simm(w_array, t_branch_idx); 			      
+			   end
+			 else if(t_first_pd == 3'd2) /* return */
+			   begin
+			      t_is_cflow = 1'b1;
+			      t_is_ret = 1'b1;
+			      t_take_br = 1'b1;
+			      n_pc = r_spec_return_stack[t_next_spec_rs_tos];
+			   end // if (t_first_pd == 4'd7)
+			 else if(t_first_pd == 3'd4 || t_first_pd == 3'd6)
+			   begin
+			      t_is_cflow = 1'b1;			 
+			      t_take_br = 1'b1;
+			      t_is_call = (t_first_pd == 3'd6);
+			      n_pc = r_btb_pc;
+			   end			 
 		      end
-		    else if(t_pd == 3'd1 && r_pht_out[1])
+		    else if((t_taken_branch_idx == 'd2) & !fq_full3)
 		      begin
-			 t_is_cflow = 1'b1;			 
-			 t_take_br = 1'b1;
-			 n_pc = (r_cache_pc + t_br_simm);
+			 t_update_spec_hist = 1'b1;
+			 t_push_insn3 = 1'b1;
+			 if(t_first_pd == 3'd5 || t_first_pd == 3'd3) /* jal and j */
+			   begin
+			      t_is_cflow = 1'b1;
+			      t_take_br = 1;
+			      t_is_call = (t_first_pd == 3'd5);
+			      n_pc = w_cache_pc8 + select_jal_simm(w_array, t_branch_idx); 
+			   end
+			 else if(t_first_pd == 3'd1)
+			   begin
+			      t_is_cflow = 1'b1;
+			      t_take_br = 1;
+			      n_pc = w_cache_pc8 + select_br_simm(w_array, t_branch_idx); 			      
+			   end
+			 else if(t_first_pd == 3'd2) /* return */
+			   begin
+			      t_is_cflow = 1'b1;
+			      t_is_ret = 1'b1;
+			      t_take_br = 1'b1;
+			      n_pc = r_spec_return_stack[t_next_spec_rs_tos];
+			   end // if (t_first_pd == 4'd7)
+			 else if(t_first_pd == 3'd4 || t_first_pd == 3'd6)
+			   begin
+			      t_is_cflow = 1'b1;			 
+			      t_take_br = 1'b1;
+			      t_is_call = (t_first_pd == 3'd6);
+			      n_pc = r_btb_pc;
+			   end			 
 		      end
-		    else if(t_pd == 3'd2) /* return */
+		    else if((t_taken_branch_idx == 'd1) & !fq_full2)
 		      begin
-			 t_is_cflow = 1'b1;
-			 t_is_ret = 1'b1;
-			 t_take_br = 1'b1;
-			 n_pc = r_spec_return_stack[t_next_spec_rs_tos];
-		      end // if (t_pd == 4'd7)
-		    else if(t_pd == 3'd4 || t_pd == 3'd6)
+			 //$display("t_branch_marker = %b, first_branch = %d", 
+			 //t_branch_marker, t_first_branch);
+			 //$display("r_cache_pc = %x", r_cache_pc);
+			 //$display("branch = %x", r_cache_pc + 'd4);
+			 //$display("t_first_pd = %d", t_first_pd);
+			 //$display("t_pht_out = %d", t_pht_out);
+
+			 t_update_spec_hist = 1'b1;
+			 t_push_insn2 = 1'b1;
+			 if(t_first_pd == 3'd5 || t_first_pd == 3'd3) /* jal and j */
+			   begin
+			      t_is_cflow = 1'b1;
+			      t_take_br = 1;
+			      t_is_call = (t_first_pd == 3'd5);
+			      n_pc = w_cache_pc4 + select_jal_simm(w_array, t_branch_idx); 
+			   end
+			 else if(t_first_pd == 3'd1)
+			   begin
+			      t_is_cflow = 1'b1;
+			      t_take_br = 1;
+			      n_pc = w_cache_pc4 + select_br_simm(w_array, t_branch_idx); 			      
+			   end
+			 else if(t_first_pd == 3'd2) /* return */
+			   begin
+			      t_is_cflow = 1'b1;
+			      t_is_ret = 1'b1;
+			      t_take_br = 1'b1;
+			      n_pc = r_spec_return_stack[t_next_spec_rs_tos];
+			   end // if (t_first_pd == 4'd7)
+			 else if(t_first_pd == 3'd4 || t_first_pd == 3'd6)
+			   begin
+			      t_is_cflow = 1'b1;			 
+			      t_take_br = 1'b1;
+			      t_is_call = (t_first_pd == 3'd6);
+			      n_pc = r_btb_pc;
+			   end
+		      end // if ((t_taken_branch_idx == 'd1) & !fq_full2)
+		    else
 		      begin
-			 t_is_cflow = 1'b1;			 
-			 t_take_br = 1'b1;
-			 t_is_call = (t_pd == 3'd6);
-			 n_pc = r_btb_pc;
-		      end
-		    
+			 t_update_spec_hist = (t_pd != 3'd0);
+			 
+			 if(t_pd == 3'd5 || t_pd == 3'd3) /* jal and j */
+			   begin
+			      t_is_cflow = 1'b1;
+			      t_take_br = 1;
+			      t_is_call = (t_pd == 3'd5);
+			      n_pc = r_cache_pc + t_jal_simm;
+			      t_push_insn = 1'b1;
+			   end
+			 else if(t_pd == 3'd1 && r_pht_out[1])
+			   begin
+			      t_is_cflow = 1'b1;
+			      t_take_br = 1;			 
+			      n_pc = (r_cache_pc + t_br_simm);
+			      t_push_insn = 1'b1;
+			   end
+			 else if(t_pd == 3'd2) /* return */
+			   begin
+			      t_is_cflow = 1'b1;
+			      t_is_ret = 1'b1;
+			      t_take_br = 1'b1;
+			      n_pc = r_spec_return_stack[t_next_spec_rs_tos];
+			      t_push_insn = 1'b1;
+			   end // if (t_pd == 4'd7)
+			 else if(t_pd == 3'd4 || t_pd == 3'd6)
+			   begin
+			      t_is_cflow = 1'b1;			 
+			      t_take_br = 1'b1;
+			      t_is_call = (t_pd == 3'd6);
+			      n_pc = r_btb_pc;
+			      t_push_insn = 1'b1;			      
+			   end
+		      end // else: !if((t_taken_branch_idx == 'd1) & !fq_full2)
+
 		    n_resteer_bubble = t_is_cflow;
 		    
 		    //initial push multiple logic
-		    if(t_is_cflow)
-		      begin
-			 t_push_insn = 1'b1;
-		      end
-		    else
+		    if(t_is_cflow==1'b0)
 		      begin
 			 if(t_first_branch == 'd4 && !fq_full4)
 			   begin
 			      t_push_insn4 = 1'b1;
 			      t_cache_idx = r_cache_idx + 'd1;
-			      n_cache_pc = r_cache_pc + 'd16;
+			      n_cache_pc = w_cache_pc16;
 			      t_cache_tag = n_cache_pc[(`PA_WIDTH-1):IDX_STOP];
-			      n_pc = r_cache_pc + 'd20;
+			      n_pc = w_cache_pc20;
 			   end
 			 else if(t_first_branch == 'd3 && !fq_full3)
 			   begin
 			      t_push_insn3 = 1'b1;
-			      n_cache_pc = r_cache_pc + 'd12;
-			      n_pc = r_cache_pc + 'd16;
+			      n_cache_pc = w_cache_pc12;
+			      n_pc = w_cache_pc16;
 			      t_cache_tag = n_cache_pc[(`PA_WIDTH-1):IDX_STOP];
 			      if(t_insn_idx != 0)
 				begin
@@ -736,13 +911,10 @@ endfunction
 			   end
 			 else if(t_first_branch == 'd2 && !fq_full2)
 			   begin
-			      //$display("t_branch_locs = %b", t_branch_locs);
 			      t_push_insn2 = 1'b1;
-			      n_pc = r_cache_pc + 'd8;
-			      //guaranteed to end-up on another cacheline
-			      n_cache_pc = r_cache_pc + 'd8;
+			      n_cache_pc = w_cache_pc8;
 			      t_cache_tag = n_cache_pc[(`PA_WIDTH-1):IDX_STOP];
-			      n_pc = r_cache_pc + 'd12;
+			      n_pc = w_cache_pc12;
 			      if(t_insn_idx == 2)
 				begin
 				   t_cache_idx = r_cache_idx + 'd1;
@@ -911,34 +1083,34 @@ endfunction
 	t_insn.page_fault = r_page_fault;
 	t_insn.pc = r_cache_pc;
 	t_insn.pred_target = n_pc;
-	t_insn.pred = t_take_br;
+	t_insn.pred = t_taken_branch_idx=='d0;
 	t_insn.pht_idx = r_pht_idx;
 `ifdef	ENABLE_CYCLE_ACCOUNTING
 	t_insn.fetch_cycle = r_cycle;
 `endif
 	t_insn2.insn_bytes = t_insn_data2;
 	t_insn2.page_fault = 1'b0;
-	t_insn2.pc = r_cache_pc + 'd4;
+	t_insn2.pc = w_cache_pc4;
 	t_insn2.pred_target = n_pc;
-	t_insn2.pred = t_take_br;
+	t_insn2.pred = t_taken_branch_idx=='d1;
 	t_insn2.pht_idx = r_pht_idx;
 `ifdef	ENABLE_CYCLE_ACCOUNTING
 	t_insn2.fetch_cycle = r_cycle;
 `endif
 	t_insn3.insn_bytes = t_insn_data3;
 	t_insn3.page_fault = 1'b0;	
-	t_insn3.pc = r_cache_pc + 'd8;
+	t_insn3.pc = w_cache_pc8;
 	t_insn3.pred_target = n_pc;
-	t_insn3.pred = t_take_br;
+	t_insn3.pred = t_taken_branch_idx=='d2;
 	t_insn3.pht_idx = r_pht_idx;
 `ifdef	ENABLE_CYCLE_ACCOUNTING
 	t_insn3.fetch_cycle = r_cycle;
 `endif
 	t_insn4.insn_bytes = t_insn_data4;
 	t_insn4.page_fault = 1'b0;	
-	t_insn4.pc = r_cache_pc + 'd12;
+	t_insn4.pc = w_cache_pc12;
 	t_insn4.pred_target = n_pc;
-	t_insn4.pred = t_take_br;
+	t_insn4.pred = t_taken_branch_idx=='d3;
 	t_insn4.pht_idx = r_pht_idx;
 `ifdef	ENABLE_CYCLE_ACCOUNTING
 	t_insn4.fetch_cycle = r_cycle;
