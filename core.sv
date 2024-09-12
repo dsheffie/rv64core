@@ -1013,7 +1013,9 @@ module core(clk,
 			      n_state = DRAIN;
 			      n_restart_cycles = 'd1;
 			      n_restart_valid = 1'b1;
-			      t_bump_rob_head = 1'b1;			      
+			      t_bump_rob_head = 1'b1;
+			      //			      $display("mispredicted %x, direction %b, new target %x", 
+			      //t_rob_head.pc, t_rob_head.take_br, t_rob_head.target_pc);
 			   end // else: !if(t_rob_head.is_ii)
 			 n_ds_done = 1'b1;
 			 n_machine_clr = 1'b1;
@@ -1059,7 +1061,6 @@ module core(clk,
 					    && !t_rob_next_full
 					    && !t_uq_next_full
 					    && t_enough_next_iprfs;
-
 			      //&& (t_uop2.op == NOP || t_uop2.op == J);
 			   end // else: !if(t_uop.serializing_op && !t_dq_empty)
 		      end // if (!t_dq_empty)
@@ -1098,20 +1099,17 @@ module core(clk,
 					       && !t_dq_empty;
 			 
 			 t_alloc = !t_rob_full
-				   && !t_uop.serializing_op
 				   && !t_uq_full
 				   && !t_dq_empty
 				   && t_enough_iprfs;
 			 
 			 
 			 t_alloc_two = t_alloc
-				       && !t_uop.is_br
 				       && !t_uop2.serializing_op
 				       && !t_dq_next_empty 
 				       && !t_rob_next_full
 				       && !t_uq_next_full
 				       && t_enough_next_iprfs;
-
 		      end
 		 end
 	    end // case: ACTIVE
@@ -1542,6 +1540,19 @@ module core(clk,
 	  end
      end
 `endif
+
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if(t_alloc & !t_alloc_two & !t_dq_next_empty & (r_state == ACTIVE))
+   // 	  begin
+   // 	     $display("cant alloc %x because rob full %b uq full %b out of prf %b serializing %b at cycle %d",
+   // 		      t_uop2.pc, t_rob_next_full, t_uq_next_full, !t_enough_next_iprfs,
+   // 		      t_uop2.serializing_op, r_cycle
+   // 		      );
+   // 	     if(!(t_rob_next_full|t_uq_next_full| (!t_enough_next_iprfs) | t_uop2.serializing_op))
+   // 	       $stop();
+   // 	  end
+   //   end
    
    
    always_comb
