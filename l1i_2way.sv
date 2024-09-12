@@ -327,6 +327,8 @@ endfunction
    logic [31:0] 	  t_insn_data, t_insn_data2, t_insn_data3, t_insn_data4;
    logic [`M_WIDTH-1:0]   t_jal_simm, t_br_simm;
    logic 		  t_is_call, t_is_ret;
+   logic [`M_WIDTH-1:0]	  t_ret_pc;
+   
    logic [4:0]		  t_spec_branch_marker;
    logic [3:0]		  t_branch_marker;
    logic [2:0] 		  t_first_branch;
@@ -640,6 +642,7 @@ endfunction
 	t_is_cflow = 1'b0;
 	t_update_spec_hist = 1'b0;
 	t_is_call = 1'b0;
+	t_ret_pc = w_cache_pc4;
 	t_is_ret = 1'b0;
 	t_init_pht = 1'b0;
 	t_init_rsb = 1'b0;
@@ -743,11 +746,11 @@ endfunction
 		 end
 	       else if(t_hit && !fq_full)
 		 begin
-
-		    if((t_taken_branch_idx == 'd3) & !fq_full4 & 1'b0)
+		    if((t_taken_branch_idx == 'd3) & !fq_full4)
 		      begin
 			 t_update_spec_hist = 1'b1;
 			 t_push_insn4 = 1'b1;
+			 t_ret_pc = w_cache_pc16;			 
 			 if(t_first_pd == 3'd5 || t_first_pd == 3'd3) /* jal and j */
 			   begin
 			      t_is_cflow = 1'b1;
@@ -776,10 +779,11 @@ endfunction
 			      n_pc = r_btb_pc;
 			   end			 
 		      end
-		    else if((t_taken_branch_idx == 'd2) & !fq_full3)
+		    else if((t_taken_branch_idx == 'd2) & !fq_full3 )
 		      begin
 			 t_update_spec_hist = 1'b1;
 			 t_push_insn3 = 1'b1;
+			 t_ret_pc = w_cache_pc12;
 			 if(t_first_pd == 3'd5 || t_first_pd == 3'd3) /* jal and j */
 			   begin
 			      t_is_cflow = 1'b1;
@@ -808,7 +812,7 @@ endfunction
 			      n_pc = r_btb_pc;
 			   end			 
 		      end
-		    else if((t_taken_branch_idx == 'd1) & !fq_full2)
+		    else if((t_taken_branch_idx == 'd1) & !fq_full2 )
 		      begin
 			 //$display("t_branch_marker = %b, first_branch = %d", 
 			 //t_branch_marker, t_first_branch);
@@ -819,12 +823,13 @@ endfunction
 
 			 t_update_spec_hist = 1'b1;
 			 t_push_insn2 = 1'b1;
+			 t_ret_pc = w_cache_pc8;			 
 			 if(t_first_pd == 3'd5 || t_first_pd == 3'd3) /* jal and j */
 			   begin
 			      t_is_cflow = 1'b1;
 			      t_take_br = 1;
 			      t_is_call = (t_first_pd == 3'd5);
-			      n_pc = w_cache_pc4 + select_jal_simm(w_array, t_branch_idx); 
+			      n_pc = w_cache_pc4 + select_jal_simm(w_array, t_branch_idx);
 			   end
 			 else if(t_first_pd == 3'd1)
 			   begin
@@ -1445,7 +1450,7 @@ endfunction
 	  end
 	else if(t_is_call)
 	  begin
-	     r_spec_return_stack[r_spec_rs_tos] <= r_cache_pc + 'd4;
+	     r_spec_return_stack[r_spec_rs_tos] <= t_ret_pc;
 	  end
 	else if(n_restart_ack)
 	  begin
