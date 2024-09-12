@@ -253,6 +253,13 @@ endfunction
    logic [(`M_WIDTH-1):0] r_pc, n_pc, r_miss_pc, n_miss_pc;
    logic [(`M_WIDTH-1):0] r_cache_pc, n_cache_pc;
    logic [(`M_WIDTH-1):0] r_btb_pc;
+
+
+   wire [(`M_WIDTH-1):0]  w_cache_pc4 = r_cache_pc + 'd4;
+   wire [(`M_WIDTH-1):0]  w_cache_pc8 = r_cache_pc + 'd8;
+   wire [(`M_WIDTH-1):0]  w_cache_pc12 = r_cache_pc + 'd12;
+   wire [(`M_WIDTH-1):0]  w_cache_pc16 = r_cache_pc + 'd16;
+   wire [(`M_WIDTH-1):0]  w_cache_pc20 = r_cache_pc + 'd20;         
    
    
    state_t n_state, r_state;
@@ -718,15 +725,15 @@ endfunction
 			   begin
 			      t_push_insn4 = 1'b1;
 			      t_cache_idx = r_cache_idx + 'd1;
-			      n_cache_pc = r_cache_pc + 'd16;
+			      n_cache_pc = w_cache_pc16;
 			      t_cache_tag = n_cache_pc[(`PA_WIDTH-1):IDX_STOP];
-			      n_pc = r_cache_pc + 'd20;
+			      n_pc = w_cache_pc20;
 			   end
 			 else if(t_first_branch == 'd3 && !fq_full3)
 			   begin
 			      t_push_insn3 = 1'b1;
-			      n_cache_pc = r_cache_pc + 'd12;
-			      n_pc = r_cache_pc + 'd16;
+			      n_cache_pc = w_cache_pc12;
+			      n_pc = w_cache_pc16;
 			      t_cache_tag = n_cache_pc[(`PA_WIDTH-1):IDX_STOP];
 			      if(t_insn_idx != 0)
 				begin
@@ -736,13 +743,10 @@ endfunction
 			   end
 			 else if(t_first_branch == 'd2 && !fq_full2)
 			   begin
-			      //$display("t_branch_locs = %b", t_branch_locs);
 			      t_push_insn2 = 1'b1;
-			      n_pc = r_cache_pc + 'd8;
-			      //guaranteed to end-up on another cacheline
-			      n_cache_pc = r_cache_pc + 'd8;
+			      n_cache_pc = w_cache_pc8;
 			      t_cache_tag = n_cache_pc[(`PA_WIDTH-1):IDX_STOP];
-			      n_pc = r_cache_pc + 'd12;
+			      n_pc = w_cache_pc12;
 			      if(t_insn_idx == 2)
 				begin
 				   t_cache_idx = r_cache_idx + 'd1;
@@ -918,7 +922,7 @@ endfunction
 `endif
 	t_insn2.insn_bytes = t_insn_data2;
 	t_insn2.page_fault = 1'b0;
-	t_insn2.pc = r_cache_pc + 'd4;
+	t_insn2.pc = w_cache_pc4;
 	t_insn2.pred_target = n_pc;
 	t_insn2.pred = t_take_br;
 	t_insn2.pht_idx = r_pht_idx;
@@ -927,7 +931,7 @@ endfunction
 `endif
 	t_insn3.insn_bytes = t_insn_data3;
 	t_insn3.page_fault = 1'b0;	
-	t_insn3.pc = r_cache_pc + 'd8;
+	t_insn3.pc = w_cache_pc8;
 	t_insn3.pred_target = n_pc;
 	t_insn3.pred = t_take_br;
 	t_insn3.pht_idx = r_pht_idx;
@@ -936,7 +940,7 @@ endfunction
 `endif
 	t_insn4.insn_bytes = t_insn_data4;
 	t_insn4.page_fault = 1'b0;	
-	t_insn4.pc = r_cache_pc + 'd12;
+	t_insn4.pc = w_cache_pc12;
 	t_insn4.pred_target = n_pc;
 	t_insn4.pred = t_take_br;
 	t_insn4.pht_idx = r_pht_idx;
