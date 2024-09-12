@@ -17,7 +17,7 @@ typedef enum logic [3:0] {
 
 module predecode(insn, pd);
    input logic [31:0] insn;
-   output logic [3:0] pd;
+   output logic [2:0] pd;
    logic [6:0] 	      opcode;
    
    logic [4:0] 	      rd, rs1;
@@ -25,7 +25,7 @@ module predecode(insn, pd);
    
    always_comb
      begin
-	pd = 4'd0;
+	pd = 'd0;
 	opcode = insn[6:0];
 	rd = insn[11:7];
 	rs1 = insn[19:15];
