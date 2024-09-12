@@ -1042,7 +1042,8 @@ module exec(clk,
 	     end
 	end // for (genvar i = 0; i < N_INT_SCHED_ENTRIES; i=i+1)
    endgenerate
-   
+
+`ifdef VERILATOR   
    always_ff@(negedge clk)
      begin
 	if(|w_alu_sched_oldest_ready2)
@@ -1061,7 +1062,8 @@ module exec(clk,
 	  begin
 	     record_sched_alloc(32'd1);
 	  end
-     end
+     end // always_ff@ (negedge clk)
+`endif
    
    // always_ff@(negedge clk)
    //   begin
