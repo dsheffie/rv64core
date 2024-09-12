@@ -1501,7 +1501,10 @@ int main(int argc, char **argv) {
       total_fetch_cycles += n_fetch[i];
       total_fetch += n_fetch[i] * i;
     }
-    out << "avg fetch = " << static_cast<double>(total_fetch) / total_fetch_cycles << "\n";
+    double avg_fetch = static_cast<double>(total_fetch) / total_fetch_cycles;
+    out << "avg fetch = " << avg_fetch << "\n";
+    std::cout << "avg fetch = " << avg_fetch << "\n";
+
     out << "resteer bubble = " << n_resteer_bubble << "\n";
     out << "front-end queues full = " << n_fq_full << "\n";
     out << "fetch_slots = " << fetch_slots << "\n";
