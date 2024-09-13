@@ -717,7 +717,9 @@ module nu_l1d(clk,
    wire w_one_free_credit = (r_mrq_credits != 'd0);
    wire	w_two_free_credits = (r_mrq_credits > 'd1);
    wire	w_three_free_credits = (r_mrq_credits > 'd2);
-   
+
+   wire	w_queues_drained = (&r_mrq_credits) & w_eb_empty;
+      
    wire	w_could_early_req_any = t_push_miss & w_three_free_credits & !t_port2_hit_cache &
 	(r_last_early_valid ? (r_last_early != r_req2.addr[IDX_STOP-1:IDX_START]) : 1'b1) &
 	!(r_hit_busy_line2 | r_fwd_busy_addr2 | w_hit_pop ) &
@@ -1430,7 +1432,6 @@ module nu_l1d(clk,
 		    r_req.addr, 
 		    r_req.op == MEM_AMOD ? t_amo64_data : (r_req.op == MEM_AMOW ? {{32{t_amo32_data[31]}},t_amo32_data} : r_req.data), 
 		    r_req.is_atomic ? 32'd1 : 32'd0);
-	     //$stop();
 `ifdef VERBOSE_L1D			    
 	     if(r_req.is_atomic)
 	        $display("firing atomic for pc %x addr %x with data %x t_shift %x, at cycle %d for rob ptr %d, r_cache_idx %d", 
@@ -2081,8 +2082,8 @@ module nu_l1d(clk,
 		  t_cache_idx = 'd0;
 		  n_flush_req = 1'b0;
 	       end
-	     else if(r_flush_cl_req && mem_q_empty && !(r_got_req && r_last_wr)
-		     && !(n_page_walk_req_valid | t_got_miss | r_wr_array | t_wr_array))
+	     else if(r_flush_cl_req & mem_q_empty & w_queues_drained & !(r_got_req && r_last_wr)
+		     & !(n_page_walk_req_valid | t_got_miss | r_wr_array | t_wr_array))
 	       begin
 		  if(!mem_q_empty) $stop();
 		  if(r_got_req && r_last_wr) $stop();
@@ -2148,7 +2149,7 @@ module nu_l1d(clk,
 	      end // else: !if(r_dirty_out)
 	  FLUSH_CL_WAIT:
 	    begin
-	       	if(mem_rsp_valid)
+	       	if(w_queues_drained)
 		  begin
 		     n_state = n_flush_was_active ? ACTIVE : TLB_RELOAD;
 		     n_flush_was_active = 1'b0;
@@ -2215,7 +2216,7 @@ module nu_l1d(clk,
 		    t_reload_tlb = page_walk_rsp.fault==1'b0;
 		    n_state = TLB_TURNAROUND;
 		 end // if (page_walk_rsp_valid)
-	       else if(n_flush_cl_req)
+	       else if(n_flush_cl_req & w_queues_drained)
 		 begin
 		    n_state = FLUSH_CL;
 		    n_flush_cl_req = 1'b0;
