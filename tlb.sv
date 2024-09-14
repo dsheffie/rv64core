@@ -96,24 +96,28 @@ module tlb(clk,
    ffs(.in(w_hits),
        .y(w_idx));
 
-
-   always_ff@(posedge clk)
+   always_comb
      begin
-	if(reset)
-	  begin
-	     tlb_hits <= 'd0;
-	     tlb_accesses <= 'd0;
-	  end
-	else
-	  begin
-	     tlb_hits <= (active & req & |w_hits) ? 
-			 tlb_hits + 'd1 : 
-			 tlb_hits;
-	     tlb_accesses <= (active & req) ?
-			     tlb_accesses + 'd1 : 
-			     tlb_accesses;
-	  end
+	tlb_hits = 'd0;
+	tlb_accesses = 'd0;
      end
+   // always_ff@(posedge clk)
+   //   begin
+   // 	if(reset)
+   // 	  begin
+   // 	     tlb_hits <= 'd0;
+   // 	     tlb_accesses <= 'd0;
+   // 	  end
+   // 	else
+   // 	  begin
+   // 	     tlb_hits <= (active & req & |w_hits) ? 
+   // 			 tlb_hits + 'd1 : 
+   // 			 tlb_hits;
+   // 	     tlb_accesses <= (active & req) ?
+   // 			     tlb_accesses + 'd1 : 
+   // 			     tlb_accesses;
+   // 	  end
+   //   end
    
    always_ff@(posedge clk)
      begin
