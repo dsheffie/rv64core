@@ -254,6 +254,20 @@ module decode_riscv(
 		   end
 	       endcase
 	    end // case: 7'h3
+	  7'hb: /* hacky hacks */
+	    begin
+	       uop.dst = rd;
+	       uop.srcA = rs1;
+	       uop.srcB = rs2;
+	       uop.dst_valid = (rd != 'd0);
+	       uop.srcA_valid = 1'b1;
+	       uop.srcB_valid = 1'b1;
+	       uop.is_mem = 1'b1;
+	       if(insn[31:25] == 'd2)
+		 begin
+		    uop.op = LWX;
+		 end
+	    end
 	  7'hf:
 	    begin
 	       uop.op = NOP;

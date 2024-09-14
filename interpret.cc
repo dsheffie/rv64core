@@ -664,6 +664,32 @@ void execRiscv(state_t *s) {
 	break;
       }
     }
+    case 0xb: {
+      /* davids hacks */
+      if(m.r.rd) {
+	switch(m.r.special) {
+	case 0x2: {/* lwx */
+	  int64_t ea = s->gpr[m.r.rs1] + s->gpr[m.r.rs2];
+	  int page_fault = 0;
+	  int64_t pa = s->translate(ea, page_fault, 4);
+	  if(page_fault) {
+	    except_cause = CAUSE_LOAD_PAGE_FAULT;
+	    tval = ea;
+	    //std::cout << "ea = " << std::hex << ea << std::dec << " causes ld pf\n";
+	    //std::cout << "pa = " << std::hex << pa << std::dec << "\n";
+	    //std::cout << "pc = " << std::hex << s->pc << std::dec << "\n";
+	    goto handle_exception;
+	  }
+	  s->sext_xlen( s->load32(pa), m.r.rd);	  
+	  break;
+	}
+	default:
+	  assert(false);
+	}
+      }
+      s->pc += 4;      
+      break;
+    }
     case 0xf:/* fence - there's a bunch of 'em */
       s->pc += 4;
       break;

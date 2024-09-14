@@ -146,6 +146,8 @@ typedef enum logic [6:0]
    SRLW,
    CZEQZ,
    CZNEZ,
+   LDX,
+   LWX,
    FETCH_PF,
    IRQ,
    II //illegal instruction

@@ -3249,6 +3249,15 @@ module exec(clk,
 	       t_mem_tail.spans_cacheline = w_bad_32b_addr;
 	       t_mem_tail.unaligned = |w_agu_addr[1:0];
 	    end // case: LW
+	  LWX:
+	    begin
+	       t_mem_tail.is_load = 1'b1;
+	       t_mem_tail.op = w_bad_32b_addr ? MEM_NOP : MEM_LW;
+	       t_mem_tail.dst_valid = mem_uq.dst_valid;
+	       t_mem_tail.spans_cacheline = w_bad_32b_addr;
+	       t_mem_tail.unaligned = |w_agu_addr[1:0];
+	       $stop();
+	    end
 	  LWU:
 	    begin
 	       t_mem_tail.is_load = 1'b1;
