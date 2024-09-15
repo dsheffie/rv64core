@@ -3311,6 +3311,14 @@ module exec(clk,
 	       t_mem_tail.spans_cacheline = w_bad_64b_addr;
 	       t_mem_tail.unaligned = |w_agu_addr[2:0];
 	    end // case: LW
+	  LDX:
+	    begin
+	       t_mem_tail.is_load = 1'b1;
+	       t_mem_tail.op = w_bad_64b_addr ? MEM_NOP : MEM_LD;
+	       t_mem_tail.dst_valid = mem_uq.dst_valid;
+	       t_mem_tail.spans_cacheline = w_bad_64b_addr;
+	       t_mem_tail.unaligned = |w_agu_addr[2:0];
+	    end // case: LW	  
 	  LB:
 	    begin
 	       t_mem_tail.is_load = 1'b1;	       

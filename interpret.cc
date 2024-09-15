@@ -675,9 +675,6 @@ void execRiscv(state_t *s) {
 	  if(page_fault) {
 	    except_cause = CAUSE_LOAD_PAGE_FAULT;
 	    tval = ea;
-	    //std::cout << "ea = " << std::hex << ea << std::dec << " causes ld pf\n";
-	    //std::cout << "pa = " << std::hex << pa << std::dec << "\n";
-	    //std::cout << "pc = " << std::hex << s->pc << std::dec << "\n";
 	    goto handle_exception;
 	  }
 	  s->sext_xlen( s->load32(pa), m.r.rd);	  

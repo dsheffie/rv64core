@@ -269,6 +269,11 @@ module decode_riscv(
 		    uop.op = LWX;
 		    uop.is_indexed = 1'b1;
 		 end
+	       else if(insn[31:25] == 'd3)
+		 begin
+		    uop.op = LDX;
+		    uop.is_indexed = 1'b1;
+		 end
 	    end
 	  7'hf:
 	    begin
