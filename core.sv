@@ -1729,7 +1729,7 @@ module core(clk,
 		  //r_cycle, t_alloc_uop.pc, t_alloc_uop.dst, t_uop.fetch_cycle);
 		  // end
 		  r_rob_complete[r_rob_tail_ptr[`LG_ROB_ENTRIES-1:0]] <= t_fold_uop;
-		  r_rob_sd_complete[r_rob_tail_ptr[`LG_ROB_ENTRIES-1:0]] <= !(t_uop.is_mem & t_uop.srcB_valid);
+		  r_rob_sd_complete[r_rob_tail_ptr[`LG_ROB_ENTRIES-1:0]] <= !(t_uop.is_mem & t_uop.srcB_valid & !t_uop.is_indexed);
 	       end
 	     if(t_alloc_two)
 	       begin
@@ -1738,7 +1738,7 @@ module core(clk,
 		  //$display("alloc 2 : marking entry 5 in flight at cycle %d, fetch cycle %d", r_cycle, t_uop2.fetch_cycle);
 		  //end		  
 		  r_rob_complete[r_rob_next_tail_ptr[`LG_ROB_ENTRIES-1:0]] <= t_fold_uop2;
-		  r_rob_sd_complete[r_rob_next_tail_ptr[`LG_ROB_ENTRIES-1:0]] <= !(t_uop2.is_mem & t_uop2.srcB_valid);
+		  r_rob_sd_complete[r_rob_next_tail_ptr[`LG_ROB_ENTRIES-1:0]] <= !(t_uop2.is_mem & t_uop2.srcB_valid & !t_uop2.is_indexed);
 	       end
 	     if(t_complete_valid_1)
 	       begin

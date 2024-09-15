@@ -386,6 +386,8 @@ module exec(clk,
    /* mem data queue */
    dq_t r_mem_dq[N_MEM_DQ_ENTRIES];
    dq_t t_dq0, t_dq1, t_mem_dq, mem_dq;
+   logic [`LG_PRF_ENTRIES-1:0]	t_mem_srcB_ptr;
+   
    mem_data_t t_core_store_data;
    
    logic 	      t_mem_dq_read, t_mem_dq_empty, t_mem_dq_full,
@@ -490,6 +492,31 @@ module exec(clk,
 
    //   end
 
+   logic r_gnt_sq, t_gnt_sq;
+   always_ff@(posedge clk)
+     begin
+	r_gnt_sq <= reset ? 1'b0 : (~r_gnt_sq);
+     end
+   always_comb
+     begin
+	t_gnt_sq = t_mem_dq_empty ? 1'b0 :
+		   r_gnt_sq;
+     end
+
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if(t_push_two_dq & (uq_uop.is_store==1'b0 | uq_uop_two.is_store == 1'b0))
+   // 	  begin
+   // 	     $display("%d, %d", uq_uop.op, uq_uop_two.op);
+   // 	     $stop();
+   // 	  end
+   // 	if(t_push_one_dq & (uq_uop.is_store == 1'b0) & (uq_uop_two.is_store == 1'b0))
+   // 	  begin
+   // 	     $display("%d, %d", uq_uop.op, uq_uop_two.op);	     
+   // 	     $stop();
+   // 	  end
+   //   end
+   
    always_comb
      begin
 	n_mem_uq_head_ptr = r_mem_uq_head_ptr;
@@ -519,16 +546,17 @@ module exec(clk,
 	t_mem_uq = r_mem_uq[r_mem_uq_head_ptr[`LG_MEM_UQ_ENTRIES-1:0]];
 
 	t_mem_dq = r_mem_dq[r_mem_dq_head_ptr[`LG_MEM_DQ_ENTRIES-1:0]];
-
+	t_mem_srcB_ptr = t_gnt_sq ? t_mem_dq.src_ptr : t_mem_uq.srcB;
+	
 	t_push_two_mem = uq_push && uq_push_two && uq_uop.is_mem && uq_uop_two.is_mem;
 	t_push_one_mem = ((uq_push && uq_uop.is_mem) || (uq_push_two && uq_uop_two.is_mem)) && !t_push_two_mem;
 
-	t_push_two_dq = uq_push && uq_push_two && 
-			uq_uop.is_mem && uq_uop.srcB_valid && 
-			uq_uop_two.is_mem && uq_uop_two.srcB_valid;
+	t_push_two_dq = uq_push & uq_push_two & 
+			uq_uop.is_mem & uq_uop.srcB_valid & !uq_uop.is_indexed &
+			uq_uop_two.is_mem & uq_uop_two.srcB_valid & !uq_uop_two.is_indexed;
 	
-	t_push_one_dq = (uq_push_two && uq_uop_two.is_mem && uq_uop_two.srcB_valid) || 
-			(uq_push && uq_uop.is_mem && uq_uop.srcB_valid);
+	t_push_one_dq = (uq_push_two & uq_uop_two.is_mem & uq_uop_two.srcB_valid & !uq_uop_two.is_indexed) | 
+			(uq_push & uq_uop.is_mem & uq_uop.srcB_valid & !uq_uop.is_indexed);
 	
 	
 	if(t_push_two_dq)
@@ -3025,16 +3053,16 @@ module exec(clk,
 
    
    wire [`M_WIDTH-1:0] w_agu_addr;
-   mwidth_add agu (.A(t_mem_srcA), .B(mem_uq.rvimm), .Y(w_agu_addr));
-
+   mwidth_add agu (.A(t_mem_srcA), .B(mem_uq.is_indexed ? t_mem_srcB : mem_uq.rvimm), .Y(w_agu_addr));
+   
    wire w_mem_srcA_ready = t_mem_uq.srcA_valid ? (!r_prf_inflight[t_mem_uq.srcA] | t_fwd_int_mem_srcA | t_fwd_int2_mem_srcA | t_fwd_mem_mem_srcA) : 1'b1;
-
-
-   wire w_dq_ready = !r_prf_inflight[t_mem_dq.src_ptr] | t_fwd_int_mem_srcB | t_fwd_mem_mem_srcB | t_fwd_int2_mem_srcB;
+   wire	w_mem_srcB_ready = t_mem_uq.srcB_valid ? (!t_gnt_sq) & (!r_prf_inflight[t_mem_srcB_ptr] | t_fwd_int_mem_srcA | t_fwd_int2_mem_srcA | t_fwd_mem_mem_srcA) : 1'b1;
+   
+   wire w_dq_ready = t_gnt_sq & (!r_prf_inflight[t_mem_srcB_ptr] | t_fwd_int_mem_srcB | t_fwd_mem_mem_srcB | t_fwd_int2_mem_srcB);
    	
    always_comb
      begin
-	t_pop_mem_uq = (!t_mem_uq_empty) && (!(mem_q_next_full||mem_q_full)) && w_mem_srcA_ready && !t_flash_clear;
+	t_pop_mem_uq = (!t_mem_uq_empty) && (!(mem_q_next_full||mem_q_full)) && w_mem_srcA_ready && w_mem_srcB_ready && !t_flash_clear;
 
 	t_pop_mem_dq = (!t_mem_dq_empty) && !mem_dq_clr && w_dq_ready
 		       && (!(mem_mdq_next_full||mem_mdq_full)) ;
@@ -3061,7 +3089,7 @@ module exec(clk,
    // 	if(w_dq_ready & !t_pop_mem_dq)
    // 	  begin
    // 	     $display("dq rdy for src ptr %d dq_empty %b dq_clr %b next full %b full %b", 
-   // 		      t_mem_dq.src_ptr, t_mem_dq_empty, mem_dq_clr, mem_mdq_next_full, mem_mdq_full);
+   // 		      t_mem_srcB_ptr, t_mem_dq_empty, mem_dq_clr, mem_mdq_next_full, mem_mdq_full);
    // 	  end
 	
    // 	if(r_dq_ready)
@@ -3128,6 +3156,16 @@ module exec(clk,
 	r_restart_counter <= reset ? 'd0 : 
 			     (restart_complete ? r_restart_counter + 'd1 : r_restart_counter);
      end
+
+
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if(mem_uq.op == LWX & t_pop_mem_uq)
+   // 	  begin
+   // 	     $display("LWX address %x, a = %x, b = %x, pc %x",
+   // 		      w_agu_addr, t_mem_srcA, t_mem_srcB, mem_uq.pc);
+   // 	  end
+   //   end
    
    always_comb
      begin
@@ -3256,7 +3294,6 @@ module exec(clk,
 	       t_mem_tail.dst_valid = mem_uq.dst_valid;
 	       t_mem_tail.spans_cacheline = w_bad_32b_addr;
 	       t_mem_tail.unaligned = |w_agu_addr[1:0];
-	       $stop();
 	    end
 	  LWU:
 	    begin
@@ -3324,12 +3361,12 @@ module exec(clk,
    always_comb
      begin
 	t_fwd_int_mem_srcA = r_start_int && t_wr_int_prf &&(t_mem_uq.srcA == int_uop.dst);
-	t_fwd_int_mem_srcB = r_start_int && t_wr_int_prf &&(t_mem_dq.src_ptr == int_uop.dst);
+	t_fwd_int_mem_srcB = r_start_int && t_wr_int_prf &&(t_mem_srcB_ptr == int_uop.dst);
 	t_fwd_int2_mem_srcA = r_start_int2 && t_wr_int_prf2 &&(t_mem_uq.srcA == int_uop2.dst);
-	t_fwd_int2_mem_srcB = r_start_int2 && t_wr_int_prf2 &&(t_mem_dq.src_ptr == int_uop2.dst);
+	t_fwd_int2_mem_srcB = r_start_int2 && t_wr_int_prf2 &&(t_mem_srcB_ptr == int_uop2.dst);
 	
 	t_fwd_mem_mem_srcA = mem_rsp_dst_valid && (t_mem_uq.srcA == mem_rsp_dst_ptr);
-	t_fwd_mem_mem_srcB = mem_rsp_dst_valid && (t_mem_dq.src_ptr == mem_rsp_dst_ptr);
+	t_fwd_mem_mem_srcB = mem_rsp_dst_valid && (t_mem_srcB_ptr == mem_rsp_dst_ptr);
      end
    
    always_ff@(posedge clk)
@@ -3413,7 +3450,7 @@ module exec(clk,
 	   .rdptr0(t_picked_uop.srcA),
 	   .rdptr1(t_picked_uop.srcB),
 	   .rdptr2(t_mem_uq.srcA),
-	   .rdptr3(t_mem_dq.src_ptr),
+	   .rdptr3(t_mem_srcB_ptr),
 	   .rdptr4(t_picked_uop2.srcA),
 	   .rdptr5(t_picked_uop2.srcB),
 	   .wrptr0(t_mul_complete ? w_mul_prf_ptr :

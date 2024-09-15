@@ -206,6 +206,7 @@ module decode_riscv(
 	uop.is_mem = 1'b0;
 	uop.is_int = 1'b0;
 	uop.is_cheap_int = 1'b0;
+	uop.is_indexed = 1'b0;
 	uop.is_store = 1'b0;
 `ifdef ENABLE_CYCLE_ACCOUNTING
 	uop.fetch_cycle = fetch_cycle;
@@ -266,6 +267,7 @@ module decode_riscv(
 	       if(insn[31:25] == 'd2)
 		 begin
 		    uop.op = LWX;
+		    uop.is_indexed = 1'b1;
 		 end
 	    end
 	  7'hf:
