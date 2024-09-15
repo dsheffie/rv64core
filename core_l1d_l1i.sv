@@ -3,7 +3,7 @@
 `include "uop.vh"
 
 `ifdef VERILATOR
-import "DPI-C" function void log_mem_begin(input int r, input int l, input longint c);
+import "DPI-C" function void log_mem_begin(input int r, input int l, input longint c, input longint pc, input longint vaddr);
 import "DPI-C" function void log_mem_end(input int r, input longint c);
 `endif
 
@@ -548,7 +548,7 @@ module
      begin
 	if(core_mem_req_valid)
 	  begin
-	     log_mem_begin({27'd0,core_mem_req.rob_ptr}, {31'd0, core_mem_req.is_load}, r_cycle);
+	     log_mem_begin({27'd0,core_mem_req.rob_ptr}, {31'd0, core_mem_req.is_load}, r_cycle, core_mem_req.pc, core_mem_req.addr);
 	  end
 	if(core_mem_rsp_valid)
 	  begin

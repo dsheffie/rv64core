@@ -130,13 +130,33 @@ void record_l1d(int req, int ack, int ack_st, int blocked, int stall_reason) {
 }
 
 uint64_t mem_table[32] = {0};
+uint64_t mem_pc_table[32] = {0};
+uint64_t mem_addr_table[32] = {0};
 bool is_load[32] = {false};
 uint64_t n_logged_loads = 0;
 uint64_t total_load_lat = 0;
 
-void log_mem_begin(int r, int l, long long c) {
+std::map<uint64_t, uint64_t> last_store;
+
+void log_mem_begin(int r, int l, long long c, long long pc, long long vaddr) {
   mem_table[r] = c;
   is_load[r] = l;
+  mem_pc_table[r] = pc;
+  mem_addr_table[r] = vaddr;
+  if(l==0) {
+    last_store[vaddr & (~15UL)] = pc;
+  }
+}
+
+std::map<uint64_t, uint64_t> store_latency_map;
+
+void log_store_release(int r, long long c) {
+  //assert(is_load[r] == false);
+  if(not(is_load[r])) {
+    uint64_t cc = c - mem_table[r];
+    //printf("store released after %lu cycles\n", cc);
+    store_latency_map[cc]++;
+  }
 }
 
 void log_mem_end(int r, long long c) {
@@ -144,6 +164,13 @@ void log_mem_end(int r, long long c) {
   if(is_load[r]) {
     ++n_logged_loads;
     total_load_lat += cc;
+    // if(cc > 5) {
+    //   std::cout << "load at " << std::hex << mem_pc_table[r] << std::dec
+    // 		<< " pushes out " << cc << " cycles , last store from "
+    // 		<< std::hex << last_store[mem_addr_table[r] & (~15UL)]
+    // 		<< std::dec
+    // 		<<"\n";
+    // }
   }
 }
 
@@ -1735,8 +1762,16 @@ int main(int argc, char **argv) {
   std::cout << "simulation took " << t0 << " seconds, " << (insns_retired/t0)
 	    << " insns per second\n";
 
-
-
+  uint64_t store_median, total_stores = 0;
+  double avg_store_latency = 0.0;
+  histo_mean_median(store_latency_map, store_median);
+  std::cout << "median store latency = " << store_median << "\n";
+  for(auto &p : store_latency_map) {
+    total_stores += p.second;
+    avg_store_latency += p.first * p.second;
+  }
+  avg_store_latency /= total_stores;
+  std::cout << "avg store latency = " << (avg_store_latency) << "\n";
   dump_histo("supervisor.txt", supervisor_histo);
   
   munmap(s->mem, 1UL<<32);

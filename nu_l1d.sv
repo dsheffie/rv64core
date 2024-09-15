@@ -3,6 +3,9 @@
 `include "uop.vh"
 
 `ifdef VERILATOR
+import "DPI-C" function void log_store_release(input int r,
+					       input longint c);
+
 import "DPI-C" function void log_l1d(input int gen_early_req,
 				     input int push_miss,
 				     input int push_miss_hit_inflight,
@@ -520,7 +523,7 @@ module nu_l1d(clk,
    logic [63:0] 	       r_store_stalls, n_store_stalls;
    
    
-   logic [31:0] 			 r_cycle;
+   logic [63:0] 			 r_cycle;
    assign flush_complete = r_flush_complete;
 
    assign mem_req_valid = r_mem_req_valid;
@@ -1934,6 +1937,12 @@ module nu_l1d(clk,
 		    if(w_got_hit)
 		      begin /* valid cacheline - hit in cache */
 			 t_reset_graduated = r_req.is_store;
+`ifdef VERILATOR
+			 if(r_req.is_store)
+			   begin
+			      log_store_release({27'd0, r_req.rob_ptr}, r_cycle);
+			   end
+`endif
 			 if(r_req.is_store==1'b0)
 			   begin
 			      n_core_mem_rsp.data = t_rsp_data[`M_WIDTH-1:0];
