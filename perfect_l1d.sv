@@ -553,16 +553,6 @@ module perfect_l1d(clk,
    endgenerate
 
    
-   
-   always_ff@(negedge clk)
-     begin
-	if(core_mem_va_req.pc == 64'h800004d4)
-	  begin
-	     $display("fwd stall = %b, t_push_miss = %b, r_req2.is_store = %b, load addr = %x, r_req2.addr = %x, r_req2.pc = %x", 
-		      w_fwd_stall, t_push_miss, r_req2.is_store, core_mem_va_req.addr, r_req2.addr, r_req2.pc);
-	  end
-     end
-   
    always_ff@(posedge clk)
      begin
 	r_hit_busy_addr2 <= reset ? 1'b0 : (|w_hit_busy_addrs2);
@@ -644,8 +634,8 @@ module perfect_l1d(clk,
 	r_core_mem_rsp <= n_core_mem_rsp;
      end
 
-   logic [63:0]				  t_w64,tt_w64;
-   logic [31:0]				  t_w32, t_w32_2, tt_w32_2;
+   logic [63:0]				  t_w64;
+   logic [31:0]				  t_w32, t_w32_2;
 
    
    logic [63:0]	t_req2_addr_pa, t_pa2;
@@ -657,6 +647,10 @@ module perfect_l1d(clk,
      begin
 	t_pa2 <= dc_ld_translate({n_req2.addr[63:12], 12'd0}, page_table_root);
      end
+
+   logic [127:0] 		  t_shift, t_shift_2;
+   wire [`LG_L1D_CL_LEN+2:0] w_shift_amt2 = {r_req2.addr[`LG_L1D_CL_LEN-1:0], 3'd0};
+   logic [127:0]	     t_data2;
    
    always_comb
      begin
@@ -668,86 +662,46 @@ module perfect_l1d(clk,
 	t_req2_addr_pa = paging_active ? t_pa2 : {r_req2.addr[63:12], 12'd0};
 	t_pf2 = paging_active & (&t_req2_addr_pa);
 	
-	tt_w64 = read_dword( {t_req2_addr_pa[63:12], r_req2.addr[11:3], 3'd0});
-	tt_w32_2 = r_req2.addr[2] ? tt_w64[63:32] : tt_w64[31:0];
 
+	t_data2[63:0] = read_dword( {t_req2_addr_pa[63:12], r_req2.addr[11:4], 4'd0});
+	t_data2[127:64] = read_dword( {t_req2_addr_pa[63:12], r_req2.addr[11:4], 4'd8});
+	t_shift_2 = t_data2 >> w_shift_amt2;
+	
+	
 	case(r_req2.op)
 	  MEM_LB:
 	    begin
-	       case(r_req2.addr[1:0])
-		 2'd0:
-		   begin
-		      t_rsp_data2 = {{56{tt_w32_2[7]}}, tt_w32_2[7:0]};
-		   end
-		 2'd1:
-		   begin
-		      t_rsp_data2 = {{56{tt_w32_2[15]}}, tt_w32_2[15:8]};
-		   end
-		 2'd2:
-		   begin
-		      t_rsp_data2 = {{56{tt_w32_2[23]}}, tt_w32_2[23:16]};
-		   end
-		 2'd3:
-		   begin
-		      t_rsp_data2 = {{56{tt_w32_2[31]}}, tt_w32_2[31:24]};
-		   end
-	       endcase
+	       t_rsp_data2 = {{56{t_shift_2[7]}}, t_shift_2[7:0]};	       
 	       t_rsp_dst_valid2 = r_req2.dst_valid & t_hit_cache2;
 	    end
 	  MEM_LBU:
 	    begin
-	       case(r_req2.addr[1:0])
-		 2'd0:
-		   begin
-		      t_rsp_data2 = {56'd0, tt_w32_2[7:0]};
-		   end
-		 2'd1:
-		   begin
-		      t_rsp_data2 = {56'd0, tt_w32_2[15:8]};
-		   end
-		 2'd2:
-		   begin
-		      t_rsp_data2 = {56'd0, tt_w32_2[23:16]};
-		   end
-		 2'd3:
-		   begin
-		      t_rsp_data2 = {56'd0, tt_w32_2[31:24]};
-		   end
-	       endcase // case (r_req2.addr[1:0])
+	       t_rsp_data2 = {56'd0, t_shift_2[7:0]};
 	       t_rsp_dst_valid2 = r_req2.dst_valid & t_hit_cache2;	       
 	    end
 	  MEM_LH:
 	    begin
-	       case(r_req2.addr[1])
-		 1'b0:
-		   begin
-		      t_rsp_data2 = {{48{sext16(tt_w32_2[15:0])}}, tt_w32_2[15:0]};
-		   end
-		 1'b1:
-		   begin
-		      t_rsp_data2 = {{48{sext16(tt_w32_2[31:16])}},tt_w32_2[31:16]};	     
-		   end
-	       endcase 
+	       t_rsp_data2 = {{48{t_shift_2[15]}}, t_shift_2[15:0]};	       	       
 	       t_rsp_dst_valid2 = r_req2.dst_valid & t_hit_cache2;
 	    end
 	  MEM_LHU:
 	    begin
-	       t_rsp_data2 = {48'd0, (r_req2.addr[1] ? tt_w32_2[31:16] : tt_w32_2[15:0])};
+	       t_rsp_data2 = {48'd0, t_shift_2[15:0]};
 	       t_rsp_dst_valid2 = r_req2.dst_valid & t_hit_cache2;	       
 	    end
 	  MEM_LW:
 	    begin
-	       t_rsp_data2 = {{32{tt_w32_2[31]}}, tt_w32_2};
+	       t_rsp_data2 = {{32{t_shift_2[31]}}, t_shift_2[31:0]};
 	       t_rsp_dst_valid2 = r_req2.dst_valid & t_hit_cache2;
-	    end	 
+	    end
 	  MEM_LWU:
 	    begin
-	       t_rsp_data2 = {32'd0, tt_w32_2};
+	       t_rsp_data2 = {32'd0, t_shift_2[31:0]};
 	       t_rsp_dst_valid2 = r_req2.dst_valid & t_hit_cache2;
 	    end	 
 	  MEM_LD:
 	    begin
-	       t_rsp_data2 = tt_w64;
+	       t_rsp_data2 = t_shift_2[63:0];
 	       t_rsp_dst_valid2 = r_req2.dst_valid & t_hit_cache2;
 	    end
 	  default:
@@ -866,14 +820,19 @@ module perfect_l1d(clk,
 	t_req_addr_pa = paging_active ? t_pa : {r_req.addr[63:12], 12'd0};
 	t_pf = paging_active & (&t_req_addr_pa);
 	
-	t_w64 = read_dword({t_req_addr_pa[63:12], r_req.addr[11:3], 3'd0});
-	t_w32 = r_req.addr[2] ? t_w64[63:32] : t_w64[31:0];
 	
 	t_hit_cache = r_got_req && (r_state == ACTIVE);
 	
 	t_rsp_dst_valid = 1'b0;
 	t_rsp_data = 'd0;
 	t_wr_array = 1'b0;
+
+	t_data[63:0] = read_dword( {t_req_addr_pa[63:12], r_req.addr[11:4], 4'd0});
+	t_data[127:64] = read_dword( {t_req_addr_pa[63:12], r_req.addr[11:4], 4'd8});
+	t_shift = t_data >> {r_req.addr[`LG_L1D_CL_LEN-1:0], 3'd0};
+
+	t_w64 = t_shift[63:0];
+	t_w32 = t_shift[31:0];
 	
 	case(r_req.amo_op)
 	  5'd0: /* amoadd */
@@ -905,86 +864,46 @@ module perfect_l1d(clk,
 	  
 	  default:
 	    begin
+	       t_amo32_data = 'd0;
+	       t_amo64_data = 'd0;
+			      
 	    end
 	endcase // case (r_req.amo_op)
 
 	case(r_req.op)
 	  MEM_LB:
 	    begin
-	       case(r_req.addr[1:0])
-		 2'd0:
-		   begin
-		      t_rsp_data = {{56{t_w32[7]}}, t_w32[7:0]};
-		   end
-		 2'd1:
-		   begin
-		      t_rsp_data = {{56{t_w32[15]}}, t_w32[15:8]};
-		   end
-		 2'd2:
-		   begin
-		      t_rsp_data = {{56{t_w32[23]}}, t_w32[23:16]};
-		   end
-		 2'd3:
-		   begin
-		      t_rsp_data = {{56{t_w32[31]}}, t_w32[31:24]};
-		   end
-	       endcase
+	       t_rsp_data = {{56{t_shift[7]}}, t_shift[7:0]};	       	       
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
 	    end
 	  MEM_LBU:
 	    begin
-	       case(r_req.addr[1:0])
-		 2'd0:
-		   begin
-		      t_rsp_data = {56'd0, t_w32[7:0]};
-		   end
-		 2'd1:
-		   begin
-		      t_rsp_data = {56'd0, t_w32[15:8]};
-		   end
-		 2'd2:
-		   begin
-		      t_rsp_data = {56'd0, t_w32[23:16]};
-		   end
-		 2'd3:
-		   begin
-		      t_rsp_data = {56'd0, t_w32[31:24]};
-		   end
-	       endcase // case (r_req.addr[1:0])
+	       t_rsp_data = {56'd0, t_shift[7:0]};	       	       	       
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;	       
 	    end
 	  MEM_LH:
 	    begin
-	       case(r_req.addr[1])
-		 1'b0:
-		   begin
-		      t_rsp_data = {{48{sext16(t_w32[15:0])}}, t_w32[15:0]};
-		   end
-		 1'b1:
-		   begin
-		      t_rsp_data = {{48{sext16(t_w32[31:16])}}, t_w32[31:16]};	     
-		   end
-	       endcase // case (r_req.addr[1])
+	       t_rsp_data = {{48{t_shift[15]}}, t_shift[15:0]};	       
 	       t_rsp_dst_valid = r_req.dst_valid &t_hit_cache;
 	    end
 	  MEM_LHU:
 	    begin
-	       t_rsp_data = {48'd0, (r_req.addr[1] ? t_w32[31:16] : t_w32[15:0])};
+	       t_rsp_data = {48'd0, t_shift[15:0]};	       
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;	       
 	    end
 	  MEM_LW:
 	    begin
-	       t_rsp_data = {{32{t_w32[31]}}, t_w32};
+	       t_rsp_data = {{32{t_shift[31]}}, t_shift[31:0]};	       	       
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
 	    end
 	  MEM_LWU:
 	    begin
-	       t_rsp_data = {32'd0, t_w32};
+	       t_rsp_data = {32'd0, t_shift[31:0]};
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
 	    end
 	  MEM_LD:
 	    begin
-	       t_rsp_data = t_w64;
+	       t_rsp_data = t_shift[63:0];	       	       
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
 	    end	  
 	  
