@@ -205,10 +205,7 @@ module perfect_l1d(clk,
    logic 				  r_flush_cl_req, n_flush_cl_req;
    logic 				  r_flush_complete, n_flush_complete;
    
-
-   logic [63:0]				  t_w64;
-   logic [31:0] 			  t_w32, t_bswap_w32;
-   logic [31:0] 			  t_w32_2, t_bswap_w32_2;
+   
 
    logic 				  t_got_rd_retry, t_port2_hit_cache;
       
@@ -546,21 +543,31 @@ module perfect_l1d(clk,
    
    wire [N_MQ_ENTRIES-1:0] w_hit_busy_addrs2;
    logic 		   r_hit_busy_addr2;
-
+   wire			   w_fwd_stall = t_push_miss & r_req2.is_store & (r_req2.addr[IDX_STOP-1:IDX_START] == t_cache_idx2);
+   
    generate
       for(genvar i = 0; i < N_MQ_ENTRIES; i=i+1)
 	begin
 	   assign w_hit_busy_addrs2[i] = r_mq_addr_valid[i] ? (r_mq_addr[i] == t_cache_idx2) & (|(r_mq_mask[i] & t_req_mask)) : 1'b0;	   
 	end
    endgenerate
+
+   
+   
+   always_ff@(negedge clk)
+     begin
+	if(core_mem_va_req.pc == 64'h800004d4)
+	  begin
+	     $display("fwd stall = %b, t_push_miss = %b, r_req2.is_store = %b, load addr = %x, r_req2.addr = %x, r_req2.pc = %x", 
+		      w_fwd_stall, t_push_miss, r_req2.is_store, core_mem_va_req.addr, r_req2.addr, r_req2.pc);
+	  end
+     end
    
    always_ff@(posedge clk)
      begin
-	r_hit_busy_addr2 <= reset ? 1'b0 : |w_hit_busy_addrs2;
+	r_hit_busy_addr2 <= reset ? 1'b0 : (|w_hit_busy_addrs2);
      end
-   
-
-   
+      
    
    logic r_dead_atomic, n_dead_atomic;
   
@@ -637,9 +644,10 @@ module perfect_l1d(clk,
 	r_core_mem_rsp <= n_core_mem_rsp;
      end
 
-   logic [31:0] tt_w32_2, tt_bswap_w32_2;
-   logic [63:0]	tt_w64;
+   logic [63:0]				  t_w64,tt_w64;
+   logic [31:0]				  t_w32, t_w32_2, tt_w32_2;
 
+   
    logic [63:0]	t_req2_addr_pa, t_pa2;
    logic	t_pf2;
 
@@ -661,11 +669,8 @@ module perfect_l1d(clk,
 	t_pf2 = paging_active & (&t_req2_addr_pa);
 	
 	tt_w64 = read_dword( {t_req2_addr_pa[63:12], r_req2.addr[11:3], 3'd0});
-	tt_w32_2 = read_word({t_req2_addr_pa[63:12], r_req2.addr[11:2], 2'd0});
-	
- 
-	tt_bswap_w32_2 = bswap32(tt_w32_2);
-	
+	tt_w32_2 = r_req2.addr[2] ? tt_w64[63:32] : tt_w64[31:0];
+
 	case(r_req2.op)
 	  MEM_LB:
 	    begin
@@ -716,11 +721,11 @@ module perfect_l1d(clk,
 	       case(r_req2.addr[1])
 		 1'b0:
 		   begin
-		      t_rsp_data2 = {{48{sext16(tt_w32_2[15:0])}}, bswap16(tt_w32_2[15:0])};
+		      t_rsp_data2 = {{48{sext16(tt_w32_2[15:0])}}, tt_w32_2[15:0]};
 		   end
 		 1'b1:
 		   begin
-		      t_rsp_data2 = {{48{sext16(tt_w32_2[31:16])}}, bswap16(tt_w32_2[31:16])};	     
+		      t_rsp_data2 = {{48{sext16(tt_w32_2[31:16])}},tt_w32_2[31:16]};	     
 		   end
 	       endcase 
 	       t_rsp_dst_valid2 = r_req2.dst_valid & t_hit_cache2;
@@ -732,12 +737,12 @@ module perfect_l1d(clk,
 	    end
 	  MEM_LW:
 	    begin
-	       t_rsp_data2 = {{32{tt_bswap_w32_2[31]}}, tt_bswap_w32_2};
+	       t_rsp_data2 = {{32{tt_w32_2[31]}}, tt_w32_2};
 	       t_rsp_dst_valid2 = r_req2.dst_valid & t_hit_cache2;
 	    end	 
 	  MEM_LWU:
 	    begin
-	       t_rsp_data2 = {32'd0, tt_bswap_w32_2};
+	       t_rsp_data2 = {32'd0, tt_w32_2};
 	       t_rsp_dst_valid2 = r_req2.dst_valid & t_hit_cache2;
 	    end	 
 	  MEM_LD:
@@ -779,13 +784,13 @@ module perfect_l1d(clk,
 	  MEM_SH:
 	    begin
 	       if(t_wr_array)
-		 write_half(r_req.addr, bswap16(r_req.data[15:0]),paging_active ? page_table_root : 64'd0);
+		 write_half(r_req.addr, r_req.data[15:0],paging_active ? page_table_root : 64'd0);
 	    end
 	  MEM_SW:
 	    begin
 	       if(t_wr_array)
 		 begin
-		    write_word(r_req.addr, bswap32(r_req.data[31:0]),paging_active ? page_table_root : 64'd0, 32'd0);
+		    write_word(r_req.addr, r_req.data[31:0],paging_active ? page_table_root : 64'd0, 32'd0);
 		 end
 	    end
 	  MEM_SD:
@@ -862,12 +867,9 @@ module perfect_l1d(clk,
 	t_pf = paging_active & (&t_req_addr_pa);
 	
 	t_w64 = read_dword({t_req_addr_pa[63:12], r_req.addr[11:3], 3'd0});
-	t_w32 = read_word( {t_req_addr_pa[63:12], r_req.addr[11:2], 2'd0});
+	t_w32 = r_req.addr[2] ? t_w64[63:32] : t_w64[31:0];
 	
-        t_bswap_w32 = t_w32;
-	
-	t_hit_cache = r_got_req && 
-		      (r_state == ACTIVE);
+	t_hit_cache = r_got_req && (r_state == ACTIVE);
 	
 	t_rsp_dst_valid = 1'b0;
 	t_rsp_data = 'd0;
@@ -956,11 +958,11 @@ module perfect_l1d(clk,
 	       case(r_req.addr[1])
 		 1'b0:
 		   begin
-		      t_rsp_data = {{48{sext16(t_w32[15:0])}}, bswap16(t_w32[15:0])};
+		      t_rsp_data = {{48{sext16(t_w32[15:0])}}, t_w32[15:0]};
 		   end
 		 1'b1:
 		   begin
-		      t_rsp_data = {{48{sext16(t_w32[31:16])}}, bswap16(t_w32[31:16])};	     
+		      t_rsp_data = {{48{sext16(t_w32[31:16])}}, t_w32[31:16]};	     
 		   end
 	       endcase // case (r_req.addr[1])
 	       t_rsp_dst_valid = r_req.dst_valid &t_hit_cache;
@@ -972,12 +974,12 @@ module perfect_l1d(clk,
 	    end
 	  MEM_LW:
 	    begin
-	       t_rsp_data = {{32{t_bswap_w32[31]}}, t_bswap_w32};
+	       t_rsp_data = {{32{t_w32[31]}}, t_w32};
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
 	    end
 	  MEM_LWU:
 	    begin
-	       t_rsp_data = {32'd0, t_bswap_w32};
+	       t_rsp_data = {32'd0, t_w32};
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
 	    end
 	  MEM_LD:
