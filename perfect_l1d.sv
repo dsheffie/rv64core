@@ -1006,7 +1006,7 @@ module perfect_l1d(clk,
 	n_core_mem_rsp.rob_ptr = r_req.rob_ptr;
 	n_core_mem_rsp.dst_ptr = r_req.dst_ptr;
 	n_core_mem_rsp.has_cause = 1'b0;
-	n_core_mem_rsp.cause = 'd0;
+	n_core_mem_rsp.cause = MISALIGNED_FETCH;
 	n_core_mem_rsp.dst_valid = 1'b0;
 
 	n_cache_accesses = r_cache_accesses;
@@ -1057,6 +1057,21 @@ module perfect_l1d(clk,
 		      begin		
 			 n_core_mem_rsp.dst_valid = r_req2.dst_valid;
 			 n_core_mem_rsp_valid = 1'b1;
+		      end
+		    else if(r_req2.op == MEM_NOP)
+		      begin
+			 if(r_req2.spans_cacheline)
+			   begin
+			      n_core_mem_rsp.cause = MISALIGNED_FETCH;
+			   end
+			 else
+			   begin
+			      n_core_mem_rsp.cause = r_req2.cause;
+			   end
+			 n_core_mem_rsp.dst_valid = r_req2.dst_valid;
+			 n_core_mem_rsp.has_cause = 1'b1;
+			 n_core_mem_rsp.addr = r_req2.addr;
+			 n_core_mem_rsp_valid = 1'b1;		  			 
 		      end
 		    else if(r_req2.is_atomic)
 		      begin
