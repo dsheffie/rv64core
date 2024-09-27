@@ -331,6 +331,7 @@ endfunction
    
    logic [4:0]		  t_spec_branch_marker;
    logic [3:0]		  t_branch_marker;
+   logic [3:0]		  t_any_branch;   
    logic [2:0] 		  t_first_branch;
    logic [2:0]		  t_taken_branch_idx;
 
@@ -345,8 +346,9 @@ endfunction
    insn_fetch_t t_insn, t_insn2, t_insn3, t_insn4;
    logic [2:0] t_pd, t_first_pd;
    logic [2:0] t_pd0, t_pd1, t_pd2, t_pd3;
+   logic       t_br0, t_br1, t_br2, t_br3;
    logic       t_tcb0, t_tcb1, t_tcb2, t_tcb3;
-   
+
    
    logic [63:0] 	  r_cycle;
    always_ff@(posedge clk)
@@ -555,7 +557,12 @@ endfunction
 	t_pd1 = select_pd(w_jump, 'd1);
 	t_pd2 = select_pd(w_jump, 'd2);
 	t_pd3 = select_pd(w_jump, 'd3);	
-		
+
+	t_br0 = (t_pd0 != 3'd0);
+	t_br1 = (t_pd1 != 3'd0);
+	t_br2 = (t_pd2 != 3'd0);
+	t_br3 = (t_pd3 != 3'd0);
+	
 	t_insn_data  = select_cl32(w_array, t_insn_idx);
 	t_insn_data2 = select_cl32(w_array, t_insn_idx + 2'd1);
 	t_insn_data3 = select_cl32(w_array, t_insn_idx + 2'd2);
@@ -586,6 +593,14 @@ endfunction
 			    } >> t_insn_idx);
 	
 
+	t_any_branch = ({t_br3,
+			 t_br2,
+			 t_br1,
+			 t_br0
+			 } >> t_insn_idx);
+	
+
+	
 	t_taken_branch_idx = 'd7;
 	casez(t_branch_marker)
 	  4'b???1:
@@ -825,6 +840,8 @@ endfunction
 			      n_cache_pc = w_cache_pc16;
 			      t_cache_tag = n_cache_pc[(`PA_WIDTH-1):IDX_STOP];
 			      n_pc = w_cache_pc20;
+			      t_update_spec_hist = (|t_any_branch);
+			      
 			   end
 			 else if(t_first_branch == 'd3 && !fq_full3)
 			   begin
@@ -832,6 +849,7 @@ endfunction
 			      n_cache_pc = w_cache_pc12;
 			      n_pc = w_cache_pc16;
 			      t_cache_tag = n_cache_pc[(`PA_WIDTH-1):IDX_STOP];
+			      t_update_spec_hist = (|t_any_branch);			      
 			      if(t_insn_idx != 0)
 				begin
 				   t_cache_idx = r_cache_idx + 'd1;
@@ -844,6 +862,7 @@ endfunction
 			      n_cache_pc = w_cache_pc8;
 			      t_cache_tag = n_cache_pc[(`PA_WIDTH-1):IDX_STOP];
 			      n_pc = w_cache_pc12;
+			      t_update_spec_hist = (|t_any_branch);			      
 			      if(t_insn_idx == 2)
 				begin
 				   t_cache_idx = r_cache_idx + 'd1;
@@ -851,6 +870,7 @@ endfunction
 			   end
 			 else
 			   begin
+			      t_update_spec_hist = (|t_any_branch);			      
 			      t_push_insn = 1'b1;
 			   end // else: !if(t_first_branch == 'd2 && !fq_full2)
 		      end

@@ -136,6 +136,7 @@ bool is_load[32] = {false};
 uint64_t n_logged_loads = 0;
 uint64_t total_load_lat = 0;
 
+
 std::map<uint64_t, uint64_t> last_store;
 
 void log_mem_begin(int r, int l, long long c, long long pc, long long vaddr) {
@@ -148,7 +149,8 @@ void log_mem_begin(int r, int l, long long c, long long pc, long long vaddr) {
   }
 }
 
-std::map<uint64_t, uint64_t> store_latency_map;
+static std::map<uint64_t, uint64_t> store_latency_map;
+static std::map<int, uint64_t> mem_lat_map, fp_lat_map, non_mem_lat_map, mispred_lat_map;
 
 void log_store_release(int r, long long c) {
   //assert(is_load[r] == false);
@@ -161,6 +163,7 @@ void log_store_release(int r, long long c) {
 
 void log_mem_end(int r, long long c) {
   uint64_t cc = c - mem_table[r];
+  mem_lat_map[cc]++;
   if(is_load[r]) {
     ++n_logged_loads;
     total_load_lat += cc;
@@ -617,7 +620,7 @@ void record_fetch(int p1, int p2, int p3, int p4,
     ++n_fetch[0];
 }
 
-static std::map<int, uint64_t> mem_lat_map, fp_lat_map, non_mem_lat_map, mispred_lat_map;
+
 
 int check_insn_bytes(long long pc, int data) {
   uint32_t insn = get_insn(pc, s);
