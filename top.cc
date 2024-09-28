@@ -229,7 +229,7 @@ void csr_putchar(char c) {
   else std::cout << c;
 }
 
-long long translate(long long va, long long root, bool iside, bool store) {
+long long translate(long long va, long long root, bool fetch, bool store, bool user = true) {
   uint64_t a = 0, u = 0;
   int mask_bits = -1;
   a = root + (((va >> 30) & 511)*8);
@@ -268,19 +268,51 @@ long long translate(long long va, long long root, bool iside, bool store) {
   mask_bits = 12;
 
  translation_complete:
-  int64_t m = ((1L << mask_bits) - 1);
+  pte_t r(u);
 
+  if(fetch && (r.sv39.x == 0)) {
+    printf("-> fault at line %d\n", __LINE__);
+    return ~(0UL);
+  }
+  if(store && (r.sv39.w == 0)) {
+    //printf("-> fault at line %d at for va %lx\n", __LINE__, va);    
+    return ~(0UL);
+  }
+  if(r.sv39.w && (r.sv39.r == 0)) {
+    printf("-> fault at line %d\n", __LINE__);    
+    return ~(0UL);
+  }
+  if(not(store or fetch) && (r.sv39.r == 0)) {
+    printf("-> fault at line %d\n", __LINE__);    
+    return ~(0UL);
+  }
+  if(r.sv39.u == 0 && user) {
+    printf("not user page fault at line %d\n", __LINE__);    
+    return ~(0UL);
+  }
+  
+  //if(r.sv39.u == 1 && fetch && (not(user))) {
+  //printf("fault at line %d\n", __LINE__);    
+  //return ~(0UL);
+  //}
+
+  
+  int64_t m = ((1L << mask_bits) - 1);
+  
   /* accessed bit */
   bool accessed = ((u >> 6) & 1);
   bool dirty = ((u >> 7) & 1);
   if(!accessed) {
     u |= 1 << 6;
+    printf("marking pte at %lx as visited, fetch = %d\n", a, fetch);
     *reinterpret_cast<int64_t*>(s->mem + a) = u;
+    //*reinterpret_cast<int64_t*>(ss->mem + a) = u;    
   }
-
   if(store and not(dirty)) {
     u |= 1<<7;
-    *reinterpret_cast<int64_t*>(s->mem + a) = u;    
+    printf("marking pte at %lx as dirty\n", a);    
+    *reinterpret_cast<int64_t*>(s->mem + a) = u;
+    //*reinterpret_cast<int64_t*>(ss->mem + a) = u;     
   }
   
   u = ((u >> 10) & ((1UL<<44)-1)) * 4096;
@@ -290,12 +322,21 @@ long long translate(long long va, long long root, bool iside, bool store) {
   return (pa & ((1UL<<32)-1));
 }
 
-long long dc_ld_translate(long long va, long long root) {
-  return translate(va,root, false, false);
+long long dc_translate(long long va, long long root, int is_st, int user) {
+  long long pa = translate(va,root, false, is_st, user);
+  if(pa != ~(0UL)) {
+    int fault = 0;
+    s->translate(va, fault, 8, is_st, user);
+  }
+  //if(is_st==0) {
+  //std::cout << "ld translate " << std::hex << va << " to " << pa
+  //<< std::dec << "\n";
+  //}
+  return pa;
 }
 
 long long ic_translate(long long va, long long root) {
-  return translate(va,root,true, false);
+  return translate(va,root,true, false, false);
 }
 
 uint64_t page_table_root = ~0UL;
@@ -489,7 +530,7 @@ void write_byte(long long addr, char data, long long root) {
   int64_t pa = addr;
   //printf("%s:%lx:%lx\n", __PRETTY_FUNCTION__, addr, root);  
   if(root) {
-    pa = translate(addr, root, false, true);
+    pa = translate(addr, root, false, true, false);
     //printf("translate %lx to %lx\n", addr, pa);    
     assert(pa != -1);
   }  
@@ -501,8 +542,8 @@ void write_half(long long addr, short data, long long root) {
   int64_t pa = addr;
   //printf("%s:%lx:%lx\n", __PRETTY_FUNCTION__, addr, root);  
   if(root) {
-    pa = translate(addr, root, false, true);
-    ///printf("translate %lx to %lx\n", addr, pa);    
+    pa = translate(addr, root, false, true, false);
+    //printf("translate %lx to %lx\n", addr, pa);    
     assert(pa != -1);
   }  
   uint16_t d = *reinterpret_cast<uint16_t*>(&data);
@@ -514,8 +555,7 @@ void write_word(long long addr, int data, long long root, int id) {
   int64_t pa = addr;
   //printf("%s:%lx:%lx\n", __PRETTY_FUNCTION__, addr, root);  
   if(root) {
-    pa = translate(addr, root, false, true);
-    //printf("translate %lx to %lx\n", addr, pa);    
+    pa = translate(addr, root, false, true, false);
     assert(pa != -1);
   }  
   uint32_t d = *reinterpret_cast<uint32_t*>(&data);
@@ -524,10 +564,9 @@ void write_word(long long addr, int data, long long root, int id) {
 
 void write_dword(long long addr, long long data, long long root, int id) {
   int64_t pa = addr;
-
+  //printf("%s:%lx:%lx\n", __PRETTY_FUNCTION__, addr, root);  
   if(root) {
-    pa = translate(addr, root, false, true);
-    //printf("translate %lx to %lx\n", addr, pa);    
+    pa = translate(addr, root, false, true, false);
     assert(pa != -1);
   }
   uint64_t d = *reinterpret_cast<uint64_t*>(&data);
@@ -1176,9 +1215,11 @@ int main(int argc, char **argv) {
 	  bool diverged = false;
 	  if(ss->pc == (tb->retire_pc + 4)) {
 	    for(int i = 0; i < 32; i++) {
-	      if((ss->gpr[i] != s->gpr[i])) {
-		int wrong_bits = __builtin_popcountll(ss->gpr[i] ^ s->gpr[i]);
+	      int64_t xx = ss->gpr[i] ^ s->gpr[i];
+	      if(xx) {
+		int wrong_bits = __builtin_popcountll(xx);
 		++mismatches;
+
 		std::cout << "register " << getGPRName(i)
 			  << " does not match : rtl "
 			  << std::hex
@@ -1189,6 +1230,13 @@ int main(int argc, char **argv) {
 			  << " bits in difference "
 			  << wrong_bits
 			  << "\n";
+
+		for(int ii = 0; ii < 64; ii++) {
+		  if((xx & (1UL<<ii))) {
+		    printf("bit %d differs, sim %ld, rtl %ld\n", ii, (ss->gpr[i] >> ii) & 1, (s->gpr[i] >> ii) & 1);
+		  }
+		}
+		
 		//trace_retirement |= (wrong_bits != 0);
 		diverged = true;//(wrong_bits > 16);
 		std::cout << "incorrect "

@@ -15,6 +15,25 @@
 #include "globals.hh"
 
 #include <stack>
+static const char* exc_names[16] = {
+  "misaligned fetch", 
+  "fault fetch", 
+  "illegal instruction",
+  "breakpoint",
+  "misaligned load",
+  "fault load",
+  "misaligned store",
+  "fault store",
+  "user ecall",
+  "supervisor ecall",
+  "hypervisor ecall",
+  "machine ecall",
+  "fetch page",
+  "load page",
+  "reserved fault 14 (shouldnt ever happen)",
+  "store page"
+};
+
 extern std::list<store_rec> store_queue;
 extern std::list<store_rec> atomic_queue;
 
@@ -167,6 +186,7 @@ uint64_t state_t::translate(uint64_t ea, int &fault, int sz, bool store, bool fe
   
   //if we are unaligned assert out (for now)
   if(!same_page) {
+    printf("fault at line %d\n", __LINE__);    
     fault = 1;
     return 2;
   }
@@ -186,6 +206,7 @@ uint64_t state_t::translate(uint64_t ea, int &fault, int sz, bool store, bool fe
   a = (c.satp.ppn * 4096) + (((ea >> 30) & 511)*8);
   u = *reinterpret_cast<uint64_t*>(mem + a);
   if((u&1) == 0) {
+    printf("fault at line %d\n", __LINE__);    
     fault = 1;
     return 2;
   }  
@@ -199,6 +220,7 @@ uint64_t state_t::translate(uint64_t ea, int &fault, int sz, bool store, bool fe
   u = *reinterpret_cast<uint64_t*>(mem + a);
 
   if((u&1) == 0) {
+    printf("fault at line %d, not present page\n", __LINE__);    
     fault = 1;
     return 1;
   }
@@ -212,6 +234,7 @@ uint64_t state_t::translate(uint64_t ea, int &fault, int sz, bool store, bool fe
   
   u = *reinterpret_cast<uint64_t*>(mem + a);  
   if((u&1) == 0) {
+    printf("fault at line %d\n", __LINE__);    
     fault = 1;
     return 0;
   }
@@ -229,26 +252,32 @@ uint64_t state_t::translate(uint64_t ea, int &fault, int sz, bool store, bool fe
 
   //* permission checks */
   if(fetch && (r.sv39.x == 0)) {
+    printf("fault at line %d\n", __LINE__);
     fault = 1;
     return 0;
   }
   if(store && (r.sv39.w == 0)) {
+    printf("fault at line %d\n", __LINE__);    
     fault = 1;
     return 0;
   }
   if(r.sv39.w && (r.sv39.r == 0)) {
+    printf("fault at line %d\n", __LINE__);    
     fault = 1;
     return 0;
   }
   if(not(store or fetch) && (r.sv39.r == 0)) {
+    printf("fault at line %d\n", __LINE__);    
     fault = 1;
     return 0;
   }
-  if(r.sv39.u == 0 && (priv == priv_user)) {
-    fault = 1;
-    return 0;
-  }
+  //if(r.sv39.u == 0 && (priv == priv_user)) {
+  //printf("fault at line %d\n", __LINE__);    
+  //fault = 1;
+  //return 0;
+  //}
   if(r.sv39.u == 1 && fetch && (priv != priv_user)) {
+    printf("fault at line %d\n", __LINE__);    
     fault = 1;
     return 0;
   }
@@ -376,7 +405,8 @@ static int64_t read_csr(int csr_id, state_t *s, bool &undef) {
     case 0xc00:
       return s->icnt;
     case 0xc01:
-      return csr_time;
+      //return csr_time;
+      return 0;      
     case 0xc03:
       return 0;      
     case 0xf14:
@@ -509,7 +539,7 @@ void execRiscv(state_t *s) {
   //printf("s->icnt = %lu\n", s->icnt);
   //exit(-1);
   //}
-  if(s->get_time() >= s->mtimecmp) {
+  if((s->get_time() >= s->mtimecmp) & 0) {
     csr_t cc(0);
     cc.mip.mtip = 1;
     s->mip |= cc.raw;
@@ -1650,8 +1680,8 @@ void execRiscv(state_t *s) {
       //printf("new mstatus %lx, old %lx\n", s->mstatus, old);
       //exit(-1);
     }
-    printf("CHECKER: exception at %lx, cause %d, new pc %lx\n",
-	   oldpc, except_cause, s->pc);
+    printf("CHECKER: exception at %lx, cause %d (%s), new pc %lx\n",
+	   oldpc, except_cause, exc_names[except_cause & 15], s->pc);
     //exit(-1);
     //printf("after exception, new pc will be %lx\n", s->pc);
   }

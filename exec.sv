@@ -2676,7 +2676,7 @@ module exec(clk,
 	  RDFAULTEDBRANCH_CSR:
 	    t_rd_csr = 'd0;
 	  RDTIME_CSR:
-	    t_rd_csr = r_mtime;
+	    t_rd_csr = 'd0;//r_mtime;
 	  RDL1DTLBHIT_CSR:
 	    t_rd_csr = counters.dtlb_hits;
 	  RDL1DTLBACCESS_CSR:
@@ -3009,7 +3009,7 @@ module exec(clk,
 	  begin
 	     r_mip <= {r_mip[63:8], 1'b0, r_mip[6:0]};
 	  end
-	else if(w_mtip)
+	else if(w_mtip & 1'b0)
 	  begin
 	     //if(r_mip[7] == 1'b0)
 	     //begin

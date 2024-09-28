@@ -11,7 +11,9 @@ import "DPI-C" function void write_byte(input longint addr, input byte data, inp
 import "DPI-C" function void write_half(input longint addr, input shortint  data, input longint root);
 import "DPI-C" function void write_word(input longint addr, input int data, input longint root, int id);
 import "DPI-C" function void write_dword(input longint addr, input longint data, input longint root, int id);
-import "DPI-C" function longint dc_ld_translate(longint va, longint root );
+
+import "DPI-C" function longint dc_translate(longint va, longint root, int is_st, int user);
+
 import "DPI-C" function void wr_log(input longint pc,
 				    input int robptr,
 				    input longint unsigned addr, 
@@ -645,7 +647,7 @@ module perfect_l1d(clk,
 
    always_ff@(posedge clk)
      begin
-	t_pa2 <= dc_ld_translate({n_req2.addr[63:12], 12'd0}, page_table_root);
+	t_pa2 <= dc_translate({n_req2.addr[63:12], 12'd0}, page_table_root, n_req2.is_load ? 32'd0 : 32'd1, priv == 'd0 ? 32'd1 : 32'd0);
      end
 
    logic [127:0] 		  t_shift, t_shift_2;
@@ -791,10 +793,16 @@ module perfect_l1d(clk,
 
    always_ff@(posedge clk)
      begin
-	t_pa <= dc_ld_translate({n_req.addr[63:12], 12'd0}, page_table_root);
+	t_pa <= dc_translate({n_req.addr[63:12], 12'd0}, page_table_root, n_req.is_load ? 32'd0 : 32'd1, priv == 'd0 ? 32'd1 : 32'd0);
 
      end
 
+   //always_ff@(negedge clk)
+   //begin
+   //$display("pc = %x, t_pa = %x, got_req %b",
+   //n_req.pc, t_pa, r_got_req);
+   //end
+   
    wire [63:0] w_taddr  = {t_req_addr_pa[63:12], r_req.addr[11:0]};
    
    always_ff@(negedge clk)
@@ -1097,7 +1105,8 @@ module perfect_l1d(clk,
 			 n_core_mem_rsp.dst_valid = 1'b0;
 			 n_core_mem_rsp.has_cause = t_pf2;
 			 n_core_mem_rsp.cause = STORE_PAGE_FAULT;
-			 
+			 //$display("ack store at pc %x at cycle %d, has cause %b, pa %x", 
+			 //r_req2.pc, r_cycle, t_pf2, t_req2_addr_pa);
 			 n_cache_hits = r_cache_hits + 'd1;
 			 n_core_mem_rsp_valid = 1'b1;
 		      end // if (r_req2.is_store)

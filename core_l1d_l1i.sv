@@ -478,7 +478,7 @@ module
    
    
 
-   nu_l1d dcache (
+   perfect_l1d dcache (
 	       .clk(clk),
 	       .reset(reset),
 	       .priv(w_priv),
@@ -610,7 +610,7 @@ module
    
    
    
-   l1i_2way icache(
+   perfect_l1i icache(
 	      .clk(clk),
 	      .reset(reset),
 	      .l1i_state(l1i_state),
