@@ -133,6 +133,8 @@ uint64_t mem_table[32] = {0};
 uint64_t mem_pc_table[32] = {0};
 uint64_t mem_addr_table[32] = {0};
 bool is_load[32] = {false};
+bool data_valid[32] = {false};
+
 uint64_t n_logged_loads = 0;
 uint64_t total_load_lat = 0;
 
@@ -144,13 +146,23 @@ void log_mem_begin(int r, int l, long long c, long long pc, long long vaddr) {
   is_load[r] = l;
   mem_pc_table[r] = pc;
   mem_addr_table[r] = vaddr;
+  data_valid[r] = false;
   if(l==0) {
     last_store[vaddr & (~15UL)] = pc;
   }
 }
 
 static std::map<uint64_t, uint64_t> store_latency_map;
+static std::map<uint64_t, uint64_t> store_data_latency_map;
 static std::map<int, uint64_t> mem_lat_map, fp_lat_map, non_mem_lat_map, mispred_lat_map;
+
+void log_store_data(int r, long long c) {
+  if(data_valid[r]==false) {
+    data_valid[r] = true;
+    uint64_t cc = c - mem_table[r];
+    store_data_latency_map[cc]++;
+  }
+}
 
 void log_store_release(int r, long long c) {
   //assert(is_load[r] == false);
@@ -473,6 +485,46 @@ long long read_dword(long long addr) {
   long long x = *reinterpret_cast<long long*>(s->mem + pa);
   //std::cout << std::hex << addr << " -> " << x << std::hex << "\n";
   return x;
+}
+
+struct alias_cache_entry {
+  uint64_t va;
+  uint64_t pa;
+};
+
+#define LG_AC_ENTRIES 10
+#define N_AC_ENTRIES (1<<LG_AC_ENTRIES)
+
+static alias_cache_entry ac[N_AC_ENTRIES];
+static std::array<bool, N_AC_ENTRIES> ac_valid = {false};
+
+void drop_va2pa_caches() {
+  for(int i = 0; i < (N_AC_ENTRIES); i++) {
+    ac_valid[i] = false;
+  }
+}
+
+long long read64(long long addr, long long vaddr) {
+  if(addr != vaddr) {
+    static const int lg_alias = LG_AC_ENTRIES - 8;
+    int po = addr & 255;
+    int vo = vaddr & (N_AC_ENTRIES-1);
+    //printf("addr = %lx, vaddr = %lx\n", addr, vaddr);
+    
+    for(int i = 0, o = po; i < (1<<lg_alias); i++, po += 256) {
+      //printf("\i = %d, o = %d\n", i, po);      
+      if(not(ac_valid.at(o))) continue;
+      
+      if((o != vo) and (ac[o].pa == addr)) {
+	printf("alias found in cache for va %x, mapped to locations %d and %d\n",
+	       vaddr, o, vo);
+      }
+    }
+    ac_valid[vo] = true;
+    ac[vo].va = vaddr;
+    ac[vo].pa = addr;
+  }
+  return read_dword(addr);
 }
 
 long long ic_read_dword(long long addr) {
@@ -1765,7 +1817,7 @@ int main(int argc, char **argv) {
   std::cout << "simulation took " << t0 << " seconds, " << (insns_retired/t0)
 	    << " insns per second\n";
 
-  uint64_t store_median, total_stores = 0;
+  uint64_t store_median, store_data_median, total_stores = 0;
   double avg_store_latency = 0.0;
   histo_mean_median(store_latency_map, store_median);
   std::cout << "median store latency = " << store_median << "\n";
@@ -1775,6 +1827,8 @@ int main(int argc, char **argv) {
   }
   avg_store_latency /= total_stores;
   std::cout << "avg store latency = " << (avg_store_latency) << "\n";
+  histo_mean_median(store_data_latency_map, store_data_median);
+  std::cout << "median store data latency = " << store_data_median << "\n";
   dump_histo("supervisor.txt", supervisor_histo);
   
   munmap(s->mem, 1UL<<32);

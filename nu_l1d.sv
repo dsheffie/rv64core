@@ -6,6 +6,10 @@
 import "DPI-C" function void log_store_release(input int r,
 					       input longint c);
 
+import "DPI-C" function void log_store_data(input int r,
+					    input longint c);
+
+
 import "DPI-C" function void log_l1d(input int gen_early_req,
 				     input int push_miss,
 				     input int push_miss_hit_inflight,
@@ -1428,6 +1432,11 @@ module nu_l1d(clk,
 `ifdef VERILATOR
    always_ff@(negedge clk)
      begin
+	if(core_store_data_valid)
+	  begin
+	     log_store_data({27'd0, core_store_data.rob_ptr}, r_cycle);
+	  end
+	
 	if(t_wr_store)
 	  begin
 	     wr_log(r_req.pc,
@@ -2038,46 +2047,49 @@ module nu_l1d(clk,
 		 end
 	       
 	       /* not qualified on r_got_req */
-	       if(!mem_q_empty & !t_got_miss & !r_lock_cache & !n_pending_tlb_miss &!w_eb_port1_hit & !w_eb_full & w_two_free_credits)
+	       if(!mem_q_empty & 
+		  !t_got_miss & 
+		  !r_lock_cache & 
+		  !n_pending_tlb_miss & 
+		  !w_eb_port1_hit & 
+		  !w_eb_full &
+		  w_two_free_credits & 
+		  !t_mh_block & 
+		  (r_mq_inflight[r_mq_head_ptr[`LG_MRQ_ENTRIES-1:0]] == 1'b0) ) 
 		 begin		    
-		    if(!t_mh_block & (r_mq_inflight[r_mq_head_ptr[`LG_MRQ_ENTRIES-1:0]] == 1'b0)  )
+		    if(t_mem_head.is_store | t_mem_head.is_atomic)
 		      begin
-			 if(t_mem_head.is_store | t_mem_head.is_atomic)
-			   begin
-			      if(w_st_amo_grad && (core_store_data_valid ? (t_mem_head.rob_ptr == core_store_data.rob_ptr) : 1'b0) )
-				begin
-				   t_pop_mq = 1'b1;
-				   core_store_data_ack = 1'b1;
-				   n_req = t_mem_head;
-				   n_req.data = core_store_data.data;
-				   t_cache_idx = t_mem_head.addr[IDX_STOP-1:IDX_START];
-				   t_cache_tag = t_mem_head.addr[`PA_WIDTH-1:IDX_STOP];
-				   t_addr = t_mem_head.addr;
-				   t_got_req = 1'b1;
-				   n_is_retry = 1'b1;
-				   n_last_wr = 1'b1;
-				end // if (t_mem_head.rob_ptr == head_of_rob_ptr)
-			      else if(drain_ds_complete && dead_rob_mask[t_mem_head.rob_ptr])
-				begin
-				   t_pop_mq = 1'b1;
-				   t_force_clear_busy = 1'b1;
-				end
-			   end // if (t_mem_head.is_store)
-			 else
+			 if(w_st_amo_grad && (core_store_data_valid ? (t_mem_head.rob_ptr == core_store_data.rob_ptr) : 1'b0) )
 			   begin
 			      t_pop_mq = 1'b1;
+			      core_store_data_ack = 1'b1;
 			      n_req = t_mem_head;
+			      n_req.data = core_store_data.data;
 			      t_cache_idx = t_mem_head.addr[IDX_STOP-1:IDX_START];
 			      t_cache_tag = t_mem_head.addr[`PA_WIDTH-1:IDX_STOP];
 			      t_addr = t_mem_head.addr;
 			      t_got_req = 1'b1;
 			      n_is_retry = 1'b1;
-			      t_got_rd_retry = 1'b1;
-			   end // else: !if(t_mem_head.is_store || t_mem_head.is_atomic)
-		      end
+			      n_last_wr = 1'b1;
+			   end // if (t_mem_head.rob_ptr == head_of_rob_ptr)
+			 else if(drain_ds_complete && dead_rob_mask[t_mem_head.rob_ptr])
+			   begin
+			      t_pop_mq = 1'b1;
+			      t_force_clear_busy = 1'b1;
+			   end
+		      end // if (t_mem_head.is_store)
+		    else
+		      begin
+			 t_pop_mq = 1'b1;
+			 n_req = t_mem_head;
+			 t_cache_idx = t_mem_head.addr[IDX_STOP-1:IDX_START];
+			 t_cache_tag = t_mem_head.addr[`PA_WIDTH-1:IDX_STOP];
+			 t_addr = t_mem_head.addr;
+			 t_got_req = 1'b1;
+			 n_is_retry = 1'b1;
+			 t_got_rd_retry = 1'b1;
+		      end // else: !if(t_mem_head.is_store || t_mem_head.is_atomic)
 		 end // if (!mem_q_empty && !t_got_miss && !r_lock_cache && !n_pending_tlb_miss)
-	       
-	       
 	       
 	     if(t_new_req)
 	       begin

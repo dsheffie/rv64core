@@ -5,8 +5,10 @@
 `include "uop.vh"
 
 
-import "DPI-C" function int read_word(input longint addr);
 import "DPI-C" function longint read_dword(input longint addr);
+import "DPI-C" function void drop_va2pa_caches();
+import "DPI-C" function longint read64(input longint addr, input longint vaddr);
+
 import "DPI-C" function void write_byte(input longint addr, input byte data, input longint root);
 import "DPI-C" function void write_half(input longint addr, input shortint  data, input longint root);
 import "DPI-C" function void write_word(input longint addr, input int data, input longint root, int id);
@@ -355,6 +357,15 @@ module perfect_l1d(clk,
    
    
    logic t_reset_graduated;
+
+   always_ff@(posedge clk)
+     begin
+	if(clear_tlb)
+	  begin
+	     drop_va2pa_caches();
+	  end
+     end
+
    
    always_ff@(posedge clk)
      begin
@@ -663,8 +674,8 @@ module perfect_l1d(clk,
 	t_pf2 = paging_active & (&t_req2_addr_pa);
 	
 
-	t_data2[63:0] = read_dword( {t_req2_addr_pa[63:12], r_req2.addr[11:4], 4'd0});
-	t_data2[127:64] = read_dword( {t_req2_addr_pa[63:12], r_req2.addr[11:4], 4'd8});
+	t_data2[63:0] = read64( {t_req2_addr_pa[63:12], r_req2.addr[11:4], 4'd0}, {r_req2.addr[63:4], 4'd0});
+	t_data2[127:64] = read64( {t_req2_addr_pa[63:12], r_req2.addr[11:4], 4'd8}, {r_req2.addr[63:4], 4'd0});
 	t_shift_2 = t_data2 >> w_shift_amt2;
 	
 	
@@ -827,8 +838,9 @@ module perfect_l1d(clk,
 	t_rsp_data = 'd0;
 	t_wr_array = 1'b0;
 
-	t_data[63:0] = read_dword( {t_req_addr_pa[63:12], r_req.addr[11:4], 4'd0});
-	t_data[127:64] = read_dword( {t_req_addr_pa[63:12], r_req.addr[11:4], 4'd8});
+	t_data[63:0] = read64( {t_req_addr_pa[63:12], r_req.addr[11:4], 4'd0}, {r_req.addr[63:4], 4'd0});
+	t_data[127:64] = read64( {t_req_addr_pa[63:12], r_req.addr[11:4], 4'd8}, {r_req.addr[63:4], 4'd0}); 
+
 	t_shift = t_data >> {r_req.addr[`LG_L1D_CL_LEN-1:0], 3'd0};
 
 	t_w64 = t_shift[63:0];
