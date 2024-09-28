@@ -505,24 +505,26 @@ void drop_va2pa_caches() {
 }
 
 long long read64(long long addr, long long vaddr) {
+  long long ma = (addr & (~0xfUL));
+  long long mva = (vaddr & (~0xfUL));
   if(addr != vaddr) {
     static const int lg_alias = LG_AC_ENTRIES - 8;
-    int po = addr & 255;
-    int vo = vaddr & (N_AC_ENTRIES-1);
+    int po = (addr>>4) & 255;
+    int vo = (vaddr>>4) & (N_AC_ENTRIES-1);
     //printf("addr = %lx, vaddr = %lx\n", addr, vaddr);
     
     for(int i = 0, o = po; i < (1<<lg_alias); i++, po += 256) {
       //printf("\i = %d, o = %d\n", i, po);      
       if(not(ac_valid.at(o))) continue;
       
-      if((o != vo) and (ac[o].pa == addr)) {
-	printf("alias found in cache for va %x, mapped to locations %d and %d\n",
-	       vaddr, o, vo);
-      }
+      //if((o != vo) and (ac[o].pa == ma)) {
+      //printf("alias found in cache for va %lx, pa %lx mapped to locations %d and %d\n",
+      //       mva, ma, o, vo);
+      //}
     }
     ac_valid[vo] = true;
-    ac[vo].va = vaddr;
-    ac[vo].pa = addr;
+    ac[vo].va = mva;
+    ac[vo].pa = ma;
   }
   return read_dword(addr);
 }
