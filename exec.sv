@@ -1754,7 +1754,7 @@ module exec(clk,
 	       {{32{(t_signed_div ? t_srcB[31] : 1'b0)}}, t_srcB[31:0]} : 
 	       t_srcB;
 	       
-   divider #(.LG_W(6))
+   nu_divider #(.LG_W(6))
    d64 (
 	.clk(clk), 
 	.reset(reset),
