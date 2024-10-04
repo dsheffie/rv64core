@@ -3,6 +3,18 @@
 `include "uop.vh"
 
 `ifdef VERILATOR
+import "DPI-C" function void l1d_port_util(input int port1, input int port2);
+import "DPI-C" function void record_l1d(input int req, 
+					input int ack, 
+					input int new_req,
+					input int accept,
+					input int block);
+
+import "DPI-C" function void drop_va2pa_caches();
+
+import "DPI-C" function void alias_check(input longint paddr,
+					 input longint vaddr);
+
 import "DPI-C" function void log_store_release(input int r,
 					       input longint c);
 
@@ -1428,6 +1440,13 @@ module nu_l1d(clk,
 `ifdef VERILATOR
    always_ff@(negedge clk)
      begin
+	l1d_port_util({31'd0,r_got_req}, {31'd0, r_got_req2});
+	record_l1d({31'd0,core_mem_va_req_valid},
+		   {31'd0,core_mem_va_req_ack},
+		   {31'd0, t_new_req},
+		   {31'd0, t_accept},
+		   {25'd0, t_new_req_c}
+		   );
 	if(t_wr_store)
 	  begin
 	     wr_log(r_req.pc,
@@ -1646,7 +1665,21 @@ module nu_l1d(clk,
 	  begin
 	     n_cache_hits = r_cache_hits + 64'd1;
 	  end
+     end // always_comb
+
+`ifdef VERILATOR
+   always_ff@(negedge clk)
+     begin
+	if(clear_tlb)
+	  begin
+	     drop_va2pa_caches();
+	  end
+	if(r_got_req2 & w_tlb_hit)
+	  begin
+	     alias_check(t_req2_pa.addr, r_req2.addr);
+	  end
      end
+`endif
 
    always_comb
      begin
@@ -1703,9 +1736,18 @@ module nu_l1d(clk,
 		  t_core_mem_rsp.has_cause = 1'b1;
 		  t_core_mem_rsp.addr = r_req2.addr;
 		  t_core_mem_rsp_valid = 1'b1;		  
+	       end // if (r_req2.op == MEM_NOP)
+	     else if(!w_tlb_hit & w_zero_page)
+	       begin
+		  t_core_mem_rsp.dst_valid = r_req2.dst_valid;
+		  t_core_mem_rsp.has_cause = 1'b1;
+		  t_core_mem_rsp.cause = LOAD_PAGE_FAULT;
+		  t_core_mem_rsp.addr = r_req2.addr;
+		  t_core_mem_rsp_valid = 1'b1;			 
 	       end
 	     else if(!w_tlb_hit)
 	       begin
+		  //$display("TLB miss! for address %x", r_req2.addr);
 		  n_pending_tlb_miss = 1'b1;
 		  n_pending_tlb_zero_page = w_zero_page;
 		  if(r_pending_tlb_miss) $stop();
@@ -1807,24 +1849,37 @@ module nu_l1d(clk,
 	& !(t_mem_head.is_store | t_mem_head.is_atomic);
    
    logic t_new_req;
+   logic [6:0] t_new_req_c;
+   
    logic t_accept;
    
    always_comb
      begin
-	t_cm_block = r_got_req && r_last_wr && 
-		     (r_cache_idx == core_mem_va_req.addr[IDX_STOP-1:IDX_START]);
-
+	t_cm_block = r_got_req && r_last_wr && (r_cache_idx == core_mem_va_req.addr[IDX_STOP-1:IDX_START]);
 	t_cm_block_stall = t_cm_block && !(r_did_reload||r_is_retry);
-	
-	t_new_req = core_mem_va_req_valid && w_got_hit_or_idle &&
-		    !(mem_q_almost_full|mem_q_full) && 
-		    !w_got_rd_retry &&
-		    !(r_last_wr2 && (r_cache_idx2 == core_mem_va_req.addr[IDX_STOP-1:IDX_START]) && !core_mem_va_req.is_store) &&
-		    !(n_pending_tlb_miss | r_pending_tlb_miss) &&
-		    !t_cm_block_stall &&
-		    (!r_rob_inflight[core_mem_va_req.rob_ptr])	;
 
-     end
+	t_new_req_c[0] = w_got_hit_or_idle;
+	t_new_req_c[1] = !(mem_q_almost_full|mem_q_full);
+	t_new_req_c[2] = !w_got_rd_retry;
+	t_new_req_c[3] = !(r_last_wr2 & (r_cache_idx2 == core_mem_va_req.addr[IDX_STOP-1:IDX_START]) & !core_mem_va_req.is_store);
+	t_new_req_c[4] = !(n_pending_tlb_miss | r_pending_tlb_miss);
+	t_new_req_c[5] = !t_cm_block_stall;
+	t_new_req_c[6] = !r_rob_inflight[core_mem_va_req.rob_ptr];
+	
+	t_new_req = core_mem_va_req_valid & (&t_new_req_c);
+	// //0
+	// 	    w_got_hit_or_idle && //1
+	// 	    !(mem_q_almost_full|mem_q_full) &&  //2
+	// 	    !w_got_rd_retry && //3
+	// 	    !(r_last_wr2 && (r_cache_idx2 == core_mem_va_req.addr[IDX_STOP-1:IDX_START]) && !core_mem_va_req.is_store) && //4
+	// 	    !(n_pending_tlb_miss | r_pending_tlb_miss) && //5
+	// 	    !t_cm_block_stall && //6
+	// 	    (!r_rob_inflight[core_mem_va_req.rob_ptr]); //7
+
+     end // always_comb
+
+
+   
 
    logic t_old_ack;
    always_comb
@@ -2268,7 +2323,8 @@ module nu_l1d(clk,
      end // always_ff@ (negedge clk)
 
 
-   wire w_reload_line = ((core_mem_va_req.addr[IDX_STOP-1:IDX_START] == r_miss_idx) & (r_state != ACTIVE)) | 
+   wire w_reload_line = ((core_mem_va_req.addr[IDX_STOP-1:IDX_START] == r_miss_idx) & 
+			 (r_state != ACTIVE)) | 
 	((core_mem_va_req.addr[IDX_STOP-1:IDX_START] == t_miss_idx) & t_got_miss);
    
    
@@ -2285,7 +2341,7 @@ module nu_l1d(clk,
 	n_tlb_addr = r_tlb_addr;
 	
 	t_accept = t_new_req & (t_got_req ? n_last_wr : 1'b1) & !w_reload_line;
-	/*& t_old_ack*/;
+
 	if(w_got_reload_pf)
 	  begin
 	     n_req2.op = MEM_NOP;

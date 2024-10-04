@@ -59,6 +59,9 @@ static uint64_t rob_full = 0;
 
 static uint64_t l1d_reqs = 0;
 static uint64_t l1d_acks = 0;
+static uint64_t l1d_new_reqs = 0;
+static uint64_t l1d_accept = 0;
+
 static uint64_t l1d_stores = 0;
 
 static std::map<int,uint64_t> block_distribution;
@@ -70,16 +73,15 @@ static std::map<int,uint64_t> fault_to_restart_distribution;
 
 static std::map<uint64_t, uint64_t> supervisor_histo;
 
-static const char* l1d_stall_str[8] =
+static const char* l1d_stall_str[7] =
   {
-   "no stall", //0
-   "got miss", //1 
-   "full memory queue", //2
-   "not possible", //3
-   "load retry", //4
-   "store to same set", //5
-   "cm block stall", //6
-   "inflight rob ptr", //7
+   "wasnt idle or hit", //0
+   "full memory queue", //1
+   "read retry", //2
+   "store to same set", //3
+   "tlb miss", //4
+   "cm block", //5
+   "rob ptr inflight"
 };
 static uint64_t l1d_stall_reasons[8] = {0};
 static bool enable_checker = true, use_checkpoint = false;
@@ -120,13 +122,19 @@ void record_ds_restart(int cycles) {
 }
 
 
-
-void record_l1d(int req, int ack, int ack_st, int blocked, int stall_reason) {
+uint64_t l1d_block_reason[7] = {0};
+  
+void record_l1d(int req, int ack, int new_req, int accept, int block) {
   l1d_reqs += req;
   l1d_acks += ack;
-  l1d_stores += ack_st;
-  block_distribution[__builtin_popcount(blocked)]++;
-  l1d_stall_reasons[stall_reason&15]++;
+  l1d_new_reqs += new_req;
+  l1d_accept += accept;
+  for(int i = 0; (i < 7) & req & (!new_req); i++) {
+    if((block & (1<<i)) == 0) {
+      l1d_block_reason[i]++;
+      break;
+    }
+  }
 }
 
 uint64_t mem_table[32] = {0};
@@ -136,6 +144,47 @@ bool is_load[32] = {false};
 uint64_t n_logged_loads = 0;
 uint64_t total_load_lat = 0;
 
+
+struct alias_cache_entry {
+  uint64_t va;
+  uint64_t pa;
+};
+
+#define LG_AC_ENTRIES 10
+#define N_AC_ENTRIES (1<<LG_AC_ENTRIES)
+
+static alias_cache_entry ac[N_AC_ENTRIES];
+static std::array<bool, N_AC_ENTRIES> ac_valid = {false};
+
+void drop_va2pa_caches() {
+  for(int i = 0; i < (N_AC_ENTRIES); i++) {
+    ac_valid[i] = false;
+  }
+}
+
+void alias_check(long long addr, long long vaddr) {
+  long long ma = (addr & (~0xfUL));
+  long long mva = (vaddr & (~0xfUL));
+  if(addr != vaddr) {
+    static const int lg_alias = LG_AC_ENTRIES - 8;
+    int po = (addr>>4) & 255;
+    int vo = (vaddr>>4) & (N_AC_ENTRIES-1);
+    //printf("addr = %lx, vaddr = %lx\n", addr, vaddr);
+    
+    for(int i = 0, o = po; i < (1<<lg_alias); i++, o += 256) {
+      //printf("\i = %d, o = %d\n", i, po);      
+      if(not(ac_valid.at(o))) continue;
+      
+      if((o != vo) and (ac[o].pa == ma)) {
+	printf("loc %d : alias found in cache for va %lx, pa %lx mapped to locations %d and %d, other va %lx\n",
+	       o, mva, ma, o, vo, ac[o].va);
+      }
+    }
+    ac_valid[vo] = true;
+    ac[vo].va = mva;
+    ac[vo].pa = ma;
+  }
+}
 
 std::map<uint64_t, uint64_t> last_store;
 
@@ -752,6 +801,17 @@ static int buildArgcArgv(const char *filename, const char *sysArgs, char ***argv
     free(sa);
   }
   return (int)args.size();
+}
+
+static uint64_t port1_active = 0, port2_active = 0;
+
+void l1d_port_util(int port1, int port2) {
+  if(port1) {
+    ++port1_active;
+  }
+  if(port2) {
+    ++port2_active;
+  }
 }
 
 int main(int argc, char **argv) {
@@ -1624,15 +1684,15 @@ int main(int argc, char **argv) {
       out << restart_ds_distribution.begin()->first << " min cycles for delay slot\n";
       out << restart_ds_distribution.rbegin()->first << " max cycles for delay slot\n";
     }
-    for(auto &p : fault_distribution) {
-      out << p.first << " faults inflight, " << p.second << " times\n";
-    }
-    for(auto &p : branch_distribution) {
-      out << p.first << " branches inflight, " << p.second << " times\n";
-    }
-    for(auto &p : fault_to_restart_distribution) {
-      out << p.first << " cycles before restart, " << p.second << " times\n";
-    }
+    //for(auto &p : fault_distribution) {
+    //out << p.first << " faults inflight, " << p.second << " times\n";
+    //}
+    //for(auto &p : branch_distribution) {
+    //out << p.first << " branches inflight, " << p.second << " times\n";
+    //}
+    //for(auto &p : fault_to_restart_distribution) {
+    //out << p.first << " cycles before restart, " << p.second << " times\n";
+    //}
     dump_histo(branch_name, mispredicts, s);
     uint64_t total_pushout = 0;
     for(auto &p : pushout_histo) {
@@ -1669,17 +1729,24 @@ int main(int argc, char **argv) {
     
     out << "l1d_reqs = " << l1d_reqs << "\n";
     out << "l1d_acks = " << l1d_acks << "\n";
+    out << "l1d_new_reqs = " << l1d_new_reqs << "\n";
+    out << "l1d_accept   = " << l1d_accept << "\n";
+
+    for(int i = 0; i < 7; i++) {
+      printf("%s = %lu\n",
+	     l1d_stall_str[i],
+	     l1d_block_reason[i]);
+    }
+    
     out << "l1d_stores = " << l1d_stores << "\n";
     out << "l1d tput = " << (static_cast<double>(l1d_acks) /l1d_reqs) << "\n";
+    std::cout << "l1d tput = " << (static_cast<double>(l1d_acks) /l1d_reqs) << "\n";
+    std::cout << "l1d_reqs = " << l1d_reqs << "\n";
+    std::cout << "l1d_acks = " << l1d_acks << "\n";
+    std::cout << "l1d_new_reqs = " << l1d_new_reqs << "\n";
+    std::cout << "l1d_accept   = " << l1d_accept << "\n";
     
-    //for(auto &p :block_distribution) {
-    //out << p.first << "," << p.second << "\n";
-    //}
-    for(int i = 1; i < 8; i++) {
-      if(l1d_stall_reasons[i] != 0) {
-	out << l1d_stall_reasons[i] << " " << l1d_stall_str[i] << "\n";
-      }
-    }
+    
     std::cout << "total_retire = " << total_retire << "\n";
     std::cout << "total_cycle  = " << total_cycle << "\n";
     std::cout << "total ipc    = " << static_cast<double>(total_retire) / total_cycle << "\n";
@@ -1701,6 +1768,11 @@ int main(int argc, char **argv) {
     std::cout << "l2  mpki     = " << l2_mpki << "\n";        
     std::cout << "l1d accesses = " << tb->l1d_cache_accesses << "\n";
 
+    double port1_util = static_cast<double>(port1_active) / total_cycle;
+    double port2_util = static_cast<double>(port2_active) / total_cycle;    
+    
+    std::cout << "l1d port1 util = " << port1_util << "\n";
+    std::cout << "l1d port2 util = " << port2_util << "\n";
 
     std::cout << "log_l1d_misses                 = " << log_l1d_misses << "\n";
     std::cout << "log_l1d_dirty_misses           = " << log_l1d_dirty_misses <<"\n";
