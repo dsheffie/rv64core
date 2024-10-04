@@ -49,9 +49,9 @@ static uint64_t n_rdy[3] = {0};
 
 static uint64_t n_int_exec[2] = {0};
 static uint64_t n_int2_exec[2] = {0};
-static uint64_t n_mem_exec[3] = {0};
+static uint64_t n_mem_exec[2] = {0};
 
-static uint64_t q_full[3] = {0};
+static uint64_t q_full[2] = {0};
 static uint64_t dq_empty =  0;
 static uint64_t uq_full = 0;
 static uint64_t n_active = 0;
@@ -600,11 +600,10 @@ void report_exec(int int_valid, int int_ready,
   n_int2_exec[1] += int2_ready;  
   n_mem_exec[0] += mem_valid;
   n_mem_exec[1] += mem_ready;
-  n_mem_exec[2] += blocked_by_store;
     
   q_full[0] += intq_full;
   q_full[1] += memq_full;
-  q_full[2] += fpq_full;
+
 
   int total_ready = __builtin_popcount(ready_int) +
     __builtin_popcount(ready_int2);
@@ -1633,8 +1632,9 @@ int main(int argc, char **argv) {
     out << n_int2_exec[1] << " cycles where int2 exec queue dispatches\n";    
     out << n_mem_exec[0] << " cycles where mem exec queue is not empty\n";
     out << n_mem_exec[1] << " cycles where mem exec queue dispatches\n";
-    out << n_mem_exec[2] << " cycles where mem exec queue is blocked by a store\n";
 
+    std::cout << "mem queue tput = " << static_cast<double>(n_mem_exec[1]) /  n_mem_exec[0] << "\n";
+    
     out << q_full[0] << " cycles with int queue full\n";
     out << q_full[1] << " cycles with mem queue full\n";
     out << dq_empty  << " cycles with an empty decode queue\n";
