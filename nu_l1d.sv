@@ -1057,17 +1057,17 @@ module nu_l1d(clk,
 	     r_store_stalls <= n_store_stalls;
 	     r_inhibit_write <= n_inhibit_write;
 	     memq_empty <= mem_q_empty
-                           & (&n_mrq_credits)
-                             & drain_ds_complete
-                           & !core_mem_va_req_valid
-                           & w_eb_empty
-                           & !t_got_req
-                           & !t_got_req2
-                           & !t_push_miss
-                           & !n_mem_req_valid
-                           & !mem_rsp_valid
-                           & (r_n_inflight == 'd0);
-	     
+			   & (&n_mrq_credits)
+			   & drain_ds_complete 
+			   & !core_mem_va_req_valid
+			   & w_eb_empty
+			   & !t_got_req 
+			   & !t_got_req2 
+			   & !t_push_miss
+			   & !n_mem_req_valid
+			   & !mem_rsp_valid
+			   & (r_n_inflight == 'd0);
+
 	     r_q_priority <= n_q_priority;
 	     r_must_forward  <= t_mh_block & t_pop_mq;
 	     r_must_forward2 <= t_cm_block & core_mem_va_req_ack;
@@ -1669,19 +1669,21 @@ module nu_l1d(clk,
 	  end
      end // always_comb
 
-`ifdef VERILATOR
-   always_ff@(negedge clk)
-     begin
-	if(clear_tlb)
-	  begin
-	     drop_va2pa_caches();
-	  end
-	if(r_got_req2 & w_tlb_hit)
-	  begin
-	     alias_check(t_req2_pa.addr, r_req2.addr);
-	  end
-     end
-`endif
+
+
+// `ifdef VERILATOR
+//    always_ff@(negedge clk)
+//      begin
+// 	if(clear_tlb)
+// 	  begin
+// 	     drop_va2pa_caches();
+// 	  end
+// 	if(r_got_req2 & w_tlb_hit)
+// 	  begin
+// 	     alias_check(t_req2_pa.addr, r_req2.addr);
+// 	  end
+//      end
+// `endif
 
    always_comb
      begin
