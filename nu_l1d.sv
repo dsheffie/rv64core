@@ -1059,12 +1059,17 @@ module nu_l1d(clk,
 	     r_core_mem_rsp_valid <= n_core_mem_rsp_valid;
 	     r_store_stalls <= n_store_stalls;
 	     r_inhibit_write <= n_inhibit_write;
-	     memq_empty <= mem_q_empty 
-			   && drain_ds_complete 
-			   && !core_mem_va_req_valid 
-			   && !t_got_req && !t_got_req2 
-			   && !t_push_miss
-			   && (r_n_inflight == 'd0);
+	     memq_empty <= mem_q_empty
+                           & (&n_mrq_credits)
+                             & drain_ds_complete
+                           & !core_mem_va_req_valid
+                           & w_eb_empty
+                           & !t_got_req
+                           & !t_got_req2
+                           & !t_push_miss
+                           & !n_mem_req_valid
+                           & !mem_rsp_valid
+                           & (r_n_inflight == 'd0);
 	     
 	     r_q_priority <= n_q_priority;
 	     r_must_forward  <= t_mh_block & t_pop_mq;
