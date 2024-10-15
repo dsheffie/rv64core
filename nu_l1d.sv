@@ -1670,21 +1670,6 @@ module nu_l1d(clk,
      end // always_comb
 
 
-
-// `ifdef VERILATOR
-//    always_ff@(negedge clk)
-//      begin
-// 	if(clear_tlb)
-// 	  begin
-// 	     drop_va2pa_caches();
-// 	  end
-// 	if(r_got_req2 & w_tlb_hit)
-// 	  begin
-// 	     alias_check(t_req2_pa.addr, r_req2.addr);
-// 	  end
-//      end
-// `endif
-
    always_comb
      begin
 	t_core_mem_rsp.data = r_req.addr;

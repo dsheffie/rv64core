@@ -38,10 +38,12 @@ module
 		   resume_pc,
 		   ready_for_resume,
 		   mem_req_valid, 
-		   mem_req_addr, 
+		   mem_req_addr,
+		   mem_req_tag,
 		   mem_req_store_data,
 		   mem_req_opcode,
 		   mem_rsp_valid,
+		   mem_rsp_tag,
 		   mem_rsp_load_data,
 		   alloc_valid,
 		   alloc_two_valid,
@@ -132,11 +134,13 @@ module
    /* mem port */
    output logic 			mem_req_valid;
    output logic [`PA_WIDTH-1:0]		mem_req_addr;
+   output logic [`LG_L2_REQ_TAGS-1:0] mem_req_tag;
    output logic [(1 << (`LG_L2_CL_LEN+3)) - 1:0] mem_req_store_data;
    output logic [3:0] 				 mem_req_opcode;
    
    input logic 					 mem_rsp_valid;
-   input logic [(1 << (`LG_L2_CL_LEN+3)) - 1:0]  mem_rsp_load_data;
+   input logic [`LG_L2_REQ_TAGS-1:0]		 mem_rsp_tag;
+   input logic [(1 << (`LG_L2_CL_LEN+3)) - 1:0]	 mem_rsp_load_data;
    
    output logic					 alloc_valid;
    output logic					 alloc_two_valid;
@@ -452,10 +456,12 @@ module
 	       
 	       .mem_req_valid(mem_req_valid),
 	       .mem_req_addr(mem_req_addr),
+	       .mem_req_tag(mem_req_tag),
 	       .mem_req_store_data(mem_req_store_data),
 	       .mem_req_opcode(mem_req_opcode),
 
 	       .mem_rsp_valid(mem_rsp_valid),
+	       .mem_rsp_tag(mem_rsp_tag),
 	       .mem_rsp_load_data(mem_rsp_load_data),
 		    
 	       .mmu_req_valid(w_mmu_req_valid),

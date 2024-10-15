@@ -1426,7 +1426,10 @@ int main(int argc, char **argv) {
     if(tb->mem_req_valid && (mem_reply_cycle == -1)) {
       ++mem_reqs;
       mem_reply_cycle = cycle + (tb->mem_req_opcode == 4 ? 1 : 2)*mem_lat;
-      
+      printf("Reply to tag %d at cycle %d for addr %x\n",
+	     tb->mem_req_tag,
+	     mem_reply_cycle,
+	     tb->mem_req_addr);
     }
     
     if(/*tb->mem_req_valid*/mem_reply_cycle ==cycle) {
@@ -1461,6 +1464,10 @@ int main(int argc, char **argv) {
       }
       last_addr = tb->mem_req_addr;
       tb->mem_rsp_valid = 1;
+      printf("return tag %d at cycle %ld\n",
+	     static_cast<int>(tb->mem_req_tag),
+	     cycle);
+      tb->mem_rsp_tag = tb->mem_req_tag;
     }
 
     

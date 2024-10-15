@@ -40,12 +40,14 @@ module l2_2way(clk,
 	  
 	  //l2 -> mem
 	  mem_req_valid, 
-	  mem_req_addr, 
+	  mem_req_addr,
+	  mem_req_tag,
 	  mem_req_store_data, 
 	  mem_req_opcode,
 	  
 	  //mem -> l2
 	  mem_rsp_valid,
+	  mem_rsp_tag,
 	  mem_rsp_load_data,
 	  
 	  //page walker signals
@@ -101,33 +103,35 @@ module l2_2way(clk,
    
    output logic mem_req_valid;
    output logic [`PA_WIDTH-1:0] mem_req_addr;
+   output logic [`LG_L2_REQ_TAGS-1:0] mem_req_tag;
    output logic [(1 << (`LG_L2_CL_LEN+3)) - 1 :0] mem_req_store_data;
    output logic [3:0] 	mem_req_opcode;
    
    input logic 		mem_rsp_valid;
+   input logic [`LG_L2_REQ_TAGS-1:0] mem_rsp_tag;
    input logic [(1 << (`LG_L2_CL_LEN+3)) - 1 :0] mem_rsp_load_data;
-
+   
    input logic					 mmu_req_valid;
-   input logic [`PA_WIDTH-1:0]			  mmu_req_addr;
-   input logic [63:0]				  mmu_req_data;
-   input logic				  mmu_req_store;
-   output logic				  mmu_rsp_valid;
-   output logic [63:0]			  mmu_rsp_data;
-
+   input logic [`PA_WIDTH-1:0]			 mmu_req_addr;
+   input logic [63:0]				 mmu_req_data;
+   input logic					 mmu_req_store;
+   output logic					 mmu_rsp_valid;
+   output logic [63:0]				 mmu_rsp_data;
    
-   input logic	mem_mark_valid;
-   input logic	       mem_mark_accessed;
-   input logic	       mem_mark_dirty;
-   input logic [63:0] mem_mark_addr;
-   output logic	      mem_mark_rsp_valid;
    
-   output logic [63:0] cache_hits;
-   output logic [63:0] cache_accesses;
+   input logic					 mem_mark_valid;
+   input logic					 mem_mark_accessed;
+   input logic					 mem_mark_dirty;
+   input logic [63:0]				 mem_mark_addr;
+   output logic					 mem_mark_rsp_valid;
    
-   logic [63:0] r_mmu_rsp_data, n_mmu_rsp_data;
-   logic	r_mmu_rsp_valid, n_mmu_rsp_valid;
-   logic	n_mem_mark_rsp_valid, r_mem_mark_rsp_valid;
-
+   output logic [63:0]				 cache_hits;
+   output logic [63:0]			  cache_accesses;
+   
+   logic [63:0]				  r_mmu_rsp_data, n_mmu_rsp_data;
+   logic				  r_mmu_rsp_valid, n_mmu_rsp_valid;
+   logic				  n_mem_mark_rsp_valid, r_mem_mark_rsp_valid;
+   
    
    
    assign mmu_rsp_valid = r_mmu_rsp_valid;
@@ -163,6 +167,8 @@ module l2_2way(clk,
    
    
    logic [`PA_WIDTH-1:0]    n_addr, r_addr;
+   logic [`LG_L2_REQ_TAGS-1:0] n_rob_tag, r_rob_tag;
+   
    logic [`PA_WIDTH-1:0]    n_wb_addr, r_wb_addr;
    logic		    n_need_wb, r_need_wb;
    
@@ -222,10 +228,18 @@ module l2_2way(clk,
    
    assign flush_complete = r_flush_complete;
    assign mem_req_addr = r_addr;
+   assign mem_req_tag = r_rob_tag;
    assign mem_req_valid = r_mem_req;
    assign mem_req_opcode = r_mem_opcode;
    assign mem_req_store_data = r_mem_req_store_data;
-   
+
+   always_ff@(negedge clk)
+     begin
+	if(r_addr == 32'h82c70010 && r_rob_tag == 'd4 && mem_req_valid)
+	  begin
+	     $stop();
+	  end
+     end
    assign l1d_rsp_valid = r_l1d_rsp_valid;
    assign l1i_rsp_valid = r_l1i_rsp_valid;
 
@@ -261,13 +275,27 @@ module l2_2way(clk,
    wire [127:0]		w_d = w_hit0 ? w_d0 : w_d1;
 
 
-			
+   localparam		N_ROB_ENTRIES = (1<<`LG_L2_REQ_TAGS);
+   logic		t_alloc_rob,t_pop_rob,t_is_wb;
+   
+   logic [`LG_L2_REQ_TAGS:0] r_rob_head_ptr, n_rob_head_ptr;
+   logic [`LG_L2_REQ_TAGS:0] r_rob_tail_ptr, n_rob_tail_ptr;      
+   logic [N_ROB_ENTRIES-1:0] r_rob_valid, r_rob_done, r_rob_hitbusy, r_rob_was_wb;
+   logic [31:0]		     r_rob_addr [N_ROB_ENTRIES-1:0];
+   
+   wire [`LG_L2_REQ_TAGS-1:0] w_rob_head_ptr = r_rob_head_ptr[`LG_L2_REQ_TAGS-1:0];
+   wire [`LG_L2_REQ_TAGS-1:0] w_rob_tail_ptr = r_rob_tail_ptr[`LG_L2_REQ_TAGS-1:0];
+   
+   wire			      w_rob_empty = r_rob_head_ptr == r_rob_tail_ptr;
+   wire			      w_rob_full = (r_rob_head_ptr[`LG_L2_REQ_TAGS] != r_rob_tail_ptr[`LG_L2_REQ_TAGS]) &
+			      (r_rob_head_ptr[`LG_L2_REQ_TAGS-1:0] == r_rob_tail_ptr[`LG_L2_REQ_TAGS-1:0]);
+   
    
    
    wire 		w_need_wb0 = w_valid0 ? w_dirty0 : 1'b0;
    wire			w_need_wb1 = w_valid1 ? w_dirty1 : 1'b0;   
    wire			w_need_wb = w_need_wb0 | w_need_wb1;
-   
+
    logic		n_mmu_mark_req, r_mmu_mark_req;
    logic		n_mmu_mark_dirty, r_mmu_mark_dirty;
    logic		n_mmu_mark_accessed, r_mmu_mark_accessed;
@@ -285,7 +313,105 @@ module l2_2way(clk,
    wire [127:0]		w_updated_pte = r_mmu_addr3 ? 
 			{w_d[127:72], r_mmu_mark_dirty|w_d[71], r_mmu_mark_accessed|w_d[70], w_d[69:0]} :
 			{w_d[127:8], r_mmu_mark_dirty|w_d[7], r_mmu_mark_accessed|w_d[6], w_d[5:0]};      
-      
+   wire [N_ROB_ENTRIES-1:0] w_hit_rob;
+   generate
+      for(genvar i = 0; i < N_ROB_ENTRIES; i=i+1)
+	begin
+	   assign w_hit_rob[i] = r_rob_valid[i] ? (r_rob_addr[i] == n_addr) : 1'b0;
+	end
+   endgenerate
+   wire			    w_hit_inflight = |w_hit_rob;
+   
+
+   always_ff@(posedge clk)
+     begin
+	if(reset)
+	  begin
+	     r_rob_head_ptr <= 'd0;
+	     r_rob_tail_ptr <= 'd0;	     
+	  end
+	else
+	  begin
+	     r_rob_head_ptr <= n_rob_head_ptr;
+	     r_rob_tail_ptr <= n_rob_tail_ptr;
+	  end
+     end // always_ff@ (posedge clk)
+
+   always_ff@(posedge clk)
+     begin
+	if(reset)
+	  begin
+	     r_rob_valid <= 'd0;
+	     r_rob_done <= 'd0;
+	     r_rob_hitbusy <= 'd0;
+	     r_rob_was_wb <= 'd0;
+	  end
+	else
+	  begin
+	     if(t_alloc_rob)
+	       begin
+		  r_rob_valid[r_rob_tail_ptr[`LG_L2_REQ_TAGS-1:0]] <= 1'b1;
+		  r_rob_done[r_rob_tail_ptr[`LG_L2_REQ_TAGS-1:0]] <= 1'b0;
+		  r_rob_hitbusy[r_rob_tail_ptr[`LG_L2_REQ_TAGS-1:0]] <= w_hit_inflight;
+		  r_rob_was_wb[r_rob_tail_ptr[`LG_L2_REQ_TAGS-1:0]] <= t_is_wb;
+	       end
+	     
+	     if(mem_rsp_valid)
+	       begin
+		  r_rob_done[mem_rsp_tag] <= 1'b1;
+		  $display("tag %d returns at cycle %d", mem_rsp_tag, r_cycle);
+		     
+		  if( r_rob_done[mem_rsp_tag] )
+		    begin
+		       $display("tag %d is already done.., valid %b", 
+				mem_rsp_tag, r_rob_valid[mem_rsp_tag]);
+		       $stop();
+		    end
+		  
+		  if( r_rob_valid[mem_rsp_tag] == 1'b0)
+		    begin
+		       $stop();
+		    end
+
+		      
+	       end
+		 
+	     if(t_pop_rob)
+	       begin
+		  r_rob_valid[r_rob_head_ptr[`LG_L2_REQ_TAGS-1:0]] <= 1'b0;
+	       end
+	  end
+     end // always_ff@ (posedge clk)
+
+   always_ff@(posedge clk)
+     begin
+	if(t_alloc_rob)
+	  begin
+	     r_rob_addr[w_rob_tail_ptr] <= n_addr;
+	     //$display("allocate entry %d for address %x, wb %b, cycle %d", 
+	     //	      w_rob_tail_ptr, n_addr,
+	     //	      t_is_wb,
+	     //	      r_cycle);
+	  end
+     end
+
+   
+   
+   always_comb
+     begin
+	n_rob_head_ptr = r_rob_head_ptr;
+	n_rob_tail_ptr = r_rob_tail_ptr;
+	if(t_alloc_rob)
+	  begin
+	     n_rob_tail_ptr = r_rob_tail_ptr + 'd1;
+	  end
+	if(t_pop_rob)
+	  begin
+	     n_rob_head_ptr = r_rob_head_ptr + 'd1;	     
+	  end
+     end
+   
+   
    always_ff@(posedge clk)
      begin
 	if(reset)
@@ -304,6 +430,7 @@ module l2_2way(clk,
 	     r_tag <= 'd0;
 	     r_opcode <= 4'd0;
 	     r_addr <= 'd0;
+	     r_rob_tag <= 'd0;
 	     r_wb_addr <= 'd0;
 	     r_need_wb <= 1'b0;
 	     r_saveaddr <= 'd0;
@@ -351,6 +478,7 @@ module l2_2way(clk,
 	     r_tag <= n_tag;
 	     r_opcode <= n_opcode;
 	     r_addr <= n_addr;
+	     r_rob_tag <= n_rob_tag;
 	     r_wb_addr <= n_wb_addr;
 	     r_need_wb <= n_need_wb;
 	     r_saveaddr <= n_saveaddr;
@@ -700,6 +828,16 @@ module l2_2way(clk,
    // 	  end
    //   end
   
+   wire w_head_of_rob_done = !w_rob_empty & r_rob_valid[w_rob_head_ptr] & r_rob_done[w_rob_head_ptr];
+   //always_ff@(negedge clk)
+   //begin
+   //$display("cycle %d, state %d, n_rob_tag %d", r_cycle, r_state, n_rob_tag);
+   //end
+
+   //	$display("cycle %d, rob empty %b, head done %b, head ptr %b, tail ptr %b", 
+   //r_cycle, w_rob_empty, w_head_of_rob_done,
+   //r_rob_head_ptr, r_rob_tail_ptr);
+   //end
    
    always_comb
      begin
@@ -735,6 +873,7 @@ module l2_2way(clk,
 	n_tag = r_tag;
 	n_opcode = r_opcode;
 	n_addr = r_addr;
+	n_rob_tag = r_rob_tag;
 	n_wb_addr = r_wb_addr;
 	n_need_wb = r_need_wb;
 	
@@ -776,6 +915,10 @@ module l2_2way(clk,
 	n_l1d_rsp_valid = 1'b0;
 	n_last_idle = 1'b0;
 	
+	t_is_wb = 1'b0;
+	t_alloc_rob = 1'b0;
+	t_pop_rob = 1'b0;
+	
 	case(r_state)
 	  INITIALIZE:
 	    begin
@@ -811,87 +954,103 @@ module l2_2way(clk,
 	       n_opcode = MEM_LW;
 	       n_store_data = r_store_data;
 	       n_last_idle = 1'b1;
-	       if(r_need_wb)
+	       
+	       if(w_head_of_rob_done)
 		 begin
-		    //$display("performing writeback at cycle %d for address %x", 
-		    //r_cycle, r_wb_addr);			      		    
-		    n_mem_opcode = 4'd7; 
-		    n_mem_req = 1'b1;
-		    n_state = DIRTY_STORE;
-		    n_addr = r_wb_addr;
-		    n_mem_req = 1'b1;
-		    n_need_wb = 1'b0;
+		    $display("transaction is done for %d at cycle %d", 
+			     w_rob_tail_ptr, r_cycle);
+		    t_pop_rob = 1'b1;
 		 end
-	       else if(n_flush_req)
+	       else if(!w_rob_full)
 		 begin
-		    t_idx = 'd0;
-		    n_state = FLUSH_WAIT;
-		 end
-	       else if(w_mem_mark_valid)
-		 begin
-		    n_mmu_mark_req = 1'b0;
-		    n_mmu_mark_dirty = mem_mark_dirty;
-		    n_mmu_mark_accessed = mem_mark_accessed;
-		    n_mmu_addr3 = mem_mark_addr[3];		    
-		    t_idx = mem_mark_addr[LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN];			 
-		    n_tag = mem_mark_addr[(`PA_WIDTH-1):LG_L2_LINES+`LG_L2_CL_LEN];
-		    n_addr = {mem_mark_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
-		    n_saveaddr = {mem_mark_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
-		    n_opcode = MEM_LW;
-		    n_mark_pte = 1'b1;
-		    n_state = CHECK_VALID_AND_TAG;
-		    n_got_req = 1'b1;		    
-		 end
-	       else if(w_mmu_req)
-		 begin
-		    n_mmu_addr3 = mmu_req_addr[3];		    
-		    t_idx = mmu_req_addr[LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN];			 
-		    n_tag = mmu_req_addr[(`PA_WIDTH-1):LG_L2_LINES+`LG_L2_CL_LEN];
-		    n_addr = {mmu_req_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
-		    n_saveaddr = {mmu_req_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
-		    n_opcode = MEM_LW;
-		    n_state = CHECK_VALID_AND_TAG;
-		    n_mmu = 1'b1;
-		    n_got_req = 1'b1;		    
-		    //$display("l2 : mmu req addr %x, w_l1d_req = %b, w_l1i_req = %b", r_addr, w_l1d_req, w_l1i_req);		    
-		 end
-	       else if(w_l1d_req | w_l1i_req)
-		 begin
-		    n_l1d = w_pick_l1d;
-		    n_l1i = w_pick_l1i;		    
-		    if(w_pick_l1i)
+		    if(r_need_wb)
 		      begin
-			 //$display("accepting i-side, addr=%x", l1i_addr);			 
-			 n_last_gnt = 1'b0;			 
-			 t_idx = l1i_addr[LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN];
-			 n_tag = l1i_addr[(`PA_WIDTH-1):LG_L2_LINES+`LG_L2_CL_LEN];
-			 n_last_l1i_addr = l1i_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN];
-			 n_addr = {l1i_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
-			 n_saveaddr = {l1i_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
+			 //$display("performing writeback at cycle %d for address %x", 
+			 //r_cycle, r_wb_addr);			      		    
+			 n_mem_opcode = 4'd7; 
+			 n_mem_req = 1'b1;
+			 n_state = DIRTY_STORE;
+			 n_addr = r_wb_addr;
+			 n_need_wb = 1'b0;
+			 t_is_wb = 1'b1;
+			 t_alloc_rob = 1'b1;
+			 n_rob_tag = w_rob_tail_ptr;
+		      end
+		    else if(n_flush_req)
+		      begin
+			 t_idx = 'd0;
+			 n_state = FLUSH_WAIT;
+			 $stop();
+		      end
+		    else if(w_mem_mark_valid)
+		      begin
+			 n_mmu_mark_req = 1'b0;
+			 n_mmu_mark_dirty = mem_mark_dirty;
+			 n_mmu_mark_accessed = mem_mark_accessed;
+			 n_mmu_addr3 = mem_mark_addr[3];		    
+			 t_idx = mem_mark_addr[LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN];			 
+			 n_tag = mem_mark_addr[(`PA_WIDTH-1):LG_L2_LINES+`LG_L2_CL_LEN];
+			 n_addr = {mem_mark_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
+			 n_saveaddr = {mem_mark_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
 			 n_opcode = MEM_LW;
-			 n_l1i_req = 1'b0;
-			 t_gnt_l1i = 1'b1;
+			 n_mark_pte = 1'b1;
+			 n_state = CHECK_VALID_AND_TAG;
+			 n_got_req = 1'b1;
+			 n_rob_tag = w_rob_tail_ptr;			 
 		      end
-		    else if(w_pick_l1d)
+		    else if(w_mmu_req)
 		      begin
-			 n_last_gnt = 1'b1;
-			 t_idx = t_l1dq.addr[LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN];			 
-			 n_tag = t_l1dq.addr[(`PA_WIDTH-1):LG_L2_LINES+`LG_L2_CL_LEN];
-			 n_addr = {t_l1dq.addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
-			 n_last_l1d_addr = t_l1dq.addr[(`PA_WIDTH-1):`LG_L2_CL_LEN];			 
-			 n_saveaddr = {t_l1dq.addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
-			 n_store_data = t_l1dq.data;
-			 n_opcode = t_l1dq.opcode;
-			 n_l1d_req = 1'b0;
-			 n_l1d_rsp_tag = t_l1dq.tag;
-			 t_gnt_l1d = 1'b1;
+			 n_mmu_addr3 = mmu_req_addr[3];		    
+			 t_idx = mmu_req_addr[LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN];			 
+			 n_tag = mmu_req_addr[(`PA_WIDTH-1):LG_L2_LINES+`LG_L2_CL_LEN];
+			 n_addr = {mmu_req_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
+			 n_saveaddr = {mmu_req_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
+			 n_opcode = MEM_LW;
+			 n_state = CHECK_VALID_AND_TAG;
+			 n_mmu = 1'b1;
+			 n_got_req = 1'b1;
+			 n_rob_tag = w_rob_tail_ptr;	    
+			 //$display("l2 : mmu req addr %x, w_l1d_req = %b, w_l1i_req = %b", r_addr, w_l1d_req, w_l1i_req);		    
 		      end
-		    n_req_ack = 1'b1;
-		    n_got_req = 1'b1;		    
-		    n_state = CHECK_VALID_AND_TAG;
-		    n_cache_accesses = r_cache_accesses + 64'd1;
-		    n_cache_hits = r_cache_hits + 64'd1;
-		 end
+		    else if(w_l1d_req | w_l1i_req)
+		      begin
+			 n_l1d = w_pick_l1d;
+			 n_l1i = w_pick_l1i;
+			 n_rob_tag = w_rob_tail_ptr;			 
+			 if(w_pick_l1i)
+			   begin
+			      //$display("accepting i-side, addr=%x", l1i_addr);			 
+			      n_last_gnt = 1'b0;			 
+			      t_idx = l1i_addr[LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN];
+			      n_tag = l1i_addr[(`PA_WIDTH-1):LG_L2_LINES+`LG_L2_CL_LEN];
+			      n_last_l1i_addr = l1i_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN];
+			      n_addr = {l1i_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
+			      n_saveaddr = {l1i_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
+			      n_opcode = MEM_LW;
+			      n_l1i_req = 1'b0;
+			      t_gnt_l1i = 1'b1;
+			   end
+			 else if(w_pick_l1d)
+			   begin
+			      n_last_gnt = 1'b1;
+			      t_idx = t_l1dq.addr[LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN];			 
+			      n_tag = t_l1dq.addr[(`PA_WIDTH-1):LG_L2_LINES+`LG_L2_CL_LEN];
+			      n_addr = {t_l1dq.addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
+			      n_last_l1d_addr = t_l1dq.addr[(`PA_WIDTH-1):`LG_L2_CL_LEN];			 
+			      n_saveaddr = {t_l1dq.addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
+			      n_store_data = t_l1dq.data;
+			      n_opcode = t_l1dq.opcode;
+			      n_l1d_req = 1'b0;
+			      n_l1d_rsp_tag = t_l1dq.tag;
+			      t_gnt_l1d = 1'b1;
+			   end
+			 n_req_ack = 1'b1;
+			 n_got_req = 1'b1;		    
+			 n_state = CHECK_VALID_AND_TAG;
+			 n_cache_accesses = r_cache_accesses + 64'd1;
+			 n_cache_hits = r_cache_hits + 64'd1;
+		      end // if (w_l1d_req | w_l1i_req)
+		 end // else: !if(w_rob_full)
 	    end // case: IDLE
 	  CHECK_VALID_AND_TAG:
 	    begin
@@ -939,7 +1098,7 @@ module l2_2way(clk,
 				   n_l1d_req = 1'b0;
 				   n_l1d_rsp_tag = t_l1dq.tag;
 				   t_gnt_l1d = 1'b1;
-				   n_got_req = 1'b1;	
+				   n_got_req = 1'b1;
 				   //$display("early1");
 				end
 			      else
@@ -987,6 +1146,7 @@ module l2_2way(clk,
 		 end
 	       else
 		 begin
+		    t_alloc_rob = 1'b1;
 		    n_cache_hits = r_cache_hits - 64'd1;
 		    n_replace = (w_valid0==1'b0 ? 1'b0 :
 				(w_valid1==1'b0 ? 1'b1 : 
@@ -1010,9 +1170,6 @@ module l2_2way(clk,
 			      //n_mem_req = 1'b1;
 			      //n_state = DIRTY_STORE;			 
 			   end
-			 n_state = CLEAN_RELOAD;
-			 n_mem_opcode = 4'd4; //load
-			 n_mem_req = 1'b1;
 		      end // if (n_replace)
 		    else
 		      begin
@@ -1029,20 +1186,17 @@ module l2_2way(clk,
 			      //n_mem_req = 1'b1;
 			     // n_state = DIRTY_STORE;			 
 			   end
-			 n_state = CLEAN_RELOAD;
-			 n_mem_opcode = 4'd4; //load
-			 n_mem_req = 1'b1;
 		      end // else: !if(n_replace)
+		    n_state = CLEAN_RELOAD;
+		    n_mem_opcode = 4'd4; //load
+		    n_mem_req = 1'b1;
+		    
 		 end // else: !if(w_hit)
 	    end // case: CHECK_VALID_AND_TAG
 	  DIRTY_STORE:
 	    begin
 	       if(mem_rsp_valid)
 		 begin
-		    //$stop();
-		    //n_addr = r_saveaddr;
-		    //n_mem_opcode = 4'd4; //load
-		    //n_state = STORE_TURNAROUND;
 		    n_state = IDLE;
 		    n_mem_req = 1'b0;		    
 		 end
@@ -1078,6 +1232,8 @@ module l2_2way(clk,
 	    end // case: CLEAN_RELOAD
 	  WAIT_CLEAN_RELOAD: /* need a cycle to turn around */
 	    begin
+	       n_rob_tag = w_rob_tail_ptr;
+	       
 	       n_state = CHECK_VALID_AND_TAG;
 	       n_got_req = 1'b1;
 	    end
