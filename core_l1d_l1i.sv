@@ -823,7 +823,8 @@ module core_l1d_l1i(clk,
 		    got_monitor,
 		    inflight,
 		    epc,
-		    restart_ack);
+		    restart_ack,
+		    priv);
 
    localparam L1D_CL_LEN = 1 << `LG_L1D_CL_LEN;
    localparam L1D_CL_LEN_BITS = 1 << (`LG_L1D_CL_LEN + 3);
@@ -894,6 +895,7 @@ module core_l1d_l1i(clk,
    output logic [`LG_ROB_ENTRIES:0]		 inflight;
    output logic [31:0]				 epc;
    output logic 				 restart_ack;
+   output logic [1:0]				 priv;
    
    wire [63:0]					 w_resume_pc64 = {32'd0, resume_pc};
    
@@ -979,7 +981,8 @@ module core_l1d_l1i(clk,
                      .got_monitor(got_monitor),
                      .inflight(inflight),
                      .epc(w_epc64),
-		     .restart_ack(restart_ack)
+		     .restart_ack(restart_ack),
+		     .priv(priv)
 		     );
 
    

@@ -6,9 +6,6 @@
 import "DPI-C" function void record_fetch(int push1, int push2, int push3, int push4,
 					  longint pc0, longint pc1, longint pc2, longint pc3,
 					  int bubble, int fq_full);
-
-import "DPI-C" function int check_bad_fetch(longint pc, longint pa, int insn);
-
 `endif
 
 
@@ -330,8 +327,7 @@ endfunction
    logic [`M_WIDTH-1:0]	  t_ret_pc;
    
    logic [4:0]		  t_spec_branch_marker;
-   logic [3:0]		  t_branch_marker;
-   logic [3:0]		  t_any_branch;   
+   logic [3:0]		  t_branch_marker, t_any_branch;
    logic [2:0] 		  t_first_branch;
    logic [2:0]		  t_taken_branch_idx;
 
@@ -346,9 +342,9 @@ endfunction
    insn_fetch_t t_insn, t_insn2, t_insn3, t_insn4;
    logic [2:0] t_pd, t_first_pd;
    logic [2:0] t_pd0, t_pd1, t_pd2, t_pd3;
-   logic       t_br0, t_br1, t_br2, t_br3;
    logic       t_tcb0, t_tcb1, t_tcb2, t_tcb3;
-
+   logic       t_br0,t_br1,t_br2,t_br3;
+   
    
    logic [63:0] 	  r_cycle;
    always_ff@(posedge clk)
@@ -469,11 +465,7 @@ endfunction
 	  end
 	else if(t_push_insn4)
 	  begin
-	     //$display("push4 cycle = %d, r_valid_out =%b, r_tag_out =%d, r_cache_tag = %d, r_cache_pc = %x", r_cycle, r_valid_out,r_tag_out,r_cache_tag,r_cache_pc);
-	     //$display("t_insn.pc = %x,  t_clear_fq=%b,hit=%b", t_insn.pc,t_clear_fq,t_hit);	     
-	     //$display("t_insn2.pc = %x", t_insn2.pc);
-	     //$display("t_insn3.pc = %x", t_insn3.pc);
-	     //$display("t_insn4.pc = %x", t_insn4.pc);	     	     	     
+	     //$display("cycle %d t_insn4.pc = %x, idx = %x, t_take_br = %b", r_cycle, t_insn4.pc, r_pht_idx, t_take_br);	     	     	     
 	     r_fq[r_fq_tail_ptr[`LG_FQ_ENTRIES-1:0]] <= t_insn;
 	     r_fq[r_fq_next_tail_ptr[`LG_FQ_ENTRIES-1:0]] <= t_insn2;
 	     r_fq[r_fq_next3_tail_ptr[`LG_FQ_ENTRIES-1:0]] <= t_insn3;
@@ -484,9 +476,14 @@ endfunction
 
    //always_ff@(negedge clk)
    //begin
-   //if((restart_valid && restart_src_is_indirect))
-   //begin
-   //$display("cycle %d indirect branch at %x, target %x, pht %x", r_cycle, branch_pc, target_pc, branch_pht_idx[(`LG_BTB_SZ-1):0]);
+   //if(t_update_spec_hist)
+   //	  begin
+   //$display("cycle %d cache pc %x : spec hist update to %b", 
+   //r_cycle, r_cache_pc, n_spec_gbl_hist);
+   //end
+   //if(restart_valid)
+   ///begin
+   //$display("mispredict cycle %d branch at %x, target %x, pht %x", r_cycle, branch_pc, target_pc, branch_pht_idx[(`LG_BTB_SZ-1):0]);
    //end
    //end
    
@@ -522,7 +519,7 @@ endfunction
    // 	  end
    //   end
    logic			r_reload, n_reload;
-   logic [63:0]			t_br_disp;
+   logic [63:0]			t_br_disp, t_j_disp;
    
    always_comb
      begin
@@ -557,11 +554,12 @@ endfunction
 	t_pd1 = select_pd(w_jump, 'd1);
 	t_pd2 = select_pd(w_jump, 'd2);
 	t_pd3 = select_pd(w_jump, 'd3);	
-
+	
 	t_br0 = (t_pd0 != 3'd0);
 	t_br1 = (t_pd1 != 3'd0);
 	t_br2 = (t_pd2 != 3'd0);
-	t_br3 = (t_pd3 != 3'd0);
+	t_br3 = (t_pd3 != 3'd0);	
+	
 	
 	t_insn_data  = select_cl32(w_array, t_insn_idx);
 	t_insn_data2 = select_cl32(w_array, t_insn_idx + 2'd1);
@@ -591,15 +589,12 @@ endfunction
 			    t_tcb1,
 			    t_tcb0
 			    } >> t_insn_idx);
-	
 
 	t_any_branch = ({t_br3,
-			 t_br2,
-			 t_br1,
-			 t_br0
-			 } >> t_insn_idx);
-	
-
+                         t_br2,
+                         t_br1,
+                         t_br0
+                         } >> t_insn_idx);
 	
 	t_taken_branch_idx = 'd7;
 	casez(t_branch_marker)
@@ -645,6 +640,7 @@ endfunction
 	t_br_simm = {{(19+PP){t_insn_data[31]}}, t_insn_data[31], t_insn_data[7], t_insn_data[30:25], t_insn_data[11:8], 1'b0};
 
 	t_br_disp = select_br_simm(w_array, t_branch_idx);
+	t_j_disp = select_jal_simm(w_array, t_branch_idx);
 	
 	
 	t_clear_fq = 1'b0;
@@ -766,30 +762,32 @@ endfunction
 		 end
 	       else if(t_hit && !fq_full)
 		 begin
-		    
-		    if((t_taken_branch_idx == 'd3) & !fq_full4 & (t_first_pd == 3'd1))
+		    if((t_taken_branch_idx == 'd3) & !fq_full4 & (t_first_pd == 3'd1 | t_first_pd == 3'd3))
 		      begin
 			 t_update_spec_hist = 1'b1;
 			 t_push_insn4 = 1'b1;
 			 t_is_cflow = 1'b1;
 			 t_take_br = 1;
-			 n_pc = w_cache_pc12 + 	t_br_disp;
+			 n_pc = w_cache_pc12 + ((t_first_pd==3'd3)? t_j_disp :	t_br_disp);
+			 //$display("branch = %x, n_pc = %x", w_cache_pc12, n_pc);
 		      end // if ((t_taken_branch_idx == 'd3) & !fq_full4)
-		    else if((t_taken_branch_idx == 'd2) & !fq_full3 & (t_first_pd == 3'd1))
+		    else if((t_taken_branch_idx == 'd2) & !fq_full3 & (t_first_pd == 3'd1 | t_first_pd == 3'd3))
 		      begin
 			 t_update_spec_hist = 1'b1;
 			 t_push_insn3 = 1'b1;
 			 t_is_cflow = 1'b1;
 			 t_take_br = 1;
-			 n_pc = w_cache_pc8 + t_br_disp;
+			 n_pc = w_cache_pc8 + ((t_first_pd=='d3) ? t_j_disp :t_br_disp);
+			 //$display("branch = %x, n_pc = %x", w_cache_pc8, n_pc);			 
 		      end
-		    else if((t_taken_branch_idx == 'd1) & !fq_full2 & (t_first_pd == 3'd1))
+		    else if((t_taken_branch_idx == 'd1) & !fq_full2 & (t_first_pd == 3'd1 | t_first_pd == 3'd3))
 		      begin
 			 t_update_spec_hist = 1'b1;
 			 t_push_insn2 = 1'b1;
 			 t_is_cflow = 1'b1;
 			 t_take_br = 1;
-			 n_pc = w_cache_pc4 + t_br_disp;
+			 n_pc = w_cache_pc4 + ((t_first_pd=='d3) ? t_j_disp : t_br_disp);
+			 //$display("branch = %x, n_pc = %x", w_cache_pc4, n_pc);			 
 		      end // if ((t_taken_branch_idx == 'd1) & !fq_full2)
 		    else
 		      begin
@@ -826,6 +824,7 @@ endfunction
 			      n_pc = r_btb_pc;
 			      t_push_insn = 1'b1;			      
 			   end
+			 //$display("branch = %x, n_pc = %x", r_cache_pc, n_pc);			 
 		      end // else: !if((t_taken_branch_idx == 'd1) & !fq_full2)
 
 		    n_resteer_bubble = t_is_cflow;
@@ -840,8 +839,7 @@ endfunction
 			      n_cache_pc = w_cache_pc16;
 			      t_cache_tag = n_cache_pc[(`PA_WIDTH-1):IDX_STOP];
 			      n_pc = w_cache_pc20;
-			      t_update_spec_hist = (|t_any_branch);
-			      
+			      t_update_spec_hist = |t_any_branch;
 			   end
 			 else if(t_first_branch == 'd3 && !fq_full3)
 			   begin
@@ -849,7 +847,7 @@ endfunction
 			      n_cache_pc = w_cache_pc12;
 			      n_pc = w_cache_pc16;
 			      t_cache_tag = n_cache_pc[(`PA_WIDTH-1):IDX_STOP];
-			      t_update_spec_hist = (|t_any_branch);			      
+			      t_update_spec_hist = |t_any_branch;			      
 			      if(t_insn_idx != 0)
 				begin
 				   t_cache_idx = r_cache_idx + 'd1;
@@ -862,7 +860,7 @@ endfunction
 			      n_cache_pc = w_cache_pc8;
 			      t_cache_tag = n_cache_pc[(`PA_WIDTH-1):IDX_STOP];
 			      n_pc = w_cache_pc12;
-			      t_update_spec_hist = (|t_any_branch);			      
+			      t_update_spec_hist = |t_any_branch;
 			      if(t_insn_idx == 2)
 				begin
 				   t_cache_idx = r_cache_idx + 'd1;
@@ -870,7 +868,6 @@ endfunction
 			   end
 			 else
 			   begin
-			      t_update_spec_hist = (|t_any_branch);			      
 			      t_push_insn = 1'b1;
 			   end // else: !if(t_first_branch == 'd2 && !fq_full2)
 		      end
@@ -1083,7 +1080,50 @@ endfunction
      end
    
    //compute_pht_idx cpi0 (.pc(n_cache_pc), .hist(r_spec_gbl_hist), .idx(n_pht_idx));
-   compute_pht_idx cpi0 (.pc({n_cache_pc[63:4], 4'd0}), .hist(r_spec_gbl_hist), .idx(n_pht_idx));   
+   compute_pht_idx cpi0 (.pc({n_cache_pc[63:4], 4'd0}), .hist(r_spec_gbl_hist), .idx(n_pht_idx));
+
+   logic r_print_pht;
+   always_ff@(posedge clk)
+     begin
+	r_print_pht <= reset ? 1'b0 : (n_cache_pc[63:4] == 60'h1099);
+     end
+   
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if(n_cache_pc[63:4] == 60'h1099)
+   // 	  begin
+   // 	     $display("cycle %d, n_cache_pc = %x, n_pht_idx = %x, hist = %b, br idx %d, take %b", 
+   // 		      r_cycle, 
+   // 		      n_cache_pc, 
+   // 		      n_pht_idx, 
+   // 		      r_spec_gbl_hist,
+   // 		      t_branch_idx,
+   // 		      t_take_br);
+   // 	  end
+   // 	if(r_print_pht)
+   // 	  begin
+   // 	     $display("cycle %d, pht read %b", r_cycle, r_pht_out_vec);
+   // 	  end
+	
+   // 	if(r_pht_update && r_branch_pc[63:4] == 60'h1099)
+   // 	  begin
+   // 	     $display("cycle %d, t_pht_val = %b, r_take_br = %b, %b", 
+   // 		      r_cycle, t_pht_val, r_take_br,
+   // 		      r_arch_gbl_hist);
+   // 	  end
+	
+   // 	if(branch_pc[63:4] == 60'h1099 && branch_pc_valid)
+   // 	  begin
+   // 	     $display("cycle %d,branch pht idx= %d", r_cycle, branch_pht_idx);
+   // 	  end//branch_pht_idx
+	
+   // 	if(branch_pc_valid & branch_pht_idx == 'd48539)
+   // 	  begin
+   // 	     $display("cycle %d, branch at pc %x maps to pht entry",
+   // 		      r_cycle, branch_pc);
+   // 	  end
+	
+   //   end   
 
    
    always_comb
@@ -1158,18 +1198,6 @@ endfunction
 	endcase // case (r_branch_pc[4:3])
      end // always_comb
 
-   //always_ff@(negedge clk)
-   //begin
-   //if(r_pht_update)
-   //begin
-   //$display("r_branch_addr %x, index %d, r_pht_update_out = %b, t_pht_val_vec = %b, r_take_br = %b, t_pht_val = %b", 
-   //r_branch_pc, 
-   //r_branch_pc[4:2], 
-   //r_pht_update_out,
-   //t_pht_val_vec,
-   //r_take_br,t_pht_val);
-   ///end
-   //end
    
    always_ff@(posedge clk)
      begin
@@ -1184,7 +1212,6 @@ endfunction
 	  end
 	else
 	  begin
-	     
 	     r_pht_idx <= n_pht_idx;
 	     r_last_spec_gbl_hist <= r_spec_gbl_hist;
 	     r_pht_update <= branch_pc_valid;
@@ -1453,7 +1480,6 @@ endfunction
 	  end
      end
 
-    // always_ff@(negedge clk)
     //   begin
     // 	if(n_restart_ack)
     // 	  begin

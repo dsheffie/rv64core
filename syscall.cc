@@ -19,8 +19,8 @@
 #include "helper.hh"
 #include "globals.hh"
 
-static int fdcnt = 3;
 static std::map<state_t*, std::map<int, int>> fdmap;
+static std::map<state_t*, int> fdcnt;
 
 
 void handle_syscall(state_t *s, uint64_t tohost) {
@@ -47,9 +47,16 @@ void handle_syscall(state_t *s, uint64_t tohost) {
     case SYS_open: {
       const char *path = reinterpret_cast<const char*>(s->mem + buf[1]);
       int fd = open(path, remapIOFlags(buf[2]), S_IRUSR|S_IWUSR);
-      m[fdcnt] = fd;
-      buf[0] = fdcnt;
-      fdcnt++;
+      if(fd > 0) {
+	int fd_ = static_cast<int>(fdcnt[s]) + 3;
+	//printf("pointer %p : real fd = %d, remapped fd = %d\n", s, fd, fd_);      	
+	m[fd_] = fd;      
+	buf[0] = fd_;
+	fdcnt[s]++;
+      }
+      else {
+	buf[0] = fd;
+      }
       break;
     }
     case SYS_close: {
@@ -61,7 +68,8 @@ void handle_syscall(state_t *s, uint64_t tohost) {
       break;
     }
     case SYS_read: {
-      int fd = (buf[1] > 2) ? m.at(buf[1]) : buf[1];      
+      int fd = (buf[1] > 2) ? m.at(buf[1]) : buf[1];
+      //printf("buf[1] = %d, attempting to read fd %d\n", buf[1], fd);
       buf[0] = read(fd, reinterpret_cast<char*>(s->mem + buf[2]), buf[3]); 
       break;
     }
