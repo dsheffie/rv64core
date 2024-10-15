@@ -595,12 +595,9 @@ module nu_l1d(clk,
 
    always_ff@(posedge clk)
      begin
-	if(reset)
+	if(r_state == INIT_CACHE)
 	  begin
-	     for(integer i = 0; i < N_ROB_ENTRIES; i = i+1)
-	       begin
-		  r_graduated[i] <= 2'b00;
-	       end
+	     r_graduated[r_cache_idx[`LG_ROB_ENTRIES-1:0]] <= 2'b00;
 	  end
 	else
 	  begin
@@ -1455,7 +1452,7 @@ module nu_l1d(clk,
 	if(t_wr_store)
 	  begin
 	     wr_log(r_req.pc,
-		    {27'd0, r_req.rob_ptr},
+		    { {(32-`LG_ROB_ENTRIES){1'b0}}, r_req.rob_ptr},
 		    r_req.addr, 
 		    r_req.op == MEM_AMOD ? t_amo64_data : (r_req.op == MEM_AMOW ? {{32{t_amo32_data[31]}},t_amo32_data} : r_req.data), 
 		    r_req.is_atomic ? 32'd1 : 32'd0);
@@ -2000,7 +1997,7 @@ module nu_l1d(clk,
 `ifdef VERILATOR
 			 if(r_req.is_store)
 			   begin
-			      log_store_release({27'd0, r_req.rob_ptr}, r_cycle);
+			      log_store_release( { {(32-`LG_ROB_ENTRIES){1'b0}}, r_req.rob_ptr}, r_cycle);
 			   end
 `endif
 			 if(r_req.is_store==1'b0)

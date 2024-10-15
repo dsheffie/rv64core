@@ -1789,58 +1789,48 @@ module core(clk,
    
    always_ff@(posedge clk)
      begin
-	if(reset || t_clr_rob)
+	if(t_alloc)
 	  begin
-	     for(integer i = 0; i < N_ROB_ENTRIES; i=i+1)
-	       begin
-		  r_rob[i].faulted <= 1'b0;
-	       end
+	     r_rob[r_rob_tail_ptr[`LG_ROB_ENTRIES-1:0]] <= t_rob_tail;
 	  end
-	else
+	if(t_alloc_two)
 	  begin
-	     if(t_alloc)
-	       begin
-		  r_rob[r_rob_tail_ptr[`LG_ROB_ENTRIES-1:0]] <= t_rob_tail;
-	       end
-	     if(t_alloc_two)
-	       begin
-		  r_rob[r_rob_next_tail_ptr[`LG_ROB_ENTRIES-1:0]] <= t_rob_next_tail;
-	       end
-	     if(t_complete_valid_1)
-	       begin
-		  r_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].faulted <= t_complete_bundle_1.faulted;
-		  r_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].has_cause <= t_complete_bundle_1.has_cause;
-		  r_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].cause <= t_complete_bundle_1.cause;		  
-		  r_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].target_pc <= t_complete_bundle_1.restart_pc;
-		  r_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].take_br <= t_complete_bundle_1.take_br;
-		  r_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].data <= t_complete_bundle_1.data;
+	     r_rob[r_rob_next_tail_ptr[`LG_ROB_ENTRIES-1:0]] <= t_rob_next_tail;
+	  end
+	if(t_complete_valid_1)
+	  begin
+	     r_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].faulted <= t_complete_bundle_1.faulted;
+	     r_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].has_cause <= t_complete_bundle_1.has_cause;
+	     r_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].cause <= t_complete_bundle_1.cause;		  
+	     r_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].target_pc <= t_complete_bundle_1.restart_pc;
+	     r_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].take_br <= t_complete_bundle_1.take_br;
+	     r_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].data <= t_complete_bundle_1.data;
 `ifdef ENABLE_CYCLE_ACCOUNTING
-		  r_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].complete_cycle <= r_cycle;
+	     r_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].complete_cycle <= r_cycle;
 `endif	    
-	       end // if (t_complete_valid_1)
-	     if(t_complete_valid_2)
-	       begin
-		  r_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].faulted <= t_complete_bundle_2.faulted;
-		  r_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].has_cause <= t_complete_bundle_2.has_cause;
-		  r_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].cause <= t_complete_bundle_2.cause;
-		  r_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].target_pc <= t_complete_bundle_2.restart_pc;
-		  r_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].take_br <= t_complete_bundle_2.take_br;
-		  r_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].data <= t_complete_bundle_2.data;
+	  end // if (t_complete_valid_1)
+	if(t_complete_valid_2)
+	  begin
+	     r_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].faulted <= t_complete_bundle_2.faulted;
+	     r_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].has_cause <= t_complete_bundle_2.has_cause;
+	     r_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].cause <= t_complete_bundle_2.cause;
+	     r_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].target_pc <= t_complete_bundle_2.restart_pc;
+	     r_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].take_br <= t_complete_bundle_2.take_br;
+	     r_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].data <= t_complete_bundle_2.data;
 `ifdef ENABLE_CYCLE_ACCOUNTING
-		  r_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].complete_cycle <= r_cycle;
+	     r_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].complete_cycle <= r_cycle;
 `endif	    
-	       end	     
-	     if(core_mem_rsp_valid)
-	       begin
-		  r_rob[core_mem_rsp.rob_ptr].data <= core_mem_rsp.data;
-		  r_rob[core_mem_rsp.rob_ptr].faulted <= core_mem_rsp.has_cause;
-		  r_rob[core_mem_rsp.rob_ptr].cause <= core_mem_rsp.cause;
-		  r_rob[core_mem_rsp.rob_ptr].has_cause <= core_mem_rsp.has_cause;
-		  r_rob[core_mem_rsp.rob_ptr].mark_page_dirty <= core_mem_rsp.mark_page_dirty;
+	  end	     
+	if(core_mem_rsp_valid)
+	  begin
+	     r_rob[core_mem_rsp.rob_ptr].data <= core_mem_rsp.data;
+	     r_rob[core_mem_rsp.rob_ptr].faulted <= core_mem_rsp.has_cause;
+	     r_rob[core_mem_rsp.rob_ptr].cause <= core_mem_rsp.cause;
+	     r_rob[core_mem_rsp.rob_ptr].has_cause <= core_mem_rsp.has_cause;
+	     r_rob[core_mem_rsp.rob_ptr].mark_page_dirty <= core_mem_rsp.mark_page_dirty;
 `ifdef ENABLE_CYCLE_ACCOUNTING
-		  r_rob[core_mem_rsp.rob_ptr].complete_cycle <= r_cycle;
+	     r_rob[core_mem_rsp.rob_ptr].complete_cycle <= r_cycle;
 `endif	    	     	     
-	       end
 	  end
      end // always_ff@ (posedge clk)
 

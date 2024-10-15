@@ -548,11 +548,11 @@ module
      begin
 	if(core_mem_req_valid)
 	  begin
-	     log_mem_begin({27'd0,core_mem_req.rob_ptr}, {31'd0, core_mem_req.is_load}, r_cycle, core_mem_req.pc, core_mem_req.addr);
+	     log_mem_begin( { {(32-`LG_ROB_ENTRIES){1'b0}}, core_mem_req.rob_ptr}, {31'd0, core_mem_req.is_load}, r_cycle, core_mem_req.pc, core_mem_req.addr);
 	  end
 	if(core_mem_rsp_valid)
 	  begin
-	     log_mem_end({27'd0, core_mem_rsp.rob_ptr}, r_cycle);
+	     log_mem_end({ {(32-`LG_ROB_ENTRIES){1'b0}}, core_mem_rsp.rob_ptr}, r_cycle);
 	  end
      end
 `endif
