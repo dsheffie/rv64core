@@ -214,7 +214,8 @@ module l2_2way(clk,
 				     IDLE = 'd1,
 				     CHECK_VALID_AND_TAG = 'd2,
 				     CLEAN_RELOAD = 'd3, 
-				     DIRTY_STORE = 'd4, 
+				     DIRTY_STORE = 'd4,
+				     PREPARE_STORE,
 				     STORE_TURNAROUND, //5
 				     WAIT_CLEAN_RELOAD, //6
 				     WAIT_STORE_IDLE, //7
@@ -260,8 +261,8 @@ module l2_2way(clk,
      begin
 	if(l1d_rsp_valid)
 	  begin
-	     $display("L1D RESP FOR ADDR %x TAG %d",
-		      l1d_rsp_addr, l1d_rsp_tag);
+	     $display("L1D RESP FOR ADDR %x TAG %d at cycle %d",
+		      l1d_rsp_addr, l1d_rsp_tag, r_cycle);
 	  end
      end
    
@@ -414,10 +415,13 @@ module l2_2way(clk,
 	     r_rob_replace[w_rob_tail_ptr] <= n_replace;
 	     r_rob_req_ty[w_rob_tail_ptr] <= r_req_ty;
 	     
-	     $display("allocate entry %d for address %x, wb %b, cycle %d", 
-	     	      w_rob_tail_ptr, n_addr,
+	     $display("allocate entry %d for address %x, wb %b, tag %d, cycle %d, state = %d", 
+	     	      w_rob_tail_ptr, 
+		      n_addr,
 	     	      t_is_wb,
-	     	      r_cycle);
+		      n_l1d_rsp_tag,
+	     	      r_cycle, 
+		      r_state);
 	  end
      end
 
@@ -1005,9 +1009,6 @@ module l2_2way(clk,
 	       
 	       if(w_head_of_rob_done)
 		 begin
-		    $display("transaction is done for %d at cycle %d, head %d, tail %d", 
-			     w_rob_head_ptr, r_cycle, r_rob_head_ptr, r_rob_tail_ptr);
-
 
 		    n_replace = r_rob_replace[w_rob_head_ptr];
 		    n_addr = r_rob_addr[w_rob_head_ptr];
@@ -1016,13 +1017,7 @@ module l2_2way(clk,
 		    t_idx = r_rob_addr[w_rob_head_ptr][LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN];
 		    n_l1d_rsp_tag = r_rob_l1tag[w_rob_head_ptr];
 
-		    $display("data = %x", r_rob_data[w_rob_head_ptr]);
-		    $display("addr = %x", r_rob_addr[w_rob_head_ptr]);
-		    $display("saveaddr = %x", n_saveaddr);
-		    $display("replace = %b", r_rob_replace[w_rob_head_ptr]);
-		    $display("r_rob_l1tag = %d", r_rob_l1tag[w_rob_head_ptr]);
-		    $display("req type = %d", r_rob_req_ty[w_rob_head_ptr]);
-
+		    if(r_rob_hitbusy[w_rob_head_ptr]) $stop();
 		    
 		    case(r_rob_req_ty[w_rob_head_ptr])
 		      L1I:
@@ -1038,8 +1033,14 @@ module l2_2way(clk,
 			   n_last_gnt = 1'b1;		
 			   //n_l1d_rsp_valid  = 1'b1;
 			end
+		      WRITEBACK:
+			begin
+			end
 		      default:
-			$stop();
+			begin
+			   $display("handle req type %d", r_rob_req_ty[w_rob_head_ptr]);
+			   $stop();
+			end
 		    endcase // case (r_rob_req_ty[w_rob_head_ptr])
 		    
 		    t_pop_rob = 1'b1;
@@ -1050,13 +1051,10 @@ module l2_2way(clk,
 		      begin
 			 //$display("performing writeback at cycle %d for address %x", 
 			 //r_cycle, r_wb_addr);			      		    
-			 n_mem_opcode = 4'd7; 
-			 n_mem_req = 1'b1;
-			 n_state = DIRTY_STORE;
+			 n_state = PREPARE_STORE;
 			 n_addr = r_wb_addr;
 			 n_need_wb = 1'b0;
 			 t_is_wb = 1'b1;
-			 t_alloc_rob = 1'b1;
 			 n_rob_tag = w_rob_tail_ptr;
 			 n_req_ty = WRITEBACK;
 		      end
@@ -1103,7 +1101,6 @@ module l2_2way(clk,
 			 n_l1i = w_pick_l1i;
 			 if(w_pick_l1i)
 			   begin
-			      $display("accepting i-side, addr=%x", l1i_addr);			 
 			      n_last_gnt = 1'b0;			 
 			      t_idx = l1i_addr[LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN];
 			      n_tag = l1i_addr[(`PA_WIDTH-1):LG_L2_LINES+`LG_L2_CL_LEN];
@@ -1129,7 +1126,6 @@ module l2_2way(clk,
 			      n_l1d_rsp_tag = t_l1dq.tag;
 			      t_gnt_l1d = 1'b1;
 			      n_req_ty = L1D;
-			      $display("accepting d-side, addr=%x", n_addr);
 			   end
 			 n_req_ack = 1'b1;
 			 n_got_req = 1'b1;		    
@@ -1265,16 +1261,19 @@ module l2_2way(clk,
 		    n_state = IDLE;
 		    n_mem_opcode = 4'd4; //load
 		    n_mem_req = 1'b1;
-		    $display("missed l2 for address %x, pointer %d", r_addr, w_rob_tail_ptr);		    
+		    //$display("missed l2 for address %x, pointer %d", r_addr, w_rob_tail_ptr);		    
 		 end // else: !if(w_hit)
 	    end // case: CHECK_VALID_AND_TAG
+	  PREPARE_STORE:
+	    begin
+	       t_alloc_rob = 1'b1;
+	       n_mem_opcode = MEM_SW; 	       	       
+	       n_mem_req = 1'b1;	       
+	       n_state = IDLE;
+	    end
 	  DIRTY_STORE:
 	    begin
-	       if(mem_rsp_valid)
-		 begin
-		    n_state = IDLE;
-		    n_mem_req = 1'b0;		    
-		 end
+	       n_state = IDLE;
 	    end // case: DIRTY_STORE
 	  STORE_TURNAROUND:
 	    begin
@@ -1296,7 +1295,6 @@ module l2_2way(clk,
 	       t_wr_dirty1 = r_replace == 1'b1;		    
 	       t_wr_tag1 = r_replace == 1'b1;
 	       t_wr_d1 = r_replace == 1'b1;
-	       
 	       
 	       n_state = WAIT_CLEAN_RELOAD;
 	    end // case: CLEAN_RELOAD
@@ -1393,6 +1391,20 @@ module l2_2way(clk,
 
    always_ff@(negedge clk)
      begin
+	if(r_state == IDLE & w_head_of_rob_done)
+	  begin
+	     $display("transaction is done for %d at cycle %d, head %d, tail %d", 
+		      w_rob_head_ptr, r_cycle, r_rob_head_ptr, r_rob_tail_ptr);
+	     
+	     
+	     $display("data = %x", r_rob_data[w_rob_head_ptr]);
+	     $display("addr = %x", r_rob_addr[w_rob_head_ptr]);
+	     $display("saveaddr = %x", n_saveaddr);
+	     $display("replace = %b", r_rob_replace[w_rob_head_ptr]);
+	     $display("r_rob_l1tag = %d", r_rob_l1tag[w_rob_head_ptr]);
+	     $display("req type = %d", r_rob_req_ty[w_rob_head_ptr]);
+	  end
+	
 	if(r_state == CHECK_VALID_AND_TAG)
 	  begin
 	     
@@ -1437,24 +1449,23 @@ module l2_2way(clk,
      (.clk(clk), .addr(t_idx), .wr_data(t_dirty), .wr_en(t_wr_dirty1), .rd_data(w_dirty1));   
 
 
-   always@(posedge clk)
-     begin
-	//if(r_state_cnt != 'd0)
-	// begin
-	//$display("in state %d at cycle %d", r_state, r_cycle);
-	//end
-	
-	if(t_alloc_rob)
-	  begin
-	     $display("bump rob tail pointer to %d, r_state = %d at cycle %d",
-		      r_rob_tail_ptr + 'd1, r_state, r_cycle);	     
-	  end
-	if(t_pop_rob)
-	  begin
-	     $display("bump rob head pointer to %d, r_state = %d, at cycle %d",
-		      r_rob_head_ptr + 'd1, r_state, r_cycle);	     	     
-	  end
-     end // always_ff@ (negedge clk)
+   //always@(posedge clk)
+   //begin
+   //if(r_state_cnt != 'd0)
+   // begin
+   //$display("in state %d at cycle %d", r_state, r_cycle);
+   //end
+   //if(t_alloc_rob)
+   //begin
+   //$display("bump rob tail pointer to %d, r_state = %d at cycle %d",
+   //		      r_rob_tail_ptr + 'd1, r_state, r_cycle);	     
+   //end
+   //if(t_pop_rob)
+   //begin
+   //$display("bump rob head pointer to %d, r_state = %d, at cycle %d",
+   //r_rob_head_ptr + 'd1, r_state, r_cycle);	     	     
+   //end
+   //end // always_ff@ (negedge clk)
    
    // always_comb
    //   begin

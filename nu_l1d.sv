@@ -746,21 +746,6 @@ module nu_l1d(clk,
 
    
    wire w_gen_early_req = w_could_early_req & (r_got_req ? w_cache_port1_hit : 1'b1);
-
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if(r_got_req2 & (r_req2.pc == 64'h800002ec))
-   // 	  begin
-   // 	     $display("t_push_miss = %b", t_push_miss);
-   // 	     $display("mem_rdy = %b", mem_rdy);
-   // 	     $display("t_port2_hit_cache = %b", t_port2_hit_cache);
-   // 	     $display("r_hit_busy_line2 = %b", r_hit_busy_line2);
-   // 	     $display("r_fwd_busy_addr2 = %b", r_fwd_busy_addr2);
-   // 	     $display("r_pop_busy_addr2 = %b, w_hit_pop = %b", r_pop_busy_addr2, w_hit_pop);
-   // 	  end
-   //   end
-
-
    
    wire	w_early_rsp = mem_rsp_valid ? (mem_rsp_tag != (1 << `LG_MRQ_ENTRIES)) : 1'b0;
 
@@ -2427,10 +2412,12 @@ module nu_l1d(clk,
 	  end
      end // always_comb
 
+   wire w_decr_credit = n_mem_req_valid & !mem_rsp_valid;
+   wire	w_incr_credit = !n_mem_req_valid & mem_rsp_valid;
    always_comb
      begin
 	n_mrq_credits = r_mrq_credits;
-	if(n_mem_req_valid & !mem_rsp_valid)
+	if(w_decr_credit)
 	  begin
 	     n_mrq_credits = r_mrq_credits - 'd1;
 	     if(r_mrq_credits == 'd0) 
@@ -2440,17 +2427,59 @@ module nu_l1d(clk,
 		  $stop();
 	       end
 	  end
-	else if(!n_mem_req_valid & mem_rsp_valid)
+	else if(w_incr_credit)
 	  begin
 	     n_mrq_credits = r_mrq_credits + 'd1;
+	  end
+     end // always_comb
+
+
+   logic [15:0] r_credits, n_credits;
+   always_comb
+     begin
+	n_credits = r_credits;
+	if(r_mem_req_valid)
+	  begin
+	     if(n_credits[mem_req.tag]) 
+	       begin
+		  $display("credit %d was already inflight", mem_req.tag);
+		  $stop();
+	       end
+	     n_credits[mem_req.tag] = 1'b1;
+	  end
+	if(mem_rsp_valid)
+	  begin
+	     if(n_credits[mem_rsp_tag] == 1'b0)
+	       begin
+		  $display("credit %d, addr %x was not inflight", mem_rsp_tag, mem_rsp_addr);
+		  $stop();
+	       end
+	     n_credits[mem_rsp_tag] = 1'b0;
+	  end
+     end // always_comb
+   always_ff@(posedge clk)
+     begin
+	r_credits <= reset ? 'd0 : n_credits;
+     end
+   
+   always_ff@(negedge clk)
+     begin
+	if(w_decr_credit)
+	  begin
+	     $display("decr credit value %d at cycle %d, tag %d", 
+		      n_mrq_credits, r_cycle, mem_req.tag);
+	  end
+	else if(w_incr_credit)
+	  begin
+	     $display("incr credit value %d at cycle %d, tag %d, addr %x", 
+		      n_mrq_credits, r_cycle, mem_rsp_tag, mem_rsp_addr);
 	     if(n_mrq_credits == 'd0)
 	       begin
 		  $display("overflow!");
 		  $stop();
-	       end
+	       end	     
 	  end
-     end // always_comb
-
+     end
    
 
    always_comb
