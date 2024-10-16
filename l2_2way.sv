@@ -381,10 +381,7 @@ module l2_2way(clk,
 	       begin
 		  r_rob_done[mem_rsp_tag] <= 1'b1;
 		  r_rob_data[mem_rsp_tag] <= mem_rsp_load_data;
-		  
-		  $display("tag %d returns at cycle %d, head %d, state %d", 
-			   mem_rsp_tag, r_cycle, w_rob_head_ptr, r_state);
-		     
+		  		     
 		  if( r_rob_done[mem_rsp_tag] )
 		    begin
 		       $display("tag %d is already done.., valid %b", 
@@ -400,7 +397,6 @@ module l2_2way(clk,
 		 
 	     if(t_pop_rob)
 	       begin
-		  $display("marking %d invalid", w_rob_head_ptr);
 		  r_rob_valid[w_rob_head_ptr] <= 1'b0;
 	       end
 	  end
@@ -1017,32 +1013,45 @@ module l2_2way(clk,
 		    t_idx = r_rob_addr[w_rob_head_ptr][LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN];
 		    n_l1d_rsp_tag = r_rob_l1tag[w_rob_head_ptr];
 
-		    if(r_rob_hitbusy[w_rob_head_ptr]) $stop();
-		    
-		    case(r_rob_req_ty[w_rob_head_ptr])
-		      L1I:
-			begin
-			   n_state = CLEAN_RELOAD;
-			   n_opcode = MEM_LW;			   
-			   n_last_gnt = 1'b0;
-			end
-		      L1D:
-			begin
-			   n_state = CLEAN_RELOAD;
-			   n_opcode = MEM_LW;			   
-			   n_last_gnt = 1'b1;		
-			   //n_l1d_rsp_valid  = 1'b1;
-			end
-		      WRITEBACK:
-			begin
-			end
-		      default:
-			begin
-			   $display("handle req type %d", r_rob_req_ty[w_rob_head_ptr]);
-			   $stop();
-			end
-		    endcase // case (r_rob_req_ty[w_rob_head_ptr])
-		    
+		    if(r_rob_hitbusy[w_rob_head_ptr]) 
+		      begin
+			 n_state = CHECK_VALID_AND_TAG;
+			 n_got_req = 1'b1;
+			 $stop();
+		      end
+		    else
+		      begin
+			 case(r_rob_req_ty[w_rob_head_ptr])
+			   MMU:
+			     begin
+				n_state = CLEAN_RELOAD;
+				n_opcode = MEM_LW;			   
+				n_last_gnt = 1'b0;
+				n_mmu = 1'b1;
+			     end
+			   L1I:
+			     begin
+				n_state = CLEAN_RELOAD;
+				n_opcode = MEM_LW;			   
+				n_last_gnt = 1'b0;
+			     end
+			   L1D:
+			     begin
+				n_state = CLEAN_RELOAD;
+				n_opcode = MEM_LW;			   
+				n_last_gnt = 1'b1;		
+				//n_l1d_rsp_valid  = 1'b1;
+			     end
+			   WRITEBACK:
+			     begin
+			     end
+			   default:
+			     begin
+				$display("handle req type %d", r_rob_req_ty[w_rob_head_ptr]);
+				$stop();
+			     end
+			 endcase // case (r_rob_req_ty[w_rob_head_ptr])
+		      end
 		    t_pop_rob = 1'b1;
 		 end
 	       else if(!w_rob_full)
@@ -1054,7 +1063,6 @@ module l2_2way(clk,
 			 n_state = PREPARE_STORE;
 			 n_addr = r_wb_addr;
 			 n_need_wb = 1'b0;
-			 t_is_wb = 1'b1;
 			 n_rob_tag = w_rob_tail_ptr;
 			 n_req_ty = WRITEBACK;
 		      end
@@ -1267,6 +1275,7 @@ module l2_2way(clk,
 	  PREPARE_STORE:
 	    begin
 	       t_alloc_rob = 1'b1;
+	       t_is_wb = 1'b1;	       
 	       n_mem_opcode = MEM_SW; 	       	       
 	       n_mem_req = 1'b1;	       
 	       n_state = IDLE;
@@ -1393,16 +1402,13 @@ module l2_2way(clk,
      begin
 	if(r_state == IDLE & w_head_of_rob_done)
 	  begin
-	     $display("transaction is done for %d at cycle %d, head %d, tail %d", 
-		      w_rob_head_ptr, r_cycle, r_rob_head_ptr, r_rob_tail_ptr);
-	     
-	     
-	     $display("data = %x", r_rob_data[w_rob_head_ptr]);
-	     $display("addr = %x", r_rob_addr[w_rob_head_ptr]);
-	     $display("saveaddr = %x", n_saveaddr);
-	     $display("replace = %b", r_rob_replace[w_rob_head_ptr]);
-	     $display("r_rob_l1tag = %d", r_rob_l1tag[w_rob_head_ptr]);
-	     $display("req type = %d", r_rob_req_ty[w_rob_head_ptr]);
+	     //$display("transaction is done for %d at cycle %d, head %d, tail %d", 
+	     //w_rob_head_ptr, r_cycle, r_rob_head_ptr, r_rob_tail_ptr);
+	     //$display("addr = %x", r_rob_addr[w_rob_head_ptr]);
+	     //$display("saveaddr = %x", n_saveaddr);
+	     //$display("replace = %b", r_rob_replace[w_rob_head_ptr]);
+	     //$display("r_rob_l1tag = %d", r_rob_l1tag[w_rob_head_ptr]);
+	     //$display("req type = %d", r_rob_req_ty[w_rob_head_ptr]);
 	  end
 	
 	if(r_state == CHECK_VALID_AND_TAG)

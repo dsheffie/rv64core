@@ -2462,24 +2462,24 @@ module nu_l1d(clk,
 	r_credits <= reset ? 'd0 : n_credits;
      end
    
-   always_ff@(negedge clk)
-     begin
-	if(w_decr_credit)
-	  begin
-	     $display("decr credit value %d at cycle %d, tag %d", 
-		      n_mrq_credits, r_cycle, mem_req.tag);
-	  end
-	else if(w_incr_credit)
-	  begin
-	     $display("incr credit value %d at cycle %d, tag %d, addr %x", 
-		      n_mrq_credits, r_cycle, mem_rsp_tag, mem_rsp_addr);
-	     if(n_mrq_credits == 'd0)
-	       begin
-		  $display("overflow!");
-		  $stop();
-	       end	     
-	  end
-     end
+   //always_ff@(negedge clk)
+     //begin
+	//if(w_decr_credit)
+	//begin
+	  //   $display("decr credit value %d at cycle %d, tag %d", 
+	//n_mrq_credits, r_cycle, mem_req.tag);
+	  //end
+	//else if(w_incr_credit)
+	  //begin
+	     //$display("incr credit value %d at cycle %d, tag %d, addr %x", 
+	     //n_mrq_credits, r_cycle, mem_rsp_tag, mem_rsp_addr);
+	    // if(n_mrq_credits == 'd0)
+	//begin
+	//	  $display("overflow!");
+	///$stop();
+     //end	     
+     //end
+	// end
    
 
    always_comb
