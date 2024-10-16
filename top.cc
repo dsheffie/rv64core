@@ -812,6 +812,11 @@ void l1d_port_util(int port1, int port2) {
     ++port2_active;
   }
 }
+struct mem_req_t {
+  uint32_t addr, tag;  
+  bool is_st = false;
+  uint32_t data[4] = {0};
+};
 
 int main(int argc, char **argv) {
   static_assert(sizeof(itype) == 4, "itype must be 4 bytes");
@@ -835,6 +840,9 @@ int main(int argc, char **argv) {
   std::map<int64_t, double> &tip_map = rt.tip;
   std::map<int64_t, uint64_t> insn_cnts;
   uint64_t priv[4] = {0};
+
+  std::map<int64_t, mem_req_t> mem_req_map;
+
   
   try {
     po::options_description desc("Options");
@@ -1423,51 +1431,46 @@ int main(int argc, char **argv) {
     //negedge
     tb->mem_rsp_valid = 0;
 
-    if(tb->mem_req_valid && (mem_reply_cycle == -1)) {
+    if(tb->mem_req_valid) {
       ++mem_reqs;
       mem_reply_cycle = cycle + (tb->mem_req_opcode == 4 ? 1 : 2)*mem_lat;
-      printf("Reply to tag %d at cycle %d for addr %x\n",
-	     tb->mem_req_tag,
-	     mem_reply_cycle,
-	     tb->mem_req_addr);
-    }
-    
-    if(/*tb->mem_req_valid*/mem_reply_cycle ==cycle) {
-      //std::cout << "got memory request for address "
-      //<< std::hex << tb->mem_req_addr << std::dec <<"\n";
-      last_retire = 0;
-      mem_reply_cycle = -1;
-      assert(tb->mem_req_valid);
-
+      mem_req_t r;
+      r.addr = tb->mem_req_addr;
+      r.tag = tb->mem_req_tag;
       
-      if(tb->mem_req_opcode == 4) {/*load word */
-	//printf("got dram read for %lx at cycle %lu\n",
-	//tb->mem_req_addr, cycle);	
+      if(tb->mem_req_opcode == 7) {
+	r.is_st = true;
 	for(int i = 0; i < 4; i++) {
-	  uint64_t ea = (tb->mem_req_addr + 4*i) & ((1UL<<32)-1);
+	  r.data[i] = tb->mem_req_store_data[i];
+	}
+      }
+      mem_req_map[mem_reply_cycle] = r;
+    }
+
+    auto c_cit = mem_req_map.find(cycle);
+    if(c_cit != mem_req_map.end()) {
+      mem_req_t &r = c_cit->second;
+      last_retire = 0;
+      if(r.is_st) {
+	for(int i = 0; i < 4; i++) {
+	  uint64_t ea = (r.addr + 4*i) & ((1UL<<32)-1);
+	  mem_w32(s, ea, r.data[i]);
+	}
+      }
+      else {
+	for(int i = 0; i < 4; i++) {
+	  uint64_t ea = (r.addr + 4*i) & ((1UL<<32)-1);
 	  tb->mem_rsp_load_data[i] = mem_r32(s,ea);
 	}
-	last_load_addr = tb->mem_req_addr;
-	assert((tb->mem_req_addr & 0xf) == 0);
-	touched_lines[(tb->mem_req_addr & ((1UL<<32) - 1))>>4] = 1;
-	++n_loads;
       }
-      else if(tb->mem_req_opcode == 7) { /* store word */
-	//printf("got dram write for %lx at cycle %lu\n",
-	//tb->mem_req_addr, cycle);		
-	for(int i = 0; i < 4; i++) {
-	  uint64_t ea = (tb->mem_req_addr + 4*i) & ((1UL<<32)-1);
-	  mem_w32(s, ea, tb->mem_req_store_data[i]);
-	}
-	last_store_addr = tb->mem_req_addr;
-	++n_stores;
-      }
-      last_addr = tb->mem_req_addr;
       tb->mem_rsp_valid = 1;
+      
       printf("return tag %d at cycle %ld\n",
-	     static_cast<int>(tb->mem_req_tag),
+	     static_cast<int>(r.tag),
 	     cycle);
-      tb->mem_rsp_tag = tb->mem_req_tag;
+
+      tb->mem_rsp_tag = r.tag;
+      mem_req_map.erase(c_cit);      
     }
 
     
@@ -1515,7 +1518,7 @@ int main(int argc, char **argv) {
     }  
   }
   
-  if(!incorrect) {
+  if(!incorrect & false) {
     std::ofstream out(log_name);
     out << "n_mispredicts = " << n_mispredicts
 	<<  ", cycles = " << cycle
