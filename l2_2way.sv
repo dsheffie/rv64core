@@ -259,11 +259,11 @@ module l2_2way(clk,
 
    always_ff@(negedge clk)
      begin
-	if(l1d_rsp_valid)
-	begin
-	   $display("L1D RESP FOR ADDR %x TAG %d at cycle %d, data %x",
-		 l1d_rsp_addr, l1d_rsp_tag, r_cycle, l1_mem_load_data);
-	end
+	//if(l1d_rsp_valid)
+	//begin
+	//$display("L1D RESP FOR ADDR %x TAG %d at cycle %d, data %x",
+	//l1d_rsp_addr, l1d_rsp_tag, r_cycle, l1_mem_load_data);
+	//end
 	if(mmu_rsp_valid)
 	  begin
 	     $display("MMU RSP, return %x at cycle %d",
@@ -422,13 +422,13 @@ module l2_2way(clk,
 	     r_rob_replace[w_rob_tail_ptr] <= n_replace;
 	     r_rob_req_ty[w_rob_tail_ptr] <= r_req_ty;
 	     
-	     $display("allocate entry %d for address %x, wb %b, tag %d, cycle %d, state = %d", 
-		      w_rob_tail_ptr, 
-		      n_addr,
-		      t_is_wb,
-		      n_l1d_rsp_tag,
-		      r_cycle, 
-		      r_state);
+	     //$display("allocate entry %d for address %x, wb %b, tag %d, cycle %d, state = %d", 
+	     //w_rob_tail_ptr, 
+	     //n_addr,
+	     //t_is_wb,
+	     //n_l1d_rsp_tag,
+	     //r_cycle, 
+	     //r_state);
 	  end
      end
 
@@ -1072,7 +1072,7 @@ module l2_2way(clk,
 		      end
 		    t_pop_rob = 1'b1;
 		 end
-	       else if(/*!w_rob_full*/w_rob_empty)
+	       else if(!w_rob_full)
 		 begin
 		    if(r_need_wb)
 		      begin
@@ -1419,9 +1419,9 @@ module l2_2way(clk,
      begin
 	if(r_state == IDLE & w_head_of_rob_done)
 	  begin
-	     $display("transaction is done for %d at cycle %d, head %d, tail %d", 
-		      w_rob_head_ptr, r_cycle, r_rob_head_ptr, r_rob_tail_ptr);
-	     $display("addr = %x, ty = %d", r_rob_addr[w_rob_head_ptr], r_rob_req_ty[w_rob_head_ptr]);
+	     //$display("transaction is done for %d at cycle %d, head %d, tail %d", 
+	     //w_rob_head_ptr, r_cycle, r_rob_head_ptr, r_rob_tail_ptr);
+	     //$display("addr = %x, ty = %d", r_rob_addr[w_rob_head_ptr], r_rob_req_ty[w_rob_head_ptr]);
 	     //$display("saveaddr = %x", n_saveaddr);
 	     //$display("replace = %b", r_rob_replace[w_rob_head_ptr]);
 	     //$display("r_rob_l1tag = %d", r_rob_l1tag[w_rob_head_ptr]);
@@ -1441,14 +1441,14 @@ module l2_2way(clk,
 	if(r_state == CHECK_VALID_AND_TAG)
 	  begin
 	     
-	     //if(w_hit0 & w_hit1)
-	       //begin
+	     if(w_hit0 & w_hit1)
+	       begin
 		  $display("w_hit %b : hit 0 = %b, hit 1 = %b, r_addr %x, r_tag %x, cycle %d, opcode %d",
 			   w_hit, w_hit0, w_hit1, r_saveaddr, r_tag, r_cycle, r_opcode);
 		  
-		 // $display("multihit r_saveaddr = %x, r_tag = %x, cycle %d", r_saveaddr,r_tag, r_cycle);
-		 // $stop();
-	       //end
+		 $display("multihit r_saveaddr = %x, r_tag = %x, cycle %d", r_saveaddr,r_tag, r_cycle);
+		  $stop();
+	       end
 	  end // if (r_state == CHECK_VALID_AND_TAG)
      end
 
