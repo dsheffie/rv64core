@@ -215,7 +215,7 @@ module l2_2way(clk,
 				     CHECK_VALID_AND_TAG = 'd2,
 				     CLEAN_RELOAD = 'd3, 
 				     DIRTY_STORE = 'd4,
-				     PREPARE_STORE,
+				     PREPARE_WRITEBACK,
 				     STORE_TURNAROUND, //5
 				     WAIT_CLEAN_RELOAD, //6
 				     WAIT_STORE_IDLE, //7
@@ -309,6 +309,7 @@ module l2_2way(clk,
    req_t	     r_rob_req_ty[N_ROB_ENTRIES-1:0];
    
    logic [127:0]	     r_rob_data [N_ROB_ENTRIES-1:0];
+   logic [127:0]	     r_rob_st_data [N_ROB_ENTRIES-1:0];
    
    wire [`LG_L2_REQ_TAGS-1:0] w_rob_head_ptr = r_rob_head_ptr[`LG_L2_REQ_TAGS-1:0];
    wire [`LG_L2_REQ_TAGS-1:0] w_rob_tail_ptr = r_rob_tail_ptr[`LG_L2_REQ_TAGS-1:0];
@@ -384,6 +385,7 @@ module l2_2way(clk,
 		  r_rob_hitbusy[r_rob_tail_ptr[`LG_L2_REQ_TAGS-1:0]] <= w_hit_inflight;
 		  r_rob_was_wb[r_rob_tail_ptr[`LG_L2_REQ_TAGS-1:0]] <= t_is_wb;
 		  r_rob_was_st[r_rob_tail_ptr[`LG_L2_REQ_TAGS-1:0]] <= t_is_st;
+		  r_rob_st_data[r_rob_tail_ptr[`LG_L2_REQ_TAGS-1:0]] <= r_store_data;
 	       end
 	     
 	     if(mem_rsp_valid & (r_state != FLUSH_STORE))
@@ -813,7 +815,6 @@ module l2_2way(clk,
 	
 	n_mmu_rsp_data = r_mmu_addr3 ? w_d[127:64] : w_d[63:0];
 	n_mmu_rsp_valid = 1'b0;
-
 	
 	t_d0 = r_data;
 	t_d1 = r_data;
@@ -1052,9 +1053,10 @@ module l2_2way(clk,
 			     end
 			   L1D:
 			     begin
-				n_was_st = r_rob_was_st[w_rob_head_ptr];				
-				n_state = CLEAN_RELOAD;
-				n_opcode = MEM_LW;			   
+				n_state = CLEAN_RELOAD;				
+				n_was_st = r_rob_was_st[w_rob_head_ptr];
+				n_opcode =  r_rob_was_st[w_rob_head_ptr] ? MEM_SW : MEM_LW;	
+				n_store_data = r_rob_st_data[w_rob_head_ptr];
 				n_last_gnt = 1'b1;		
 				//n_l1d_rsp_valid  = 1'b1;
 			     end
@@ -1076,7 +1078,7 @@ module l2_2way(clk,
 		      begin
 			 //$display("performing writeback at cycle %d for address %x", 
 			 //r_cycle, r_wb_addr);			      		    
-			 n_state = PREPARE_STORE;
+			 n_state = PREPARE_WRITEBACK;
 			 n_addr = r_wb_addr;
 			 n_need_wb = 1'b0;
 			 n_rob_tag = w_rob_tail_ptr;
@@ -1288,7 +1290,7 @@ module l2_2way(clk,
 		    //$display("missed l2 for address %x, pointer %d", r_addr, w_rob_tail_ptr);		    
 		 end // else: !if(w_hit)
 	    end // case: CHECK_VALID_AND_TAG
-	  PREPARE_STORE:
+	  PREPARE_WRITEBACK:
 	    begin
 	       t_alloc_rob = 1'b1;
 	       t_is_wb = 1'b1;	       
@@ -1327,10 +1329,6 @@ module l2_2way(clk,
 	    begin
 	       n_state = CHECK_VALID_AND_TAG;
 	       n_got_req = 1'b1;
-	       if(r_was_st == 1'b1) 
-		 begin
-		    $stop();
-		 end
 	    end
 	  WAIT_STORE_IDLE:
 	    begin
