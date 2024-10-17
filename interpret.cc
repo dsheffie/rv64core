@@ -523,7 +523,8 @@ void execRiscv(state_t *s) {
   
 
   phys_pc = s->translate(s->pc, fetch_fault, 4, false, true);
-  
+  //printf("translating %lx to %lx, fetch fault %d\n",
+  //s->pc, phys_pc, fetch_fault);
   //if(s->pc == 0xffffffff80ba287cL) {
   //printf("linux panic, last call %lx\n", s->last_call);
   //dump_calls();

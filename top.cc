@@ -1456,6 +1456,16 @@ int main(int argc, char **argv) {
 	  uint64_t ea = (r.addr + 4*i) & ((1UL<<32)-1);
 	  mem_w32(s, ea, r.data[i]);
 	}
+	int eq = memcmp(&(ss->mem[r.addr]), &(s->mem[r.addr]), 16);
+	printf("WRITEBACK TO %x, data matches = %d\n", r.addr, eq==0);
+	
+	if(eq != 0) {
+	  for(int i = 0; i < 4; i++) {
+	    printf("%d : %x vs %x\n", i, mem_r32(ss, r.addr + 4*i), r.data[i]);
+	  }
+	}
+	
+	assert(eq == 0);
       }
       else {
 	for(int i = 0; i < 4; i++) {
@@ -1465,9 +1475,9 @@ int main(int argc, char **argv) {
       }
       tb->mem_rsp_valid = 1;
       
-      printf("return tag %d at cycle %ld\n",
-	     static_cast<int>(r.tag),
-	     cycle);
+      //printf("return tag %d at cycle %ld\n",
+      //static_cast<int>(r.tag),
+      //cycle);
 
       tb->mem_rsp_tag = r.tag;
       mem_req_map.erase(c_cit);      
@@ -1506,16 +1516,17 @@ int main(int argc, char **argv) {
     }
     else {
       std::cout << "checker mem does not equal rtl mem\n";
-      // for(uint64_t p = 0; p < (1UL<<32); p+=8) {
-      // 	uint64_t t0 = *reinterpret_cast<uint64_t*>(ss->mem + p);
-      // 	uint64_t t1 = *reinterpret_cast<uint64_t*>(s->mem + p);
-      // 	if(t0 != t1) {
-      // 	  printf("qword at %lx does not match SIM %lx vs RTL %lx\n",
-      // 		 p, t0, t1);
-      // 	}
-	  
-      // }
-    }  
+#if 0
+       for(uint64_t p = 0; p < (1UL<<32); p+=8) {
+       	uint64_t t0 = *reinterpret_cast<uint64_t*>(ss->mem + p);
+       	uint64_t t1 = *reinterpret_cast<uint64_t*>(s->mem + p);
+       	if(t0 != t1) {
+       	  printf("qword at %lx does not match SIM %lx vs RTL %lx\n",
+       		 p, t0, t1);
+       	}
+       }
+#endif
+    } 
   }
   
   if(!incorrect & false) {

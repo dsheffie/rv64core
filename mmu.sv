@@ -1,4 +1,5 @@
 `include "rob.vh"
+`define VERBOSE_MMU
 
 module mmu(clk, reset, clear_tlb, page_table_root, 
 	   l1i_req, l1i_va, l1d_req, l1d_st, l1d_va,
@@ -140,10 +141,14 @@ module mmu(clk, reset, clear_tlb, page_table_root,
    wire		w_bad_va = (w_lo_va | w_hi_va) == 1'b0;
 
    logic [63:0]	r_cycle;
-   
    always_ff@(posedge clk)
      begin
 	r_cycle <= reset ? 64'd0 : (r_cycle + 64'd1);
+     end
+   
+   
+   always_ff@(posedge clk)
+     begin
 	if(r_state == IDLE)
 	  begin
 	     if(n_l1i_req & l1i_va[38:12] == 'd0)
@@ -155,6 +160,18 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 		  $display("translating zero page for dside");
 	       end
 	  end
+     end
+
+   always_ff@(negedge clk)
+     begin
+	if(n_l1i_req)
+	  begin
+	     $display("MMU translate iside %x", l1i_va[38:12]);
+	  end
+	if(n_l1d_req)
+	  begin
+	     $display("MMU translate dside %x", l1d_va[38:12]);
+	  end	
      end
 	      
 	     
@@ -355,7 +372,9 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 		 begin /* 1gig page */
 		    n_pa = {8'd0, r_addr[53:28], r_va[29:12], 12'd0};
 		 end
-	       //$display("pa root address %x, hit lvl %d", n_pa, r_hit_lvl);	       
+`ifdef VERBOSE_MMU
+	       $display("va %x translated to pa %x", r_va, n_pa);
+`endif
 	       /* can ack now, but need to check if accessed needs to be set */
 	       n_l1i_rsp_valid = r_do_l1i;
 	       n_l1d_rsp_valid = r_do_l1d;
