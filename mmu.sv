@@ -257,8 +257,7 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 	    begin
 	       n_addr = page_table_root + {52'd0, r_va[38:30], 3'd0};
 `ifdef VERBOSE_MMU
-		 $display("r_va = %x, r_va[38:30] = %d, addr %x l1i %b, l1d %b", 
-			  r_va, r_va[38:30], n_addr, r_do_l1i, r_do_l1d);
+	       $display("walker level 0 generates address %x", n_addr);	       
 `endif
 	       if(w_bad_va)
 		 begin
@@ -301,7 +300,9 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 	  LOAD1:
 	    begin
 	       n_addr = {8'd0, r_addr[53:10], 12'd0} + {52'd0, r_va[29:21], 3'd0};
-	       //$display("walker level 1 generates address %x", n_addr);
+`ifdef VERBOSE_MMU
+	       $display("walker level 1 generates address %x", n_addr);
+`endif
 	       n_req = 1'b1;
 	       n_state = WAIT1;
 	    end
@@ -333,7 +334,9 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 	  LOAD2:
 	    begin
 	       n_addr = {8'd0, r_addr[53:10], 12'd0} + {52'd0, r_va[20:12], 3'd0};
-	       //$display("walker level 2 generates address %x", n_addr);
+`ifdef VERBOSE_MMU
+	       $display("walker level 2 generates address %x", n_addr);
+`endif
 	       n_req = 1'b1;
 	       n_state = WAIT2;
 	    end

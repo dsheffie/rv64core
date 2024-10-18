@@ -756,6 +756,13 @@ module nu_l1d(clk,
      end
    
 `ifdef DEBUG
+   logic r_port1_req_valid, r_port2_req_valid;
+   always_ff@(posedge clk)
+     begin
+	r_port1_req_valid <= reset ? 1'b0 : n_port1_req_valid;
+	r_port2_req_valid <= reset ? 1'b0 : n_port2_req_valid;	
+     end
+   
    always_ff@(negedge clk)
      begin
 	if(mem_rsp_valid)
@@ -772,14 +779,17 @@ module nu_l1d(clk,
 	     // 	$stop();
 	     // end
 		
-	     $display("req for tag %d, line %x at cycle %d, opcode %d, r_last_wr = %b, rr_last_wr = %b, r_state = %d",
+	     $display("req for tag %d, line %x at cycle %d, opcode %d, r_last_wr = %b, rr_last_wr = %b, r_state = %d, req1 %b, req2 %b",
 		      mem_req.tag, 
 		      mem_req.addr[IDX_STOP-1:IDX_START], 
 		      r_cycle, 
 		      mem_req.opcode, 
 		      r_last_wr, 
 		      rr_last_wr,
-		      r_state);
+		      r_state,
+		      r_port1_req_valid,
+		      r_port2_req_valid
+		      );
 	  end
      end
 `endif
@@ -804,7 +814,7 @@ module nu_l1d(clk,
 `endif
 		  r_mq_inflight[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]] <= 1'b1;
 	       end
-	     if(w_early_rsp)
+	     if(w_early_rsp & (mem_rsp_tag[`LG_MRQ_ENTRIES] == 1'b0))
 	       begin
 `ifdef DEBUG
 		  $display("early mem req returns for tag %d, addr %x at cycle %d", mem_rsp_tag, mem_rsp_addr, r_cycle);
@@ -1136,6 +1146,20 @@ module nu_l1d(clk,
 `ifdef DEBUG
     always_ff@(negedge clk)
       begin
+	 for(integer i = 0; i < N_MQ_ENTRIES; i=i+1)
+	   begin
+	      if(r_mq_addr_valid[i])
+		begin
+		   $display("line %d has addr %x", i, r_mq_addr[i]);
+		end
+	      if(r_mq_inflight[i])
+		begin
+		   $display("line %d is inflight", i);
+		end
+	   end
+
+	 
+	 
 	 if(t_got_req2)
 	   begin
 	      $display("ingest t_cache_idx2 = %x at cycle %d", t_cache_idx2, r_cycle);
@@ -1961,7 +1985,9 @@ module nu_l1d(clk,
 	    begin
 	       if(r_got_req)
 		 begin
-		    //$display("---> port1 addr %x for pc %x, rob_ptr %d", r_req.addr, r_req.pc, r_req.rob_ptr);
+`ifdef DEBUG
+		    $display("---> port1 addr %x for pc %x, rob_ptr %d", r_req.addr, r_req.pc, r_req.rob_ptr);
+`endif
 		    
 		    if(w_got_hit)
 		      begin /* valid cacheline - hit in cache */

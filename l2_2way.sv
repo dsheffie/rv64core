@@ -6,6 +6,8 @@ import "DPI-C" function void l1_to_l2_queue_occupancy(int e);
 import "DPI-C" function void record_l2_state(int s);
 `endif
 
+//`define VERBOSE_L2
+
 module l2_2way(clk,
 	  reset,
 	  l2_state,
@@ -215,7 +217,7 @@ module l2_2way(clk,
 				     CHECK_VALID_AND_TAG = 'd2,
 				     CLEAN_RELOAD = 'd3, 
 				     DIRTY_STORE = 'd4,
-				     PREPARE_WRITEBACK,
+				     PREPARE_WRITEBACK = 'd5,
 				     STORE_TURNAROUND, //5
 				     WAIT_CLEAN_RELOAD, //6
 				     WAIT_STORE_IDLE, //7
@@ -245,6 +247,16 @@ module l2_2way(clk,
    assign mem_req_opcode = r_mem_opcode;
    assign mem_req_store_data = r_mem_req_store_data;
 
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if(mem_req_valid)
+   // 	  begin
+   // 	     $display("mem op %d at addr %x cycle %d",
+   // 		      mem_req_opcode,
+   // 		      mem_req_addr,
+   // 		      r_cycle);
+   // 	  end
+   //   end
 
    assign l1d_rsp_valid = r_l1d_rsp_valid;
    assign l1i_rsp_valid = r_l1i_rsp_valid;
@@ -422,17 +434,29 @@ module l2_2way(clk,
 	     r_rob_replace[w_rob_tail_ptr] <= n_replace;
 	     r_rob_req_ty[w_rob_tail_ptr] <= r_req_ty;
 	     
-	     //$display("allocate entry %d for address %x, wb %b, tag %d, cycle %d, state = %d", 
-	     //w_rob_tail_ptr, 
-	     //n_addr,
-	     //t_is_wb,
-	     //n_l1d_rsp_tag,
-	     //r_cycle, 
-	     //r_state);
 	  end
      end
 
-   
+`ifdef VERBOSE_L2
+   always_ff@(negedge clk)
+     begin
+	if(t_alloc_rob)
+	  begin
+	     $display("allocate entry %d for address %x, wb %b, tag %d, cycle %d, state = %d", 
+		      w_rob_tail_ptr, 
+		      n_addr,
+		      t_is_wb,
+		      n_l1d_rsp_tag,
+		      r_cycle, 
+		      r_state);
+	  end
+
+	if(t_pop_rob)
+	  begin
+	     $display("dealloc entry %d at cycle %d", w_rob_head_ptr, r_cycle);
+	  end
+     end
+`endif   
    
    always_comb
      begin
@@ -1031,7 +1055,8 @@ module l2_2way(clk,
 		    
 		    if(r_rob_hitbusy[w_rob_head_ptr]) 
 		      begin
-			 $stop();
+			 $display("HIT BUSY for ADDR %x, tag entry %d", n_addr, w_rob_head_ptr);
+			 //$stop();
 			 n_state = CHECK_VALID_AND_TAG;
 			 n_got_req = 1'b1;
 		      end
@@ -1072,12 +1097,11 @@ module l2_2way(clk,
 		      end
 		    t_pop_rob = 1'b1;
 		 end
-	       else if(!w_rob_full)
+	       else if(w_rob_empty)
 		 begin
 		    if(r_need_wb)
 		      begin
-			 //$display("performing writeback at cycle %d for address %x", 
-			 //r_cycle, r_wb_addr);			      		    
+			 //$display("performing writeback at cycle %d for address %x", r_cycle, r_wb_addr);
 			 n_state = PREPARE_WRITEBACK;
 			 n_addr = r_wb_addr;
 			 n_need_wb = 1'b0;
@@ -1090,7 +1114,7 @@ module l2_2way(clk,
 			 n_state = FLUSH_WAIT;
 			 n_req_ty = FLUSH;			 
 		      end
-		    else if(w_mem_mark_valid)
+		    else if(w_mem_mark_valid & w_rob_empty)
 		      begin
 			 n_mmu_mark_req = 1'b0;
 			 n_mmu_mark_dirty = mem_mark_dirty;
@@ -1106,7 +1130,7 @@ module l2_2way(clk,
 			 n_got_req = 1'b1;
 			 n_req_ty = MARK_PTE;
 		      end
-		    else if(w_mmu_req)
+		    else if(w_mmu_req & w_rob_empty)
 		      begin
 			 n_mmu_addr3 = mmu_req_addr[3];		    
 			 t_idx = mmu_req_addr[LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN];			 

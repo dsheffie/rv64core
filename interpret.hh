@@ -139,7 +139,8 @@ struct state_t{
 
   
   uint64_t translate(uint64_t ea, int &fault, int sz,
-		     bool store = false, bool fetch = false) const;
+		     bool store = false, bool fetch = false,
+		     bool force = false) const;
 
    
 };

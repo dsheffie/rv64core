@@ -149,13 +149,14 @@ int64_t state_t::get_time() const {
   return csr_time;
 }
 
-static std::unordered_map<uint64_t, std::pair<uint64_t, uint64_t>> tlb;
+//static std::unordered_map<uint64_t, std::pair<uint64_t, uint64_t>> tlb;
 
-uint64_t state_t::translate(uint64_t ea, int &fault, int sz, bool store, bool fetch) const {
+uint64_t state_t::translate(uint64_t ea, int &fault, int sz, bool store, bool fetch,
+			    bool force) const {
   fault = false;
-  if(unpaged_mode()) {
+  if(unpaged_mode() and not(force)) {
     return ea;
-  }  
+  }
   csr_t c(satp);
   pte_t r(0);
   uint64_t ea0 = ea & (~4095L);
@@ -171,20 +172,11 @@ uint64_t state_t::translate(uint64_t ea, int &fault, int sz, bool store, bool fe
     return 2;
   }
 
-  // auto &t = tlb[ea >> 12];
-  // r.r = t.first;
-  // if(r.sv39.v and not((r.sv39.d == 0) && store)) {
-  //   mask_bits = t.second & 4095;
-  //   int64_t m = ((1L << mask_bits) - 1);
-  //   tlb_pa = (t.second & (~m)) | (ea & m);
-  //   return tlb_pa;
-  // }
-  // r.r = 0;
-  // mask_bits = -1;
-
   assert(c.satp.mode == 8);
   a = (c.satp.ppn * 4096) + (((ea >> 30) & 511)*8);
+  printf("level 0 : %x\n", a);  
   u = *reinterpret_cast<uint64_t*>(mem + a);
+
   if((u&1) == 0) {
     fault = 1;
     return 2;
@@ -196,6 +188,7 @@ uint64_t state_t::translate(uint64_t ea, int &fault, int sz, bool store, bool fe
   }
   
   a = (r.sv39.ppn * 4096) + (((ea >> 21) & 511)*8);
+  printf("level 1 : %x\n", a);  
   u = *reinterpret_cast<uint64_t*>(mem + a);
 
   if((u&1) == 0) {
@@ -209,7 +202,7 @@ uint64_t state_t::translate(uint64_t ea, int &fault, int sz, bool store, bool fe
     goto translation_complete;
   }
   a = (r.sv39.ppn * 4096) + (((ea >> 12) & 511)*8);
-  
+  printf("level 2 : %x\n", a);
   u = *reinterpret_cast<uint64_t*>(mem + a);  
   if((u&1) == 0) {
     fault = 1;
@@ -283,7 +276,7 @@ uint64_t state_t::translate(uint64_t ea, int &fault, int sz, bool store, bool fe
 static void set_priv(state_t *s, int priv) {
   if (s->priv != priv) {
     //printf("tlb had %lu entries\n", tlb.size());
-    tlb.clear();
+    //tlb.clear();
     int mxl;
     if (priv == priv_supervisor) {
       mxl = (s->mstatus >> MSTATUS_SXL_SHIFT) & 3;
@@ -426,8 +419,8 @@ static void write_csr(int csr_id, state_t *s, int64_t v, bool &undef) {
       if(c.satp.mode == 8 &&
 	 c.satp.asid == 0) {
 	s->satp = v;
-	//printf("tlb had %lu entries\n", tlb.size());
-	tlb.clear();	
+	////printf("tlb had %lu entries\n", tlb.size());
+	//tlb.clear();	
       }
       break;
     case 0x300:
@@ -1454,7 +1447,7 @@ void execRiscv(state_t *s) {
       else if(upper7 == 9 && ((inst & (16384-1)) == 0x73 )) {
 	//std::cout << "warn : got sfence\n";
 	//printf("tlb had %lu entries\n", tlb.size());	
-	tlb.clear();
+	//tlb.clear();
       }      
       else if(bits19to7z and (csr_id == 0x002)) {  /* uret */
 	assert(false);

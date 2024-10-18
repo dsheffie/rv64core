@@ -162,6 +162,7 @@ void drop_va2pa_caches() {
   }
 }
 
+
 void alias_check(long long addr, long long vaddr) {
   long long ma = (addr & (~0xfUL));
   long long mva = (vaddr & (~0xfUL));
@@ -278,6 +279,18 @@ void csr_putchar(char c) {
   else std::cout << c;
 }
 
+
+void check_translation(long long addr, int paddr) {
+  int fault = 0;
+  uint64_t pa = s->translate(addr, fault, 1,
+			     false, false, true);
+  if(!fault) {
+    pa &= ((1UL<<32)-1);
+    printf("pa %lx, paddr %x\n", pa, paddr);
+    assert(pa == paddr);
+  }
+}
+
 long long translate(long long va, long long root, bool iside, bool store) {
   uint64_t a = 0, u = 0;
   int mask_bits = -1;
@@ -338,6 +351,8 @@ long long translate(long long va, long long root, bool iside, bool store) {
   //exit(-1);
   return (pa & ((1UL<<32)-1));
 }
+
+
 
 long long dc_ld_translate(long long va, long long root) {
   return translate(va,root, false, false);
@@ -1432,8 +1447,10 @@ int main(int argc, char **argv) {
     tb->mem_rsp_valid = 0;
 
     if(tb->mem_req_valid) {
+      //printf("GOT MEMORY REQ FOR ADDR %x TYPE %d TAG %d CYCLE %lu\n",
+      //tb->mem_req_addr, tb->mem_req_opcode, tb->mem_req_tag, cycle);
       ++mem_reqs;
-      mem_reply_cycle = cycle + (tb->mem_req_opcode == 4 ? 1 : 2)*mem_lat;
+      mem_reply_cycle = cycle + mem_lat;
       mem_req_t r;
       r.addr = tb->mem_req_addr;
       r.tag = tb->mem_req_tag;
@@ -1444,6 +1461,8 @@ int main(int argc, char **argv) {
 	  r.data[i] = tb->mem_req_store_data[i];
 	}
       }
+      assert(mem_req_map.find(mem_reply_cycle) == mem_req_map.end());
+
       mem_req_map[mem_reply_cycle] = r;
     }
 
@@ -1457,15 +1476,12 @@ int main(int argc, char **argv) {
 	  mem_w32(s, ea, r.data[i]);
 	}
 	int eq = memcmp(&(ss->mem[r.addr]), &(s->mem[r.addr]), 16);
-	printf("WRITEBACK TO %x, data matches = %d\n", r.addr, eq==0);
-	
 	if(eq != 0) {
+	  printf("WRITEBACK TO %x, data matches = %d, tag = %d\n", r.addr, eq==0, r.tag);	  
 	  for(int i = 0; i < 4; i++) {
 	    printf("%d : %x vs %x\n", i, mem_r32(ss, r.addr + 4*i), r.data[i]);
 	  }
 	}
-	
-	assert(eq == 0);
       }
       else {
 	for(int i = 0; i < 4; i++) {

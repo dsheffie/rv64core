@@ -65,10 +65,19 @@ if __name__ == '__main__':
 
     with open('timeout.txt', 'w') as o:
         for t in timeout:
+            icnt = None
+            with open(t, 'r') as in_:
+                for line in in_:
+                    m = re.search(r'instructions retired = (\d+)', line)
+                    if m:
+                        icnt = m.groups()[0]
+                        break
+            if icnt:
+                print('%s failed after %s instructions' % (t,icnt))
             o.write('%s\n' % t)
 
     with open('tjobs.txt', 'w') as o:
         for test in timeout:
             t = test.split('.')
             job =t[0] +'.' + t[1]
-            o.write('./rv64_core -f %s --maxicnt %d &> %s\n' % (job, 32*1024*1024, test)) 
+            o.write('../rv64_core -f %s --maxicnt %d &> %s\n' % (job, 32*1024*1024, test)) 
