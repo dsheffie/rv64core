@@ -282,8 +282,7 @@ void csr_putchar(char c) {
 
 void check_translation(long long addr, int paddr) {
   int fault = 0;
-  uint64_t pa = s->translate(addr, fault, 1,
-			     false, false, true);
+  uint64_t pa = s->translate(addr, fault, 1);
   if(!fault) {
     pa &= ((1UL<<32)-1);
     printf("pa %lx, paddr %x\n", pa, paddr);

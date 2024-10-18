@@ -174,7 +174,8 @@ uint64_t state_t::translate(uint64_t ea, int &fault, int sz, bool store, bool fe
 
   assert(c.satp.mode == 8);
   a = (c.satp.ppn * 4096) + (((ea >> 30) & 511)*8);
-  printf("level 0 : %x\n", a);  
+  
+  //printf("level 0 : %x\n", a);  
   u = *reinterpret_cast<uint64_t*>(mem + a);
 
   if((u&1) == 0) {
@@ -188,7 +189,7 @@ uint64_t state_t::translate(uint64_t ea, int &fault, int sz, bool store, bool fe
   }
   
   a = (r.sv39.ppn * 4096) + (((ea >> 21) & 511)*8);
-  printf("level 1 : %x\n", a);  
+  //printf("level 1 : %x\n", a);  
   u = *reinterpret_cast<uint64_t*>(mem + a);
 
   if((u&1) == 0) {
@@ -202,7 +203,7 @@ uint64_t state_t::translate(uint64_t ea, int &fault, int sz, bool store, bool fe
     goto translation_complete;
   }
   a = (r.sv39.ppn * 4096) + (((ea >> 12) & 511)*8);
-  printf("level 2 : %x\n", a);
+  //printf("level 2 : %x\n", a);
   u = *reinterpret_cast<uint64_t*>(mem + a);  
   if((u&1) == 0) {
     fault = 1;

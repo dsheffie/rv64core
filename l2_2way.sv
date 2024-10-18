@@ -1097,7 +1097,7 @@ module l2_2way(clk,
 		      end
 		    t_pop_rob = 1'b1;
 		 end
-	       else if(w_rob_empty)
+	       else if(w_rob_full==1'b0)
 		 begin
 		    if(r_need_wb)
 		      begin
