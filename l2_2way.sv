@@ -442,13 +442,14 @@ module l2_2way(clk,
      begin
 	if(t_alloc_rob)
 	  begin
-	     $display("allocate entry %d for address %x, wb %b, tag %d, cycle %d, state = %d", 
+	     $display("allocate entry %d for address %x, wb %b, tag %d, cycle %d, state = %d, ty = %d", 
 		      w_rob_tail_ptr, 
 		      n_addr,
 		      t_is_wb,
 		      n_l1d_rsp_tag,
 		      r_cycle, 
-		      r_state);
+		      r_state,
+		      r_req_ty);
 	  end
 
 	if(t_pop_rob)
@@ -873,11 +874,25 @@ module l2_2way(clk,
 	  end
      end // always_comb
 
-   
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if((r_state == CHECK_VALID_AND_TAG) & r_saveaddr[LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN] == 'd1765)
-   // 	  begin
+
+`ifdef VERBOSE_L2
+    always_ff@(negedge clk)
+      begin
+	 if(r_mmu == 1'b0 && n_mmu == 1'b1)
+	   begin
+	      $display("r_mmu assigned at cycle %d in state %d", r_cycle, r_state);
+	   end
+    	if(r_state == CHECK_VALID_AND_TAG)
+	  begin
+	     $display("process adddress %x at cycle %d, hit %b, last_gnt %b, r_opcode %d, r_mmu %b", 
+		      r_addr, r_cycle, w_hit, r_last_gnt, r_opcode, r_mmu);
+	  end
+	 if(l1i_rsp_valid)
+	   begin
+	      $display("ack lli req at cycle %d", r_cycle);
+	   end
+      end // always_ff@ (negedge clk)
+`endif
    // 	     if(w_hit)
    // 	       begin
    // 		  $display("hit  for addr %x, w_tag0 = %x, w_tag1 = %x, v0 %b, v1 %b, line %d, r_tag %x, t_last %b", 
@@ -1052,6 +1067,7 @@ module l2_2way(clk,
 		    n_mmu_addr3 = r_rob_addr[w_rob_head_ptr][3];
 
 		    n_was_st = 1'b0;
+		    n_mmu = 1'b0;
 		    
 		    if(r_rob_hitbusy[w_rob_head_ptr]) 
 		      begin
@@ -1280,6 +1296,7 @@ module l2_2way(clk,
 	       else
 		 begin
 		    t_alloc_rob = 1'b1;
+		    n_mmu = 1'b0;
 		    t_is_st = r_opcode == MEM_SW;
 		    n_rob_tag = w_rob_tail_ptr;			 		    
 		    n_cache_hits = r_cache_hits - 64'd1;
