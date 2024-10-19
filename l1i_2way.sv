@@ -751,14 +751,14 @@ endfunction
 		    n_miss_pc = r_cache_pc;
 		    n_pc = r_pc;
 		    n_reload = r_cycle[0];//!w_last_out;
-		    $display("cycle %d :missed for pc %x, set idx %d, replace way %d, w_tag_out0 = %x w_tag_out1 = %x",
-			     r_cycle,
-			     n_mem_req_addr,
-			     r_cache_pc[11:4],
-			     n_reload,
-			     {w_tag_out0, r_cache_pc[11:4], 4'd0},
-			     {w_tag_out1, r_cache_pc[11:4], 4'd0}
-		    );
+		    //$display("cycle %d :missed for pc %x, set idx %d, replace way %d, w_tag_out0 = %x w_tag_out1 = %x",
+		    //r_cycle,
+		    //n_mem_req_addr,
+		    //r_cache_pc[11:4],
+		    //n_reload,
+		    //	     {w_tag_out0, r_cache_pc[11:4], 4'd0},
+		    //{w_tag_out1, r_cache_pc[11:4], 4'd0}
+		    //);
 		 end
 	       else if(t_hit && !fq_full)
 		 begin

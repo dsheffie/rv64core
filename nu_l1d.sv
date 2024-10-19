@@ -1,3 +1,5 @@
+
+
 `include "machine.vh"
 `include "rob.vh"
 `include "uop.vh"
@@ -1850,6 +1852,22 @@ module nu_l1d(clk,
    logic [6:0] t_new_req_c;
    
    logic t_accept;
+
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if((r_l2_probe_ack == 1'b0) & n_l2_probe_ack)
+   // 	  begin
+   // 	     $display("prepare ack at cycle %d, state = %d", r_cycle, r_state);	     
+   // 	  end
+   // 	if(r_state == FLUSH_CL)
+   // 	  begin
+   // 	     $display("flush dirty = %b, flush_hit = %b", r_dirty_out, w_flush_hit);
+   // 	  end
+   // 	if(r_l2_probe_ack)
+   // 	  begin
+   // 	     $display("probe ack at cycle %d", r_cycle);
+   // 	  end
+   //   end
    
    always_comb
      begin
@@ -1998,6 +2016,13 @@ module nu_l1d(clk,
 			      log_store_release( { {(32-`LG_ROB_ENTRIES){1'b0}}, r_req.rob_ptr}, r_cycle);
 			   end
 `endif
+`ifdef DEBUG
+			 $display("p1 store %b hit cache for pc %x, addr %x, got data %x, cycle %d, data %x", 
+				  r_req.is_store,
+				  r_req.pc, r_req.addr, t_rsp_data[`M_WIDTH-1:0], r_cycle,
+				  t_data);
+`endif
+			 
 			 if(r_req.is_store==1'b0)
 			   begin
 			      n_core_mem_rsp.data = t_rsp_data[`M_WIDTH-1:0];
@@ -2006,11 +2031,8 @@ module nu_l1d(clk,
 			      if(t_core_mem_rsp_valid) $stop();
 			      n_core_mem_rsp.has_cause = r_req.spans_cacheline;
 
-`ifdef DEBUG
-			      $display("load on port1 hit cache for pc %x, addr %x, got data %x, cycle %d", 
-				       r_req.pc, r_req.addr, t_rsp_data[`M_WIDTH-1:0], r_cycle);
-`endif
 			   end // else: !if(r_req.is_store)
+
 		      end // if (w_got_hit)
 		    else if(r_valid_out && r_dirty_out && (r_tag_out != r_cache_tag) )
 		      begin
@@ -2198,6 +2220,7 @@ module nu_l1d(clk,
 	    if(r_dirty_out & w_flush_hit)
 	      begin
 		 n_port1_req_addr = {r_tag_out,r_cache_idx,4'd0};
+		 $display("flush cl flushing line at addr %x", n_port1_req_addr);		 
 		 n_port1_req_opcode = MEM_SW;
 		 n_port1_req_store_data = t_data;
 		 n_state = FLUSH_CL_WAIT;

@@ -1,5 +1,9 @@
 `include "rob.vh"
-`define VERBOSE_MMU
+//`define VERBOSE_MMU
+
+`ifdef VERILATOR
+import "DPI-C" function void check_translation(input longint va, input int pa);
+`endif
 
 module mmu(clk, reset, clear_tlb, page_table_root, 
 	   l1i_req, l1i_va, l1d_req, l1d_st, l1d_va,
@@ -146,7 +150,7 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 	r_cycle <= reset ? 64'd0 : (r_cycle + 64'd1);
      end
    
-   
+`ifdef VERBOSE_MMU   
    always_ff@(posedge clk)
      begin
 	if(r_state == IDLE)
@@ -173,7 +177,7 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 	     $display("MMU translate dside %x", l1d_va[38:12]);
 	  end	
      end
-	      
+`endif	      
 	     
    always_comb
      begin
@@ -259,6 +263,11 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 `ifdef VERBOSE_MMU
 	       $display("walker level 0 generates address %x", n_addr);	       
 `endif
+	       if(r_va == 64'hfffffffffe400000)
+		 begin
+		    $display("walker level 0 generates address %x", n_addr);	       
+		 end
+	       
 	       if(w_bad_va)
 		 begin
 		    n_state = IDLE;
@@ -279,6 +288,11 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 		    //$display("walker level 0 got %x, cycle %d", mem_rsp_data, r_cycle);
 		    n_addr = mem_rsp_data;
 		    n_last_addr = r_addr;
+
+		    if(r_va == 64'hfffffffffe400000)
+		      begin
+			 $display("walker got data %x", mem_rsp_data);
+		      end	    		    		    
 		    if(mem_rsp_data[0] == 1'b0)
 		      begin
 			 n_state = IDLE;
@@ -303,6 +317,10 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 `ifdef VERBOSE_MMU
 	       $display("walker level 1 generates address %x", n_addr);
 `endif
+	       if(r_va == 64'hfffffffffe400000)
+		 begin
+		    $display("walker level 1 generates address %x", n_addr);		    
+		 end
 	       n_req = 1'b1;
 	       n_state = WAIT1;
 	    end
@@ -312,6 +330,11 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 		 begin
 		    n_addr = mem_rsp_data;
 		    n_last_addr = r_addr;
+
+		    if(r_va == 64'hfffffffffe400000)
+		      begin
+			 $display("walker got data %x", mem_rsp_data);
+		      end	    		    
 		    //$display("walker level 1 got %x", mem_rsp_data);
 		    if(mem_rsp_data[0] == 1'b0)
 		      begin
@@ -337,6 +360,10 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 `ifdef VERBOSE_MMU
 	       $display("walker level 2 generates address %x", n_addr);
 `endif
+	       if(r_va == 64'hfffffffffe400000)
+		 begin
+		    $display("walker level 2 generates address %x", n_addr);		    
+		 end	       
 	       n_req = 1'b1;
 	       n_state = WAIT2;
 	    end
@@ -347,6 +374,11 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 		    //$display("walker level 2 got %x",  mem_rsp_data);
 		    n_addr = mem_rsp_data;
 		    n_last_addr = r_addr;
+
+		    if(r_va == 64'hfffffffffe400000)
+		      begin
+			 $display("walker got data %x", mem_rsp_data);
+		      end	    
 		    if(mem_rsp_data[0] == 1'b0)
 		      begin
 			 n_state = IDLE;
@@ -369,14 +401,22 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 		 end
 	       else if(r_hit_lvl == 2'd1)
 		 begin /* 2mbyte page */
+		    //18 17 16 15 14 13 12 11 10
 		    n_pa = {8'd0, r_addr[53:19], r_va[20:12], 12'd0};
+		    //n_pa = {8'd0, r_addr[53:19], 21'd0};		    
 		 end
 	       else if(r_hit_lvl == 2'd0)
 		 begin /* 1gig page */
 		    n_pa = {8'd0, r_addr[53:28], r_va[29:12], 12'd0};
 		 end
+
+`ifdef VERILATOR
+	       check_translation(r_va, n_pa[31:0]);
+`endif
+
+	       
 `ifdef VERBOSE_MMU
-	       $display("va %x translated to pa %x", r_va, n_pa);
+	       $display("va %x translated to pa %x, hit lvl %d, pte %x", r_va, n_pa, r_hit_lvl, r_addr);
 `endif
 	       /* can ack now, but need to check if accessed needs to be set */
 	       n_l1i_rsp_valid = r_do_l1i;

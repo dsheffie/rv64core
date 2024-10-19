@@ -274,6 +274,101 @@ uint64_t state_t::translate(uint64_t ea, int &fault, int sz, bool store, bool fe
   return pa;
 }
 
+uint64_t state_t::page_lookup(uint64_t ea, int &fault, int sz, bool verbose) const {
+  fault = false;
+  if(unpaged_mode()) {
+    return ea;
+  }
+  csr_t c(satp);
+  pte_t r(0);
+  uint64_t ea0 = ea & (~4095L);
+  uint64_t ea1 = ((ea + sz - 1) & (~4095L));
+  bool same_page = (ea0 == ea1);
+  uint64_t a = 0, u = 0;
+  int mask_bits = -1;
+  uint64_t tlb_pa = 0;
+  
+  //if we are unaligned assert out (for now)
+  if(!same_page) {
+    fault = 1;
+    return 2;
+  }
+
+  assert(c.satp.mode == 8);
+  a = (c.satp.ppn * 4096) + (((ea >> 30) & 511)*8);
+  
+  u = *reinterpret_cast<uint64_t*>(mem + a);
+  if(verbose) {
+    printf("level 0 : va %lx, addr %lx, data %lx\n", ea, a, u);
+  }
+
+  if((u&1) == 0) {
+    fault = 1;
+    return 2;
+  }  
+  r.r = u;
+  if(r.sv39.x || r.sv39.w || r.sv39.r) {
+    mask_bits = 30;
+    goto translation_complete;
+  }
+  
+  a = (r.sv39.ppn * 4096) + (((ea >> 21) & 511)*8);
+  //printf("level 1 : %x\n", a);  
+  u = *reinterpret_cast<uint64_t*>(mem + a);
+
+  if(verbose) {
+    printf("level 1 : va %lx, addr %lx, data %lx\n", ea, a, u);
+  }
+  
+  if((u&1) == 0) {
+    fault = 1;
+    return 1;
+  }
+  
+  r.r = u;
+  if(r.sv39.x || r.sv39.w || r.sv39.r) {
+    mask_bits = 21;
+    goto translation_complete;
+  }
+  a = (r.sv39.ppn * 4096) + (((ea >> 12) & 511)*8);
+  u = *reinterpret_cast<uint64_t*>(mem + a);
+
+  if(verbose) {
+    printf("level 2 : addr %lx, data %lx\n", a, u);
+  }
+
+  
+  if((u&1) == 0) {
+    fault = 1;
+    return 0;
+  }
+  r.r = u;  
+  if(not(r.sv39.x || r.sv39.w || r.sv39.r)) {
+    std::cout << "huh no translation for " << std::hex << pc << std::dec << "\n";
+    std::cout << "huh no translation for " << std::hex << ea << std::dec << "\n";
+    std::cout << "u = " << std::hex << u << std::dec << "\n";
+  }
+
+  assert(r.sv39.x || r.sv39.w || r.sv39.r);
+  mask_bits = 12;
+  
+ translation_complete:
+  assert(mask_bits != -1);
+  int64_t m = ((1L << mask_bits) - 1);
+  ea &= (~4095UL);
+  int64_t pa = ((r.sv39.ppn * 4096) & (~m)) | (ea & m);
+  
+  //tlb[ea >>  12] = std::pair<uint64_t, uint64_t>(r.r, (r.sv39.ppn << 12) | mask_bits );
+  // if(tlb_pa != 0 && (pa != tlb_pa)) {
+  //   std::cout << "m = " << std::hex << m << std::dec << "\n";
+  //   printf("ea     = %lx\n", ea);
+  //   printf("pa     = %lx\n", pa);
+  //   printf("tlb pa = %lx\n", tlb_pa);
+  //   assert(pa == tlb_pa);
+  // }
+  return pa;
+}
+
 static void set_priv(state_t *s, int priv) {
   if (s->priv != priv) {
     //printf("tlb had %lu entries\n", tlb.size());
@@ -1131,6 +1226,10 @@ void execRiscv(state_t *s) {
       }
 
 
+      if(pa == 0x828bfff8UL) {
+	printf("WRITING LOC %x with %lx at pc %lx\n",
+	       pa, s->gpr[m.s.rs2], s->pc);
+      }
       
       switch(m.s.sel)
 	{

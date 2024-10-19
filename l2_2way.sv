@@ -269,8 +269,14 @@ module l2_2way(clk,
      end
    assign l1_mem_load_data = r_rsp_data;
 
+`ifdef VERBOSE_L2
    always_ff@(negedge clk)
      begin
+	if(l1d_req_valid)
+	  begin
+	     $display(">>>> request to address %x at cycle %d", l1d_req.addr, r_cycle);
+	  end
+
 	//if(l1d_rsp_valid)
 	//begin
 	//$display("L1D RESP FOR ADDR %x TAG %d at cycle %d, data %x",
@@ -278,11 +284,11 @@ module l2_2way(clk,
 	//end
 	if(mmu_rsp_valid)
 	  begin
-	     $display("MMU RSP, return %x at cycle %d",
-		      mmu_rsp_data, r_cycle);
+	     $display("MMU RSP, return %x at cycle %d, addr %x, data %x, sel %b",
+		      mmu_rsp_data, r_cycle, r_addr, r_rsp_data, r_mmu_addr3);
 	  end
      end
-   
+`endif
    
    assign l1_mem_req_ack = r_req_ack;
    
@@ -313,7 +319,7 @@ module l2_2way(clk,
    logic [`LG_L2_REQ_TAGS:0] r_rob_head_ptr, n_rob_head_ptr;
    logic [`LG_L2_REQ_TAGS:0] r_rob_tail_ptr, n_rob_tail_ptr;      
    logic [N_ROB_ENTRIES-1:0] r_rob_valid, r_rob_done, r_rob_hitbusy;
-   logic [N_ROB_ENTRIES-1:0] r_rob_was_wb, r_rob_was_st;
+   logic [N_ROB_ENTRIES-1:0] r_rob_was_wb, r_rob_was_st, r_rob_mmu_addr3;
    
    logic [31:0]		     r_rob_addr [N_ROB_ENTRIES-1:0];
    logic [`LG_MRQ_ENTRIES:0] r_rob_l1tag [N_ROB_ENTRIES-1:0];
@@ -398,6 +404,7 @@ module l2_2way(clk,
 		  r_rob_was_wb[r_rob_tail_ptr[`LG_L2_REQ_TAGS-1:0]] <= t_is_wb;
 		  r_rob_was_st[r_rob_tail_ptr[`LG_L2_REQ_TAGS-1:0]] <= t_is_st;
 		  r_rob_st_data[r_rob_tail_ptr[`LG_L2_REQ_TAGS-1:0]] <= r_store_data;
+		  r_rob_mmu_addr3[r_rob_tail_ptr[`LG_L2_REQ_TAGS-1:0]] <= r_mmu_addr3;
 	       end
 	     
 	     if(mem_rsp_valid & (r_state != FLUSH_STORE))
@@ -661,7 +668,7 @@ module l2_2way(clk,
 	    begin
 	       if(mmu_req_valid)
 		 begin
-		    $display("got probe req at cycle %d for addr %x", r_cycle, mmu_req_addr);
+		    //$display("got probe req at cycle %d for addr %x", r_cycle, mmu_req_addr);
 		    n_pstate = PROBE_WAIT;
 		    n_l2_probe_val = 1'b1;
 		    n_l2_probe_addr = mmu_req_addr;
@@ -672,7 +679,7 @@ module l2_2way(clk,
 	    begin
 	       if(l2_probe_ack)
 		 begin
-		    $display("got probe ack at cycle %d", r_cycle);
+		    //$display("got probe ack at cycle %d", r_cycle);
 		    n_pstate = PROBE_IDLE;
 		    t_probe_mmu_req_valid = r_l2_probe_mmu;
 		    n_l2_probe_mmu = 1'b0;
@@ -884,8 +891,8 @@ module l2_2way(clk,
 	   end
     	if(r_state == CHECK_VALID_AND_TAG)
 	  begin
-	     $display("process adddress %x at cycle %d, hit %b, last_gnt %b, r_opcode %d, r_mmu %b", 
-		      r_addr, r_cycle, w_hit, r_last_gnt, r_opcode, r_mmu);
+	     $display("process adddress %x at cycle %d, hit %b, last_gnt %b, r_opcode %d, r_mmu %b, r_store_data %x", 
+		      r_addr, r_cycle, w_hit, r_last_gnt, r_opcode, r_mmu, r_store_data);
 	  end
 	 if(l1i_rsp_valid)
 	   begin
@@ -1064,7 +1071,8 @@ module l2_2way(clk,
 		    n_tag = r_rob_addr[w_rob_head_ptr][(`PA_WIDTH-1):LG_L2_LINES+`LG_L2_CL_LEN];
 		    t_idx = r_rob_addr[w_rob_head_ptr][LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN];
 		    n_l1d_rsp_tag = r_rob_l1tag[w_rob_head_ptr];
-		    n_mmu_addr3 = r_rob_addr[w_rob_head_ptr][3];
+		    n_mmu_addr3 = r_rob_mmu_addr3[w_rob_head_ptr];
+		    
 
 		    n_was_st = 1'b0;
 		    n_mmu = 1'b0;
@@ -1456,6 +1464,7 @@ module l2_2way(clk,
 	endcase
      end
 
+`ifdef VERBOSE_L2
    always_ff@(negedge clk)
      begin
 	if(r_state == IDLE & w_head_of_rob_done)
@@ -1467,6 +1476,7 @@ module l2_2way(clk,
 	     //$display("replace = %b", r_rob_replace[w_rob_head_ptr]);
 	     //$display("r_rob_l1tag = %d", r_rob_l1tag[w_rob_head_ptr]);
 	     //$display("req type = %d", r_rob_req_ty[w_rob_head_ptr]);
+
 	     if(r_rob_req_ty[w_rob_head_ptr] == MMU)
 	       begin
 		  $display("MMU REQ for addr %x begins at cycle %d",
@@ -1491,7 +1501,8 @@ module l2_2way(clk,
 		  $stop();
 	       end
 	  end // if (r_state == CHECK_VALID_AND_TAG)
-     end
+     end // always_ff@ (negedge clk)
+`endif
 
    reg_ram1rw #(.WIDTH(1), .LG_DEPTH(LG_L2_LINES)) last_ram
      (.clk(clk), .addr(t_idx), .wr_data(t_last), .wr_en(t_wr_last), .rd_data(w_last));      

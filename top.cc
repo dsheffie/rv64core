@@ -282,11 +282,18 @@ void csr_putchar(char c) {
 
 void check_translation(long long addr, int paddr) {
   int fault = 0;
-  uint64_t pa = s->translate(addr, fault, 1);
+  uint64_t pa = ss->page_lookup(addr, fault, 1, addr == 0xfffffffffe400000L);
+  uint32_t upa = paddr;  
   if(!fault) {
     pa &= ((1UL<<32)-1);
-    printf("pa %lx, paddr %x\n", pa, paddr);
-    assert(pa == paddr);
+    if(pa != upa) {
+      printf("---> %d va %lx, sw %lx, hw %lx, delta %lx\n",
+	     (pa==upa),
+	     addr,
+	     pa, upa,
+	     (pa^upa));
+    }
+      //assert(pa == paddr);
   }
 }
 
@@ -1478,7 +1485,10 @@ int main(int argc, char **argv) {
 	if(eq != 0) {
 	  printf("WRITEBACK TO %x, data matches = %d, tag = %d\n", r.addr, eq==0, r.tag);	  
 	  for(int i = 0; i < 4; i++) {
-	    printf("%d : %x vs %x\n", i, mem_r32(ss, r.addr + 4*i), r.data[i]);
+	    printf("%d : hw %x vs sw %x\n", i,
+		   mem_r32(s, r.addr + 4*i),
+		   mem_r32(ss, r.addr + 4*i)
+		   );
 	  }
 	}
       }

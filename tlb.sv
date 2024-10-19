@@ -1,10 +1,6 @@
 `include "rob.vh"
 `include "machine.vh"
 
-`ifdef VERILATOR
-import "DPI-C" function void check_translation(input longint va, input int pa);
-`endif
-
 module tlb(clk,
 	   reset,
 	   priv,
@@ -133,15 +129,6 @@ module tlb(clk,
 	zero_page <= reset ? 1'b0 : ((|va[39:12]) == 1'b0);
      end
 
-// `ifdef VERILATOR
-//    always@(negedge clk)
-//      begin
-// 	if(active &  (req & |w_hits))
-// 	  begin
-// 	     check_translation(va, w_pa_sel[`PA_WIDTH-1:0]);
-// 	  end
-//      end
-// `endif
 
    logic [63:0] r_cycle;
    always@(posedge clk)
