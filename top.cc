@@ -281,6 +281,9 @@ void csr_putchar(char c) {
 
 
 void check_translation(long long addr, int paddr) {
+  if(not(enable_checker)) {
+    return;
+  }
   int fault = 0;
   uint64_t pa = ss->page_lookup(addr, fault, 1, addr == 0xfffffffffe400000L);
   uint32_t upa = paddr;  
@@ -1481,14 +1484,16 @@ int main(int argc, char **argv) {
 	  uint64_t ea = (r.addr + 4*i) & ((1UL<<32)-1);
 	  mem_w32(s, ea, r.data[i]);
 	}
-	int eq = memcmp(&(ss->mem[r.addr]), &(s->mem[r.addr]), 16);
-	if(eq != 0) {
-	  printf("WRITEBACK TO %x, data matches = %d, tag = %d\n", r.addr, eq==0, r.tag);	  
-	  for(int i = 0; i < 4; i++) {
-	    printf("%d : hw %x vs sw %x\n", i,
-		   mem_r32(s, r.addr + 4*i),
-		   mem_r32(ss, r.addr + 4*i)
-		   );
+	if(enable_checker) {
+	  int eq = memcmp(&(ss->mem[r.addr]), &(s->mem[r.addr]), 16);
+	  if(eq != 0) {
+	    printf("WRITEBACK TO %x, data matches = %d, tag = %d\n", r.addr, eq==0, r.tag);	  
+	    for(int i = 0; i < 4; i++) {
+	      printf("%d : hw %x vs sw %x\n", i,
+		     mem_r32(s, r.addr + 4*i),
+		     mem_r32(ss, r.addr + 4*i)
+		     );
+	    }
 	  }
 	}
       }

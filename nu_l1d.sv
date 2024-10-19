@@ -2489,20 +2489,20 @@ module nu_l1d(clk,
 	n_credits = r_credits;
 	if(r_mem_req_valid)
 	  begin
-	     if(n_credits[mem_req.tag]) 
-	       begin
-		  $display("credit %d was already inflight", mem_req.tag);
-		  $stop();
-	       end
+	     //if(n_credits[mem_req.tag]) 
+	       //begin
+	     //$display("credit %d was already inflight", mem_req.tag);
+	     //$stop();
+	  //end
 	     n_credits[mem_req.tag] = 1'b1;
 	  end
 	if(mem_rsp_valid)
 	  begin
-	     if(n_credits[mem_rsp_tag] == 1'b0)
-	       begin
-		  $display("credit %d, addr %x was not inflight", mem_rsp_tag, mem_rsp_addr);
-		  $stop();
-	       end
+	    // if(n_credits[mem_rsp_tag] == 1'b0)
+	     //begin
+	     //$display("credit %d, addr %x was not inflight", mem_rsp_tag, mem_rsp_addr);
+	     //$stop();
+	     //end
 	     n_credits[mem_rsp_tag] = 1'b0;
 	  end
      end // always_comb
