@@ -1559,7 +1559,7 @@ int main(int argc, char **argv) {
     } 
   }
   
-  if(!incorrect & false) {
+  if(not(incorrect)) {
     std::ofstream out(log_name);
     out << "n_mispredicts = " << n_mispredicts
 	<<  ", cycles = " << cycle
@@ -1872,7 +1872,7 @@ int main(int argc, char **argv) {
     std::cout << "port1 sched       " << schedules[1] << "\n";
     std::cout << "port0 sched alloc " << schedules_alloc[0] << "\n";
     std::cout << "port1 sched alloc " << schedules_alloc[1] << "\n";
-    
+    std::cout << "dram bytes per cycle " << static_cast<double>(mem_reqs*16)/cycle << "\n";
     if(not(rt.empty())) {
       std::ofstream ofs(retire_name);
       boost::archive::binary_oarchive oa(ofs);

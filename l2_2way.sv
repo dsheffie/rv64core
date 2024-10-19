@@ -269,15 +269,15 @@ module l2_2way(clk,
      end
    assign l1_mem_load_data = r_rsp_data;
 
-   always_ff@(negedge clk)
-     begin
-	if(r_was_busy)
-	  begin
-	     $display("process adddress %x at cycle %d, hit %b, last_gnt %b, r_opcode %d, r_mmu %b, r_store_data %x", 
-		      r_addr, r_cycle, w_hit, r_last_gnt, r_opcode, r_mmu, r_store_data);
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if(r_was_busy)
+   // 	  begin
+   // 	     $display("process adddress %x at cycle %d, hit %b, last_gnt %b, r_opcode %d, r_mmu %b, r_store_data %x", 
+   // 		      r_addr, r_cycle, w_hit, r_last_gnt, r_opcode, r_mmu, r_store_data);
 	     
-	  end
-     end
+   // 	  end
+   //   end
    // 	if(l1d_req_valid)
    // 	  begin
    // 	     $display(">>>> request to address %x at cycle %d", l1d_req.addr, r_cycle);
@@ -1132,12 +1132,12 @@ module l2_2way(clk,
 		    
 		    if(r_rob_hitbusy[w_rob_head_ptr]) 
 		      begin
-			 $display("HIT BUSY for ADDR %x, tag entry %d, l1d tag %d, type %d at cycle %d", 
-				  n_addr, 
-				  w_rob_head_ptr, 
-				  n_l1d_rsp_tag,
-				  r_rob_req_ty[w_rob_head_ptr],				  
-				  r_cycle);
+			 //$display("HIT BUSY for ADDR %x, tag entry %d, l1d tag %d, type %d at cycle %d", 
+			 //	  n_addr, 
+			 //	  w_rob_head_ptr, 
+			 //	  n_l1d_rsp_tag,
+			 //	  r_rob_req_ty[w_rob_head_ptr],				  
+			 //r_cycle);
 			 //$stop();
 			 n_state = CHECK_VALID_AND_TAG;
 			 n_got_req = 1'b1;
