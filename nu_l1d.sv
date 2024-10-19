@@ -1,5 +1,3 @@
-
-
 `include "machine.vh"
 `include "rob.vh"
 `include "uop.vh"

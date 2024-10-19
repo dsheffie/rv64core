@@ -263,10 +263,6 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 `ifdef VERBOSE_MMU
 	       $display("walker level 0 generates address %x", n_addr);	       
 `endif
-	       if(r_va == 64'hfffffffffe400000)
-		 begin
-		    $display("walker level 0 generates address %x", n_addr);	       
-		 end
 	       
 	       if(w_bad_va)
 		 begin
@@ -289,10 +285,6 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 		    n_addr = mem_rsp_data;
 		    n_last_addr = r_addr;
 
-		    if(r_va == 64'hfffffffffe400000)
-		      begin
-			 $display("walker got data %x", mem_rsp_data);
-		      end	    		    		    
 		    if(mem_rsp_data[0] == 1'b0)
 		      begin
 			 n_state = IDLE;
@@ -317,10 +309,6 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 `ifdef VERBOSE_MMU
 	       $display("walker level 1 generates address %x", n_addr);
 `endif
-	       if(r_va == 64'hfffffffffe400000)
-		 begin
-		    $display("walker level 1 generates address %x", n_addr);		    
-		 end
 	       n_req = 1'b1;
 	       n_state = WAIT1;
 	    end
@@ -330,11 +318,6 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 		 begin
 		    n_addr = mem_rsp_data;
 		    n_last_addr = r_addr;
-
-		    if(r_va == 64'hfffffffffe400000)
-		      begin
-			 $display("walker got data %x", mem_rsp_data);
-		      end	    		    
 		    //$display("walker level 1 got %x", mem_rsp_data);
 		    if(mem_rsp_data[0] == 1'b0)
 		      begin
@@ -360,10 +343,6 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 `ifdef VERBOSE_MMU
 	       $display("walker level 2 generates address %x", n_addr);
 `endif
-	       if(r_va == 64'hfffffffffe400000)
-		 begin
-		    $display("walker level 2 generates address %x", n_addr);		    
-		 end	       
 	       n_req = 1'b1;
 	       n_state = WAIT2;
 	    end
@@ -375,10 +354,6 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 		    n_addr = mem_rsp_data;
 		    n_last_addr = r_addr;
 
-		    if(r_va == 64'hfffffffffe400000)
-		      begin
-			 $display("walker got data %x", mem_rsp_data);
-		      end	    
 		    if(mem_rsp_data[0] == 1'b0)
 		      begin
 			 n_state = IDLE;
