@@ -2220,7 +2220,6 @@ module nu_l1d(clk,
 	    if(r_dirty_out & w_flush_hit)
 	      begin
 		 n_port1_req_addr = {r_tag_out,r_cache_idx,4'd0};
-		 $display("flush cl flushing line at addr %x", n_port1_req_addr);		 
 		 n_port1_req_opcode = MEM_SW;
 		 n_port1_req_store_data = t_data;
 		 n_state = FLUSH_CL_WAIT;

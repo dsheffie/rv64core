@@ -277,11 +277,11 @@ module l2_2way(clk,
 	     $display(">>>> request to address %x at cycle %d", l1d_req.addr, r_cycle);
 	  end
 
-	//if(l1d_rsp_valid)
-	//begin
-	//$display("L1D RESP FOR ADDR %x TAG %d at cycle %d, data %x",
-	//l1d_rsp_addr, l1d_rsp_tag, r_cycle, l1_mem_load_data);
-	//end
+	if(l1d_rsp_valid)
+	begin
+	   $display("L1D RESP FOR ADDR %x TAG %d at cycle %d, data %x",
+		    l1d_rsp_addr, l1d_rsp_tag, r_cycle, l1_mem_load_data);
+	end
 	if(mmu_rsp_valid)
 	  begin
 	     $display("MMU RSP, return %x at cycle %d, addr %x, data %x, sel %b",
@@ -933,9 +933,11 @@ module l2_2way(clk,
    //end
 
    logic r_pop_rob;
+   logic r_was_rob, n_was_rob;
    always_ff@(posedge clk)
      begin
 	r_pop_rob <= reset ? 1'b0 : t_pop_rob;
+	r_was_rob <= reset ? 1'b0 : n_was_rob;
      end
 
    
@@ -1023,6 +1025,7 @@ module l2_2way(clk,
 	t_pop_rob = 1'b0;
 	n_req_ty = r_req_ty;
 	n_was_st = r_was_st;
+	n_was_rob = 1'b0;
 	
 	case(r_state)
 	  INITIALIZE:
@@ -1072,8 +1075,7 @@ module l2_2way(clk,
 		    t_idx = r_rob_addr[w_rob_head_ptr][LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN];
 		    n_l1d_rsp_tag = r_rob_l1tag[w_rob_head_ptr];
 		    n_mmu_addr3 = r_rob_mmu_addr3[w_rob_head_ptr];
-		    
-
+		    n_was_rob = 1'b1;
 		    n_was_st = 1'b0;
 		    n_mmu = 1'b0;
 		    
@@ -1241,7 +1243,33 @@ module l2_2way(clk,
 			 else if(r_last_gnt)
 			   begin
 			      n_l1d_rsp_valid  = 1'b1;	
-			      if(w_l1d_req & !w_l1i_req & t_l1dq.opcode == MEM_LW & (r_need_wb==1'b0)&1'b0)
+			      if(w_l1d_req & !w_l1i_req & t_l1dq.opcode == MEM_LW & (r_need_wb==1'b0) & (r_was_rob == 1'b0))
+				begin				   
+				   n_l1d = 1'b1;
+				   n_last_idle = 1'b1;
+				   n_last_gnt = 1'b1;
+				   t_idx = t_l1dq.addr[LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN];			 
+				   n_tag = t_l1dq.addr[(`PA_WIDTH-1):LG_L2_LINES+`LG_L2_CL_LEN];
+				   n_addr = {t_l1dq.addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
+				   n_last_l1d_addr = t_l1dq.addr[(`PA_WIDTH-1):`LG_L2_CL_LEN];			 
+				   n_saveaddr = {t_l1dq.addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
+				   n_opcode = MEM_LW;
+				   n_l1d_req = 1'b0;
+				   n_l1d_rsp_tag = t_l1dq.tag;
+				   t_gnt_l1d = 1'b1;
+				   n_got_req = 1'b1;
+				   n_req_ty = L1D;				   
+				   //$display("early1");
+				end
+			      else
+				begin
+				   n_state = IDLE;	
+				end
+			   end
+			 else
+			   begin
+			      //n_l1i_rsp_valid  = 1'b1;
+			      if(w_l1d_req & !w_l1i_req & t_l1dq.opcode == MEM_LW & (r_need_wb==1'b0) & (r_was_rob==1'b0))
 				begin
 				   n_l1d = 1'b1;
 				   n_last_idle = 1'b1;
@@ -1256,31 +1284,7 @@ module l2_2way(clk,
 				   n_l1d_rsp_tag = t_l1dq.tag;
 				   t_gnt_l1d = 1'b1;
 				   n_got_req = 1'b1;
-				   //$display("early1");
-				end
-			      else
-				begin
-				   n_state = IDLE;	
-				end
-			   end
-			 else
-			   begin
-			      //n_l1i_rsp_valid  = 1'b1;
-			      if(w_l1d_req & !w_l1i_req & t_l1dq.opcode == MEM_LW & (r_need_wb==1'b0)&1'b0)
-				begin
-				   n_l1d = 1'b1;
-				   n_last_idle = 1'b1;
-				   n_last_gnt = 1'b1;
-				   t_idx = t_l1dq.addr[LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN];			 
-				   n_tag = t_l1dq.addr[(`PA_WIDTH-1):LG_L2_LINES+`LG_L2_CL_LEN];
-				   n_addr = {t_l1dq.addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
-				   n_last_l1d_addr = t_l1dq.addr[(`PA_WIDTH-1):`LG_L2_CL_LEN];			 
-				   n_saveaddr = {t_l1dq.addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
-				   n_opcode = MEM_LW;
-				   n_l1d_req = 1'b0;
-				   n_l1d_rsp_tag = t_l1dq.tag;
-				   t_gnt_l1d = 1'b1;
-				   n_got_req = 1'b1;	
+				   n_req_ty = L1D;				   				   
 				   //$display("early2");
 				end
 			      else
