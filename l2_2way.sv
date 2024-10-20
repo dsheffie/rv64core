@@ -292,6 +292,15 @@ module l2_2way(clk,
 `ifdef VERBOSE_L2
    always_ff@(negedge clk)
      begin
+	if(r_state == IDLE & w_head_of_rob_done & r_rob_hitbusy[w_rob_head_ptr])
+	  begin
+	     $display("HIT BUSY for ADDR %x, tag entry %d, l1d tag %d, type %d at cycle %d", 
+		      n_addr, 
+		      w_rob_head_ptr, 
+		      n_l1d_rsp_tag,
+		      r_rob_req_ty[w_rob_head_ptr],				  
+		      r_cycle);
+	  end
 	if(l1d_req_valid)
 	  begin
 	     $display(">>>> request to address %x at cycle %d", l1d_req.addr, r_cycle);
@@ -385,11 +394,51 @@ module l2_2way(clk,
    generate
       for(genvar i = 0; i < N_ROB_ENTRIES; i=i+1)
 	begin
-	   assign w_hit_rob[i] = r_rob_valid[i] ? (r_rob_addr[i] == n_addr) : 1'b0;
+	   assign w_hit_rob[i] = r_rob_valid[i] ? (r_rob_addr[i][31:4] == n_addr[31:4]) : 1'b0;
 	end
    endgenerate
-   wire			    w_hit_inflight = |w_hit_rob;
+
+   logic [`LG_L2_REQ_TAGS-1:0] r_txn_credits, n_txn_credits;
+   always_ff@(posedge clk)
+     begin
+	r_txn_credits <= reset ? {`LG_L2_REQ_TAGS{1'b1}} : n_txn_credits;
+     end
+   wire w_more_than_one_free_credit = (r_txn_credits != 'd0);
    
+   always_comb
+     begin
+	n_txn_credits = r_txn_credits;
+	if(mem_req_valid & !mem_rsp_valid)	
+	  begin
+	     n_txn_credits = r_txn_credits - 'd1;
+	  end
+	else if(!mem_req_valid & mem_rsp_valid)
+	  begin
+	     n_txn_credits = r_txn_credits + 'd1;	     
+	  end
+     end // always_comb
+
+   
+   // logic r_txn_inflight, n_txn_inflight;
+   // always_ff@(posedge clk)
+   //   begin
+   // 	r_txn_inflight <= reset ? 1'b0 : n_txn_inflight;
+   //   end
+   // always_comb
+   //   begin
+   // 	n_txn_inflight = r_txn_inflight;
+   // 	if(mem_req_valid)
+   // 	  begin
+   // 	     n_txn_inflight = 1'b1;
+   // 	  end
+   // 	else if(mem_rsp_valid)
+   // 	  begin
+   // 	     n_txn_inflight = 1'b0;
+   // 	  end
+   //   end // always_comb
+   // wire			    w_hit_inflight = (|w_hit_rob) | r_txn_inflight | n_txn_inflight;
+
+   wire			    w_hit_inflight = (|w_hit_rob);
 
    always_ff@(posedge clk)
      begin
@@ -423,18 +472,8 @@ module l2_2way(clk,
 		  r_rob_done[r_rob_tail_ptr[`LG_L2_REQ_TAGS-1:0]] <= 1'b0;
 		  r_rob_hitbusy[r_rob_tail_ptr[`LG_L2_REQ_TAGS-1:0]] <= w_hit_inflight;
 
-		  // if(r_addr == 32'h8287bbd0)
-		  //   begin
-		  //      $display("transaction to address %x at cycle %d, tag %d, n_req_ty %d, r_req_ty %d state %d", 
-		  // 		n_addr, 
-		  // 		r_cycle, 
-		  // 		n_l1d_rsp_tag,
-		  // 		n_req_ty,
-		  // 		r_req_ty,
-		  // 		r_state
-		  // 		);
-		  //   end
-		  
+
+`ifdef VERBOSE_L2
 		  if(w_hit_inflight)
 		    begin
 		       for(integer i = 0; i < N_ROB_ENTRIES; i=i+1)
@@ -448,7 +487,8 @@ module l2_2way(clk,
 				 //$stop();
 			      end
 			 end
-		    end
+		    end // if (w_hit_inflight)
+`endif
 		  r_rob_was_wb[r_rob_tail_ptr[`LG_L2_REQ_TAGS-1:0]] <= t_is_wb;
 		  r_rob_was_st[r_rob_tail_ptr[`LG_L2_REQ_TAGS-1:0]] <= t_is_st;
 		  r_rob_st_data[r_rob_tail_ptr[`LG_L2_REQ_TAGS-1:0]] <= r_store_data;
@@ -641,9 +681,23 @@ module l2_2way(clk,
      begin
 	r_mem_req_store_data <= n_mem_req_store_data;
      end
+
+`ifdef VERBOSE_L2
+   always_ff@(negedge clk)
+     begin
+	if(mem_req_valid)
+	  begin
+	     $display("MEMORY REQ AT cycle %d for addr %x, tag %d", 
+		      r_cycle, mem_req_addr, mem_req_tag);	     
+	  end
+	if(mem_rsp_valid)
+	  begin
+	     $display("MEMORY RSP AT cycle %d for tag %d", 
+		      r_cycle, mem_rsp_tag);
+	  end
+     end
+`endif // unmatched `else, `elsif or `endif
    
-   //always_ff@(negedge clk)
-   //begin
 	//$display("l1i_flush_req = %b", l1i_flush_req);
 	//$display("l1d_flush_req = %b", l1d_flush_req);
 	
@@ -1117,7 +1171,7 @@ module l2_2way(clk,
 	       //$display("waiting for %d entry empty %b, full %b", 
 	       //r_rob_head_ptr, w_rob_empty, w_rob_full);
 	       
-	       if(w_head_of_rob_done)
+	       if(w_head_of_rob_done & w_more_than_one_free_credit)
 		 begin
 		    n_replace = r_rob_replace[w_rob_head_ptr];
 		    n_addr = r_rob_addr[w_rob_head_ptr];
@@ -1133,17 +1187,23 @@ module l2_2way(clk,
 		    
 		    if(r_rob_hitbusy[w_rob_head_ptr]) 
 		      begin
-			 //$display("HIT BUSY for ADDR %x, tag entry %d, l1d tag %d, type %d at cycle %d", 
-			 //	  n_addr, 
-			 //	  w_rob_head_ptr, 
-			 //	  n_l1d_rsp_tag,
-			 //	  r_rob_req_ty[w_rob_head_ptr],				  
-			 //r_cycle);
-			 //$stop();
 			 n_state = CHECK_VALID_AND_TAG;
 			 n_got_req = 1'b1;
 			 n_was_busy = 1'b1;
+			 //if(w_rob_full) 
+			 //begin
+			 //$display("tail ptr %d, head ptr %d", w_rob_head_ptr, w_rob_tail_ptr);
+			 //$stop();
+			 //end
 			 case(r_rob_req_ty[w_rob_head_ptr])
+			   WRITEBACK:
+			     begin
+				n_state = PREPARE_WRITEBACK;
+				n_addr = r_wb_addr;
+				n_need_wb = 1'b0;
+				n_rob_tag = w_rob_tail_ptr;
+				n_req_ty = WRITEBACK;		
+			     end	   
 			   L1I:
 			     begin
 				n_opcode =  MEM_LW;	
@@ -1156,8 +1216,15 @@ module l2_2way(clk,
 				n_last_gnt = 1'b1;
 				n_req_ty = L1D;				
 			     end
+			   MMU:
+			     begin
+				n_opcode = MEM_LW;			   
+				n_last_gnt = 1'b0;
+				n_mmu = 1'b1;
+			     end
 			   default:
 			     begin
+				$display("hit busy for op type %d", r_rob_req_ty[w_rob_head_ptr]);
 				$stop();
 			     end
 			 endcase
@@ -1198,8 +1265,8 @@ module l2_2way(clk,
 			 endcase // case (r_rob_req_ty[w_rob_head_ptr])
 		      end
 		    t_pop_rob = 1'b1;
-		 end
-	       else if(w_rob_full==1'b0)
+		 end // if (w_head_of_rob_done)
+	       else if(w_rob_full==1'b0 & w_more_than_one_free_credit)
 		 begin
 		    if(r_need_wb)
 		      begin

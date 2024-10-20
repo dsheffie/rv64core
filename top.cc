@@ -285,7 +285,7 @@ void check_translation(long long addr, int paddr) {
     return;
   }
   int fault = 0;
-  uint64_t pa = ss->page_lookup(addr, fault, 1, addr == 0xfffffffffe400000L);
+  uint64_t pa = ss->page_lookup(addr, fault, 1, false);
   uint32_t upa = paddr;  
   if(!fault) {
     pa &= ((1UL<<32)-1);
