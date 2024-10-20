@@ -424,6 +424,109 @@ module
 	t_counters.l2_hits = l2_cache_hits;
 	t_counters.l2_accesses = l2_cache_accesses;
      end
+
+
+   typedef struct packed {
+      logic [`PA_WIDTH-1:0] addr;
+      logic [`LG_L2_REQ_TAGS-1:0] tag;
+      logic [(1 << (`LG_L2_CL_LEN+3)) - 1:0] data;
+      logic [3:0]			     opcode;
+   } mem_fifo_t;
+   
+   
+   
+   wire 			w_mem_req_valid;
+   wire [`PA_WIDTH-1:0]		w_mem_req_addr;
+   wire [`LG_L2_REQ_TAGS-1:0]	w_mem_req_tag;
+   wire [(1 << (`LG_L2_CL_LEN+3)) - 1:0] w_mem_req_store_data;
+   wire [3:0]				  w_mem_req_opcode;
+
+   mem_fifo_t mem_fifo[((1<<`LG_L2_REQ_TAGS)-1):0];
+   mem_fifo_t t_mem_fifo;
+   
+   logic [`LG_L2_REQ_TAGS:0] r_mem_head_ptr, n_mem_head_ptr;
+   logic [`LG_L2_REQ_TAGS:0] r_mem_tail_ptr, n_mem_tail_ptr;
+   
+   wire [`LG_L2_REQ_TAGS-1:0] w_mem_head_ptr = r_mem_head_ptr[`LG_L2_REQ_TAGS-1:0];
+   wire [`LG_L2_REQ_TAGS-1:0] w_mem_tail_ptr = r_mem_tail_ptr[`LG_L2_REQ_TAGS-1:0];
+   
+   wire			      w_mem_empty = r_mem_head_ptr == r_mem_tail_ptr;
+   wire			      w_mem_full = (r_mem_head_ptr != r_mem_tail_ptr) &
+			      (r_mem_head_ptr[`LG_L2_REQ_TAGS-1:0] == r_mem_tail_ptr[`LG_L2_REQ_TAGS-1:0]);
+
+   always_comb
+     begin
+	t_mem_fifo.addr = w_mem_req_addr;
+	t_mem_fifo.tag = w_mem_req_tag;
+	t_mem_fifo.data = w_mem_req_store_data;
+	t_mem_fifo.opcode = w_mem_req_opcode;
+	
+	n_mem_tail_ptr = r_mem_tail_ptr;
+	n_mem_head_ptr = r_mem_head_ptr;
+
+	if(w_mem_req_valid)
+	  begin
+	     n_mem_tail_ptr = r_mem_tail_ptr + 'd1;
+	  end
+	if(mem_rsp_valid)
+	  begin
+	     n_mem_head_ptr = r_mem_head_ptr + 'd1;
+	  end
+     end
+
+   
+   always_ff@(posedge clk)
+     begin
+	r_mem_tail_ptr <= reset ? 'd0 : n_mem_tail_ptr;
+	r_mem_head_ptr <= reset ? 'd0 : n_mem_head_ptr;
+	if(w_mem_req_valid)
+	  begin
+	     mem_fifo[w_mem_tail_ptr] <= t_mem_fifo;
+	  end
+     end
+
+   logic r_pulse_fsm, n_pulse_fsm;
+   logic r_pulse_valid, n_pulse_valid;   
+   always_comb
+     begin
+	n_pulse_fsm = r_pulse_fsm;
+	n_pulse_valid = (r_pulse_fsm==1'b0) & (w_mem_empty==1'b0);
+	if(r_pulse_fsm)
+	  begin
+	     if(mem_rsp_valid)
+	       begin
+		  n_pulse_fsm = 1'b0;
+	       end
+	  end
+	else
+	  begin
+	     if(w_mem_empty == 1'b0)
+	       begin
+		  n_pulse_fsm = 1'b1;
+	       end
+	  end
+     end
+
+   always_ff@(posedge clk)
+     begin
+	r_pulse_fsm <= reset ? 1'b0 : n_pulse_fsm;
+	r_pulse_valid <= reset ? 1'b0 : n_pulse_valid;
+     end
+
+   assign mem_req_valid = r_pulse_valid;
+   assign mem_req_addr = mem_fifo[w_mem_head_ptr].addr;
+   assign mem_req_tag = mem_fifo[w_mem_head_ptr].tag;
+   assign mem_req_store_data = mem_fifo[w_mem_head_ptr].data;
+   assign mem_req_opcode = mem_fifo[w_mem_head_ptr].opcode;
+   
+   always_ff@(negedge clk)
+     begin
+	if(mem_req_valid & w_mem_full)
+	  begin
+	     $stop();
+	  end
+     end
+   
    
    l2_2way l2cache (
 	       .clk(clk),
@@ -454,11 +557,11 @@ module
 	       .l1_mem_req_ack(w_l1_mem_req_ack),
 	       .l1_mem_load_data(w_l1_mem_load_data),
 	       
-	       .mem_req_valid(mem_req_valid),
-	       .mem_req_addr(mem_req_addr),
-	       .mem_req_tag(mem_req_tag),
-	       .mem_req_store_data(mem_req_store_data),
-	       .mem_req_opcode(mem_req_opcode),
+	       .mem_req_valid(w_mem_req_valid),
+	       .mem_req_addr(w_mem_req_addr),
+	       .mem_req_tag(w_mem_req_tag),
+	       .mem_req_store_data(w_mem_req_store_data),
+	       .mem_req_opcode(w_mem_req_opcode),
 
 	       .mem_rsp_valid(mem_rsp_valid),
 	       .mem_rsp_tag(mem_rsp_tag),
@@ -482,6 +585,9 @@ module
 
 	       );
    
+
+
+
    
 
    nu_l1d dcache (
