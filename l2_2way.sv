@@ -1129,6 +1129,7 @@ module l2_2way(clk,
 		    n_was_rob = 1'b1;
 		    n_was_st = 1'b0;
 		    n_mmu = 1'b0;
+		    n_store_data = r_rob_st_data[w_rob_head_ptr];
 		    
 		    if(r_rob_hitbusy[w_rob_head_ptr]) 
 		      begin
@@ -1143,10 +1144,15 @@ module l2_2way(clk,
 			 n_got_req = 1'b1;
 			 n_was_busy = 1'b1;
 			 case(r_rob_req_ty[w_rob_head_ptr])
+			   L1I:
+			     begin
+				n_opcode =  MEM_LW;	
+				n_last_gnt = 1'b0;
+				n_req_ty = L1I;								
+			     end
 			   L1D:
 			     begin
 				n_opcode =  r_rob_was_st[w_rob_head_ptr] ? MEM_SW : MEM_LW;	
-				n_store_data = r_rob_st_data[w_rob_head_ptr];
 				n_last_gnt = 1'b1;
 				n_req_ty = L1D;				
 			     end
