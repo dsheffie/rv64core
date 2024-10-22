@@ -474,6 +474,16 @@ module
 	  end
      end
 
+   //always_ff@(negedge clk)
+   //begin
+   //if(w_mem_req_valid) $display("bump wr mem ptr to %d, cycle %d", n_mem_tail_ptr, r_cycle);
+   //if(mem_rsp_valid) $display("bump rd mem ptr to %d, cycle %d", n_mem_head_ptr, r_cycle);
+   //if(mem_req_valid)
+   //begin
+   //$display("req for addr %d with tag %d", mem_req_addr, mem_req_tag);
+   //end
+   //end
+   
    
    always_ff@(posedge clk)
      begin
@@ -486,11 +496,13 @@ module
      end
 
    logic r_pulse_fsm, n_pulse_fsm;
-   logic r_pulse_valid, n_pulse_valid;   
+   logic r_pulse_valid, n_pulse_valid;
+   logic [`LG_L2_REQ_TAGS-1:0] r_save_req_tag, n_save_req_tag;   
    always_comb
      begin
 	n_pulse_fsm = r_pulse_fsm;
 	n_pulse_valid = (r_pulse_fsm==1'b0) & (w_mem_empty==1'b0);
+	n_save_req_tag = r_save_req_tag;
 	if(r_pulse_fsm)
 	  begin
 	     if(mem_rsp_valid)
@@ -503,17 +515,20 @@ module
 	     if(w_mem_empty == 1'b0)
 	       begin
 		  n_pulse_fsm = 1'b1;
+		  n_save_req_tag = mem_fifo[w_mem_head_ptr].tag;
 	       end
 	  end
-     end
+     end // always_comb
+   
 
    always_ff@(posedge clk)
      begin
 	r_pulse_fsm <= reset ? 1'b0 : n_pulse_fsm;
 	r_pulse_valid <= reset ? 1'b0 : n_pulse_valid;
+	r_save_req_tag <= reset ? 'd0 : n_save_req_tag;
      end
 
-   assign mem_req_valid = r_pulse_valid;
+   assign mem_req_valid = r_pulse_fsm;
    assign mem_req_addr = mem_fifo[w_mem_head_ptr].addr;
    assign mem_req_tag = mem_fifo[w_mem_head_ptr].tag;
    assign mem_req_store_data = mem_fifo[w_mem_head_ptr].data;
@@ -525,6 +540,11 @@ module
 	  begin
 	     $stop();
 	  end
+	if(mem_req_valid & w_mem_empty)
+	  begin
+	     $stop();
+	  end
+	     
      end
    
    
@@ -564,7 +584,7 @@ module
 	       .mem_req_opcode(w_mem_req_opcode),
 
 	       .mem_rsp_valid(mem_rsp_valid),
-	       .mem_rsp_tag(mem_rsp_tag),
+	       .mem_rsp_tag(r_save_req_tag),
 	       .mem_rsp_load_data(mem_rsp_load_data),
 		    
 	       .mmu_req_valid(w_mmu_req_valid),

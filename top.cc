@@ -162,7 +162,6 @@ void drop_va2pa_caches() {
   }
 }
 
-
 void alias_check(long long addr, long long vaddr) {
   long long ma = (addr & (~0xfUL));
   long long mva = (vaddr & (~0xfUL));
@@ -279,25 +278,25 @@ void csr_putchar(char c) {
   else std::cout << c;
 }
 
-
 void check_translation(long long addr, int paddr) {
+#if 0
   if(not(enable_checker)) {
     return;
   }
   int fault = 0;
   uint64_t pa = ss->page_lookup(addr, fault, 1, false);
-  uint32_t upa = paddr;  
+  uint32_t upa = paddr;
   if(!fault) {
     pa &= ((1UL<<32)-1);
     if(pa != upa) {
       printf("---> %d va %lx, sw %lx, hw %lx, delta %lx\n",
-	     (pa==upa),
-	     addr,
-	     pa, upa,
-	     (pa^upa));
+             (pa==upa),
+             addr,
+             pa, upa,
+             (pa^upa));
     }
-      //assert(pa == paddr);
   }
+#endif
 }
 
 long long translate(long long va, long long root, bool iside, bool store) {
@@ -360,8 +359,6 @@ long long translate(long long va, long long root, bool iside, bool store) {
   //exit(-1);
   return (pa & ((1UL<<32)-1));
 }
-
-
 
 long long dc_ld_translate(long long va, long long root) {
   return translate(va,root, false, false);
@@ -836,11 +833,6 @@ void l1d_port_util(int port1, int port2) {
     ++port2_active;
   }
 }
-struct mem_req_t {
-  uint32_t addr, tag;  
-  bool is_st = false;
-  uint32_t data[4] = {0};
-};
 
 int main(int argc, char **argv) {
   static_assert(sizeof(itype) == 4, "itype must be 4 bytes");
@@ -864,9 +856,6 @@ int main(int argc, char **argv) {
   std::map<int64_t, double> &tip_map = rt.tip;
   std::map<int64_t, uint64_t> insn_cnts;
   uint64_t priv[4] = {0};
-
-  std::map<int64_t, mem_req_t> mem_req_map;
-
   
   try {
     po::options_description desc("Options");
@@ -1455,62 +1444,44 @@ int main(int argc, char **argv) {
     //negedge
     tb->mem_rsp_valid = 0;
 
-    if(tb->mem_req_valid) {
-      //printf("GOT MEMORY REQ FOR ADDR %x TYPE %d TAG %d CYCLE %lu\n",
-      //tb->mem_req_addr, tb->mem_req_opcode, tb->mem_req_tag, cycle);
+    if(tb->mem_req_valid && (mem_reply_cycle == -1)) {
       ++mem_reqs;
-      mem_reply_cycle = cycle + mem_lat;
-      mem_req_t r;
-      r.addr = tb->mem_req_addr;
-      r.tag = tb->mem_req_tag;
-      
-      if(tb->mem_req_opcode == 7) {
-	r.is_st = true;
-	for(int i = 0; i < 4; i++) {
-	  r.data[i] = tb->mem_req_store_data[i];
-	}
-      }
-      assert(mem_req_map.find(mem_reply_cycle) == mem_req_map.end());
-
-      mem_req_map[mem_reply_cycle] = r;
+      int lat = (rand() % mem_lat) + 1;
+      mem_reply_cycle = cycle + lat;
     }
-
-    auto c_cit = mem_req_map.find(cycle);
-    if(c_cit != mem_req_map.end()) {
-      mem_req_t &r = c_cit->second;
+    
+    if(/*tb->mem_req_valid*/mem_reply_cycle ==cycle) {
+      //std::cout << "got memory request for address "
+      //<< std::hex << tb->mem_req_addr << std::dec <<"\n";
       last_retire = 0;
-      if(r.is_st) {
+      mem_reply_cycle = -1;
+      assert(tb->mem_req_valid);
+
+      
+      if(tb->mem_req_opcode == 4) {/*load word */
+	//printf("got dram read for %lx at cycle %lu\n",
+	//tb->mem_req_addr, cycle);	
 	for(int i = 0; i < 4; i++) {
-	  uint64_t ea = (r.addr + 4*i) & ((1UL<<32)-1);
-	  mem_w32(s, ea, r.data[i]);
-	}
-	if(enable_checker) {
-	  int eq = memcmp(&(ss->mem[r.addr]), &(s->mem[r.addr]), 16);
-	  if(eq != 0) {
-	    printf("WRITEBACK TO %x, data matches = %d, tag = %d\n", r.addr, eq==0, r.tag);	  
-	    for(int i = 0; i < 4; i++) {
-	      printf("%d : hw %x vs sw %x\n", i,
-		     mem_r32(s, r.addr + 4*i),
-		     mem_r32(ss, r.addr + 4*i)
-		     );
-	    }
-	  }
-	}
-      }
-      else {
-	for(int i = 0; i < 4; i++) {
-	  uint64_t ea = (r.addr + 4*i) & ((1UL<<32)-1);
+	  uint64_t ea = (tb->mem_req_addr + 4*i) & ((1UL<<32)-1);
 	  tb->mem_rsp_load_data[i] = mem_r32(s,ea);
 	}
+	last_load_addr = tb->mem_req_addr;
+	assert((tb->mem_req_addr & 0xf) == 0);
+	touched_lines[(tb->mem_req_addr & ((1UL<<32) - 1))>>4] = 1;
+	++n_loads;
       }
+      else if(tb->mem_req_opcode == 7) { /* store word */
+	//printf("got dram write for %lx at cycle %lu\n",
+	//tb->mem_req_addr, cycle);		
+	for(int i = 0; i < 4; i++) {
+	  uint64_t ea = (tb->mem_req_addr + 4*i) & ((1UL<<32)-1);
+	  mem_w32(s, ea, tb->mem_req_store_data[i]);
+	}
+	last_store_addr = tb->mem_req_addr;
+	++n_stores;
+      }
+      last_addr = tb->mem_req_addr;
       tb->mem_rsp_valid = 1;
-      
-      //printf("return tag %d at cycle %ld\n",
-      //static_cast<int>(r.tag),
-      //cycle);
-
-      tb->mem_rsp_tag = r.tag;
-      mem_req_map.erase(c_cit);      
     }
 
     
@@ -1546,20 +1517,19 @@ int main(int argc, char **argv) {
     }
     else {
       std::cout << "checker mem does not equal rtl mem\n";
-#if 0
-       for(uint64_t p = 0; p < (1UL<<32); p+=8) {
-       	uint64_t t0 = *reinterpret_cast<uint64_t*>(ss->mem + p);
-       	uint64_t t1 = *reinterpret_cast<uint64_t*>(s->mem + p);
-       	if(t0 != t1) {
-       	  printf("qword at %lx does not match SIM %lx vs RTL %lx\n",
-       		 p, t0, t1);
-       	}
-       }
-#endif
-    } 
+      // for(uint64_t p = 0; p < (1UL<<32); p+=8) {
+      // 	uint64_t t0 = *reinterpret_cast<uint64_t*>(ss->mem + p);
+      // 	uint64_t t1 = *reinterpret_cast<uint64_t*>(s->mem + p);
+      // 	if(t0 != t1) {
+      // 	  printf("qword at %lx does not match SIM %lx vs RTL %lx\n",
+      // 		 p, t0, t1);
+      // 	}
+	  
+      // }
+    }  
   }
   
-  if(not(incorrect)) {
+  if(!incorrect) {
     std::ofstream out(log_name);
     out << "n_mispredicts = " << n_mispredicts
 	<<  ", cycles = " << cycle
@@ -1872,7 +1842,7 @@ int main(int argc, char **argv) {
     std::cout << "port1 sched       " << schedules[1] << "\n";
     std::cout << "port0 sched alloc " << schedules_alloc[0] << "\n";
     std::cout << "port1 sched alloc " << schedules_alloc[1] << "\n";
-    std::cout << "dram bytes per cycle " << static_cast<double>(mem_reqs*16)/cycle << "\n";
+    
     if(not(rt.empty())) {
       std::ofstream ofs(retire_name);
       boost::archive::binary_oarchive oa(ofs);

@@ -403,7 +403,8 @@ module l2_2way(clk,
      begin
 	r_txn_credits <= reset ? {`LG_L2_REQ_TAGS{1'b1}} : n_txn_credits;
      end
-   wire w_more_than_one_free_credit = (r_txn_credits != 'd0);
+   
+   wire w_more_than_one_free_credit = (r_txn_credits > 'd1);
    
    always_comb
      begin

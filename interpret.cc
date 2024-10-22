@@ -1224,12 +1224,6 @@ void execRiscv(state_t *s) {
 	tval = ea;
 	goto handle_exception;
       }
-
-
-      if(pa == 0x828bfff8UL) {
-	printf("WRITING LOC %x with %lx at pc %lx\n",
-	       pa, s->gpr[m.s.rs2], s->pc);
-      }
       
       switch(m.s.sel)
 	{
