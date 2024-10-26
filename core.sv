@@ -1122,7 +1122,7 @@ module core(clk,
 	    end // case: ACTIVE
 	  DRAIN:	    
 	    begin
-	       if((r_rob_inflight == 'd0) & memq_empty & t_divide_ready & (r_arch_fault ? l2_empty : 1'b1) )
+	       if((r_rob_inflight == 'd0) & memq_empty & t_divide_ready /*& (r_arch_fault ? l2_empty : 1'b1)*/ )
 		 begin
 		    n_state = RAT;
 		    //if(!l2_empty) $stop();

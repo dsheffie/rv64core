@@ -1078,21 +1078,8 @@ module l2_2way(clk,
 	l2_empty = (r_state == IDLE) & (!w_any_req) & w_rob_empty & w_all_free_credits;
      end
 
-   wire w_verbose = n_l1i_req & (l1i_addr == 32'h8044bba0);
    wire w_replay = w_head_of_rob_done & w_more_than_one_free_credit & (r_state == IDLE);
    
-   always_ff@(negedge clk)
-     begin
-	if(n_l1i_req & (l1i_addr == 32'h8044bba0))
-	  begin
-	     $display("l1i req for addr at cycle %d, e = %d, f = %b, cred = %b, hd = %b , state = %d, n_req_ty = %d, replay = %b",
-		      r_cycle, w_rob_empty, w_rob_full, w_more_than_one_free_credit,
-		      w_head_of_rob_done, r_state, n_req_ty,
-		      w_replay);
-	  end
-     end
-
-      
    
    always_comb
      begin
@@ -1238,11 +1225,6 @@ module l2_2way(clk,
 			 n_state = CHECK_VALID_AND_TAG;
 			 n_got_req = 1'b1;
 			 n_was_busy = 1'b1;
-			 //if(w_rob_full) 
-			 //begin
-			 //$display("tail ptr %d, head ptr %d", w_rob_head_ptr, w_rob_tail_ptr);
-			 //$stop();
-			 //end
 			 case(r_rob_req_ty[w_rob_head_ptr])
 			   WRITEBACK:
 			     begin
@@ -1440,7 +1422,7 @@ module l2_2way(clk,
 			 else if(r_last_gnt)
 			   begin
 			      n_l1d_rsp_valid  = 1'b1;	
-			      if(w_l1d_req & !w_l1i_req & t_l1dq.opcode == MEM_LW & (r_need_wb==1'b0) & (r_was_rob == 1'b0) & 1'b0)
+			      if(w_l1d_req & !w_l1i_req & t_l1dq.opcode == MEM_LW & (r_need_wb==1'b0) & (r_was_rob == 1'b0))
 				begin				   
 				   n_l1d = 1'b1;
 				   n_last_idle = 1'b1;
@@ -1466,7 +1448,7 @@ module l2_2way(clk,
 			 else
 			   begin
 			      //n_l1i_rsp_valid  = 1'b1;
-			      if(w_l1d_req & !w_l1i_req & t_l1dq.opcode == MEM_LW & (r_need_wb==1'b0) & (r_was_rob==1'b0) & 1'b0)
+			      if(w_l1d_req & !w_l1i_req & t_l1dq.opcode == MEM_LW & (r_need_wb==1'b0) & (r_was_rob==1'b0))
 				begin
 				   n_l1d = 1'b1;
 				   n_last_idle = 1'b1;
