@@ -251,8 +251,7 @@ uint64_t state_t::translate(uint64_t ea, int &fault, int sz, bool store, bool fe
   
   if(r.sv39.a == 0) {
     r.sv39.a = 1;
-    //printf("simulator marking page at %lx accessed for pc %lx\n", a, s->pc);
-	   
+    printf("simulator marking page at %lx accessed for pc %lx\n", ea, pc);
     *reinterpret_cast<uint64_t*>(mem + a) = r.r;
   }
   if((r.sv39.d == 0) && store) {
@@ -465,7 +464,8 @@ static int64_t read_csr(int csr_id, state_t *s, bool &undef) {
     case 0xc00:
       return s->icnt;
     case 0xc01:
-      return csr_time;
+      //return csr_time;
+      return 0;
     case 0xc03:
       return 0;      
     case 0xf14:
@@ -604,7 +604,7 @@ void execRiscv(state_t *s) {
     s->mip |= cc.raw;
   }
   
-  irq = take_interrupt(s);
+  irq = take_interrupt(s) & false;
   if(irq) {
     except_cause = CAUSE_INTERRUPT | irq;
     goto handle_exception;
@@ -722,6 +722,10 @@ void execRiscv(state_t *s) {
 	  tval = ea;
 	  goto handle_exception;
 	}
+
+	//if(s->pc == 0xffffffff8030db54UL) {
+	// printf("ld for phys addr %lx, virt addr %lx\n", pa, ea);
+	//}
 	
 	switch(m.s.sel)
 	  {
@@ -923,6 +927,7 @@ void execRiscv(state_t *s) {
 	    assert(!page_fault);
 	    if(m.a.rd != 0) {
 	      s->sext_xlen(s->load32(pa), m.a.rd);
+	      s->link = pa & (~15UL);
 	    }
 	    break;
 	  }
@@ -930,6 +935,8 @@ void execRiscv(state_t *s) {
 	    pa = s->translate(s->gpr[m.a.rs1], page_fault, 4, true);
 	    assert(!page_fault);
 
+	    assert(s->link == (pa & (~15UL)));
+	    
 	    assert(not(atomic_queue.empty()));
 	    auto &t = atomic_queue.front();
 	    if(not(t.pc == s->pc and t.addr == pa and t.data == s->gpr[m.a.rs2])) {
@@ -1046,26 +1053,36 @@ void execRiscv(state_t *s) {
 	    assert(!page_fault);
 	    if(m.a.rd != 0) {
 	      s->gpr[m.a.rd] = s->load64(pa);
+	      s->link = pa & (~15UL);
 	    }
 	    break;
 	  }
 	  case 0x3 : { /* sc.d */
 	    pa = s->translate(s->gpr[m.a.rs1], page_fault, 8,  true);
-	    assert(!page_fault);
-
-	    assert(not(atomic_queue.empty()));
-	    auto &t = atomic_queue.front();
-	    if(not(t.pc == s->pc and t.addr == pa and t.data == s->gpr[m.a.rs2])) {
-	      printf("you have an atomic error\n");
-	      printf("rtl %lx, %lx, %lx\n", t.pc, t.addr, t.data);
-	      printf("sim %lx, %lx, %lx\n", s->pc, pa, s->gpr[m.a.rs2]);
-	      exit(-1);
-	    }
-	    atomic_queue.pop_front();
+	    if(page_fault) {
+	      except_cause = CAUSE_STORE_PAGE_FAULT;
+	      tval = s->gpr[m.a.rs1];
+	      goto handle_exception;
+	    }	    
+	    bool succ = false;
 	    
-	    s->store64( pa, s->gpr[m.a.rs2]);
+	    if(s->link == (pa & (~15UL))) {
+	      succ = true;
+	      assert(not(atomic_queue.empty()));
+	      auto &t = atomic_queue.front();
+	      if(not(t.pc == s->pc and t.addr == pa and t.data == s->gpr[m.a.rs2])) {
+		printf("you have an atomic error\n");
+		printf("rtl %lx, %lx, %lx\n", t.pc, t.addr, t.data);
+		printf("sim %lx, %lx, %lx\n", s->pc, pa, s->gpr[m.a.rs2]);
+		exit(-1);
+	      }
+	      atomic_queue.pop_front();
+	      
+	      s->store64( pa, s->gpr[m.a.rs2]);
+	    }
+	    
 	    if(m.a.rd != 0) {
-	      s->gpr[m.a.rd] = 0;
+	      s->gpr[m.a.rd] = succ ? 0 : 1;
 	    }
 	    break;
 	  }
@@ -1224,6 +1241,11 @@ void execRiscv(state_t *s) {
 	tval = ea;
 	goto handle_exception;
       }
+
+      //if(s->pc == 0xffffffff8030db50UL) {
+      //printf("storing %lx to phys addr %lx\n", s->gpr[m.s.rs2], pa);
+      //}
+      
       
       switch(m.s.sel)
 	{
@@ -1738,8 +1760,8 @@ void execRiscv(state_t *s) {
       //printf("new mstatus %lx, old %lx\n", s->mstatus, old);
       //exit(-1);
     }
-    printf("CHECKER: exception at %lx, cause %d, new pc %lx\n",
-	   oldpc, except_cause, s->pc);
+    //printf("CHECKER: exception at %lx, cause %d, new pc %lx\n",
+    //oldpc, except_cause, s->pc);
     //exit(-1);
     //printf("after exception, new pc will be %lx\n", s->pc);
   }

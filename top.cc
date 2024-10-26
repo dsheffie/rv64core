@@ -277,6 +277,14 @@ void csr_putchar(char c) {
   if(c==0) std::cout << "\n";
   else std::cout << c;
 }
+void mark_accessed_checker(long long pa) {
+  if(not(enable_checker)) {
+    return;
+  }
+  uint64_t pte = ss->load64(pa);
+  pte |= (1UL<<6);
+  ss->store64(pa, pte);
+}
 
 void check_translation(long long addr, int paddr) {
 #if 0
@@ -834,6 +842,23 @@ void l1d_port_util(int port1, int port2) {
   }
 }
 
+static uint64_t last_retired_pc = 0;
+static uint64_t last_insns_retired = 0, last_cycle = 0;
+static Vcore_l1d_l1i *tb = nullptr;
+void catchUnixSignal(int n) {
+  printf("last_retired_pc = %lx, last_insns_retired = %lu, last_cycle = %lu\n",
+	 last_retired_pc, last_insns_retired, last_cycle);
+  if(tb) {
+    printf("core_state = %d\n", (int)tb->core_state);
+    printf("l1i_state  = %d\n", (int)tb->l1i_state);
+    printf("l1d_state  = %d\n", (int)tb->l1d_state);
+    printf("l2_state   = %d\n", (int)tb->l2_state);
+    printf("mmu_state  = %d\n", (int)tb->mmu_state);        
+    
+  }
+  exit(-1);
+}
+
 int main(int argc, char **argv) {
   static_assert(sizeof(itype) == 4, "itype must be 4 bytes");
   //std::fesetround(FE_TOWARDZERO);
@@ -919,12 +944,10 @@ int main(int argc, char **argv) {
   
   globals::sysArgc = buildArgcArgv(rv32_binary.c_str(),sysArgs.c_str(),&globals::sysArgv);
   initCapstone();
-  std::unique_ptr<Vcore_l1d_l1i> tb(new Vcore_l1d_l1i);
+  tb = new Vcore_l1d_l1i;
   uint64_t last_match_pc = 0;
   uint64_t last_retire = 0, last_check = 0, last_restart = 0;
-  uint64_t last_retired_pc = 0, last_retired_fp_pc = 0;
   uint64_t mismatches = 0, n_stores = 0, n_loads = 0;
-  uint64_t last_insns_retired = 0, last_cycle = 0;
   uint64_t last_n_logged_loads = 0, last_total_load_lat = 0;
   uint64_t n_branches = 0, n_mispredicts = 0, n_checks = 0, n_flush_cycles = 0;
   bool got_mem_req = false, got_mem_rsp = false, got_monitor = false, incorrect = false;
@@ -953,7 +976,7 @@ int main(int argc, char **argv) {
     pl = new pipeline_logger(pipelog);
   }
   s->pc = ss->pc;
-  //signal(SIGINT, catchUnixSignal);
+  signal(SIGINT, catchUnixSignal);
 
 
   double t0 = timestamp();
@@ -1269,6 +1292,11 @@ int main(int argc, char **argv) {
 			  << " bits in difference "
 			  << wrong_bits
 			  << "\n";
+		
+		if(wrong_bits == 1) {
+		  int b = __builtin_ffsll(ss->gpr[i] ^ s->gpr[i])-1;
+		  std::cout << "bit " << b << " differs\n";
+		}
 		//trace_retirement |= (wrong_bits != 0);
 		diverged = true;//(wrong_bits > 16);
 		std::cout << "incorrect "
@@ -1451,8 +1479,6 @@ int main(int argc, char **argv) {
     }
     
     if(/*tb->mem_req_valid*/mem_reply_cycle ==cycle) {
-      //std::cout << "got memory request for address "
-      //<< std::hex << tb->mem_req_addr << std::dec <<"\n";
       last_retire = 0;
       mem_reply_cycle = -1;
       assert(tb->mem_req_valid);
@@ -1880,6 +1906,6 @@ int main(int argc, char **argv) {
   }
   //delete tb;
   stopCapstone();
-
+  delete tb;
   exit(EXIT_SUCCESS);
 }

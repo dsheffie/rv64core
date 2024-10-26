@@ -61,6 +61,7 @@ module core(clk,
 	    head_of_rob_ptr,
 	    resume,
 	    memq_empty,
+	    l2_empty,
 	    drain_ds_complete,
 	    dead_rob_mask,
 	    resume_pc,
@@ -158,6 +159,7 @@ module core(clk,
    output logic [`LG_ROB_ENTRIES-1:0] head_of_rob_ptr;
    input logic resume;
    input logic memq_empty;
+   input logic l2_empty;
    output logic drain_ds_complete;
    output logic [(1<<`LG_ROB_ENTRIES)-1:0] dead_rob_mask;
    
@@ -430,6 +432,8 @@ module core(clk,
    
    logic 		     t_can_retire_rob_head;
    logic 		     t_arch_fault;
+   logic		     n_arch_fault, r_arch_fault;
+   
    
    typedef enum logic [4:0] {
 			     FLUSH_FOR_HALT = 'd0,
@@ -584,6 +588,7 @@ module core(clk,
      begin
 	if(reset)
 	  begin
+	     r_arch_fault <= 1'b0;
 	     r_update_csr_exc <= 1'b0;
 	     r_flush_req_l1i <= 1'b0;
 	     r_flush_req_l1d <= 1'b0;
@@ -621,6 +626,7 @@ module core(clk,
 	  end
 	else
 	  begin
+	     r_arch_fault <= n_arch_fault;
 	     r_update_csr_exc <= n_update_csr_exc;
 	     r_flush_req_l1d <= n_flush_req_l1d;
 	     r_flush_req_l1i <= n_flush_req_l1i;
@@ -985,6 +991,7 @@ module core(clk,
 	  end
 	
 	t_arch_fault = (t_rob_head.faulted & t_rob_head.has_cause);
+	n_arch_fault = r_arch_fault;
 	
 	unique case (r_state)
 	  ACTIVE:
@@ -995,6 +1002,7 @@ module core(clk,
 		      begin
 			 if(t_arch_fault)
 			   begin
+			      n_arch_fault = 1'b1;
 			      n_state = ARCH_FAULT;
 			      n_cause = t_rob_head.cause;
 			      n_epc = t_rob_head.pc;
@@ -1025,8 +1033,8 @@ module core(clk,
 		      end // if (t_rob_head.faulted)
 		    else if(t_rob_head.mark_page_dirty)
 		      begin
-			 //$display("retiring dirty page mark insn, pc %x, target %x, addr %x, entry %d", 
-			 //t_rob_head.pc, t_rob_head.target_pc, w_rob_head_addr, r_rob_head_ptr[`LG_ROB_ENTRIES-1:0]);
+			 $display("retiring dirty page mark insn, pc %x, target %x, addr %x, entry %d", 
+				  t_rob_head.pc, t_rob_head.target_pc, w_rob_head_addr, r_rob_head_ptr[`LG_ROB_ENTRIES-1:0]);
 			 n_state = WAIT_FOR_MMU;
 			 n_ds_done = 1'b1;
 			 n_restart_pc = t_rob_head.target_pc;
@@ -1114,9 +1122,10 @@ module core(clk,
 	    end // case: ACTIVE
 	  DRAIN:	    
 	    begin
-	       if(r_rob_inflight == 'd0 && memq_empty && t_divide_ready)
+	       if((r_rob_inflight == 'd0) & memq_empty & t_divide_ready & (r_arch_fault ? l2_empty : 1'b1) )
 		 begin
 		    n_state = RAT;
+		    //if(!l2_empty) $stop();
 		    //$display(">>> clear pc %x, restart pc %x after fault at cycle %d at priv %d, paging enabled %b", 
 		    //r_restart_src_pc, r_restart_pc, r_cycle, priv, paging_active);
 		 end 
@@ -1134,6 +1143,7 @@ module core(clk,
 		    n_ds_done = 1'b0;
 		    n_pending_fault = 1'b0;
 		    t_restart_complete = 1'b1;
+		    n_arch_fault = 1'b0;
 		 end
 	    end
 	  ALLOC_FOR_SERIALIZE:
@@ -1333,8 +1343,8 @@ module core(clk,
 		    n_restart_pc = w_exc_pc;
 		    n_restart_valid = 1'b1;
 		    if(n_got_restart_ack) $stop();
-		     t_took_irq = r_irq;
-		     n_irq = 1'b0;
+		    t_took_irq = r_irq;
+		    n_irq = 1'b0;
 		    n_state = DRAIN;
 		    //$display("restarting cycle %d, paging %b, priv %d, new pc %x", 
 		    //r_cycle, paging_active, w_priv, w_exc_pc);

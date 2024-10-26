@@ -3,6 +3,7 @@
 
 `ifdef VERILATOR
 import "DPI-C" function void check_translation(input longint va, input int pa);
+import "DPI-C" function void mark_accessed_checker(input longint addr);
 `endif
 
 module mmu(clk, reset, clear_tlb, page_table_root, 
@@ -189,9 +190,9 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 	n_l1i_rsp_valid = 1'b0;
 	n_addr = r_addr;
 	n_last_addr = r_last_addr;
-	n_mem_mark_accessed = 1'b0;
+	n_mem_mark_accessed = r_mem_mark_accessed;
 	n_mem_mark_valid = 1'b0;
-	n_mem_mark_dirty = 1'b0;
+	n_mem_mark_dirty = r_mem_mark_dirty;
 	
 	n_req = 1'b0;
 	n_va = r_va;
@@ -420,6 +421,9 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 		 end
 	       else if(r_addr[6] == 1'b0)
 		 begin
+`ifdef VERILATOR
+		    mark_accessed_checker(r_last_addr);
+`endif
 		    n_mem_mark_valid = 1'b1;
 		    n_mem_mark_accessed = 1'b1;
 		    n_state = MARK_ACCESS;
@@ -435,6 +439,9 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 		 begin
 		    n_state = IDLE;
 		    n_core_mark_dirty_rsp_valid = r_do_dirty;
+		    n_mem_mark_valid = 1'b0;
+		    n_mem_mark_dirty = 1'b0;
+		    n_mem_mark_accessed = 1'b0;		    
 		 end
 	    end
 	  default:

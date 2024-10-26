@@ -520,9 +520,15 @@ endfunction
    //   end
    logic			r_reload, n_reload;
    logic [63:0]			t_br_disp, t_j_disp;
+   logic [15:0]			n_wait_cycles,r_wait_cycles;
    
+   always_ff@(posedge clk)
+     begin
+	r_wait_cycles <= reset ? 'd0 : n_wait_cycles;
+     end
    always_comb
      begin
+	n_wait_cycles = r_wait_cycles;
 	n_page_fault = r_page_fault;
 	n_pc = r_pc;
 	n_miss_pc = r_miss_pc;
@@ -882,10 +888,18 @@ endfunction
 	    end
 	  INJECT_RELOAD:
 	    begin
+	       n_wait_cycles = r_wait_cycles + 'd1;
+	       if(&r_wait_cycles)
+		 begin
+		    $display("icache fetch request for %x timed out at cycle %d, r_miss_pc %x, phys addr %x, cycles %d", 
+			     r_pc, r_cycle, r_miss_pc, r_mem_req_addr, r_wait_cycles);
+		    $stop();
+		 end
 	       if(mem_rsp_valid)
 		 begin
 		    //$display("icache fetch request for %x returns with data %x at cycle %d, r_miss_pc %x", r_pc, mem_rsp_load_data, r_cycle, r_miss_pc);
 		    n_state = RELOAD_TURNAROUND;
+		    n_wait_cycles = 'd0;
 		 end
 	    end
 	  RELOAD_TURNAROUND:

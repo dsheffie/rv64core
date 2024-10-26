@@ -441,19 +441,40 @@ module
    wire [(1 << (`LG_L2_CL_LEN+3)) - 1:0] w_mem_req_store_data;
    wire [3:0]				  w_mem_req_opcode;
 
-   mem_fifo_t mem_fifo[((1<<`LG_L2_REQ_TAGS)-1):0];
+
+   
+   mem_fifo_t mem_fifo[((1<<(`LG_L2_REQ_TAGS+1))-1):0];
    mem_fifo_t t_mem_fifo;
    
-   logic [`LG_L2_REQ_TAGS:0] r_mem_head_ptr, n_mem_head_ptr;
-   logic [`LG_L2_REQ_TAGS:0] r_mem_tail_ptr, n_mem_tail_ptr;
+   logic [`LG_L2_REQ_TAGS+1:0] r_mem_head_ptr, n_mem_head_ptr;
+   logic [`LG_L2_REQ_TAGS+1:0] r_mem_tail_ptr, n_mem_tail_ptr;
    
-   wire [`LG_L2_REQ_TAGS-1:0] w_mem_head_ptr = r_mem_head_ptr[`LG_L2_REQ_TAGS-1:0];
-   wire [`LG_L2_REQ_TAGS-1:0] w_mem_tail_ptr = r_mem_tail_ptr[`LG_L2_REQ_TAGS-1:0];
+   wire [`LG_L2_REQ_TAGS:0] w_mem_head_ptr = r_mem_head_ptr[`LG_L2_REQ_TAGS:0];
+   wire [`LG_L2_REQ_TAGS:0] w_mem_tail_ptr = r_mem_tail_ptr[`LG_L2_REQ_TAGS:0];
    
    wire			      w_mem_empty = r_mem_head_ptr == r_mem_tail_ptr;
    wire			      w_mem_full = (r_mem_head_ptr != r_mem_tail_ptr) &
-			      (r_mem_head_ptr[`LG_L2_REQ_TAGS-1:0] == r_mem_tail_ptr[`LG_L2_REQ_TAGS-1:0]);
+			      (r_mem_head_ptr[`LG_L2_REQ_TAGS:0] == r_mem_tail_ptr[`LG_L2_REQ_TAGS:0]);
 
+   logic [`LG_L2_REQ_TAGS:0]  r_inflight,n_inflight;
+   always_ff@(posedge clk)
+     begin
+	r_inflight <= reset ? 'd0 : n_inflight;
+     end
+   always_comb
+     begin
+	n_inflight = r_inflight;
+	if(w_mem_req_valid & !mem_rsp_valid)
+	  begin
+	     n_inflight = r_inflight + 'd1;
+	  end
+	else if(!w_mem_req_valid & mem_rsp_valid)
+	  begin
+	     n_inflight = r_inflight - 'd1;
+	  end
+     end // always_comb
+
+   
    always_comb
      begin
 	t_mem_fifo.addr = w_mem_req_addr;
@@ -495,62 +516,99 @@ module
 	  end
      end
 
-   logic r_pulse_fsm, n_pulse_fsm;
-   logic r_pulse_valid, n_pulse_valid;
-   logic [`LG_L2_REQ_TAGS-1:0] r_save_req_tag, n_save_req_tag;   
-   always_comb
-     begin
-	n_pulse_fsm = r_pulse_fsm;
-	n_pulse_valid = (r_pulse_fsm==1'b0) & (w_mem_empty==1'b0);
-	n_save_req_tag = r_save_req_tag;
-	if(r_pulse_fsm)
-	  begin
-	     if(mem_rsp_valid)
-	       begin
-		  n_pulse_fsm = 1'b0;
-	       end
-	  end
-	else
-	  begin
-	     if(w_mem_empty == 1'b0)
-	       begin
-		  n_pulse_fsm = 1'b1;
-		  n_save_req_tag = mem_fifo[w_mem_head_ptr].tag;
-	       end
-	  end
-     end // always_comb
-   
-
-   always_ff@(posedge clk)
-     begin
-	r_pulse_fsm <= reset ? 1'b0 : n_pulse_fsm;
-	r_pulse_valid <= reset ? 1'b0 : n_pulse_valid;
-	r_save_req_tag <= reset ? 'd0 : n_save_req_tag;
-     end
-
-   assign mem_req_valid = r_pulse_fsm;
-   assign mem_req_addr = mem_fifo[w_mem_head_ptr].addr;
-   assign mem_req_tag = mem_fifo[w_mem_head_ptr].tag;
-   assign mem_req_store_data = mem_fifo[w_mem_head_ptr].data;
-   assign mem_req_opcode = mem_fifo[w_mem_head_ptr].opcode;
-   
    always_ff@(negedge clk)
      begin
-	if(mem_req_valid & w_mem_full)
+	//if(r_inflight >= 'd2)
+	//$display("r_inflight = %d at cycle %d", r_inflight, r_cycle);
+
+	//if(n_pulse_fsm==2'd1 & r_pulse_fsm==2'd0)
+	//begin
+	//$display("new req at cycle %d", r_cycle);
+	//end
+	if(w_mem_req_valid & w_mem_full)
 	  begin
 	     $stop();
 	  end
-	if(mem_req_valid & w_mem_empty)
+	if(mem_rsp_valid & w_mem_empty)
 	  begin
 	     $stop();
 	  end
 	     
      end
+
    
+   logic [1:0] r_pulse_fsm, n_pulse_fsm;
+   logic r_pulse_valid, n_pulse_valid;
+   logic [`LG_L2_REQ_TAGS-1:0] r_save_req_tag, n_save_req_tag;
+   logic [127:0]	       r_mem_rsp_load_data,n_mem_rsp_load_data;
+   logic		       r_mem_rsp_valid, n_mem_rsp_valid;
+   logic		       n_mem_error, r_mem_error;
+
+   assign got_bad_addr = r_mem_error;
    
+   always_comb
+     begin
+	n_pulse_fsm = r_pulse_fsm;
+	n_pulse_valid = (r_pulse_fsm==2'd0) & (w_mem_empty==1'b0);
+	n_save_req_tag = r_save_req_tag;
+	n_mem_rsp_load_data = r_mem_rsp_load_data;
+	n_mem_rsp_valid = 1'b0;
+	n_mem_error = r_mem_error | (mem_rsp_valid & w_mem_empty) | (w_mem_req_valid & w_mem_full);
+	case(r_pulse_fsm)
+	  'd2:
+	    begin
+	       if(mem_rsp_valid==1'b0)
+		 begin
+		    n_pulse_fsm = 2'd0;
+		    
+		 end
+	    end
+	  'd1:
+	    begin
+	       if(mem_rsp_valid)
+		 begin
+		    n_pulse_fsm = 2'd2;
+		    n_mem_rsp_load_data = mem_rsp_load_data;
+		    n_mem_rsp_valid = 1'b1;
+		 end
+	    end
+	  'd0:
+	    begin
+	       if(w_mem_empty == 1'b0)
+		 begin
+		    n_pulse_fsm = 2'd1;
+		    n_save_req_tag = mem_fifo[w_mem_head_ptr].tag;
+		 end
+	    end
+	  default:
+	    begin
+	    end
+	endcase // case (r_pulse_fsm)
+     end // always_comb
+   
+
+   always_ff@(posedge clk)
+     begin
+	r_pulse_fsm <= reset ? 'd0 : n_pulse_fsm;
+	r_pulse_valid <= reset ? 1'b0 : n_pulse_valid;
+	r_save_req_tag <= reset ? 'd0 : n_save_req_tag;
+	r_mem_rsp_valid <= reset ? 1'b0 : n_mem_rsp_valid;
+	r_mem_rsp_load_data <= n_mem_rsp_load_data;
+	r_mem_error <= reset ? 1'b0 : n_mem_error;
+     end
+
+   assign mem_req_valid = r_pulse_fsm==2'd1;
+   assign mem_req_addr = mem_fifo[w_mem_head_ptr].addr;
+   assign mem_req_tag = mem_fifo[w_mem_head_ptr].tag;
+   assign mem_req_store_data = mem_fifo[w_mem_head_ptr].data;
+   assign mem_req_opcode = mem_fifo[w_mem_head_ptr].opcode;
+   wire w_l2_empty;
+   
+      
    l2_2way l2cache (
 	       .clk(clk),
 	       .reset(reset),
+	       .paging_active(w_paging_active),		    
 	       .l2_state(l2_state),
 	       .l2_probe_val(w_l2_probe_val),
 	       .l2_probe_addr(w_l2_probe_addr),
@@ -583,9 +641,9 @@ module
 	       .mem_req_store_data(w_mem_req_store_data),
 	       .mem_req_opcode(w_mem_req_opcode),
 
-	       .mem_rsp_valid(mem_rsp_valid),
+	       .mem_rsp_valid(r_mem_rsp_valid),
 	       .mem_rsp_tag(r_save_req_tag),
-	       .mem_rsp_load_data(mem_rsp_load_data),
+	       .mem_rsp_load_data(r_mem_rsp_load_data),
 		    
 	       .mmu_req_valid(w_mmu_req_valid),
 	       .mmu_req_addr(w_mmu_req_addr),
@@ -601,8 +659,8 @@ module
 	       .mem_mark_rsp_valid(w_mem_mark_rsp_valid),
 	       
 	       .cache_accesses(l2_cache_accesses),
-	       .cache_hits(l2_cache_hits)
-
+	       .cache_hits(l2_cache_hits),
+	       .l2_empty(w_l2_empty)
 	       );
    
 
@@ -614,6 +672,7 @@ module
 	       .clk(clk),
 	       .reset(reset),
 	       .priv(w_priv),
+	       .l2_empty(w_l2_empty),
 	       .page_table_root(w_page_table_root),
 	       .l2_probe_val(w_l2_probe_val),
 	       .l2_probe_addr(w_l2_probe_addr),
@@ -812,6 +871,7 @@ module
 	     .mode64(w_mode64),
 	     .resume(resume),
 	     .memq_empty(memq_empty),
+	     .l2_empty(w_l2_empty),	     
 	     .drain_ds_complete(drain_ds_complete),
 	     .dead_rob_mask(dead_rob_mask),	     
 	     .head_of_rob_ptr_valid(head_of_rob_ptr_valid),	     
@@ -882,7 +942,7 @@ module
 	     .took_irq(took_irq),
 	     .got_break(got_break),
 	     .got_ud(got_ud),
-	     .got_bad_addr(got_bad_addr),
+	     .got_bad_addr(/*got_bad_addr*/),
 	     .got_monitor(got_monitor),
 	     .inflight(inflight),
 	     .epc(epc),

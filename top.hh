@@ -311,7 +311,7 @@ static inline uint8_t *mmap4G() {
 }
 
 static inline
-void reset_core(std::unique_ptr<Vcore_l1d_l1i> &tb, uint64_t &cycle,
+void reset_core(Vcore_l1d_l1i *tb, uint64_t &cycle,
 		uint64_t init_pc) {
   for(; (cycle < 4) && !Verilated::gotFinish(); ++cycle) {
     tb->mem_rsp_valid = 0;

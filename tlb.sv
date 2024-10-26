@@ -76,7 +76,6 @@ module tlb(clk,
 	end
    endgenerate
 
-
    logic [15:0] r_lfsr, n_lfsr;
    always_ff@(posedge clk)
      begin
@@ -84,7 +83,11 @@ module tlb(clk,
      end
    always_comb
      begin
-	n_lfsr = {r_lfsr[14:0], r_lfsr[15] ^ r_lfsr[13] ^ r_lfsr[12] ^ r_lfsr[10]};
+	n_lfsr = r_lfsr;
+	if(active & req & ((|w_hits) == 1'b0))
+	  begin
+	     n_lfsr = {r_lfsr[14:0], r_lfsr[15] ^ r_lfsr[13] ^ r_lfsr[12] ^ r_lfsr[10]};
+	  end
      end
 
    wire [63:0] w_pa_sel = 

@@ -40,6 +40,7 @@ import "DPI-C" function void wr_log(input longint pc,
 
 module nu_l1d(clk, 
 	   reset,
+	   l2_empty,
 	   priv,
 	   page_table_root,
 	   l2_probe_addr,
@@ -101,6 +102,7 @@ module nu_l1d(clk,
    localparam L1D_CL_LEN_BITS = 1 << (`LG_L1D_CL_LEN + 3);   
    input logic clk;
    input logic reset;
+   input logic l2_empty;
    input logic [1:0] priv;
    input logic [63:0] page_table_root;
    input logic l2_probe_val;
@@ -1069,6 +1071,19 @@ module nu_l1d(clk,
 	  end
      end // always_ff@ (posedge clk)
 
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if(memq_empty & !reset)
+   // 	  begin
+   // 	     if(l2_empty == 1'b0) 
+   // 	       begin
+   // 		  $display("memq_empty asserted but l2_empty aint empty at cycle %d", r_cycle);
+   // 		  $stop();
+   // 	       end
+   // 	  end
+   //   end
+   
+   
    always_ff@(posedge clk)
      begin
 	r_req <= n_req;
@@ -1146,17 +1161,17 @@ module nu_l1d(clk,
 `ifdef DEBUG
     always_ff@(negedge clk)
       begin
-	 for(integer i = 0; i < N_MQ_ENTRIES; i=i+1)
-	   begin
-	      if(r_mq_addr_valid[i])
-		begin
-		   $display("line %d has addr %x", i, r_mq_addr[i]);
-		end
-	      if(r_mq_inflight[i])
-		begin
-		   $display("line %d is inflight", i);
-		end
-	   end
+	 // for(integer i = 0; i < N_MQ_ENTRIES; i=i+1)
+	 //   begin
+	 //      if(r_mq_addr_valid[i])
+	 // 	begin
+	 // 	   $display("line %d has addr %x", i, r_mq_addr[i]);
+	 // 	end
+	 //      if(r_mq_inflight[i])
+	 // 	begin
+	 // 	   $display("line %d is inflight", i);
+	 // 	end
+	 //   end
 
 	 
 	 
@@ -1447,10 +1462,28 @@ module nu_l1d(clk,
    //end
    //end
 	     
-   
+   wire w_match_link = ({r_req.addr[63:4], 4'd0} == r_link_reg) & r_link_reg_val;
+
 `ifdef VERILATOR
+   wire	w_aborted_sc = t_hit_cache & ((r_req.op == MEM_SCD) | (r_req.op == MEM_SCW)) & (!w_match_link);
    always_ff@(negedge clk)
      begin
+	// if(n_link_reg_val & (r_link_reg_val==1'b0))	
+	//   begin
+	//      $display("set link reg at cycle %d", r_cycle);
+	//   end
+	// else if((n_link_reg_val==1'b0) & r_link_reg_val)
+	//   begin
+	//      $display("clear link reg at cycle %d, op %d", r_cycle,r_req.op);
+	//   end
+	
+	//if(w_aborted_sc)
+	//begin
+	//$display("r_link_reg_val = %b, r_link_reg = %x, r_req.addr = %x, link addr = %x",
+	//r_link_reg_val, r_link_reg, {r_req.addr[63:4], 4'd0}, r_link_reg);
+	///$stop();
+	//end
+	
 	l1d_port_util({31'd0,r_got_req}, {31'd0, r_got_req2});
 	record_l1d({31'd0,core_mem_va_req_valid},
 		   {31'd0,core_mem_va_req_ack},
@@ -1459,7 +1492,7 @@ module nu_l1d(clk,
 		   {25'd0, t_new_req_c}
 		   );
 	if(t_wr_store)
-	  begin
+	  begin	     
 	     wr_log(r_req.pc,
 		    { {(32-`LG_ROB_ENTRIES){1'b0}}, r_req.rob_ptr},
 		    r_req.addr, 
@@ -1467,14 +1500,15 @@ module nu_l1d(clk,
 		    r_req.is_atomic ? 32'd1 : 32'd0);
 `ifdef VERBOSE_L1D			    
 	     if(r_req.is_atomic)
-	        $display("firing atomic for pc %x addr %x with data %x t_shift %x, at cycle %d for rob ptr %d, r_cache_idx %d", 
-	     		 r_req.pc, r_req.addr, r_req.data, t_shift, r_cycle, r_req.rob_ptr, r_cache_idx);
+	        $display("firing atomic for pc %x addr %x with data %x t_shift %x, at cycle %d for rob ptr %d, r_cache_idx %d, match link %b", 
+	     		 r_req.pc, r_req.addr, r_req.data, t_shift, r_cycle, r_req.rob_ptr, r_cache_idx, w_match_link);
 `endif	     
 	  end
      end // always_ff@ (negedge clk)
 `endif
 
-   wire w_match_link = ({r_req.addr[63:4], 4'd0} == r_link_reg) & r_link_reg_val;
+
+
    always_comb
      begin
 	t_data = /* mem_rsp_valid ? mem_rsp_load_data : */
@@ -1560,7 +1594,7 @@ module nu_l1d(clk,
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
 	       t_wr_link_reg = r_req.is_ll;
 	       n_link_reg = {r_req.addr[63:4], 4'd0};
-	       n_link_reg_val = r_req.is_ll;
+	       n_link_reg_val = r_req.is_ll ? 1'b1 : r_link_reg_val;
 	    end
 	  MEM_LWU:
 	    begin
@@ -1573,7 +1607,7 @@ module nu_l1d(clk,
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
 	       t_wr_link_reg = r_req.is_ll;
 	       n_link_reg = {r_req.addr[63:4], 4'd0};
-	       n_link_reg_val = r_req.is_ll;
+	       n_link_reg_val = r_req.is_ll ? 1'b1 : r_link_reg_val;	       
 	    end	  
 	  MEM_SB:
 	    begin
@@ -1603,7 +1637,7 @@ module nu_l1d(clk,
 	       t_wr_store = w_match_link && t_hit_cache && 
 			    (r_is_retry || r_did_reload) & (!r_req.has_cause);
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
-	       n_link_reg_val = 1'b0;
+	       //n_link_reg_val = t_wr_store ? 1'b0 : r_link_reg_val;
 	    end
 	  MEM_SCW:
 	    begin
@@ -1612,7 +1646,7 @@ module nu_l1d(clk,
 	       t_wr_store = w_match_link && t_hit_cache && 
 			    (r_is_retry || r_did_reload) & (!r_req.has_cause);
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
-	       n_link_reg_val = 1'b0;
+	       //n_link_reg_val = t_wr_store ? 1'b0 : r_link_reg_val;	       
 	    end
 	  MEM_AMOW:
 	    begin
@@ -2215,22 +2249,29 @@ module nu_l1d(clk,
 	       n_state = ACTIVE;
 	    end
 	  FLUSH_CL:
-	    if(r_dirty_out & w_flush_hit)
-	      begin
-		 n_port1_req_addr = {r_tag_out,r_cache_idx,4'd0};
-		 n_port1_req_opcode = MEM_SW;
-		 n_port1_req_store_data = t_data;
-		 n_state = FLUSH_CL_WAIT;
-		 n_inhibit_write = 1'b1;
-		 n_port1_req_valid = 1'b1;	       
-	      end
-	    else
-	      begin
-		 n_state = r_flush_was_active ? ACTIVE : TLB_RELOAD;
-		 n_flush_was_active = 1'b0;
-		 t_mark_invalid = w_flush_hit;		 
-		 n_l2_probe_ack = 1'b1;
-	      end // else: !if(r_dirty_out)
+	    begin
+	       if(w_flush_hit & r_link_reg_val & (r_link_reg[31:0] == {r_tag_out,r_cache_idx,4'd0}))
+		 begin
+		    $stop();
+		 end
+	       
+	       if(r_dirty_out & w_flush_hit)
+		 begin
+		    n_port1_req_addr = {r_tag_out,r_cache_idx,4'd0};
+		    n_port1_req_opcode = MEM_SW;
+		    n_port1_req_store_data = t_data;
+		    n_state = FLUSH_CL_WAIT;
+		    n_inhibit_write = 1'b1;
+		    n_port1_req_valid = 1'b1;	       
+		 end
+	       else
+		 begin
+		    n_state = r_flush_was_active ? ACTIVE : TLB_RELOAD;
+		    n_flush_was_active = 1'b0;
+		    t_mark_invalid = w_flush_hit;		 
+		    n_l2_probe_ack = 1'b1;
+		 end // else: !if(r_dirty_out)
+	    end
 	  FLUSH_CL_WAIT:
 	    begin
 	       	if(w_queues_drained)

@@ -66,7 +66,8 @@ struct state_t{
   uint64_t epc;
   uint64_t maxicnt;
   uint64_t icnt;
-
+  uint64_t link;
+  
   bool took_exception;
   riscv_priv priv;
   
@@ -98,7 +99,7 @@ struct state_t{
   int64_t pmpaddr2;
   int64_t pmpaddr3;
   int64_t pmpcfg0;
-  int64_t mtimecmp;  
+  int64_t mtimecmp;
   int xlen() const {
     return 64;
   }
