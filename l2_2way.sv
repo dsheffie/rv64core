@@ -395,12 +395,13 @@ module l2_2way(clk,
    wire [127:0]		w_updated_pte = r_mmu_addr3 ? 
 			{w_d[127:72], r_mmu_mark_dirty|w_d[71], r_mmu_mark_accessed|w_d[70], w_d[69:0]} :
 			{w_d[127:8], r_mmu_mark_dirty|w_d[7], r_mmu_mark_accessed|w_d[6], w_d[5:0]};      
-   wire [N_ROB_ENTRIES-1:0] w_hit_rob, w_mmu, w_pte, w_wb, w_st;
+   wire [N_ROB_ENTRIES-1:0] w_hit_rob, w_mmu, w_pte, w_wb, w_st, w_hit_cl;
 
    generate
       for(genvar i = 0; i < N_ROB_ENTRIES; i=i+1)
 	begin
 	   assign w_hit_rob[i] = r_rob_valid[i] ? (r_rob_addr[i][31:4] == n_addr[31:4]) : 1'b0;
+
 	   assign w_mmu[i] = r_rob_valid[i] ? r_rob_was_mmu[i] : 1'b0;
 	   assign w_pte[i] = r_rob_valid[i] ? r_rob_was_mark_dirty[i] : 1'b0;
 	   assign w_wb[i] = r_rob_valid[i] ? r_rob_was_wb[i] : 1'b0;
@@ -460,6 +461,7 @@ module l2_2way(clk,
 
    wire			    w_hit_inflight = (|w_hit_rob);
 
+   
    always_ff@(posedge clk)
      begin
 	if(reset)
@@ -949,12 +951,32 @@ module l2_2way(clk,
 	r_l1i <= reset ? 1'b0 : n_l1i;	
      end
    
-   wire w_l1i_req = r_l1i_req | l1i_req;
-   wire w_l1d_req = !w_l1d_empty;
    //r_l1d_req | l1d_req;
    wire	w_mmu_req = r_mmu_req | t_probe_mmu_req_valid;
    wire w_mem_mark_valid = mem_mark_valid | r_mmu_mark_req;
 
+   wire	w_l1i_r = r_l1i_req | l1i_req;
+   wire w_l1d_r = !w_l1d_empty;
+
+   wire [LG_L2_LINES-1:0] w_l1i_tag = l1i_addr[LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN];
+   wire [LG_L2_LINES-1:0] w_l1d_tag = t_l1dq.addr[LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN];
+
+   /* interlock inflight cachelines */
+   wire [N_ROB_ENTRIES-1:0] w_hit_l1d_cl, w_hit_l1i_cl;
+   generate
+      for(genvar i = 0; i < N_ROB_ENTRIES; i=i+1)
+	begin
+	   assign w_hit_l1d_cl[i] = r_rob_valid[i] ? (r_rob_addr[i][LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN] == w_l1d_tag) : 1'b0;
+	   assign w_hit_l1i_cl[i] = r_rob_valid[i] ? (r_rob_addr[i][LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN] == w_l1i_tag) : 1'b0;	   	   	   
+	end
+   endgenerate
+
+   wire w_hit_any_l1d = w_l1d_r ? (|w_hit_l1d_cl) : 1'b0;
+   wire	w_hit_any_l1i = w_l1i_r ? (|w_hit_l1i_cl) : 1'b0;
+
+   wire	w_l1d_req = (!w_hit_any_l1d) & w_l1d_r;
+   wire	w_l1i_req = (!w_hit_any_l1i) & w_l1i_r;
+   
    wire w_pick_l1i = (w_l1i_req & w_l1d_req) ? r_last_gnt : w_l1i_req;
    wire w_pick_l1d = (w_l1i_req & w_l1d_req) ? !r_last_gnt : w_l1d_req;   
 
@@ -968,7 +990,7 @@ module l2_2way(clk,
    
    always_comb
      begin
-	n_rsp_data = w_hit ? w_d : r_rsp_data;
+	n_rsp_data = w_hit ? w_d : 128'hdeadbeef;//r_rsp_data;
 	n_mem_mark_rsp_valid = 1'b0;
 	
 	n_mmu_rsp_data = r_mmu_addr3 ? w_d[127:64] : w_d[63:0];
@@ -1079,6 +1101,7 @@ module l2_2way(clk,
      end
 
    wire w_replay = w_head_of_rob_done & w_more_than_one_free_credit & (r_state == IDLE);
+   
    
    
    always_comb
@@ -1362,6 +1385,7 @@ module l2_2way(clk,
 			      n_l1i_req = 1'b0;
 			      t_gnt_l1i = 1'b1;
 			      n_req_ty = L1I;
+			      if(w_hit_any_l1i) $stop();
 			   end
 			 else if(w_pick_l1d)
 			   begin
@@ -1377,6 +1401,7 @@ module l2_2way(clk,
 			      n_l1d_rsp_tag = t_l1dq.tag;
 			      t_gnt_l1d = 1'b1;
 			      n_req_ty = L1D;
+			      if(w_hit_any_l1d) $stop();
 			   end
 			 n_req_ack = 1'b1;
 			 n_got_req = 1'b1;		    
@@ -1389,6 +1414,9 @@ module l2_2way(clk,
 	  CHECK_VALID_AND_TAG:
 	    begin
 	       //load hit
+	       //$display("l2 hit %b for address %x op %d pointer %d", 
+	       //w_hit, r_addr, r_opcode, w_rob_tail_ptr);
+	       
 	       if(w_hit)
 		 begin
 		    t_wr_last = 1'b1;
@@ -1519,7 +1547,6 @@ module l2_2way(clk,
 		    n_state = IDLE;
 		    n_mem_opcode = 4'd4; //load
 		    n_mem_req = 1'b1;
-		    //$display("missed l2 for address %x, pointer %d", r_addr, w_rob_tail_ptr);		    
 		 end // else: !if(w_hit)
 	    end // case: CHECK_VALID_AND_TAG
 	  PREPARE_WRITEBACK:

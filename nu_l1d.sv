@@ -769,8 +769,8 @@ module nu_l1d(clk,
      begin
 	if(mem_rsp_valid)
 	  begin
-	     $display("resp for tag %d, addr %x, data %x at cycle %d",
-		      mem_rsp_tag, mem_rsp_addr, mem_rsp_load_data, r_cycle);
+	     $display("resp for tag %d, addr %x, data %x at cycle %d, t_array_wr_en = %b cycle %d",
+		      mem_rsp_tag, mem_rsp_addr, mem_rsp_load_data, r_cycle, t_array_wr_en, r_cycle);
 	  end
 	if(mem_req_valid)
 	  begin
@@ -1096,6 +1096,11 @@ module nu_l1d(clk,
 	t_array_wr_addr = mem_rsp_reload ? mem_rsp_addr[IDX_STOP-1:IDX_START] : r_cache_idx;
 	t_array_wr_data = mem_rsp_reload ? mem_rsp_load_data : t_store_shift;
 	t_array_wr_en = (mem_rsp_reload) | t_wr_array;
+     end
+
+   always_ff@(negedge clk)
+     begin
+	if(mem_rsp_reload & t_wr_array) $stop();
      end
    
  ram2r1w #(.WIDTH(N_TAG_BITS), .LG_DEPTH(`LG_L1D_NUM_SETS)) dc_tag
