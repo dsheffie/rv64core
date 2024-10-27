@@ -1055,7 +1055,7 @@ module nu_l1d(clk,
 	     r_inhibit_write <= n_inhibit_write;
 	     memq_empty <= mem_q_empty
 			   & (&n_mrq_credits)
-			   & drain_ds_complete 
+			     /*& drain_ds_complete */
 			   & !core_mem_va_req_valid
 			   & w_eb_empty
 			   & !t_got_req 
@@ -1070,6 +1070,15 @@ module nu_l1d(clk,
 	     r_must_forward2 <= t_cm_block & core_mem_va_req_ack;
 	  end
      end // always_ff@ (posedge clk)
+
+   //always_ff@(negedge clk)
+   // begin
+     //  if(!memq_empty)
+   //begin
+   //$display("mem_q_empty = %b", mem_q_empty);
+   //$display("drain_ds_complete = %b", drain_ds_complete);
+   //end
+    //end
 
    // always_ff@(negedge clk)
    //   begin

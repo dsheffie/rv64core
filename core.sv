@@ -1086,7 +1086,7 @@ module core(clk,
 		 end // if (t_can_retire_rob_head)
 	       else if(!t_dq_empty)
 		 begin
-		    if(t_uop.serializing_op && t_rob_empty)
+		    if(t_uop.serializing_op & t_rob_empty)
 		      begin
 			 if(t_uop.op == MONITOR )
 			   begin
@@ -1148,9 +1148,12 @@ module core(clk,
 	    end
 	  ALLOC_FOR_SERIALIZE:
 	    begin
-	       t_alloc = !t_rob_full && !t_uq_full 
-			 && (r_prf_free != 'd0) 
-			   && !t_dq_empty;
+	       t_alloc = !t_rob_full 
+			 & !t_uq_full 
+			 & (r_prf_free != 'd0)
+			   & memq_empty
+			 & !t_dq_empty;
+	       
 	       if(t_alloc)
 		 begin
 		    n_state = WAIT_FOR_SERIALIZE_AND_RESTART;
