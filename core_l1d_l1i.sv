@@ -442,21 +442,23 @@ module
    wire [3:0]				  w_mem_req_opcode;
 
 
-   
-   mem_fifo_t mem_fifo[((1<<(`LG_L2_REQ_TAGS+1))-1):0];
+
+   localparam				  LG_REQ_Q_SZ = `LG_L2_REQ_TAGS;
+  
+   mem_fifo_t mem_fifo[((1<<(LG_REQ_Q_SZ+1))-1):0];
    mem_fifo_t t_mem_fifo;
    
-   logic [`LG_L2_REQ_TAGS+1:0] r_mem_head_ptr, n_mem_head_ptr;
-   logic [`LG_L2_REQ_TAGS+1:0] r_mem_tail_ptr, n_mem_tail_ptr;
+   logic [LG_REQ_Q_SZ+1:0] r_mem_head_ptr, n_mem_head_ptr;
+   logic [LG_REQ_Q_SZ+1:0] r_mem_tail_ptr, n_mem_tail_ptr;
    
-   wire [`LG_L2_REQ_TAGS:0] w_mem_head_ptr = r_mem_head_ptr[`LG_L2_REQ_TAGS:0];
-   wire [`LG_L2_REQ_TAGS:0] w_mem_tail_ptr = r_mem_tail_ptr[`LG_L2_REQ_TAGS:0];
+   wire [LG_REQ_Q_SZ:0] w_mem_head_ptr = r_mem_head_ptr[LG_REQ_Q_SZ:0];
+   wire [LG_REQ_Q_SZ:0] w_mem_tail_ptr = r_mem_tail_ptr[LG_REQ_Q_SZ:0];
    
    wire			      w_mem_empty = r_mem_head_ptr == r_mem_tail_ptr;
    wire			      w_mem_full = (r_mem_head_ptr != r_mem_tail_ptr) &
-			      (r_mem_head_ptr[`LG_L2_REQ_TAGS:0] == r_mem_tail_ptr[`LG_L2_REQ_TAGS:0]);
+			      (r_mem_head_ptr[LG_REQ_Q_SZ:0] == r_mem_tail_ptr[LG_REQ_Q_SZ:0]);
 
-   logic [`LG_L2_REQ_TAGS:0]  r_inflight,n_inflight;
+   logic [LG_REQ_Q_SZ:0]  r_inflight,n_inflight;
    always_ff@(posedge clk)
      begin
 	r_inflight <= reset ? 'd0 : n_inflight;

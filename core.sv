@@ -480,9 +480,12 @@ module core(clk,
 				  (w_priv == 2'd3) ? w_en_m_irqs : 
 				  (w_priv == 2'd1 ? w_en_s_irqs : (~(64'd0) ))
 				  ) & w_pending_irq;
-   
+
+`ifdef DISABLE_IRQ
+   wire		w_any_irq = 1'b0;
+`else
    wire 	w_any_irq = (|w_enabled_irqs[31:0]) & (|w_pending_irq[31:0]);
-   
+`endif
    
    wire [5:0] 	w_irq_id;
    find_first_set#(5) irq_ffs(.in(w_enabled_irqs[31:0]),

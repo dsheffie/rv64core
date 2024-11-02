@@ -584,6 +584,7 @@ static void write_csr(int csr_id, state_t *s, int64_t v, bool &undef) {
 
 
 void execRiscv(state_t *s) {
+  //printf("%s:%lx\n", __PRETTY_FUNCTION__, s->pc);
   uint8_t *mem = s->mem;
   int fetch_fault = 0, except_cause = -1;
   uint64_t tval = 0, tohost = 0,phys_pc = 0;
@@ -604,7 +605,7 @@ void execRiscv(state_t *s) {
     s->mip |= cc.raw;
   }
   
-  irq = take_interrupt(s) & false;
+  irq = take_interrupt(s);
   if(irq) {
     except_cause = CAUSE_INTERRUPT | irq;
     goto handle_exception;
@@ -1584,6 +1585,7 @@ void execRiscv(state_t *s) {
       }
       else if(bits19to7z and (csr_id == 0x105)) {  /* wfi */
 	s->pc += 4;
+	break;
       }
       else if(bits19to7z and (csr_id == 0x202)) {  /* hret */
 	assert(false);

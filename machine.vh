@@ -8,7 +8,8 @@
 
 `define FPGA 1
 
-//`define SECOND_EXEC_PORT 1
+//`define DISABLE_IRQ
+`define SECOND_EXEC_PORT 1
 //`define FOUR_CYCLE_L1D 1
 //`define TWO_SRC_CHEAP 1
 
@@ -76,9 +77,9 @@
 `define LG_L1D_NUM_SETS 8
 `define LG_L1I_NUM_SETS 8
 
-`define LG_L2_NUM_SETS 6
+`define LG_L2_NUM_SETS 12
 
-`define LG_L2_REQ_TAGS 2
+`define LG_L2_REQ_TAGS 1
 
 `define M_WIDTH (1 << `LG_M_WIDTH)
 

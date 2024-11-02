@@ -1245,17 +1245,18 @@ int main(int argc, char **argv) {
        
       
       if( enable_checker) {
-	
+	//printf("checking rtl %lx, sim %lx\n", tb->retire_pc, ss->pc);	
 	int cnt = 0;
 	bool mismatch = (tb->retire_pc != ss->pc), exception = false;
 	uint64_t initial_pc = ss->pc;
-
+	
 	if((tb->retire_pc != ss->pc) and pending_irq) {
 	  printf("divergence, rtl took interrupt\n");
 	  exit(-1);
 	}
 	
 	while( (tb->retire_pc != ss->pc) and (cnt < 3)) {
+	  printf("did not match, moving checker rtl %lx, sim %lx\n", tb->retire_pc, ss->pc);
 	  execRiscv(ss);
 	  exception |= ss->took_exception;
 	  cnt++;

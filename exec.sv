@@ -2818,7 +2818,11 @@ module exec(clk,
 	  end
 	else
 	  begin
+`ifndef DISABLE_IRQ
 	     r_mtime <= r_mtime + 'd1;
+`else
+	     r_mtime <= 'd0;
+`endif
 	  end	
      end // always_ff@ (posedge clk)
    
