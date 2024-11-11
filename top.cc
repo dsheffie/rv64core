@@ -871,7 +871,7 @@ int main(int argc, char **argv) {
   std::string pushout_name = "pushout.txt";
   std::string branch_name = "branch_info.txt";
   std::string retire_name;
-  bool window, retiretrace = false;
+  bool window, retiretrace = false, verbose = false;
   uint64_t heartbeat = 1UL<<36, start_trace_at = ~0UL;
   uint64_t max_cycle = 0, max_icnt = 0, mem_lat = 1;
   uint64_t last_store_addr = 0, last_load_addr = 0, last_addr = 0;
@@ -907,6 +907,7 @@ int main(int argc, char **argv) {
       ("starttrace,s", po::value<uint64_t>(&start_trace_at)->default_value(~0UL), "start tracing retired instructions")
       ("window,w", po::value<bool>(&window)->default_value(false), "report windowed ipc")
       ("retiretrace", po::value<std::string>(&retire_name), "retire trace filename")
+      ("verbose,v", po::value<bool>(&verbose)->default_value(false), "verbose")
       ; 
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);
@@ -1545,15 +1546,14 @@ int main(int argc, char **argv) {
     }
     else {
       std::cout << "checker mem does not equal rtl mem\n";
-      // for(uint64_t p = 0; p < (1UL<<32); p+=8) {
-      // 	uint64_t t0 = *reinterpret_cast<uint64_t*>(ss->mem + p);
-      // 	uint64_t t1 = *reinterpret_cast<uint64_t*>(s->mem + p);
-      // 	if(t0 != t1) {
-      // 	  printf("qword at %lx does not match SIM %lx vs RTL %lx\n",
-      // 		 p, t0, t1);
-      // 	}
-	  
-      // }
+      for(uint64_t p = 0; (p < (1UL<<32)) and verbose; p+=8) {
+	uint64_t t0 = *reinterpret_cast<uint64_t*>(ss->mem + p);
+	uint64_t t1 = *reinterpret_cast<uint64_t*>(s->mem + p);
+	if(t0 != t1) {
+	  printf("qword at %lx does not match SIM %lx vs RTL %lx\n",
+		 p, t0, t1);
+	}
+      }
     }  
   }
   

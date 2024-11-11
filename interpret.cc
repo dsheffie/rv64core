@@ -1246,8 +1246,7 @@ void execRiscv(state_t *s) {
       //if(s->pc == 0xffffffff8030db50UL) {
       //printf("storing %lx to phys addr %lx\n", s->gpr[m.s.rs2], pa);
       //}
-      
-      
+
       switch(m.s.sel)
 	{
 	case 0x0: /* sb */
