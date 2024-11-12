@@ -731,24 +731,24 @@ module
 	       .tlb_accesses(w_l1d_tlb_accesses)
 	       );
 
-`ifdef VERILATOR
-   logic [63:0] r_cycle;
-   always_ff@(posedge clk)
-     begin
-	r_cycle <= reset ? 'd0 : r_cycle + 'd1;
-     end
-   always_ff@(negedge clk)
-     begin
-	if(core_mem_req_valid)
-	  begin
-	     log_mem_begin( { {(32-`LG_ROB_ENTRIES){1'b0}}, core_mem_req.rob_ptr}, {31'd0, core_mem_req.is_load}, r_cycle, core_mem_req.pc, core_mem_req.addr);
-	  end
-	if(core_mem_rsp_valid)
-	  begin
-	     log_mem_end({ {(32-`LG_ROB_ENTRIES){1'b0}}, core_mem_rsp.rob_ptr}, r_cycle);
-	  end
-     end
-`endif
+// `ifdef VERILATOR
+//    logic [63:0] r_cycle;
+//    always_ff@(posedge clk)
+//      begin
+// 	r_cycle <= reset ? 'd0 : r_cycle + 'd1;
+//      end
+//    always_ff@(negedge clk)
+//      begin
+// 	if(core_mem_req_valid)
+// 	  begin
+// 	     log_mem_begin( { {(32-`LG_ROB_ENTRIES){1'b0}}, core_mem_req.rob_ptr}, {31'd0, core_mem_req.is_load}, r_cycle, core_mem_req.pc, core_mem_req.addr);
+// 	  end
+// 	if(core_mem_rsp_valid)
+// 	  begin
+// 	     log_mem_end({ {(32-`LG_ROB_ENTRIES){1'b0}}, core_mem_rsp.rob_ptr}, r_cycle);
+// 	  end
+//      end
+// `endif
    
    wire [63:0]			    w_l1i_page_walk_req_va;
    wire				    w_l1i_page_walk_req_valid;

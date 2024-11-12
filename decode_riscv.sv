@@ -256,7 +256,18 @@ module decode_riscv(
 	    end // case: 7'h3
 	  7'hf:
 	    begin
-	       uop.op = NOP;
+	       case(insn[14:12])
+		 //3'd1:
+		 //begin
+		 //uop.op = FENCEI;
+		 //uop.serializing_op = 1'b1;
+		 //   uop.must_restart = 1'b1;		    		      
+		 // end
+		 default:
+		   begin
+		      uop.op = NOP;
+		   end
+	       endcase // case (insn[14:12])
 	    end
 	  7'h13:
 	    begin

@@ -1043,36 +1043,25 @@ module core(clk,
 			 n_restart_pc = t_rob_head.target_pc;
 			 n_mmu_mark_dirty = 1'b1;
 		      end
-		    else if(!t_dq_empty)
+		    else if(t_dq_empty ? 1'b0 : (t_uop.serializing_op==1'b0))
 		      begin
-			 if(t_uop.serializing_op)
-			   begin
-			      if(/*r_inflight*/t_rob_empty)
-				begin
-				   n_state = (t_uop.op == MONITOR) ? 
-					     HANDLE_MONITOR : ALLOC_FOR_SERIALIZE;
-				end
-			   end
-			 else
-			   begin
-			      t_possible_to_alloc = !t_rob_full
-						    && !t_uq_full
-						    && !t_dq_empty;
-
-			      t_alloc = !t_rob_full
-					&& !r_pending_fault
-					&& !t_uq_full
-					&& !t_dq_empty					
-					&& t_enough_iprfs;
-			      
-			      t_alloc_two = t_alloc
-					    && !t_uop2.serializing_op
-					    && !t_dq_next_empty 
-					    && !t_rob_next_full
-					    && !t_uq_next_full
-					    && t_enough_next_iprfs;
-			      //&& (t_uop2.op == NOP || t_uop2.op == J);
-			   end // else: !if(t_uop.serializing_op && !t_dq_empty)
+			 if(t_uop.serializing_op) $stop();
+			 t_possible_to_alloc = !t_rob_full
+					       && !t_uq_full
+					       && !t_dq_empty;
+			 
+			 t_alloc = !t_rob_full
+				   && !r_pending_fault
+				   && !t_uq_full
+				   && !t_dq_empty					
+				   && t_enough_iprfs;
+			 
+			 t_alloc_two = t_alloc
+				       && !t_uop2.serializing_op
+				       && !t_dq_next_empty 
+				       && !t_rob_next_full
+				       && !t_uq_next_full
+				       && t_enough_next_iprfs;
 		      end // if (!t_dq_empty)
 		    t_retire = t_rob_head_complete & !t_arch_fault;
 		    t_retire_two = !t_rob_next_empty
@@ -1091,6 +1080,7 @@ module core(clk,
 		 begin
 		    if(t_uop.serializing_op & t_rob_empty)
 		      begin
+			 $display("MONITOR ISSUE B");			 
 			 if(t_uop.op == MONITOR )
 			   begin
 			      n_flush_req_l1i = 1'b1;
@@ -1120,8 +1110,8 @@ module core(clk,
 				       && !t_rob_next_full
 				       && !t_uq_next_full
 				       && t_enough_next_iprfs;
-		      end
-		 end
+		      end // if (!t_uop.serializing_op)
+		 end // if (!t_dq_empty)
 	    end // case: ACTIVE
 	  DRAIN:	    
 	    begin
