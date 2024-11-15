@@ -875,7 +875,7 @@ module core(clk,
    
    always_ff@(negedge clk)
      begin
-	if(r_watchdog > 64'd10000)
+	if(/*r_watchdog > 64'd10000*/1'b1)
 	  begin 
 	     $display("cycle %d : state = %d, alu complete %b, mem complete %b,head_ptr %d, complete %b,  can_retire_rob_head %b, head pc %x, empty %b, full %b", 
 		      r_cycle,
@@ -1080,8 +1080,7 @@ module core(clk,
 		 begin
 		    if(t_uop.serializing_op & t_rob_empty)
 		      begin
-			 $display("MONITOR ISSUE B");			 
-			 if(t_uop.op == MONITOR )
+			 if(t_uop.op == MONITOR | t_uop.op == FENCEI )
 			   begin
 			      n_flush_req_l1i = 1'b1;
 			      n_flush_req_l1d = 1'b1;
@@ -1187,7 +1186,6 @@ module core(clk,
 	       //$display("monitor flush %b %b", n_l1d_flush_complete, n_l2_flush_complete);
 	       if(n_l1i_flush_complete && n_l1d_flush_complete && n_l2_flush_complete)
 		 begin
-		    //$display("caches flushed at cycle %d", r_cycle);
 		    n_got_monitor = t_uop.op == MONITOR;
 		    n_state = (t_uop.op == MONITOR) ? HANDLE_MONITOR : ALLOC_FOR_SERIALIZE;
 		    n_l1i_flush_complete = 1'b0;

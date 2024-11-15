@@ -257,12 +257,13 @@ module decode_riscv(
 	  7'hf:
 	    begin
 	       case(insn[14:12])
-		 //3'd1:
-		 //begin
-		 //uop.op = FENCEI;
-		 //uop.serializing_op = 1'b1;
-		 //   uop.must_restart = 1'b1;		    		      
-		 // end
+		 3'd1:
+		   begin
+		      uop.is_int = 1'b1;		      
+		      uop.op = FENCEI;
+		      uop.serializing_op = 1'b1;
+		      uop.must_restart = 1'b1;		    		      
+		   end
 		 default:
 		   begin
 		      uop.op = NOP;

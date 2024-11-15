@@ -94,7 +94,7 @@ module
    output logic [4:0] core_state;
    output logic [3:0] l1i_state;
    output logic [3:0] l1d_state;
-   output logic [3:0] l2_state;
+   output logic [4:0] l2_state;
    output logic [3:0] mmu_state;
    output logic [`LG_ROB_ENTRIES-1:0] rob_ptr;
    
@@ -965,6 +965,7 @@ module core_l1d_l1i(clk,
 		    core_state,
 		    l1i_state,
 		    l1d_state,
+		    l2_state,		    
 		    memq_empty,
 		    putchar_fifo_out,
 		    putchar_fifo_empty,
@@ -1029,6 +1030,7 @@ module core_l1d_l1i(clk,
    output logic [4:0] core_state;
    output logic [3:0] l1i_state;
    output logic [3:0] l1d_state;
+   output logic [4:0] l2_state;
    output logic       memq_empty;
    output logic [7:0] putchar_fifo_out;
    output logic       putchar_fifo_empty;
@@ -1121,6 +1123,8 @@ module core_l1d_l1i(clk,
 		     .core_state(core_state),
 		     .l1i_state(l1i_state),
 		     .l1d_state(l1d_state),
+		     .l2_state(l2_state),
+		     .memq_empty(memq_empty),
 		     .putchar_fifo_out(putchar_fifo_out),
 		     .putchar_fifo_empty(putchar_fifo_empty),
 		     .putchar_fifo_pop(putchar_fifo_pop),

@@ -75,7 +75,7 @@ module l2_2way(clk,
    input logic clk;
    input logic reset;
    input logic paging_active;
-   output logic [3:0] l2_state;
+   output logic [4:0] l2_state;
    
    input logic l1d_req_valid;
    input       l1d_req_t l1d_req;
@@ -234,7 +234,7 @@ module l2_2way(clk,
    state_t n_state, r_state;
    logic r_got_req, n_got_req;
    
-   assign l2_state = 4'd0;
+   assign l2_state = r_state;
    
    logic 		n_flush_complete, r_flush_complete;
    logic 		r_flush_req, n_flush_req;

@@ -2406,6 +2406,11 @@ module exec(clk,
 	       t_alu_valid = 1'b1;
 	       t_clear_tlb = r_start_int;
 	    end
+	  FENCEI:
+	    begin
+	       t_pc = w_pc4;
+	       t_alu_valid = 1'b1;
+	    end
 	  CSRRW:
 	    begin
 	       t_rd_csr_en = 1'b1;
