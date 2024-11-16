@@ -2624,13 +2624,14 @@ module nu_l1d(clk,
 
    always_ff@(posedge clk)
      begin
-	if(r_cycle == 64'd1900000)
+	if(r_cycle == 64'd12346120000)
 	  begin
-	     $display("BEGIN VCD DUMP");
-	     $dumpfile("nu_l1d.vcd");
+	     $display("BEGIN FST DUMP");
+	     $dumpfile("nu_l1d.fst");
 	     $dumpvars(1, nu_l1d);
 	  end
      end
+   
    
    
 endmodule // l1d
