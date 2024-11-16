@@ -1425,7 +1425,7 @@ int main(int argc, char **argv) {
     was_in_flush_mode = tb->in_flush_mode;
     
     ++last_retire;
-    if(last_retire > (1U<<21) && not(tb->in_flush_mode)) {
+    if(last_retire > (1U<<19) && not(tb->in_flush_mode)) {
       std::cout << "in flush mode = " << static_cast<int>(tb->in_flush_mode) << "\n";
       std::cout << "no retire in " << last_retire << " cycles, last retired "
     		<< std::hex
