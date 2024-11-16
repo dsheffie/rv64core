@@ -860,6 +860,10 @@ void catchUnixSignal(int n) {
   exit(-1);
 }
 
+#if defined(__APPLE__) 
+double sc_time_stamp() { return 0; }
+#endif
+
 int main(int argc, char **argv) {
   static_assert(sizeof(itype) == 4, "itype must be 4 bytes");
   //std::fesetround(FE_TOWARDZERO);
