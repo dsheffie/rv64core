@@ -865,7 +865,7 @@ module core(clk,
      end
 `endif
    
-//`define DUMP_ROB
+`define DUMP_ROB
 `ifdef DUMP_ROB
    logic [63:0] r_watchdog;
    always_ff@(posedge clk)
@@ -875,7 +875,7 @@ module core(clk,
    
    always_ff@(negedge clk)
      begin
-	if(/*r_watchdog > 64'd10000*/1'b1)
+	if(r_watchdog > 64'd2097153)
 	  begin 
 	     $display("cycle %d : state = %d, alu complete %b, mem complete %b,head_ptr %d, complete %b,  can_retire_rob_head %b, head pc %x, empty %b, full %b", 
 		      r_cycle,

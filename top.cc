@@ -901,7 +901,7 @@ int main(int argc, char **argv) {
       ("pipeend", po::value<uint64_t>(&pipeend)->default_value(~0UL), "when to stop logging")
       ("pipeip", po::value<uint64_t>(&pipeip)->default_value(0), "when to start logging")
       ("pipeipcnt", po::value<uint64_t>(&pipeipcnt)->default_value(0), "when to start logging")      
-      ("maxcycle", po::value<uint64_t>(&max_cycle)->default_value(1UL<<34), "maximum cycles")
+      ("maxcycle", po::value<uint64_t>(&max_cycle)->default_value(1UL<<50), "maximum cycles")
       ("maxicnt", po::value<uint64_t>(&max_icnt)->default_value(1UL<<50), "maximum icnt")
       ("trace,t", po::value<bool>(&trace_retirement)->default_value(false), "trace retired instruction stream")
       ("starttrace,s", po::value<uint64_t>(&start_trace_at)->default_value(~0UL), "start tracing retired instructions")
@@ -930,9 +930,10 @@ int main(int argc, char **argv) {
   
   uint32_t max_inflight = 0;
 
-
   const std::unique_ptr<VerilatedContext> contextp{new VerilatedContext};
-  contextp->commandArgs(argc, argv);  
+  contextp->commandArgs(argc, argv);
+  Verilated::traceEverOn(true);
+  
   s = new state_t;
   ss = new state_t;
   
