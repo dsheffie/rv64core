@@ -2624,7 +2624,7 @@ module nu_l1d(clk,
 
    always_ff@(posedge clk)
      begin
-	if(r_cycle == 64'd12346120000)
+	if(r_cycle == 64'd4632130000)
 	  begin
 	     $display("BEGIN FST DUMP");
 	     $dumpfile("nu_l1d.fst");
