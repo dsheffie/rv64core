@@ -1054,6 +1054,7 @@ module nu_l1d(clk,
 	     r_store_stalls <= n_store_stalls;
 	     r_inhibit_write <= n_inhibit_write;
 	     memq_empty <= mem_q_empty
+			   & ((|r_rob_inflight) == 1'b0)
 			   & (&n_mrq_credits)
 			     /*& drain_ds_complete */
 			   & !core_mem_va_req_valid
@@ -2622,15 +2623,11 @@ module nu_l1d(clk,
      end
 `endif
 
-   always_ff@(posedge clk)
-     begin
-	if(r_cycle == 64'd4632130000)
-	  begin
-	     $display("BEGIN FST DUMP");
-	     $dumpfile("nu_l1d.fst");
-	     $dumpvars(1, nu_l1d);
-	  end
-     end
+   //always_ff@(posedge clk)
+   //  begin
+   //$dumpfile("rv64.fst");
+   //	$dumpvars(0, nu_l1d);
+   //end
    
    
    
