@@ -946,7 +946,9 @@ module nu_l1d(clk,
 	r_cache_accesses <= reset ? 64'd0 : n_cache_accesses;
 	r_cache_hits <= reset ? 64'd0 : n_cache_hits;
      end
-  
+
+   wire w_drained = (|r_rob_inflight) == 1'b0;
+      
    always_ff@(posedge clk)
      begin
 	if(reset)
@@ -1054,9 +1056,9 @@ module nu_l1d(clk,
 	     r_store_stalls <= n_store_stalls;
 	     r_inhibit_write <= n_inhibit_write;
 	     memq_empty <= mem_q_empty
+			   & w_drained
 			   & (&n_mrq_credits)
-			     /*& drain_ds_complete */
-			   & !core_mem_va_req_valid
+			     & !core_mem_va_req_valid
 			   & w_eb_empty
 			   & !t_got_req 
 			   & !t_got_req2 
@@ -1070,7 +1072,15 @@ module nu_l1d(clk,
 	     r_must_forward2 <= t_cm_block & core_mem_va_req_ack;
 	  end
      end // always_ff@ (posedge clk)
-
+   
+   always_ff@(negedge clk)
+   begin
+      if(w_drained & ((&n_mrq_credits) == 1'b0))
+	begin
+	   $display("HUH?, rob drained by n flight = %d", r_n_inflight);
+	end
+   end
+   
    //always_ff@(negedge clk)
    // begin
      //  if(!memq_empty)
@@ -1715,15 +1725,15 @@ module nu_l1d(clk,
    always_comb
      begin
 	n_cache_hits = r_cache_hits;
-	n_cache_accesses = r_cache_accesses;
-	if(r_got_req2)
-	  begin
-	     n_cache_accesses = r_cache_accesses + 64'd1;
-	  end
-	if(t_port2_hit_cache & !r_pending_tlb_miss)
-	  begin
-	     n_cache_hits = r_cache_hits + 64'd1;
-	  end
+	// n_cache_accesses = r_cache_accesses;
+	// if(r_got_req2)
+	//   begin
+	//      n_cache_accesses = r_cache_accesses + 64'd1;
+	//   end
+	// if(t_port2_hit_cache & !r_pending_tlb_miss)
+	//   begin
+	//      n_cache_hits = r_cache_hits + 64'd1;
+	//   end
      end // always_comb
 
 
