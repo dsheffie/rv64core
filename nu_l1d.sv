@@ -491,6 +491,7 @@ module nu_l1d(clk,
    assign l1d_state = r_state;
    logic 	t_pop_mq;
    logic 	n_did_reload, r_did_reload;
+   logic r_got_rd_retry;
    
    
    
@@ -1072,14 +1073,6 @@ module nu_l1d(clk,
 	     r_must_forward2 <= t_cm_block & core_mem_va_req_ack;
 	  end
      end // always_ff@ (posedge clk)
-   
-   always_ff@(negedge clk)
-   begin
-      if(w_drained & ((&n_mrq_credits) == 1'b0))
-	begin
-	   $display("HUH?, rob drained by n flight = %d", r_n_inflight);
-	end
-   end
    
    //always_ff@(negedge clk)
    // begin
@@ -1725,17 +1718,17 @@ module nu_l1d(clk,
    always_comb
      begin
 	n_cache_hits = r_cache_hits;
-	// n_cache_accesses = r_cache_accesses;
+	n_cache_accesses = r_cache_accesses;
 	// if(r_got_req2)
 	//   begin
 	//      n_cache_accesses = r_cache_accesses + 64'd1;
 	//   end
-	// if(t_port2_hit_cache & !r_pending_tlb_miss)
+	// if(t_hit_cache2 & !r_pending_tlb_miss)
 	//   begin
 	//      n_cache_hits = r_cache_hits + 64'd1;
 	//   end
      end // always_comb
-
+   
 
    always_comb
      begin
@@ -1833,8 +1826,9 @@ module nu_l1d(clk,
 		  t_core_mem_rsp.mark_page_dirty = w_tlb_st_not_dirty;
 		  t_core_mem_rsp.addr = r_req2.addr;
 	       end // if (r_req2.is_store)
-	     else if(w_port2_rd_hit)
+	     else if(w_port2_rd_hit & !r_got_rd_retry)
 	       begin
+		  
 `ifdef DEBUG
 		  $display("cycle %d load on port2 hit cache for pc %x, addr %x, got data %x, t_data2 = %x, t_shift_2 = %x, shift = %d", 
 			   r_cycle, r_req2.pc, r_req2.addr, t_rsp_data2[`M_WIDTH-1:0], t_data2, t_shift_2, w_shift_amt2[6:3]);
@@ -1909,22 +1903,7 @@ module nu_l1d(clk,
    
    logic t_accept;
 
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if((r_l2_probe_ack == 1'b0) & n_l2_probe_ack)
-   // 	  begin
-   // 	     $display("prepare ack at cycle %d, state = %d", r_cycle, r_state);	     
-   // 	  end
-   // 	if(r_state == FLUSH_CL)
-   // 	  begin
-   // 	     $display("flush dirty = %b, flush_hit = %b", r_dirty_out, w_flush_hit);
-   // 	  end
-   // 	if(r_l2_probe_ack)
-   // 	  begin
-   // 	     $display("probe ack at cycle %d", r_cycle);
-   // 	  end
-   //   end
-   
+  
    always_comb
      begin
 	t_cm_block = r_got_req && r_last_wr && (r_cache_idx == core_mem_va_req.addr[IDX_STOP-1:IDX_START]);
@@ -1932,24 +1911,19 @@ module nu_l1d(clk,
 
 	t_new_req_c[0] = w_got_hit_or_idle;
 	t_new_req_c[1] = !(mem_q_almost_full|mem_q_full);
-	t_new_req_c[2] = !w_got_rd_retry;
+	t_new_req_c[2] = /* !w_got_rd_retry; */ 1'b1;
 	t_new_req_c[3] = !(r_last_wr2 & (r_cache_idx2 == core_mem_va_req.addr[IDX_STOP-1:IDX_START]) & !core_mem_va_req.is_store);
 	t_new_req_c[4] = !(n_pending_tlb_miss | r_pending_tlb_miss);
 	t_new_req_c[5] = !t_cm_block_stall;
 	t_new_req_c[6] = !r_rob_inflight[core_mem_va_req.rob_ptr];
 	
 	t_new_req = core_mem_va_req_valid & (&t_new_req_c);
-	// //0
-	// 	    w_got_hit_or_idle && //1
-	// 	    !(mem_q_almost_full|mem_q_full) &&  //2
-	// 	    !w_got_rd_retry && //3
-	// 	    !(r_last_wr2 && (r_cache_idx2 == core_mem_va_req.addr[IDX_STOP-1:IDX_START]) && !core_mem_va_req.is_store) && //4
-	// 	    !(n_pending_tlb_miss | r_pending_tlb_miss) && //5
-	// 	    !t_cm_block_stall && //6
-	// 	    (!r_rob_inflight[core_mem_va_req.rob_ptr]); //7
-
      end // always_comb
 
+   always_ff@(posedge clk)
+     begin
+	r_got_rd_retry <= reset ? 1'b0 : w_got_rd_retry & t_new_req;
+     end
 
    
 
@@ -2545,7 +2519,7 @@ module nu_l1d(clk,
      end // always_comb
 
 
-   logic [15:0] r_credits, n_credits;
+   logic [(1<<(`LG_MRQ_ENTRIES+1))-1:0] r_credits, n_credits;
    always_comb
      begin
 	n_credits = r_credits;

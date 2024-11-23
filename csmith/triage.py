@@ -61,7 +61,7 @@ if __name__ == '__main__':
     for f in failures:
         print('%d,%s' % f)
 
-    print('%d successes, %d failures, %d badva %d, timeout' % (len(successes), len(failures), len(badvas), len(timeout)))
+    print('%d successes, %d failures, %d badva, %d timeout' % (len(successes), len(failures), len(badvas), len(timeout)))
 
     with open('timeout.txt', 'w') as o:
         for t in timeout:

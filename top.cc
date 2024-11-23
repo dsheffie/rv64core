@@ -1781,11 +1781,11 @@ int main(int argc, char **argv) {
     out << "l1d_new_reqs = " << l1d_new_reqs << "\n";
     out << "l1d_accept   = " << l1d_accept << "\n";
 
-    //for(int i = 0; i < 7; i++) {
-    //printf("%s = %lu\n",
-    //l1d_stall_str[i],
-    //	     l1d_block_reason[i]);
-    //}
+    for(int i = 0; i < 7; i++) {
+    printf("%s = %lu\n",
+	   l1d_stall_str[i],
+	   l1d_block_reason[i]);
+    }
     
     out << "l1d_stores = " << l1d_stores << "\n";
     out << "l1d tput = " << (static_cast<double>(l1d_acks) /l1d_reqs) << "\n";
