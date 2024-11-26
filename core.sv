@@ -3,9 +3,21 @@
 `include "uop.vh"
 
 `ifdef VERILATOR
+
+import "DPI-C" function void pt_alloc(input longint pc,
+				      input longint fetch_cycle,
+				      input longint alloc_cycle,
+				      input int	    rob_id);
+
+import "DPI-C" function void pt_retire(input longint cycle,
+				       input int rob_id);
+
+
+
 import "DPI-C" function void record_faults(input int n_faults);
 import "DPI-C" function void record_branches(input int n_branches);
 import "DPI-C" function void record_exception_type(input int cause);
+
 
 import "DPI-C" function void start_log(input int startlog);
 
@@ -776,6 +788,18 @@ module core(clk,
 `ifdef ENABLE_CYCLE_ACCOUNTING
    always_ff@(negedge clk)
      begin
+	if(t_alloc)
+	  begin
+	     pt_alloc(t_uop.pc, t_uop.fetch_cycle, r_cycle, 
+		      {{ (32-`LG_ROB_ENTRIES){1'b0}}, t_alloc_uop.rob_ptr});
+	  end
+	
+	if(t_alloc_two)
+	  begin
+	     pt_alloc(t_uop2.pc, t_uop2.fetch_cycle, r_cycle, 
+		      {{ (32-`LG_ROB_ENTRIES){1'b0}}, t_alloc_uop2.rob_ptr});
+	  end
+	
 	record_alloc(t_rob_full ? 32'd1 : 32'd0,
 		     t_alloc ? 32'd1 : 32'd0,
 		     t_alloc_two ? 32'd1 : 32'd0,
@@ -790,6 +814,8 @@ module core(clk,
 			    
    	if(t_retire)
    	  begin
+	     pt_retire(r_cycle, {{ (32-`LG_ROB_ENTRIES){1'b0}}, r_rob_head_ptr[`LG_ROB_ENTRIES-1:0]});
+	     
 	     record_retirement(
 			       { {(64-`M_WIDTH){1'b0}},t_rob_head.pc},
    			       t_rob_head.fetch_cycle,
@@ -807,6 +833,8 @@ module core(clk,
    	  end
    	if(t_retire_two)
    	  begin
+	     pt_retire(r_cycle, {{ (32-`LG_ROB_ENTRIES){1'b0}}, r_rob_next_head_ptr[`LG_ROB_ENTRIES-1:0]});
+	     
 	     record_retirement(
 			       { {(64-`M_WIDTH){1'b0}},t_rob_next_head.pc},
    			       t_rob_next_head.fetch_cycle,
@@ -1781,6 +1809,19 @@ module core(clk,
 	  end
      end // always_ff@ (posedge clk)
 
+
+`ifdef VERILATOR
+   always_ff@(negedge clk)
+     begin
+	if(core_mem_rsp_valid)
+	  begin
+	     pt_complete(r_cycle, 
+			 {{ (32-`LG_ROB_ENTRIES){1'b0}}, core_mem_rsp.rob_ptr});
+	     
+	  end
+     end
+`endif
+   
 
    always_ff@(posedge clk)
      begin

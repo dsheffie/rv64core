@@ -2,6 +2,12 @@
 `include "rob.vh"
 
 `ifdef VERILATOR
+import "DPI-C" function void pt_sched(input longint cycle,
+				      input int	rob_id);
+
+import "DPI-C" function void pt_complete(input longint cycle,
+					 input int rob_id);
+
 import "DPI-C" function void record_sched(input int p);
 import "DPI-C" function void record_sched_alloc(input int p);
 
@@ -952,7 +958,10 @@ module exec(clk,
      begin
 	r_start_int2 <= reset ? 1'b0 : ((t_alu_entry_rdy2 != 'd0) & !ds_done);
      end
+  
    
+
+ 
    always_comb
      begin
 	//allocation forwarding
@@ -3497,5 +3506,53 @@ module exec(clk,
 	//(uq.rob_ptr == 'd5) ? 1'b1 : 1'b0;
      end
 
+
+`ifdef VERILATOR
+   always_ff@(negedge clk)
+     begin
+	if(t_pop_mem_uq)
+	  begin
+	     pt_sched(r_cycle, 
+		      {{ (32-`LG_ROB_ENTRIES){1'b0}}, t_mem_uq.rob_ptr});
+	  end
+	
+	if(((t_alu_entry_rdy != 'd0) & !ds_done))
+	  begin
+	     pt_sched(r_cycle, 
+		      {{ (32-`LG_ROB_ENTRIES){1'b0}}, t_picked_uop.rob_ptr});
+	     
+	  end
+
+	if(((t_alu_entry_rdy2 != 'd0) & !ds_done))
+	  begin
+	     pt_sched(r_cycle, 
+		      {{ (32-`LG_ROB_ENTRIES){1'b0}}, t_picked_uop2.rob_ptr});
+	  end
+	      
+	if(r_start_int && t_alu_valid || t_mul_complete || t_div_complete)
+	  begin
+	     if(t_mul_complete)	       
+	       begin
+		  pt_complete(r_cycle, 
+			      {{ (32-`LG_ROB_ENTRIES){1'b0}}, t_rob_ptr_out});		  
+	       end
+	     else if(t_div_complete)
+	       begin
+		  pt_complete(r_cycle, 
+			      {{ (32-`LG_ROB_ENTRIES){1'b0}}, t_div_rob_ptr});		  
+	       end
+	     else
+	       begin
+		  pt_complete(r_cycle, 
+			      {{ (32-`LG_ROB_ENTRIES){1'b0}}, int_uop.rob_ptr});
+	       end
+	  end
+	if(r_start_int2)
+	  begin
+	     pt_complete(r_cycle, 
+			 {{ (32-`LG_ROB_ENTRIES){1'b0}}, int_uop2.rob_ptr});
+	  end
+     end
+`endif
 
 endmodule
