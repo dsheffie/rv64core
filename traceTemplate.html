@@ -68,6 +68,7 @@ var tableData = {}
 var eventToColor = {
     "F": "Cyan",
     "A": "LightSkyBlue",
+    "S": "Red",
     "C": "Pink",
     "R": "ForestGreen",
 }
@@ -137,7 +138,7 @@ function createTable() {
 
 function createLegend() {
     legendHtml = ''
-    for (let [ev, expl] of [['F', 'Fetched'], ['A', 'Allocated'], ['C', 'Completed'],['R', 'Retired']]) {
+    for (let [ev, expl] of [['F', 'Fetched'], ['A', 'Allocated'], ['S', 'Scheduled'], ['C', 'Completed'],['R', 'Retired']]) {
         legendHtml += `<tr><td style="background-color:${eventToColor[ev]}">${ev}</td>`
         legendHtml += `<td style="padding-left: 10px; text-align:left; border: 0">${expl}</td></tr>`
     }

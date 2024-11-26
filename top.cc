@@ -736,7 +736,7 @@ void pt_alloc(long long pc, long long fetch_cycle, long long alloc_cycle, int ro
   r.clear();
   r.pc = pc;
   r.fetch = fetch_cycle;
-  r.alloc = alloc_cycle;
+  r.alloc = r.sched = r.complete = alloc_cycle;
 }
 
 void pt_sched(long long cycle, int rob_id) {

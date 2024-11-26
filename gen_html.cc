@@ -130,7 +130,7 @@ int main(int argc, char *argv[]) {
   cout << r.get_records().size() << " records read\n";
   cout << "Start at " << start << " and complete at " << len+start << "\n";
   
-  generate_kanata(r, start, len);
+  //generate_kanata(r, start, len);
   
   size_t cnt = 0;
 
@@ -151,6 +151,7 @@ int main(int argc, char *argv[]) {
        << "\"events\":{"
        << "\"" << rec.fetch_cycle << "\":\"F\","
        << "\"" << rec.alloc_cycle << "\":\"A\","
+       << "\"" << rec.sched_cycle << "\":\"S\","
        << "\"" << rec.complete_cycle << "\":\"C\","
        << "\"" << rec.retire_cycle << "\":\"R\""                  
        << "}}]"
