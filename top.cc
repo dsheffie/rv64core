@@ -719,6 +719,7 @@ struct pt_ {
   uint64_t retire;
   uint64_t l1d_p1_hit;
   uint64_t l1d_p1_miss;
+  uint64_t l1d_replay;
   void clear() {
     memset(this,0xff,sizeof(pt_));
   }
@@ -754,6 +755,11 @@ void pt_l1d_pass1_hit(long long cycle, int rob_id) {
 void pt_l1d_pass1_miss(long long cycle, int rob_id) {
   auto &r = records[rob_id & 63];
   r.l1d_p1_miss = cycle;
+}
+
+void pt_l1d_replay(long long cycle, int rob_id) {
+  auto &r = records[rob_id & 63];
+  r.l1d_replay = cycle;
 }
 
 void pt_complete(long long cycle, int rob_id) {
@@ -821,6 +827,7 @@ void pt_retire(long long cycle,
 	       r.retire,
 	       r.l1d_p1_hit,
 	       r.l1d_p1_miss,
+	       r.l1d_replay,
 	       false);
   }
   ++record_insns_retired;  

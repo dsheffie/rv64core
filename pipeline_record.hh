@@ -24,7 +24,7 @@ public:
   std::string disasm;
   uint64_t pc;
   uint64_t fetch_cycle, alloc_cycle, sched_cycle, complete_cycle, retire_cycle;
-  uint64_t p1_hit_cycle, p1_miss_cycle;
+  uint64_t p1_hit_cycle, p1_miss_cycle, l1d_replay;
   bool faulted;
   friend class boost::serialization::access;
   template<class Archive>
@@ -39,6 +39,7 @@ public:
     ar & retire_cycle;
     ar & p1_hit_cycle;
     ar & p1_miss_cycle;
+    ar & l1d_replay;
     ar & faulted;
   }
 public:
@@ -52,15 +53,16 @@ public:
 		  uint64_t retire_cycle,
 		  uint64_t p1_hit_cycle,
 		  uint64_t p1_miss_cycle,
+		  uint64_t l1d_replay,
 		  bool faulted) :
     uuid(uuid), disasm(disasm), pc(pc), fetch_cycle(fetch_cycle), alloc_cycle(alloc_cycle),
     sched_cycle(sched_cycle), complete_cycle(complete_cycle), retire_cycle(retire_cycle),
-    p1_hit_cycle(p1_hit_cycle), p1_miss_cycle(p1_miss_cycle),
+    p1_hit_cycle(p1_hit_cycle), p1_miss_cycle(p1_miss_cycle), l1d_replay(l1d_replay),
     faulted(faulted) {}
   pipeline_record() :
     uuid(~0UL), disasm(""), pc(0), fetch_cycle(0), alloc_cycle(0),
     complete_cycle(0), retire_cycle(0),
-    p1_hit_cycle(~0UL), p1_miss_cycle(~0UL),
+    p1_hit_cycle(~0UL), p1_miss_cycle(~0UL), l1d_replay(~0UL),
     faulted(false) {}
 
   friend std::ostream &operator<<(std::ostream &out, const pipeline_record &r) {
@@ -124,6 +126,7 @@ public:
 	      uint64_t retire_cycle,
 	      uint64_t p1_hit_cycle,
 	      uint64_t p1_miss_cycle,
+	      uint64_t l1d_replay,
 	      bool faulted) {
 
     assert(fetch_cycle != (~0UL));
@@ -143,6 +146,7 @@ public:
 			 retire_cycle,
 			 p1_hit_cycle,
 			 p1_miss_cycle,
+			 l1d_replay,
 			 faulted);
   }
 };

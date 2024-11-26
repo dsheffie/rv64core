@@ -160,7 +160,9 @@ int main(int argc, char *argv[]) {
     if(rec.p1_miss_cycle != (~0UL)) {
       ss << "\"" << rec.p1_miss_cycle << "\":\"M\",";
     }
-    
+    if(rec.l1d_replay != (~0UL)) {
+      ss << "\"" << rec.l1d_replay << "\":\"L\",";
+    }
     ss << "\"" << rec.complete_cycle << "\":\"C\","
        << "\"" << rec.retire_cycle << "\":\"R\""                  
        << "}}]"
