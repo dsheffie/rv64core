@@ -151,8 +151,17 @@ int main(int argc, char *argv[]) {
        << "\"events\":{"
        << "\"" << rec.fetch_cycle << "\":\"F\","
        << "\"" << rec.alloc_cycle << "\":\"A\","
-       << "\"" << rec.sched_cycle << "\":\"S\","
-       << "\"" << rec.complete_cycle << "\":\"C\","
+       << "\"" << rec.sched_cycle << "\":\"S\",";
+
+    if(rec.p1_hit_cycle != (~0UL)) {
+      ss << "\"" << rec.p1_hit_cycle << "\":\"H\",";
+    }
+
+    if(rec.p1_miss_cycle != (~0UL)) {
+      ss << "\"" << rec.p1_miss_cycle << "\":\"M\",";
+    }
+    
+    ss << "\"" << rec.complete_cycle << "\":\"C\","
        << "\"" << rec.retire_cycle << "\":\"R\""                  
        << "}}]"
        << "}";

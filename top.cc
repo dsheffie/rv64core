@@ -717,6 +717,8 @@ struct pt_ {
   uint64_t sched;
   uint64_t complete;
   uint64_t retire;
+  uint64_t l1d_p1_hit;
+  uint64_t l1d_p1_miss;
   void clear() {
     memset(this,0xff,sizeof(pt_));
   }
@@ -742,6 +744,16 @@ void pt_alloc(long long pc, long long fetch_cycle, long long alloc_cycle, int ro
 void pt_sched(long long cycle, int rob_id) {
   auto &r = records[rob_id & 63];
   r.sched = cycle;
+}
+
+void pt_l1d_pass1_hit(long long cycle, int rob_id) {
+  auto &r = records[rob_id & 63];
+  r.l1d_p1_hit = cycle;
+}
+
+void pt_l1d_pass1_miss(long long cycle, int rob_id) {
+  auto &r = records[rob_id & 63];
+  r.l1d_p1_miss = cycle;
 }
 
 void pt_complete(long long cycle, int rob_id) {
@@ -807,6 +819,8 @@ void pt_retire(long long cycle,
 	       r.sched,
 	       r.complete,
 	       r.retire,
+	       r.l1d_p1_hit,
+	       r.l1d_p1_miss,
 	       false);
   }
   ++record_insns_retired;  

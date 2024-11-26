@@ -3,6 +3,13 @@
 `include "uop.vh"
 
 `ifdef VERILATOR
+import "DPI-C" function void pt_l1d_pass1_hit(input longint cycle,
+					      input int	rob_id);
+
+import "DPI-C" function void pt_l1d_pass1_miss(input longint cycle,
+					       input int rob_id);
+
+
 import "DPI-C" function void l1d_port_util(input int port1, input int port2);
 import "DPI-C" function void record_l1d(input int req, 
 					input int ack, 
@@ -1839,6 +1846,10 @@ module nu_l1d(clk,
                   t_core_mem_rsp.dst_valid = t_rsp_dst_valid2;
                   t_core_mem_rsp_valid = 1'b1;
 		  t_core_mem_rsp.has_cause = r_req2.spans_cacheline;
+`ifdef VERILATOR
+		  pt_l1d_pass1_hit(r_cycle,
+				   {{ (32-`LG_ROB_ENTRIES){1'b0}}, r_req2.rob_ptr});				   
+`endif
 	       end
 	     else
 	       begin
@@ -1850,6 +1861,12 @@ module nu_l1d(clk,
 `ifdef VERILATOR
    always_ff@(negedge clk)
      begin
+	if(t_push_miss)
+	  begin
+	     pt_l1d_pass1_miss(r_cycle,
+			      {{ (32-`LG_ROB_ENTRIES){1'b0}}, r_req2.rob_ptr});				   
+	  end
+	
 	if(r_got_req2)
 	  begin
  `ifdef DEBUG
