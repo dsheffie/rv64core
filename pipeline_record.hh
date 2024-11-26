@@ -115,9 +115,23 @@ public:
 	      uint64_t complete_cycle,
 	      uint64_t retire_cycle,
 	      bool faulted) {
-    records.emplace_back(uuid, disasm, pc, fetch_cycle,
-			 alloc_cycle, sched_cycle, complete_cycle,
-			 retire_cycle, faulted);
+
+    assert(fetch_cycle != (~0UL));
+    assert(alloc_cycle != (~0UL));
+    if(sched_cycle == (~0UL)) {
+      std::cout << disasm << "\n";
+    }
+    assert(sched_cycle != (~0UL));
+    assert(complete_cycle != (~0UL));
+    assert(retire_cycle != (~0UL));    
+    records.emplace_back(uuid,
+			 disasm, pc,
+			 fetch_cycle,
+			 alloc_cycle,
+			 sched_cycle,
+			 complete_cycle,
+			 retire_cycle,
+			 faulted);
   }
 };
 
