@@ -710,6 +710,53 @@ static uint64_t record_insns_retired = 0;
 
 static int pl_regs[32] = {0};
 
+struct pt_ {
+  uint64_t pc;
+  uint64_t fetch;
+  uint64_t alloc;
+  uint64_t sched;
+  uint64_t complete;
+  uint64_t retire;
+  void clear() {
+    memset(this,0xff,sizeof(pt_));
+  }
+};
+
+static pt_ records[64];
+
+static std::ostream &operator<<(std::ostream &out, const pt_ &r) {
+  out << std::hex << r.pc << std::dec 
+      << r.fetch << "," << r.alloc << "," << r.sched << "," << r.complete << ","
+      << r.retire;
+  return out;
+}
+
+void pt_alloc(long long pc, long long fetch_cycle, long long alloc_cycle, int rob_id) {
+  auto &r = records[rob_id & 63];
+  r.clear();
+  r.pc = pc;
+  r.fetch = fetch_cycle;
+  r.alloc = alloc_cycle;
+}
+
+void pt_sched(long long cycle, int rob_id) {
+  auto &r = records[rob_id & 63];
+  r.sched = cycle;
+}
+
+void pt_complete(long long cycle, int rob_id) {
+  auto &r = records[rob_id & 63];
+  r.complete = cycle;
+}
+
+void pt_retire(long long cycle, int rob_id) {
+  auto &r = records[rob_id & 63];
+  r.retire = cycle;
+
+  std::cout << r << "\n";
+}
+		       
+
 
 void record_retirement(long long pc,
 		       long long fetch_cycle,
