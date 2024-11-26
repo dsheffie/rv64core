@@ -10,7 +10,9 @@ import "DPI-C" function void pt_alloc(input longint pc,
 				      input int	    rob_id);
 
 import "DPI-C" function void pt_retire(input longint cycle,
-				       input int rob_id);
+				       input int     rob_id,
+				       input int     paging_active,
+				       input longint page_table_root);
 
 
 
@@ -814,7 +816,10 @@ module core(clk,
 			    
    	if(t_retire)
    	  begin
-	     pt_retire(r_cycle, {{ (32-`LG_ROB_ENTRIES){1'b0}}, r_rob_head_ptr[`LG_ROB_ENTRIES-1:0]});
+	     pt_retire(r_cycle, 
+		       {{ (32-`LG_ROB_ENTRIES){1'b0}}, r_rob_head_ptr[`LG_ROB_ENTRIES-1:0]}, 
+		       paging_active ? 32'd1 : 32'd0,
+		       page_table_root);
 	     
 	     record_retirement(
 			       { {(64-`M_WIDTH){1'b0}},t_rob_head.pc},
@@ -833,7 +838,10 @@ module core(clk,
    	  end
    	if(t_retire_two)
    	  begin
-	     pt_retire(r_cycle, {{ (32-`LG_ROB_ENTRIES){1'b0}}, r_rob_next_head_ptr[`LG_ROB_ENTRIES-1:0]});
+	     pt_retire(r_cycle, 
+		       {{ (32-`LG_ROB_ENTRIES){1'b0}}, r_rob_next_head_ptr[`LG_ROB_ENTRIES-1:0]},
+		       paging_active ? 32'd1 : 32'd0,
+		       page_table_root);
 	     
 	     record_retirement(
 			       { {(64-`M_WIDTH){1'b0}},t_rob_next_head.pc},

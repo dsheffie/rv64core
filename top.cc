@@ -749,11 +749,67 @@ void pt_complete(long long cycle, int rob_id) {
   r.complete = cycle;
 }
 
-void pt_retire(long long cycle, int rob_id) {
+
+void pt_retire(long long cycle,
+	       int rob_id,
+	       int paging_active,
+	       long long page_table_root	       
+	       ) {
   auto &r = records[rob_id & 63];
   r.retire = cycle;
 
-  std::cout << r << "\n";
+
+  if((pl != nullptr) and (pipeip != 0)) {
+    if(r.pc ==  pipeip) {
+      --pipeipcnt;
+      //printf("hit token ip, count %lu\n", pipeipcnt);      
+      if(pipeipcnt == 0) {
+	pipestart = record_insns_retired;
+	pipeend = record_insns_retired + 4096;
+	std::cout << "trace " << std::hex << pipeip << " hit enough times : starts at " 
+		  << std::dec << pipestart << ", will end at "
+		  << pipeend << "\n";
+	pipeip = 0;
+      }
+    }
+  }
+  
+  if((pl != nullptr) and (record_insns_retired >= pipestart) and (record_insns_retired < pipeend)) {
+    
+    uint32_t insn = get_insn(r.pc, s);
+    uint32_t opcode = insn & 127;
+    auto disasm = getAsmString(r.pc, page_table_root, paging_active);
+    riscv_t m(insn);
+    if(opcode == 0x3 ) {
+      std::stringstream ss;
+      int32_t disp = m.l.imm11_0;
+      if((insn>>31)&1) {
+	disp |= 0xfffff000;
+      }
+      uint32_t ea = disp + pl_regs[m.l.rs1];
+      ss << std::hex << ea << std::dec;
+      disasm += " EA :  " + ss.str();
+    }
+    else if(opcode == 0x23) {
+      std::stringstream ss;
+      int32_t disp = m.s.imm4_0 | (m.s.imm11_5 << 5);
+      disp |= ((insn>>31)&1) ? 0xfffff000 : 0x0;
+      uint32_t ea = disp + pl_regs[m.s.rs1];
+      ss << std::hex << ea << std::dec;
+      disasm += " EA :  " + ss.str();
+    }
+
+    pl->append(record_insns_retired,
+	       disasm,
+	       r.pc,
+	       r.fetch,
+	       r.alloc,
+	       r.sched,
+	       r.complete,
+	       r.retire,
+	       false);
+  }
+  ++record_insns_retired;  
 }
 		       
 
@@ -801,49 +857,7 @@ void record_retirement(long long pc,
   last_retire_cycle = retire_cycle;
   last_retire_pc = pc;
   
-  if((pl != nullptr) and (pipeip != 0)) {
-    if(pc ==  pipeip) {
-      --pipeipcnt;
-      //printf("hit token ip, count %lu\n", pipeipcnt);      
-      if(pipeipcnt == 0) {
-	pipestart = record_insns_retired;
-	pipeend = record_insns_retired + 4096;
-	std::cout << "trace " << std::hex << pipeip << " hit enough times : starts at " 
-		  << std::dec << pipestart << ", will end at "
-		  << pipeend << "\n";
-	pipeip = 0;
-      }
-    }
-  }
-  
-  if((pl != nullptr) and (record_insns_retired >= pipestart) and (record_insns_retired < pipeend)) {
-    
-    uint32_t insn = get_insn(pc, s);
-    uint32_t opcode = insn & 127;
-    auto disasm = getAsmString(pc, page_table_root, paging_active);
-    riscv_t m(insn);
-    if(opcode == 0x3 ) {
-      std::stringstream ss;
-      int32_t disp = m.l.imm11_0;
-      if((insn>>31)&1) {
-	disp |= 0xfffff000;
-      }
-      uint32_t ea = disp + pl_regs[m.l.rs1];
-      ss << std::hex << ea << std::dec;
-      disasm += " EA :  " + ss.str();
-    }
-    else if(opcode == 0x23) {
-      std::stringstream ss;
-      int32_t disp = m.s.imm4_0 | (m.s.imm11_5 << 5);
-      disp |= ((insn>>31)&1) ? 0xfffff000 : 0x0;
-      uint32_t ea = disp + pl_regs[m.s.rs1];
-      ss << std::hex << ea << std::dec;
-      disasm += " EA :  " + ss.str();
-    }
 
-    pl->append(record_insns_retired, disasm, pc, fetch_cycle, alloc_cycle, complete_cycle, retire_cycle, faulted);
-  }
-  ++record_insns_retired;
 }
 
 
