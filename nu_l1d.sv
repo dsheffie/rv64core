@@ -9,6 +9,9 @@ import "DPI-C" function void pt_l1d_pass1_hit(input longint cycle,
 import "DPI-C" function void pt_l1d_replay(input longint cycle,
 					   input int rob_id);
 
+import "DPI-C" function void pt_l1d_blocked(input longint cycle,
+					    input int rob_id);
+
 import "DPI-C" function void pt_l1d_pass1_miss(input longint cycle,
 					       input int rob_id);
 
@@ -1864,10 +1867,18 @@ module nu_l1d(clk,
 `ifdef VERILATOR
    always_ff@(negedge clk)
      begin
+	if(!t_accept & core_mem_va_req_valid)
+	  begin
+	     pt_l1d_blocked(r_cycle,
+			    {{ (32-`LG_ROB_ENTRIES){1'b0}}, 
+			     core_mem_va_req.rob_ptr});	
+	  end
+	
 	if(t_push_miss)
 	  begin
 	     pt_l1d_pass1_miss(r_cycle,
-			      {{ (32-`LG_ROB_ENTRIES){1'b0}}, r_req2.rob_ptr});				   
+			      {{ (32-`LG_ROB_ENTRIES){1'b0}},
+			       r_req2.rob_ptr});				   
 	  end
 
 	if(t_got_req & t_mem_head.is_load)

@@ -153,10 +153,14 @@ int main(int argc, char *argv[]) {
        << "\"" << rec.alloc_cycle << "\":\"A\","
        << "\"" << rec.sched_cycle << "\":\"S\",";
 
+    if(not(rec.l1d_blocks.empty())) {
+      for(uint64_t c : rec.l1d_blocks) {
+	ss << "\"" << c << "\":\"B\",";
+      }
+    }
     if(rec.p1_hit_cycle != (~0UL)) {
       ss << "\"" << rec.p1_hit_cycle << "\":\"H\",";
     }
-
     if(rec.p1_miss_cycle != (~0UL)) {
       ss << "\"" << rec.p1_miss_cycle << "\":\"M\",";
     }

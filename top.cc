@@ -711,6 +711,7 @@ static uint64_t record_insns_retired = 0;
 static int pl_regs[32] = {0};
 
 struct pt_ {
+  static const uint64_t NI = (~0UL);
   uint64_t pc;
   uint64_t fetch;
   uint64_t alloc;
@@ -720,8 +721,12 @@ struct pt_ {
   uint64_t l1d_p1_hit;
   uint64_t l1d_p1_miss;
   uint64_t l1d_replay;
+  std::list<uint64_t> l1d_blocks;
   void clear() {
-    memset(this,0xff,sizeof(pt_));
+    fetch = alloc = sched = NI;
+    complete = retire = NI;
+    l1d_p1_hit = l1d_p1_miss = l1d_replay = NI;
+    l1d_blocks.clear();
   }
 };
 
@@ -755,6 +760,12 @@ void pt_l1d_pass1_hit(long long cycle, int rob_id) {
 void pt_l1d_pass1_miss(long long cycle, int rob_id) {
   auto &r = records[rob_id & 63];
   r.l1d_p1_miss = cycle;
+}
+
+void pt_l1d_blocked(long long cycle, int rob_id) {
+  auto &r = records[rob_id & 63];
+  r.l1d_blocks.push_back(cycle);
+  //r.l1d_replay = cycle;
 }
 
 void pt_l1d_replay(long long cycle, int rob_id) {
@@ -828,6 +839,7 @@ void pt_retire(long long cycle,
 	       r.l1d_p1_hit,
 	       r.l1d_p1_miss,
 	       r.l1d_replay,
+	       r.l1d_blocks,
 	       false);
   }
   ++record_insns_retired;  
