@@ -7,6 +7,8 @@
 #define BRANCH_DEBUG 1
 #define CACHE_STATS 1
 
+#define ROB_ENTRIES 64
+
 bool globals::syscall_emu = true;
 uint32_t globals::tohost_addr = 0;
 uint32_t globals::fromhost_addr = 0;
@@ -140,51 +142,9 @@ void record_l1d(int req, int ack, int new_req, int accept, int block) {
 uint64_t mem_table[32] = {0};
 uint64_t mem_pc_table[32] = {0};
 uint64_t mem_addr_table[32] = {0};
-bool is_load[32] = {false};
+bool is_load[ROB_ENTRIES] = {false};
 uint64_t n_logged_loads = 0;
 uint64_t total_load_lat = 0;
-
-
-struct alias_cache_entry {
-  uint64_t va;
-  uint64_t pa;
-};
-
-#define LG_AC_ENTRIES 10
-#define N_AC_ENTRIES (1<<LG_AC_ENTRIES)
-
-static alias_cache_entry ac[N_AC_ENTRIES];
-static std::array<bool, N_AC_ENTRIES> ac_valid = {false};
-
-void drop_va2pa_caches() {
-  for(int i = 0; i < (N_AC_ENTRIES); i++) {
-    ac_valid[i] = false;
-  }
-}
-
-void alias_check(long long addr, long long vaddr) {
-  long long ma = (addr & (~0xfUL));
-  long long mva = (vaddr & (~0xfUL));
-  if(addr != vaddr) {
-    static const int lg_alias = LG_AC_ENTRIES - 8;
-    int po = (addr>>4) & 255;
-    int vo = (vaddr>>4) & (N_AC_ENTRIES-1);
-    //printf("addr = %lx, vaddr = %lx\n", addr, vaddr);
-    
-    for(int i = 0, o = po; i < (1<<lg_alias); i++, o += 256) {
-      //printf("\i = %d, o = %d\n", i, po);      
-      if(not(ac_valid.at(o))) continue;
-      
-      if((o != vo) and (ac[o].pa == ma)) {
-	printf("loc %d : alias found in cache for va %lx, pa %lx mapped to locations %d and %d, other va %lx\n",
-	       o, mva, ma, o, vo, ac[o].va);
-      }
-    }
-    ac_valid[vo] = true;
-    ac[vo].va = mva;
-    ac[vo].pa = ma;
-  }
-}
 
 std::map<uint64_t, uint64_t> last_store;
 
@@ -505,13 +465,13 @@ int check_bad_fetch(long long pc, long long rtl_pa, int insn) {
   uint32_t u = *reinterpret_cast<uint32_t*>(s->mem + pa);
   bool match = u == *reinterpret_cast<uint32_t*>(&insn);
 
-  printf("check : pc %llx, pa %lx, rtl pa %llx, match %d, sim %x, rtl %x\n",
-	 pc,
-	 pa,
-	 rtl_pa,
-	 match,
-	 u,
-	 *reinterpret_cast<uint32_t*>(&insn));
+  std::cout << "check : pc " << std::hex
+	    << pc << ", pa " << pa
+	    << ", rtl pa " << rtl_pa
+	    << match << ", sim "
+	    << u <<", rtl "
+	    << *reinterpret_cast<uint32_t*>(&insn)
+	    << std::dec << "\n";
     
   return not(match);
 }
@@ -742,47 +702,62 @@ static std::ostream &operator<<(std::ostream &out, const pt_ &r) {
 }
 
 void pt_alloc(long long pc, long long fetch_cycle, long long alloc_cycle, int rob_id) {
-  auto &r = records[rob_id & 63];
-  r.clear();
-  r.pc = pc;
-  r.fetch = fetch_cycle;
-  r.alloc = r.sched = r.complete = alloc_cycle;
+  if(pl != nullptr) {
+    auto &r = records[rob_id & (ROB_ENTRIES-1)];
+    r.clear();
+    r.pc = pc;
+    r.fetch = fetch_cycle;
+    r.alloc = r.sched = r.complete = alloc_cycle;
+  }
 }
 
 void pt_sched(long long cycle, int rob_id) {
-  auto &r = records[rob_id & 63];
-  r.sched = cycle;
+  if(pl != nullptr) {
+    auto &r = records[rob_id & (ROB_ENTRIES-1)];
+    r.sched = cycle;
+  }
 }
 
 void pt_l1d_pass1_hit(long long cycle, int rob_id) {
-  auto &r = records[rob_id & 63];
-  r.l1d_p1_hit = cycle;
+  if(pl != nullptr) {
+    auto &r = records[rob_id & (ROB_ENTRIES-1)];
+    r.l1d_p1_hit = cycle;
+  }
 }
 
 void pt_l1d_pass1_miss(long long cycle, int rob_id) {
-  auto &r = records[rob_id & 63];
-  r.l1d_p1_miss = cycle;
+  if(pl != nullptr) {
+    auto &r = records[rob_id & (ROB_ENTRIES-1)];
+    r.l1d_p1_miss = cycle;
+  }
 }
 
 void pt_l1d_blocked(long long cycle, int rob_id) {
-  auto &r = records[rob_id & 63];
-  r.l1d_blocks.push_back(cycle);
-  //r.l1d_replay = cycle;
+  if(pl != nullptr) {
+    auto &r = records[rob_id & (ROB_ENTRIES-1)];
+    r.l1d_blocks.push_back(cycle);
+  }
 }
 
 void pt_l1d_replay(long long cycle, int rob_id) {
-  auto &r = records[rob_id & 63];
-  r.l1d_replay = cycle;
+  if(pl != nullptr) {
+    auto &r = records[rob_id & (ROB_ENTRIES-1)];
+    r.l1d_replay = cycle;
+  }
 }
 
 void pt_l1d_store_data_ready(long long cycle, int rob_id) {
-  auto &r = records[rob_id & 63];
-  r.l1d_sd.push_back(cycle);
+  if(pl != nullptr) {
+    auto &r = records[rob_id & (ROB_ENTRIES-1)];
+    r.l1d_sd.push_back(cycle);
+  }
 }
 
 void pt_complete(long long cycle, int rob_id) {
-  auto &r = records[rob_id & 63];
-  r.complete = cycle;
+  if(pl != nullptr) {
+    auto &r = records[rob_id & (ROB_ENTRIES-1)];
+    r.complete = cycle;
+  }
 }
 
 
@@ -791,64 +766,61 @@ void pt_retire(long long cycle,
 	       int paging_active,
 	       long long page_table_root	       
 	       ) {
-  auto &r = records[rob_id & 63];
-  r.retire = cycle;
-
-
-  if((pl != nullptr) and (pipeip != 0)) {
-    if(r.pc ==  pipeip) {
-      --pipeipcnt;
-      //printf("hit token ip, count %lu\n", pipeipcnt);      
-      if(pipeipcnt == 0) {
-	pipestart = record_insns_retired;
-	pipeend = record_insns_retired + 4096;
-	std::cout << "trace " << std::hex << pipeip << " hit enough times : starts at " 
-		  << std::dec << pipestart << ", will end at "
-		  << pipeend << "\n";
-	pipeip = 0;
+  if(pl != nullptr) {
+    auto &r = records[rob_id & (ROB_ENTRIES-1)];
+    r.retire = cycle;
+    if((pipeip != 0)) {
+      if(r.pc ==  pipeip) {
+	--pipeipcnt;
+	//printf("hit token ip, count %lu\n", pipeipcnt);      
+	if(pipeipcnt == 0) {
+	  pipestart = record_insns_retired;
+	  pipeend = record_insns_retired + 4096;
+	  std::cout << "trace " << std::hex << pipeip << " hit enough times : starts at " 
+		    << std::dec << pipestart << ", will end at "
+		    << pipeend << "\n";
+	  pipeip = 0;
+	}
       }
     }
-  }
-  
-  if((pl != nullptr) and (record_insns_retired >= pipestart) and (record_insns_retired < pipeend)) {
-    
-    uint32_t insn = get_insn(r.pc, s);
-    uint32_t opcode = insn & 127;
-    auto disasm = getAsmString(r.pc, page_table_root, paging_active);
-    riscv_t m(insn);
-    if(opcode == 0x3 ) {
-      std::stringstream ss;
-      int32_t disp = m.l.imm11_0;
-      if((insn>>31)&1) {
-	disp |= 0xfffff000;
+    if((record_insns_retired >= pipestart) and (record_insns_retired < pipeend)) {
+      uint32_t insn = get_insn(r.pc, s);
+      uint32_t opcode = insn & 127;
+      auto disasm = getAsmString(r.pc, page_table_root, paging_active);
+      riscv_t m(insn);
+      if(opcode == 0x3 ) {
+	std::stringstream ss;
+	int32_t disp = m.l.imm11_0;
+	if((insn>>31)&1) {
+	  disp |= 0xfffff000;
+	}
+	uint32_t ea = disp + pl_regs[m.l.rs1];
+	ss << std::hex << ea << std::dec;
+	disasm += " EA :  " + ss.str();
       }
-      uint32_t ea = disp + pl_regs[m.l.rs1];
-      ss << std::hex << ea << std::dec;
-      disasm += " EA :  " + ss.str();
+      else if(opcode == 0x23) {
+	std::stringstream ss;
+	int32_t disp = m.s.imm4_0 | (m.s.imm11_5 << 5);
+	disp |= ((insn>>31)&1) ? 0xfffff000 : 0x0;
+	uint32_t ea = disp + pl_regs[m.s.rs1];
+	ss << std::hex << ea << std::dec;
+	disasm += " EA :  " + ss.str();
+      }
+      pl->append(record_insns_retired,
+		 disasm,
+		 r.pc,
+		 r.fetch,
+		 r.alloc,
+		 r.sched,
+		 r.complete,
+		 r.retire,
+		 r.l1d_p1_hit,
+		 r.l1d_p1_miss,
+		 r.l1d_replay,
+		 r.l1d_blocks,
+		 r.l1d_sd,
+		 false);
     }
-    else if(opcode == 0x23) {
-      std::stringstream ss;
-      int32_t disp = m.s.imm4_0 | (m.s.imm11_5 << 5);
-      disp |= ((insn>>31)&1) ? 0xfffff000 : 0x0;
-      uint32_t ea = disp + pl_regs[m.s.rs1];
-      ss << std::hex << ea << std::dec;
-      disasm += " EA :  " + ss.str();
-    }
-
-    pl->append(record_insns_retired,
-	       disasm,
-	       r.pc,
-	       r.fetch,
-	       r.alloc,
-	       r.sched,
-	       r.complete,
-	       r.retire,
-	       r.l1d_p1_hit,
-	       r.l1d_p1_miss,
-	       r.l1d_replay,
-	       r.l1d_blocks,
-	       r.l1d_sd,
-	       false);
   }
   ++record_insns_retired;  
 }
@@ -949,8 +921,9 @@ static uint64_t last_retired_pc = 0;
 static uint64_t last_insns_retired = 0, last_cycle = 0;
 static Vcore_l1d_l1i *tb = nullptr;
 void catchUnixSignal(int n) {
-  printf("last_retired_pc = %lx, last_insns_retired = %lu, last_cycle = %lu\n",
-	 last_retired_pc, last_insns_retired, last_cycle);
+  std::cout << std::hex << "last_retired_pc = " << last_retired_pc
+	    << std::dec << ", last_insns_retired = " << last_insns_retired
+	    << ", last_cycle = " << last_cycle << "\n";
   if(tb) {
     printf("core_state = %d\n", (int)tb->core_state);
     printf("l1i_state  = %d\n", (int)tb->l1i_state);
@@ -1359,7 +1332,10 @@ int main(int argc, char **argv) {
 	}
 	
 	while( (tb->retire_pc != ss->pc) and (cnt < 3)) {
-	  printf("did not match, moving checker rtl %lx, sim %lx\n", tb->retire_pc, ss->pc);
+	  std::cout << "did not match, moving checker : RTL "
+		    << std::hex << tb->retire_pc
+		    << ", sim " << ss->pc
+		    << std::dec << "\n";
 	  execRiscv(ss);
 	  exception |= ss->took_exception;
 	  cnt++;
@@ -1652,8 +1628,9 @@ int main(int argc, char **argv) {
 	uint64_t t0 = *reinterpret_cast<uint64_t*>(ss->mem + p);
 	uint64_t t1 = *reinterpret_cast<uint64_t*>(s->mem + p);
 	if(t0 != t1) {
-	  printf("qword at %lx does not match SIM %lx vs RTL %lx\n",
-		 p, t0, t1);
+	  std::cout << "qword at " << std::hex << p << " does not match SIM "
+		    << t0 << " vs RTL " << t1
+		    << std::dec << "\n";
 	}
       }
     }  
@@ -1883,10 +1860,8 @@ int main(int argc, char **argv) {
     out << "l1d_new_reqs = " << l1d_new_reqs << "\n";
     out << "l1d_accept   = " << l1d_accept << "\n";
 
-    for(int i = 0; i < 7; i++) {
-    printf("%s = %lu\n",
-	   l1d_stall_str[i],
-	   l1d_block_reason[i]);
+    for(size_t i = 0; i < (sizeof(l1d_block_reason)/sizeof(l1d_block_reason[0])); i++) {
+      std::cout << l1d_stall_str[i] << " = " << l1d_block_reason[i] << "\n";
     }
     
     out << "l1d_stores = " << l1d_stores << "\n";

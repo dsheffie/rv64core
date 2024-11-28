@@ -26,10 +26,6 @@ import "DPI-C" function void record_l1d(input int req,
 					input int accept,
 					input int block);
 
-import "DPI-C" function void drop_va2pa_caches();
-
-import "DPI-C" function void alias_check(input longint paddr,
-					 input longint vaddr);
 
 import "DPI-C" function void log_store_release(input int r,
 					       input longint c);
