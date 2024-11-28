@@ -18,6 +18,7 @@
 `define MAX_VA 39
 
 `define LG_INT_SCHED_ENTRIES 3
+`define LG_MEM_SCHED_ENTRIES 3
 
 //gshare branch predictor
 `define LG_PHT_SZ 16

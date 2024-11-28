@@ -197,6 +197,7 @@ module exec(clk,
 
    
    localparam N_INT_SCHED_ENTRIES = 1<<`LG_INT_SCHED_ENTRIES;
+   localparam N_MEM_SCHED_ENTRIES = 1<<`LG_MEM_SCHED_ENTRIES;
    
    localparam N_MQ_ENTRIES = (1<<`LG_MQ_ENTRIES);
    localparam N_MDQ_ENTRIES = (1<<`LG_MDQ_ENTRIES);   
@@ -261,7 +262,7 @@ module exec(clk,
    logic [63:0] t_pc, t_pc_2;
    logic 	t_srcs_rdy;
 
-   //does this scheduler entry contain a valid uop?
+   /* int alu scheduler signals */
    logic [N_INT_SCHED_ENTRIES-1:0] r_alu_sched_valid, r_alu_sched_valid2;
    logic [`LG_INT_SCHED_ENTRIES:0] t_alu_sched_alloc_ptr, t_alu_sched_alloc_ptr2;
    logic [N_INT_SCHED_ENTRIES-1:0] t_alu_alloc_entry, t_alu_select_entry, t_alu_alloc_entry2, t_alu_select_entry2;
@@ -277,8 +278,27 @@ module exec(clk,
    
    logic 			   t_alu_alloc_srcA_match, t_alu_alloc_srcB_match, t_alu_alloc_srcA_match2, t_alu_alloc_srcB_match2;
    
-   
    wire [N_INT_SCHED_ENTRIES-1:0] w_alu_sched_oldest_ready, w_alu_sched_oldest_ready2;
+   logic [N_INT_SCHED_ENTRIES-1:0] t_alu_sched_mask_valid, t_alu_sched_mask_valid2;
+   logic [N_INT_SCHED_ENTRIES-1:0] r_alu_sched_matrix [N_INT_SCHED_ENTRIES-1:0];
+   logic [N_INT_SCHED_ENTRIES-1:0] r_alu_sched_matrix2 [N_INT_SCHED_ENTRIES-1:0];
+
+
+   /* mem scheduler signals */
+   logic [N_MEM_SCHED_ENTRIES-1:0] r_mem_sched_valid;
+   logic [`LG_MEM_SCHED_ENTRIES:0] t_mem_sched_alloc_ptr;
+   logic [N_MEM_SCHED_ENTRIES-1:0] t_mem_alloc_entry, t_mem_select_entry;
+   uop_t r_mem_sched_uops[N_MEM_SCHED_ENTRIES-1:0], t_picked_mem_uop;
+   logic [N_MEM_SCHED_ENTRIES-1:0] t_mem_entry_rdy;
+   logic [`LG_MEM_SCHED_ENTRIES:0] t_mem_sched_select_ptr;
+   logic [N_MEM_SCHED_ENTRIES-1:0] r_mem_srcA_rdy, r_mem_srcB_rdy;
+   logic [N_MEM_SCHED_ENTRIES-1:0] t_mem_srcA_match, t_mem_srcB_match;
+   logic			   t_mem_alloc_srcA_match, t_mem_alloc_srcB_match;
+   wire [N_MEM_SCHED_ENTRIES-1:0]  w_mem_sched_oldest_ready;
+   logic [N_MEM_SCHED_ENTRIES-1:0] t_mem_sched_mask_valid;
+   logic [N_MEM_SCHED_ENTRIES-1:0] r_mem_sched_matrix [N_MEM_SCHED_ENTRIES-1:0];
+   
+   
    
    wire [63:0] w_srcA, w_srcB;
    logic [63:0] t_srcA_2, t_srcB_2;
@@ -989,14 +1009,7 @@ module exec(clk,
 						     (r_start_int && t_wr_int_prf & (int_uop.dst == uq2.srcB))
 						     );		
      end // always_comb
-   
-
-   logic [N_INT_SCHED_ENTRIES-1:0] t_alu_sched_mask_valid;
-   logic [N_INT_SCHED_ENTRIES-1:0] r_alu_sched_matrix [N_INT_SCHED_ENTRIES-1:0];
-
-   logic [N_INT_SCHED_ENTRIES-1:0] t_alu_sched_mask_valid2;
-   logic [N_INT_SCHED_ENTRIES-1:0] r_alu_sched_matrix2 [N_INT_SCHED_ENTRIES-1:0];
-   
+      
    
    always_comb
      begin
@@ -3036,8 +3049,6 @@ module exec(clk,
    	
    always_comb
      begin
-	t_pop_mem_uq = (!t_mem_uq_empty) && (!(mem_q_next_full||mem_q_full)) && w_mem_srcA_ready && !t_flash_clear;
-
 	t_pop_mem_dq = (!t_mem_dq_empty) && !mem_dq_clr && w_dq_ready
 		       && (!(mem_mdq_next_full||mem_mdq_full)) ;
      end
@@ -3100,21 +3111,11 @@ module exec(clk,
 	     r_mdq[r_mdq_tail_ptr[`LG_MDQ_ENTRIES-1:0]] <= t_core_store_data;
 	  end
      end
-
    
    
    always_ff@(posedge clk)
      begin
-	if(reset)
-	  begin
-	     r_mem_ready <= 1'b0;
-	     r_dq_ready <= 1'b0;
-	  end
-	else
-	  begin
-	     r_mem_ready <= t_pop_mem_uq;
-	     r_dq_ready <= t_pop_mem_dq;
-	  end
+	r_dq_ready <= reset ? 1'b0 : t_pop_mem_dq;
      end // always_ff@ (posedge clk)
 
    
@@ -3130,6 +3131,112 @@ module exec(clk,
 	r_restart_counter <= reset ? 'd0 : 
 			     (restart_complete ? r_restart_counter + 'd1 : r_restart_counter);
      end
+
+
+   find_first_set#(`LG_MEM_SCHED_ENTRIES) ffs_mem_sched_alloc( .in(~r_mem_sched_valid),
+							       .y(t_mem_sched_alloc_ptr));
+
+
+   wire w_mem_sched_avail = ((&r_mem_sched_valid) == 1'b0) & (t_flash_clear == 1'b0);
+   
+   always_comb
+     begin
+	t_pop_mem_uq = (!t_mem_uq_empty) & w_mem_sched_avail;
+     end
+
+
+   generate
+      for(genvar i = 0; i < N_MEM_SCHED_ENTRIES; i=i+1)
+	begin
+	   always_comb
+	     begin
+		t_mem_entry_rdy[i] = 1'b0;
+	     end
+	end
+   endgenerate
+
+   always_comb
+     begin
+	t_mem_alloc_entry = 'd0;
+	t_mem_select_entry = 'd0;
+	if(t_pop_mem_uq)
+	  begin
+	     t_mem_alloc_entry[t_mem_sched_alloc_ptr[`LG_MEM_SCHED_ENTRIES-1:0]] = 1'b1;
+	  end
+	if(t_mem_entry_rdy != 'd0)
+	  begin
+	     t_mem_select_entry[t_mem_sched_select_ptr[`LG_MEM_SCHED_ENTRIES-1:0]] = 1'b1;
+	  end
+     end // always_comb
+   
+   
+   always_ff@(posedge clk)
+     begin
+	if(reset || t_flash_clear)
+	  begin
+	     r_mem_sched_valid <= 'd0;
+	  end
+	else
+	  begin
+	     if(t_pop_mem_uq)
+	       begin
+		  r_mem_sched_valid[t_mem_sched_alloc_ptr[`LG_INT_SCHED_ENTRIES-1:0]] <= 1'b1;
+		  r_mem_sched_uops[t_mem_sched_alloc_ptr[`LG_INT_SCHED_ENTRIES-1:0]] <= mem_uq;		  
+	       end
+	     if(t_mem_entry_rdy != 'd0)
+	       begin
+		  r_mem_sched_valid[t_mem_sched_select_ptr[`LG_INT_SCHED_ENTRIES-1:0]] <= 1'b0;
+	       end	     
+	  end
+     end // always_ff@ (posedge clk)
+
+
+   always_comb
+     begin
+	t_mem_sched_mask_valid = r_mem_sched_valid & (~t_mem_select_entry);
+     end
+
+   generate
+      for(genvar i = 0; i < N_MEM_SCHED_ENTRIES; i=i+1)
+	begin
+	   assign w_mem_sched_oldest_ready[i] = t_mem_entry_rdy[i] & (~(|(t_mem_entry_rdy & r_mem_sched_matrix[i])));
+	   always_ff@(posedge clk)
+	     begin
+		if(reset || t_flash_clear)
+		  begin
+		     r_mem_sched_matrix[i] <= 'd0;
+		  end
+		else if(t_mem_alloc_entry[i])
+		  begin
+		     r_mem_sched_matrix[i] <= t_mem_sched_mask_valid;
+		  end
+		else if(t_mem_entry_rdy != 'd0)
+		  begin
+		     r_mem_sched_matrix[i] <= r_mem_sched_matrix[i] & (~t_mem_select_entry);
+		  end
+	     end
+	end // for (genvar i = 0; i < N_INT_SCHED_ENTRIES; i=i+1)
+   endgenerate
+ 
+   find_first_set#(`LG_MEM_SCHED_ENTRIES) ffs_memt_sched_select( .in(w_mem_sched_oldest_ready),
+								 .y(t_mem_sched_select_ptr));
+
+
+
+   always_ff@(posedge clk)
+     begin
+	r_mem_ready <= reset ? 1'b0 : ((t_mem_entry_rdy != 'd0) & !ds_done);	
+     end // always_ff@ (posedge clk)
+   
+
+   //always_ff@(negedge clk)
+   //begin
+   //if(|r_mem_sched_valid)
+   //begin
+   //$stop();
+   //end
+   //end
+
    
    always_comb
      begin
