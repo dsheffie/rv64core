@@ -722,11 +722,13 @@ struct pt_ {
   uint64_t l1d_p1_miss;
   uint64_t l1d_replay;
   std::list<uint64_t> l1d_blocks;
+  std::list<uint64_t> l1d_sd;
   void clear() {
     fetch = alloc = sched = NI;
     complete = retire = NI;
     l1d_p1_hit = l1d_p1_miss = l1d_replay = NI;
     l1d_blocks.clear();
+    l1d_sd.clear();
   }
 };
 
@@ -771,6 +773,11 @@ void pt_l1d_blocked(long long cycle, int rob_id) {
 void pt_l1d_replay(long long cycle, int rob_id) {
   auto &r = records[rob_id & 63];
   r.l1d_replay = cycle;
+}
+
+void pt_l1d_store_data_ready(long long cycle, int rob_id) {
+  auto &r = records[rob_id & 63];
+  r.l1d_sd.push_back(cycle);
 }
 
 void pt_complete(long long cycle, int rob_id) {
@@ -840,6 +847,7 @@ void pt_retire(long long cycle,
 	       r.l1d_p1_miss,
 	       r.l1d_replay,
 	       r.l1d_blocks,
+	       r.l1d_sd,
 	       false);
   }
   ++record_insns_retired;  

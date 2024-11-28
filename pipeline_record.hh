@@ -27,7 +27,7 @@ public:
   uint64_t p1_hit_cycle, p1_miss_cycle, l1d_replay;
   bool faulted;
   
-  std::list<uint64_t> l1d_blocks;  
+  std::list<uint64_t> l1d_blocks, l1d_sd;  
   friend class boost::serialization::access;
   template<class Archive>
   void serialize(Archive & ar, const unsigned int version) {
@@ -44,6 +44,7 @@ public:
     ar & l1d_replay;
     ar & faulted;    
     ar & l1d_blocks;
+    ar & l1d_sd;
   }
 public:
   pipeline_record(uint64_t uuid,
@@ -58,12 +59,13 @@ public:
 		  uint64_t p1_miss_cycle,
 		  uint64_t l1d_replay,
 		  const std::list<uint64_t> &l1d_blocks,
+		  const std::list<uint64_t> &l1d_sd,
 		  bool faulted) :
     uuid(uuid), disasm(disasm), pc(pc), fetch_cycle(fetch_cycle), alloc_cycle(alloc_cycle),
     sched_cycle(sched_cycle), complete_cycle(complete_cycle), retire_cycle(retire_cycle),
     p1_hit_cycle(p1_hit_cycle), p1_miss_cycle(p1_miss_cycle), l1d_replay(l1d_replay),
     faulted(faulted),
-    l1d_blocks(l1d_blocks)  {}
+    l1d_blocks(l1d_blocks), l1d_sd(l1d_sd)  {}
   pipeline_record() :
     uuid(~0UL), disasm(""), pc(0), fetch_cycle(0), alloc_cycle(0),
     complete_cycle(0), retire_cycle(0),
@@ -133,6 +135,7 @@ public:
 	      uint64_t p1_miss_cycle,
 	      uint64_t l1d_replay,
 	      const std::list<uint64_t> &l1d_blocks,
+	      const std::list<uint64_t> &l1d_sd,	      
 	      bool faulted) {
 
     assert(fetch_cycle != (~0UL));
@@ -154,6 +157,7 @@ public:
 			 p1_miss_cycle,
 			 l1d_replay,
 			 l1d_blocks,
+			 l1d_sd,
 			 faulted);
   }
 };
