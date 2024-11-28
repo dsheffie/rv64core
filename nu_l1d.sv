@@ -1358,14 +1358,17 @@ module nu_l1d(clk,
    logic r_paging_active;   
    logic [63:0]	n_link_reg, r_link_reg;
    logic	n_link_reg_val, r_link_reg_val;
-
+   logic [1:0]	r_priv;
+   
    always_ff@(posedge clk)
      begin
 	r_paging_active <= reset ? 1'b0 : paging_active;
+	r_priv <= reset ? 2'd0 : priv;
      end
 
-
    wire w_paging_toggle = r_paging_active ^ paging_active;
+   wire	w_priv_toggle = (priv  != r_priv);
+   
    always_ff@(posedge clk)
      begin
 	if(reset)
@@ -1383,7 +1386,7 @@ module nu_l1d(clk,
 	  begin
 	     r_link_reg <= 64'd0;
 	  end
-	else if(w_paging_toggle)
+	else if(w_paging_toggle | w_priv_toggle)
 	  begin
 	     r_link_reg <= 'd0;
 	  end
@@ -1729,16 +1732,21 @@ module nu_l1d(clk,
 
    always_comb
      begin
+`ifdef COUNT_DCACHE_HITS
 	n_cache_hits = r_cache_hits;
 	n_cache_accesses = r_cache_accesses;
-	// if(r_got_req2)
-	//   begin
-	//      n_cache_accesses = r_cache_accesses + 64'd1;
-	//   end
-	// if(t_hit_cache2 & !r_pending_tlb_miss)
-	//   begin
-	//      n_cache_hits = r_cache_hits + 64'd1;
-	//   end
+	if(r_got_req2)
+	  begin
+	     n_cache_accesses = r_cache_accesses + 64'd1;
+	  end
+	if(t_hit_cache2 & !r_pending_tlb_miss)
+	  begin
+	     n_cache_hits = r_cache_hits + 64'd1;
+	  end
+`else // !`ifdef COUNT_DCACHE_HITS
+	n_cache_hits ='d0;
+	n_cache_accesses = 'd0;
+`endif
      end // always_comb
    
 

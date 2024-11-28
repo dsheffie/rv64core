@@ -41,7 +41,7 @@
 `define LG_RET_STACK_ENTRIES 3
 
 /* non-uop queue */
-`define LG_UQ_ENTRIES 3
+`define LG_UQ_ENTRIES 4
 /* mem uop queue */
 `define LG_MEM_UQ_ENTRIES 3
 

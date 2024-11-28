@@ -844,9 +844,10 @@ endfunction
    
    always_comb
      begin
+`ifdef COUNT_ICACHE_HITS
 	n_cache_accesses = r_cache_accesses;
-	n_cache_hits = r_cache_hits;	
-	if(t_hit)
+	n_cache_hits = r_cache_hits;
+	if(t_hit)	  
 	  begin
 	     n_cache_hits = r_cache_hits + 'd1;
 	  end
@@ -854,6 +855,10 @@ endfunction
 	  begin
 	     n_cache_accesses = r_cache_accesses + 'd1;
 	  end
+`else // !`ifdef COUNT_ICACHE_HITS
+	n_cache_accesses = 'd0;
+	n_cache_hits = 'd0;	
+`endif
      end
    
    always_comb
