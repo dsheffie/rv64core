@@ -242,9 +242,10 @@ module exec(clk,
    logic [`LG_PRF_ENTRIES-1:0] r_div_prf_ptr;
    logic 		       r_div_complete;
 
-   logic 	t_pop_uq,t_pop_mem_uq,t_pop_mem_dq,t_pop_uq2;
-   logic	t_alloc_uq, t_alloc_uq2;
-   logic	t_uq_swizzle;
+   wire			       w_pop_uq, w_pop_uq2;
+   wire			       w_alloc_uq, w_alloc_uq2,w_uq_swizzle;   
+
+   logic		       t_pop_mem_uq,t_pop_mem_dq;
    
    
    logic 	r_mem_ready, r_dq_ready;
@@ -688,22 +689,13 @@ module exec(clk,
 	w_alu_sched_avail2 & 
 	(t_uq_empty==1'b0) & (t_uq_next_empty == 1'b0) &
 	(t_uq.is_cheap_int | t_uq2.is_cheap_int);
-      
-   always_comb
-     begin
-	t_alloc_uq = 1'b0;
-	t_alloc_uq2 = 1'b0;
-	
-	t_pop_uq = w_sched_two_uops | w_uop1_on_sched2 | w_uop1_on_sched1;
-	t_pop_uq2 = w_sched_two_uops;
-	
-	t_alloc_uq = w_sched_two_uops  | ((w_sched_two_uops==1'b0) & (w_uop1_on_sched2 ==1'b0) & w_uop1_on_sched1);
-	t_alloc_uq2 = w_sched_two_uops | ((w_sched_two_uops==1'b0) & w_uop1_on_sched2);
-	
-	t_uq_swizzle = (w_sched_two_uops & (t_uq.is_cheap_int) & (!t_uq2.is_cheap_int)) | ((w_sched_two_uops==1'b0) & w_uop1_on_sched2);
-     end // always_comb
-   
 
+   assign w_pop_uq = w_sched_two_uops | w_uop1_on_sched2 | w_uop1_on_sched1;
+   assign w_pop_uq2 = w_sched_two_uops;
+   assign w_alloc_uq = w_sched_two_uops  | ((w_sched_two_uops==1'b0) & (w_uop1_on_sched2 ==1'b0) & w_uop1_on_sched1);
+   assign w_alloc_uq2 = w_sched_two_uops | ((w_sched_two_uops==1'b0) & w_uop1_on_sched2);
+   assign w_uq_swizzle = (w_sched_two_uops & (t_uq.is_cheap_int) & (!t_uq2.is_cheap_int)) | ((w_sched_two_uops==1'b0) & w_uop1_on_sched2);
+   
    
    always_comb
      begin
@@ -727,8 +719,8 @@ module exec(clk,
 
 
 
-	uq  = t_uq_swizzle ? t_uq2 : t_uq;
-	uq2 = t_uq_swizzle ? t_uq : t_uq2;
+	uq  = w_uq_swizzle ? t_uq2 : t_uq;
+	uq2 = w_uq_swizzle ? t_uq : t_uq2;
 	
 
 	
@@ -743,12 +735,12 @@ module exec(clk,
 	     n_uq_next_tail_ptr = r_uq_next_tail_ptr + 'd1;
 	  end
 
-	if(t_pop_uq2)
+	if(w_pop_uq2)
 	  begin
 	     n_uq_next_head_ptr = r_uq_next_head_ptr + 'd2;
 	     n_uq_head_ptr = r_uq_head_ptr + 'd2;
 	  end
-	else if(t_pop_uq)
+	else if(w_pop_uq)
 	  begin
 	     n_uq_head_ptr = r_uq_head_ptr + 'd1;
 	     n_uq_next_head_ptr = r_uq_next_head_ptr + 'd1;	     
@@ -909,7 +901,7 @@ module exec(clk,
      begin
 	t_alu_alloc_entry = 'd0;
 	t_alu_select_entry = 'd0;
-	if(t_alloc_uq)
+	if(w_alloc_uq)
 	  begin
 	     t_alu_alloc_entry[t_alu_sched_alloc_ptr[`LG_INT_SCHED_ENTRIES-1:0]] = 1'b1;
 	  end
@@ -923,7 +915,7 @@ module exec(clk,
      begin
 	t_alu_alloc_entry2 = 'd0;
 	t_alu_select_entry2 = 'd0;
-	if(t_alloc_uq2)
+	if(w_alloc_uq2)
 	  begin
 	     t_alu_alloc_entry2[t_alu_sched_alloc_ptr2[`LG_INT_SCHED_ENTRIES-1:0]] = 1'b1;
 	  end
@@ -1069,11 +1061,11 @@ module exec(clk,
 	  begin
 	     record_sched(32'd0);
 	  end
-	if(t_alloc_uq)
+	if(w_alloc_uq)
 	  begin
 	     record_sched_alloc(32'd0);
 	  end
-	if(t_alloc_uq2)
+	if(w_alloc_uq2)
 	  begin
 	     record_sched_alloc(32'd1);
 	  end
@@ -1597,7 +1589,7 @@ module exec(clk,
 	  end
 	else
 	  begin
-	     if(t_alloc_uq)
+	     if(w_alloc_uq)
 	       begin
 		  r_alu_sched_valid[t_alu_sched_alloc_ptr[`LG_INT_SCHED_ENTRIES-1:0]] <= 1'b1;
 		  r_alu_sched_uops[t_alu_sched_alloc_ptr[`LG_INT_SCHED_ENTRIES-1:0]] <= uq;
@@ -1618,7 +1610,7 @@ module exec(clk,
 	  end
 	else
 	  begin
-	     if(t_alloc_uq2)
+	     if(w_alloc_uq2)
 	       begin
 		  r_alu_sched_valid2[t_alu_sched_alloc_ptr2[`LG_INT_SCHED_ENTRIES-1:0]] <= 1'b1;
 		  r_alu_sched_uops2[t_alu_sched_alloc_ptr2[`LG_INT_SCHED_ENTRIES-1:0]] <= uq2;
@@ -1916,9 +1908,9 @@ module exec(clk,
    always_ff@(negedge clk)
      begin
 	report_exec(t_uq_empty ? 32'd0 : 32'd1,
-		    t_pop_uq ? 32'd1 : 32'd0,
-		    !t_uq_next_empty & t_pop_uq & uq2.is_cheap_int ? 32'd1 : 32'd0,
-		    t_pop_uq2 ? 32'd1 : 32'd0,
+		    w_pop_uq ? 32'd1 : 32'd0,
+		    !t_uq_next_empty & w_pop_uq & uq2.is_cheap_int ? 32'd1 : 32'd0,
+		    w_pop_uq2 ? 32'd1 : 32'd0,
 		    t_mem_uq_empty ? 32'd0 : 32'd1,
 		    t_pop_mem_uq ? 32'd1 : 32'd0,
 		    32'd1,
