@@ -243,8 +243,7 @@ module exec(clk,
    logic 		       r_div_complete;
 
    logic 	t_pop_uq,t_pop_mem_uq,t_pop_mem_dq,t_pop_uq2;
-   logic	t_could_pop_uq2;
-   
+   logic	t_alloc_uq, t_alloc_uq2;
    logic	t_uq_swizzle;
    
    
@@ -264,7 +263,6 @@ module exec(clk,
    //does this scheduler entry contain a valid uop?
    logic [N_INT_SCHED_ENTRIES-1:0] r_alu_sched_valid, r_alu_sched_valid2;
    logic [`LG_INT_SCHED_ENTRIES:0] t_alu_sched_alloc_ptr, t_alu_sched_alloc_ptr2;
-   logic 			   t_alu_sched_full, t_alu_sched_full2;
    logic [N_INT_SCHED_ENTRIES-1:0] t_alu_alloc_entry, t_alu_select_entry, t_alu_alloc_entry2, t_alu_select_entry2;
    
    uop_t r_alu_sched_uops[N_INT_SCHED_ENTRIES-1:0], t_picked_uop;
@@ -676,25 +674,33 @@ module exec(clk,
 	t_uq2 = r_uq[r_uq_next_head_ptr[`LG_UQ_ENTRIES-1:0]];
      end
 
+   wire w_alu_sched_avail = ((&r_alu_sched_valid) == 1'b0) & (t_flash_clear == 1'b0);
+`ifdef SECOND_EXEC_PORT   
+   wire	w_alu_sched_avail2 = ((&r_alu_sched_valid2) == 1'b0) & (t_flash_clear == 1'b0);
+`else
+   wire	w_alu_sched_avail2 = 1'b0;
+`endif
+   
+   wire	w_uop1_on_sched1 = w_alu_sched_avail & (t_uq_empty==1'b0);
+   wire	w_uop1_on_sched2 = w_alu_sched_avail2 & (t_uq_empty==1'b0) & t_uq.is_cheap_int;
+
+   wire w_sched_two_uops = w_alu_sched_avail & 
+	w_alu_sched_avail2 & 
+	(t_uq_empty==1'b0) & (t_uq_next_empty == 1'b0) &
+	(t_uq.is_cheap_int | t_uq2.is_cheap_int);
+      
    always_comb
      begin
-	t_pop_uq = 1'b0;
-	t_pop_uq2 = 1'b0;
-	t_alu_sched_full = (&r_alu_sched_valid);
-	t_alu_sched_full2 = (&r_alu_sched_valid2);
-	t_could_pop_uq2 = 1'b0;
-	t_uq_swizzle = 1'b0;
+	t_alloc_uq = 1'b0;
+	t_alloc_uq2 = 1'b0;
 	
-	t_pop_uq = !(t_flash_clear | t_uq_empty | t_alu_sched_full);
-`ifdef SECOND_EXEC_PORT
-	t_could_pop_uq2 = t_uq_next_empty ? 1'b0 : (t_pop_uq & (!t_alu_sched_full2));
-	t_pop_uq2 = t_could_pop_uq2 & (t_uq.is_cheap_int | t_uq2.is_cheap_int);
-
-	t_uq_swizzle = t_pop_uq 
-		       & t_could_pop_uq2
-		       & (t_uq.is_cheap_int)
-			 & (!t_uq2.is_cheap_int);
-`endif
+	t_pop_uq = w_sched_two_uops | w_uop1_on_sched2 | w_uop1_on_sched1;
+	t_pop_uq2 = w_sched_two_uops;
+	
+	t_alloc_uq = w_sched_two_uops  | ((w_sched_two_uops==1'b0) & (w_uop1_on_sched2 ==1'b0) & w_uop1_on_sched1);
+	t_alloc_uq2 = w_sched_two_uops | ((w_sched_two_uops==1'b0) & w_uop1_on_sched2);
+	
+	t_uq_swizzle = (w_sched_two_uops & (t_uq.is_cheap_int) & (!t_uq2.is_cheap_int)) | ((w_sched_two_uops==1'b0) & w_uop1_on_sched2);
      end // always_comb
    
 
@@ -903,7 +909,7 @@ module exec(clk,
      begin
 	t_alu_alloc_entry = 'd0;
 	t_alu_select_entry = 'd0;
-	if(t_pop_uq)
+	if(t_alloc_uq)
 	  begin
 	     t_alu_alloc_entry[t_alu_sched_alloc_ptr[`LG_INT_SCHED_ENTRIES-1:0]] = 1'b1;
 	  end
@@ -917,7 +923,7 @@ module exec(clk,
      begin
 	t_alu_alloc_entry2 = 'd0;
 	t_alu_select_entry2 = 'd0;
-	if(t_pop_uq2)
+	if(t_alloc_uq2)
 	  begin
 	     t_alu_alloc_entry2[t_alu_sched_alloc_ptr2[`LG_INT_SCHED_ENTRIES-1:0]] = 1'b1;
 	  end
@@ -1063,30 +1069,16 @@ module exec(clk,
 	  begin
 	     record_sched(32'd0);
 	  end
-	if(t_pop_uq)
+	if(t_alloc_uq)
 	  begin
 	     record_sched_alloc(32'd0);
 	  end
-	if(t_pop_uq2)
+	if(t_alloc_uq2)
 	  begin
 	     record_sched_alloc(32'd1);
 	  end
      end // always_ff@ (negedge clk)
 `endif
-   
-   // always_ff@(negedge clk)
-   //   begin
-   // 	for(integer i = 0; i < N_INT_SCHED_ENTRIES; i=i+1)
-   // 	  begin
-   // 	     if(r_alu_sched_valid[i] & r_alu_sched_uops[i].pc == 64'hffffffff80270a84)
-   // 	       begin
-   // 		  $display("entry for pc %x is %b ready, src A %b, src B %b", 
-   // 			   r_alu_sched_uops[i].pc, t_alu_entry_rdy[i],
-   // 			   r_alu_srcA_rdy[i],
-   // 			   r_alu_srcB_rdy[i]);
-   // 	       end
-   // 	  end
-   //   end
    
    
    generate
@@ -1605,7 +1597,7 @@ module exec(clk,
 	  end
 	else
 	  begin
-	     if(t_pop_uq)
+	     if(t_alloc_uq)
 	       begin
 		  r_alu_sched_valid[t_alu_sched_alloc_ptr[`LG_INT_SCHED_ENTRIES-1:0]] <= 1'b1;
 		  r_alu_sched_uops[t_alu_sched_alloc_ptr[`LG_INT_SCHED_ENTRIES-1:0]] <= uq;
@@ -1626,7 +1618,7 @@ module exec(clk,
 	  end
 	else
 	  begin
-	     if(t_pop_uq2)
+	     if(t_alloc_uq2)
 	       begin
 		  r_alu_sched_valid2[t_alu_sched_alloc_ptr2[`LG_INT_SCHED_ENTRIES-1:0]] <= 1'b1;
 		  r_alu_sched_uops2[t_alu_sched_alloc_ptr2[`LG_INT_SCHED_ENTRIES-1:0]] <= uq2;
