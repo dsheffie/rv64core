@@ -289,7 +289,7 @@ module exec(clk,
    logic [`LG_MEM_SCHED_ENTRIES:0] t_mem_sched_alloc_ptr;
    logic [N_MEM_SCHED_ENTRIES-1:0] t_mem_alloc_entry, t_mem_select_entry;
    uop_t r_mem_sched_uops[N_MEM_SCHED_ENTRIES-1:0], t_picked_mem_uop;
-   logic [N_MEM_SCHED_ENTRIES-1:0] t_mem_entry_rdy;
+   logic [N_MEM_SCHED_ENTRIES-1:0] t_mem_entry_reg_rdy;
    logic [`LG_MEM_SCHED_ENTRIES:0] t_mem_sched_select_ptr;
    logic [N_MEM_SCHED_ENTRIES-1:0] r_mem_srcA_rdy, r_mem_srcB_rdy;
    logic [N_MEM_SCHED_ENTRIES-1:0] t_mem_srcA_match, t_mem_srcB_match;
@@ -1005,7 +1005,7 @@ module exec(clk,
    generate
       for(genvar i = 0; i < N_INT_SCHED_ENTRIES; i=i+1)
 	begin
-	   assign w_alu_sched_oldest_ready[i] = t_alu_entry_rdy[i] & ( (|r_alu_sched_matrix[i]) == 1'b0 );
+	   assign w_alu_sched_oldest_ready[i] = t_alu_entry_rdy[i] & (~(|(t_alu_entry_rdy & r_alu_sched_matrix[i])));
 	   always_ff@(posedge clk)
 	     begin
 		if(reset || t_flash_clear)
@@ -1686,17 +1686,18 @@ module exec(clk,
 	// $display(">> %x writes %x to mstatus old %x at cycle %d",
 	//int_uop.pc, t_wr_csr, r_mstatus, r_cycle);
 	//end	
-	//if((int_uop.op == SRLIW) & r_start_int)
-	//begin
-	//$display("portA pc %x src A = %x, imm = %x, result %x", 
-	//int_uop.pc, t_srcA, t_shift_amt, t_result);
-	// end
 
-	//if((int_uop2.op == SRLIW) & r_start_int2)
-	//begin
-	//$display("portA pc %x src A = %x, imm = %x, result %x", 
-	//int_uop2.pc, t_srcA_2, t_shift_amt2, t_result2);
-	 // end
+	if((int_uop.op == SLLI) & r_start_int)
+	  begin
+	     $display("1 portA pc %x src A = %x, imm = %x, result %x", 
+		      int_uop.pc, t_srcA, t_shift_amt, t_result);
+	  end
+
+	if((int_uop2.op == SLLI) & r_start_int2)
+	  begin
+	     $display("2 portA pc %x src A = %x, imm = %x, result %x, cycle %d", 
+		      int_uop2.pc, t_srcA_2, t_shift_amt2, t_result2, r_cycle);
+	  end
 
 
 	// if(t_start_mul&r_start_int)
@@ -3156,7 +3157,7 @@ module exec(clk,
 									 (r_start_int2 & t_wr_int_prf2 & (int_uop2.dst == r_mem_sched_uops[i].srcA)) |			 
 									 (r_start_int & t_wr_int_prf & (int_uop.dst == r_mem_sched_uops[i].srcA))
 									 );		
-		t_mem_entry_rdy[i] = (r_mem_sched_valid[i] & (!(mem_q_next_full|mem_q_full))) ? (t_mem_srcA_match[i] |r_mem_srcA_rdy[i]) : 1'b0;
+		t_mem_entry_reg_rdy[i] = (r_mem_sched_valid[i] & (!(mem_q_next_full|mem_q_full))) ? (t_mem_srcA_match[i] |r_mem_srcA_rdy[i]) : 1'b0;
  	     end
 
 	   always_ff@(posedge clk)
@@ -3193,7 +3194,7 @@ module exec(clk,
 	  begin
 	     t_mem_alloc_entry[t_mem_sched_alloc_ptr[`LG_MEM_SCHED_ENTRIES-1:0]] = 1'b1;
 	  end
-	if(t_mem_entry_rdy != 'd0)
+	if(|w_mem_sched_oldest_ready)
 	  begin
 	     t_mem_select_entry[t_mem_sched_select_ptr[`LG_MEM_SCHED_ENTRIES-1:0]] = 1'b1;
 	  end
@@ -3213,7 +3214,7 @@ module exec(clk,
 		  r_mem_sched_valid[t_mem_sched_alloc_ptr[`LG_MEM_SCHED_ENTRIES-1:0]] <= 1'b1;
 		  r_mem_sched_uops[t_mem_sched_alloc_ptr[`LG_MEM_SCHED_ENTRIES-1:0]] <= t_mem_uq;		  
 	       end
-	     if(t_mem_entry_rdy != 'd0)
+	     if(|w_mem_sched_oldest_ready)
 	       begin
 		  r_mem_sched_valid[t_mem_sched_select_ptr[`LG_MEM_SCHED_ENTRIES-1:0]] <= 1'b0;
 	       end	     
@@ -3226,13 +3227,14 @@ module exec(clk,
 	t_mem_sched_mask_valid = r_mem_sched_valid & (~t_mem_select_entry);
      end
 
+   
    generate
       for(genvar i = 0; i < N_MEM_SCHED_ENTRIES; i=i+1)
 	begin
-	   assign w_mem_sched_oldest_ready[i] = t_mem_entry_rdy[i] & (~(|(t_mem_entry_rdy & r_mem_sched_matrix[i])));
+	   assign w_mem_sched_oldest_ready[i] = t_mem_entry_reg_rdy[i] & ((|r_mem_sched_matrix[i]) == 1'b0);
 	   always_ff@(posedge clk)
 	     begin
-		if(reset || t_flash_clear)
+		if(reset | t_flash_clear)
 		  begin
 		     r_mem_sched_matrix[i] <= 'd0;
 		  end
@@ -3240,7 +3242,7 @@ module exec(clk,
 		  begin
 		     r_mem_sched_matrix[i] <= t_mem_sched_mask_valid;
 		  end
-		else if(t_mem_entry_rdy != 'd0)
+		else if(|w_mem_sched_oldest_ready)
 		  begin
 		     r_mem_sched_matrix[i] <= r_mem_sched_matrix[i] & (~t_mem_select_entry);
 		  end
@@ -3256,7 +3258,7 @@ module exec(clk,
    
    always_ff@(posedge clk)
      begin
-	r_mem_ready <= reset ? 1'b0 : ((t_mem_entry_rdy != 'd0) & !ds_done);
+	r_mem_ready <= reset ? 1'b0 : ((|w_mem_sched_oldest_ready) & !ds_done);
 	mem_uop <= t_picked_mem_uop;
      end // always_ff@ (posedge clk)
    
@@ -3271,41 +3273,48 @@ module exec(clk,
 	
    always_ff@(negedge clk)
      begin
-	//if(|r_mem_sched_valid)
-	//begin
-	//for(integer i = 0; i < N_MEM_SCHED_ENTRIES; i=i+1)
-	//begin
-	//if(r_mem_sched_valid[i])
-	//begin
-	//$display("mem sched entry %d holds rob ptr %d", i, r_mem_sched_uops[i].rob_ptr);
-	//end
-	//end
-	//end
-	if(|t_mem_entry_rdy)
+	if(|w_mem_sched_oldest_ready)
 	  begin
-	     $display("rdy = %b", t_mem_entry_rdy);
 	     for(integer i = 0; i < N_MEM_SCHED_ENTRIES; i=i+1)
 	       begin
-		  $display("%b : %b, pc %x, rob ptr %d", t_mem_entry_rdy[i], r_mem_sched_matrix[i], r_mem_sched_uops[i].pc, r_mem_sched_uops[i].rob_ptr);
+		  $display("%b %b : %b, pc %x, rob ptr %d, fetch cycle %d", 
+			   r_mem_sched_valid[i], 
+			   w_mem_sched_oldest_ready[i], 
+			   r_mem_sched_matrix[i], 
+			   r_mem_sched_uops[i].pc, 
+			   r_mem_sched_uops[i].rob_ptr,
+			   r_mem_sched_uops[i].fetch_cycle);
 	       end
+	     
 	     $display("picked mem uop has pc %x, store %b, rob ptr %d, data ptr %d, fetch cycle %d, slot %d", 
 		      t_picked_mem_uop.pc,
 		      t_picked_mem_uop.is_store,
 		      t_picked_mem_uop.rob_ptr,
 		      t_picked_mem_uop.srcB,
-		      t_picked_mem_uop.fetch_cycle, t_mem_sched_select_ptr);
+		      t_picked_mem_uop.fetch_cycle, 
+		      t_mem_sched_select_ptr);
 	  end
 
 	
 	if(t_pop_mem_uq)
 	  begin
 	     $display("allocate into slot %d, pc %x fetch cycle %d cycle %d", t_mem_sched_alloc_ptr[`LG_INT_SCHED_ENTRIES-1:0], t_mem_uq.pc, t_mem_uq.fetch_cycle, r_cycle);
-	     $display("age mask %b", t_mem_sched_mask_valid);
 	  end
 
 	if(restart_complete)
 	  begin
 	     $display("restart complete asserted at cycle %d", r_cycle);
+	  end
+
+	for(integer i = 0; i < N_MEM_SCHED_ENTRIES; i=i+1)
+	  begin
+	     for(integer j = i+1; j < N_MEM_SCHED_ENTRIES; j=j+1)
+	       begin
+		  if(w_mem_sched_oldest_ready[i] & w_mem_sched_oldest_ready[j])
+		    begin
+		       $stop();
+		    end
+	       end
 	  end
      end
 
@@ -3623,7 +3632,7 @@ module exec(clk,
 	  end
 	else
 	  begin
-	     complete_valid_1 <= r_start_int && t_alu_valid || t_mul_complete || t_div_complete;
+	     complete_valid_1 <= (r_start_int & t_alu_valid) | t_mul_complete | t_div_complete;
 	     complete_valid_2 <= r_start_int2;
 	  end
      end // always_ff@ (posedge clk)
@@ -3668,7 +3677,14 @@ module exec(clk,
 	     complete_bundle_1.take_br <= t_take_br;
 	     complete_bundle_1.data <= t_result;
 	  end
-	//(uq.rob_ptr == 'd5) ? 1'b1 : 1'b0;
+     end // always_ff@ (posedge clk)
+
+   always_ff@(negedge clk)
+     begin
+	if(complete_valid_1 & int_uop.rob_ptr == 'd24 & t_result == 'ha)
+	  begin
+	     $display("===> picking uop with pc %x, rob ptr %d, fetch_cycle %d", int_uop.pc, int_uop.rob_ptr, int_uop.fetch_cycle);
+	  end
      end
 
 
