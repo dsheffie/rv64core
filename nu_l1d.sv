@@ -1835,7 +1835,7 @@ module nu_l1d(clk,
 	       end
 	     else if(r_req2.is_store)
 	       begin
-		  //$display("store miss at cycle %d", r_cycle);
+		  $display("store miss at cycle %d for rob pointer %d", r_cycle, r_req2.rob_ptr);
 		  t_push_miss = 1'b1;
 		  t_incr_busy = 1'b1;
 		  n_stall_store = 1'b1;
