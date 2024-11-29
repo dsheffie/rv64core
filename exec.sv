@@ -399,7 +399,7 @@ module exec(clk,
 
    /* mem uop queue */
    uop_t r_mem_uq[N_MEM_UQ_ENTRIES];
-   uop_t t_mem_uq, mem_uq;
+   uop_t t_mem_uq;
    logic 	      t_mem_uq_read, t_mem_uq_empty, t_mem_uq_full,
 		      t_mem_uq_next_full;
    
@@ -592,7 +592,6 @@ module exec(clk,
 
    always_ff@(posedge clk)
      begin
-	mem_uq <= t_mem_uq;
 	mem_dq <= t_mem_dq;
      end
 
@@ -1091,19 +1090,19 @@ module exec(clk,
 	begin
 	   always_comb
 	     begin
-		t_alu_srcA_match[i] = r_alu_sched_uops[i].srcA_valid && (
-									 (mem_rsp_dst_valid & (mem_rsp_dst_ptr == r_alu_sched_uops[i].srcA)) ||
-									 (t_mul_complete && (w_mul_prf_ptr == r_alu_sched_uops[i].srcA)) ||
-									 (r_div_complete && (r_div_prf_ptr == r_alu_sched_uops[i].srcA)) ||
-									 (r_start_int2 && t_wr_int_prf2 & (int_uop2.dst == r_alu_sched_uops[i].srcA)) ||			 
-									 (r_start_int && t_wr_int_prf & (int_uop.dst == r_alu_sched_uops[i].srcA))
+		t_alu_srcA_match[i] = r_alu_sched_uops[i].srcA_valid & (
+									 (mem_rsp_dst_valid & (mem_rsp_dst_ptr == r_alu_sched_uops[i].srcA)) |
+									 (t_mul_complete & (w_mul_prf_ptr == r_alu_sched_uops[i].srcA)) |
+									 (r_div_complete & (r_div_prf_ptr == r_alu_sched_uops[i].srcA)) |
+									 (r_start_int2 & t_wr_int_prf2 & (int_uop2.dst == r_alu_sched_uops[i].srcA)) |			 
+									 (r_start_int & t_wr_int_prf & (int_uop.dst == r_alu_sched_uops[i].srcA))
 									 );
-		t_alu_srcB_match[i] = r_alu_sched_uops[i].srcB_valid && (
-									 (mem_rsp_dst_valid & (mem_rsp_dst_ptr == r_alu_sched_uops[i].srcB)) ||
-									 (t_mul_complete && (w_mul_prf_ptr == r_alu_sched_uops[i].srcB)) ||
-									 (r_div_complete && (r_div_prf_ptr == r_alu_sched_uops[i].srcB)) ||
-									 (r_start_int2 && t_wr_int_prf2 & (int_uop2.dst == r_alu_sched_uops[i].srcB)) ||
-									 (r_start_int && t_wr_int_prf & (int_uop.dst == r_alu_sched_uops[i].srcB))
+		t_alu_srcB_match[i] = r_alu_sched_uops[i].srcB_valid & (
+									 (mem_rsp_dst_valid & (mem_rsp_dst_ptr == r_alu_sched_uops[i].srcB)) |
+									 (t_mul_complete & (w_mul_prf_ptr == r_alu_sched_uops[i].srcB)) |
+									 (r_div_complete & (r_div_prf_ptr == r_alu_sched_uops[i].srcB)) |
+									 (r_start_int2 & t_wr_int_prf2 & (int_uop2.dst == r_alu_sched_uops[i].srcB)) |
+									 (r_start_int & t_wr_int_prf & (int_uop.dst == r_alu_sched_uops[i].srcB))
 									 );
 		
 		t_alu_entry_rdy[i] = r_alu_sched_valid[i] &&
@@ -1820,6 +1819,7 @@ module exec(clk,
 	if(r_mem_ready)
 	  begin
 	     r_mem_q[r_mq_tail_ptr[`LG_MQ_ENTRIES-1:0]] <= t_mem_tail;
+	     if(mem_q_full) $stop();
 	  end
      end
 
@@ -3039,10 +3039,6 @@ module exec(clk,
      end // always_ff@ (posedge clk)
 
    
-   wire [`M_WIDTH-1:0] w_agu_addr;
-   mwidth_add agu (.A(t_mem_srcA), .B(mem_uq.rvimm), .Y(w_agu_addr));
-
-   wire w_mem_srcA_ready = t_mem_uq.srcA_valid ? (!r_prf_inflight[t_mem_uq.srcA] | t_fwd_int_mem_srcA | t_fwd_int2_mem_srcA | t_fwd_mem_mem_srcA) : 1'b1;
 
 
    wire w_dq_ready = !r_prf_inflight[t_mem_dq.src_ptr] | t_fwd_int_mem_srcB | t_fwd_mem_mem_srcB | t_fwd_int2_mem_srcB;
@@ -3120,10 +3116,14 @@ module exec(clk,
 
    
    //cases were address wraps the cacheline
+
+   always_comb
+     begin
+	t_picked_mem_uop = r_mem_sched_uops[t_mem_sched_select_ptr[`LG_MEM_SCHED_ENTRIES-1:0]];
+     end
    
-   wire w_bad_16b_addr = &w_agu_addr[3:0];
-   wire w_bad_32b_addr = (&w_agu_addr[3:2]) & (|w_agu_addr[1:0]);
-   wire	w_bad_64b_addr = w_agu_addr[3] & (|w_agu_addr[2:0]);
+
+   
 
    logic [3:0] r_restart_counter;
    always_ff@(posedge clk)
@@ -3145,15 +3145,58 @@ module exec(clk,
      end
 
 
+   always_comb
+     begin
+	//allocation forwarding
+	t_mem_alloc_srcA_match = t_mem_uq.srcA_valid & (
+						      (mem_rsp_dst_valid & (mem_rsp_dst_ptr == t_mem_uq.srcA)) |
+						      (t_mul_complete & (w_mul_prf_ptr == t_mem_uq.srcA)) |
+						      (r_start_int2 & t_wr_int_prf2 & (int_uop2.dst == t_mem_uq.srcA)) |
+						      (r_start_int & t_wr_int_prf & (int_uop.dst == t_mem_uq.srcA))
+						      );
+     end
+   
+   
    generate
       for(genvar i = 0; i < N_MEM_SCHED_ENTRIES; i=i+1)
 	begin
 	   always_comb
 	     begin
-		t_mem_entry_rdy[i] = 1'b0;
-	     end
+		t_mem_srcA_match[i] = r_mem_sched_uops[i].srcA_valid & (
+									 (mem_rsp_dst_valid & (mem_rsp_dst_ptr == r_mem_sched_uops[i].srcA)) |
+									 (t_mul_complete & (w_mul_prf_ptr == r_mem_sched_uops[i].srcA)) |
+									 (r_div_complete & (r_div_prf_ptr == r_mem_sched_uops[i].srcA)) |
+									 (r_start_int2 & t_wr_int_prf2 & (int_uop2.dst == r_mem_sched_uops[i].srcA)) |			 
+									 (r_start_int & t_wr_int_prf & (int_uop.dst == r_mem_sched_uops[i].srcA))
+									 );		
+		t_mem_entry_rdy[i] = (r_mem_sched_valid[i] & (!(mem_q_next_full|mem_q_full))) ? (t_mem_srcA_match[i] |r_mem_srcA_rdy[i]) : 1'b0;
+ 	     end
+
+	   always_ff@(posedge clk)
+	     begin
+		if(reset)
+		  begin
+		     r_mem_srcA_rdy[i] <= 1'b0;
+		  end
+		else
+		  begin
+		     if(t_mem_alloc_entry[i])
+		       begin //allocating to this entry
+			  r_mem_srcA_rdy[i] <= t_mem_uq.srcA_valid ? (!r_prf_inflight[t_mem_uq.srcA] | t_mem_alloc_srcA_match) : 1'b1;
+		       end
+		     else if(t_mem_select_entry[i])
+		       begin
+			  r_mem_srcA_rdy[i] <= 1'b0;
+		       end
+		     else if(r_mem_sched_valid[i])
+		       begin
+			  r_mem_srcA_rdy[i] <= r_mem_srcA_rdy[i] | t_mem_srcA_match[i];
+		       end // else: !if(t_pop_uq&&(t_mem_sched_alloc_ptr == i))
+		  end // else: !if(reset)
+	     end // always_ff@ (posedge clk)
 	end
    endgenerate
+   
 
    always_comb
      begin
@@ -3180,12 +3223,12 @@ module exec(clk,
 	  begin
 	     if(t_pop_mem_uq)
 	       begin
-		  r_mem_sched_valid[t_mem_sched_alloc_ptr[`LG_INT_SCHED_ENTRIES-1:0]] <= 1'b1;
-		  r_mem_sched_uops[t_mem_sched_alloc_ptr[`LG_INT_SCHED_ENTRIES-1:0]] <= mem_uq;		  
+		  r_mem_sched_valid[t_mem_sched_alloc_ptr[`LG_MEM_SCHED_ENTRIES-1:0]] <= 1'b1;
+		  r_mem_sched_uops[t_mem_sched_alloc_ptr[`LG_MEM_SCHED_ENTRIES-1:0]] <= t_mem_uq;		  
 	       end
 	     if(t_mem_entry_rdy != 'd0)
 	       begin
-		  r_mem_sched_valid[t_mem_sched_select_ptr[`LG_INT_SCHED_ENTRIES-1:0]] <= 1'b0;
+		  r_mem_sched_valid[t_mem_sched_select_ptr[`LG_MEM_SCHED_ENTRIES-1:0]] <= 1'b0;
 	       end	     
 	  end
      end // always_ff@ (posedge clk)
@@ -3218,24 +3261,39 @@ module exec(clk,
 	end // for (genvar i = 0; i < N_INT_SCHED_ENTRIES; i=i+1)
    endgenerate
  
-   find_first_set#(`LG_MEM_SCHED_ENTRIES) ffs_memt_sched_select( .in(w_mem_sched_oldest_ready),
+   find_first_set#(`LG_MEM_SCHED_ENTRIES) ffs_mem_sched_select( .in(w_mem_sched_oldest_ready),
 								 .y(t_mem_sched_select_ptr));
 
 
-
+   uop_t mem_uop;
+   
    always_ff@(posedge clk)
      begin
-	r_mem_ready <= reset ? 1'b0 : ((t_mem_entry_rdy != 'd0) & !ds_done);	
+	r_mem_ready <= reset ? 1'b0 : ((t_mem_entry_rdy != 'd0) & !ds_done);
+	mem_uop <= t_picked_mem_uop;
      end // always_ff@ (posedge clk)
    
 
-   //always_ff@(negedge clk)
-   //begin
-   //if(|r_mem_sched_valid)
-   //begin
-   //$stop();
-   //end
-   //end
+   wire [`M_WIDTH-1:0] w_agu_addr;
+   mwidth_add agu (.A(t_mem_srcA), .B(mem_uop.rvimm), .Y(w_agu_addr));
+   
+   wire w_bad_16b_addr = &w_agu_addr[3:0];
+   wire w_bad_32b_addr = (&w_agu_addr[3:2]) & (|w_agu_addr[1:0]);
+   wire	w_bad_64b_addr = w_agu_addr[3] & (|w_agu_addr[2:0]);
+
+   
+   always_ff@(negedge clk)
+     begin
+	if(|t_mem_entry_rdy)
+	  begin
+	     $display("picked mem uop has pc %x, rob ptr %d, slot %d", t_picked_mem_uop.pc, t_picked_mem_uop.rob_ptr, t_mem_sched_select_ptr);
+	     //$stop();
+	  end
+	if(t_pop_mem_uq)
+	  begin
+	     $display("allocate into slot %d, pc %x cycle %d", t_mem_sched_alloc_ptr[`LG_INT_SCHED_ENTRIES-1:0], t_mem_uq.pc, r_cycle);
+	  end
+     end
 
    
    always_comb
@@ -3245,27 +3303,27 @@ module exec(clk,
 `ifdef VERILATOR
 	t_mem_tail.vaddr = w_agu_addr;
 `endif	
-	t_mem_tail.rob_ptr = mem_uq.rob_ptr;
+	t_mem_tail.rob_ptr = mem_uop.rob_ptr;
 	t_mem_tail.dst_valid = 1'b0;
-	t_mem_tail.dst_ptr = mem_uq.dst;
+	t_mem_tail.dst_ptr = mem_uop.dst;
 	t_mem_tail.is_load = 1'b0;
 	t_mem_tail.is_store = 1'b0;
 	t_mem_tail.is_atomic = 1'b0;
-	t_mem_tail.amo_op = mem_uq.jmp_imm[4:0];
+	t_mem_tail.amo_op = mem_uop.jmp_imm[4:0];
 	t_mem_tail.data = 'd0;
 	t_mem_tail.spans_cacheline = 1'b0;
 	t_mem_tail.unaligned = 1'b0;
-	t_mem_tail.pc = mem_uq.pc;
+	t_mem_tail.pc = mem_uop.pc;
 	t_mem_tail.has_cause = 1'b0;
 	t_mem_tail.cause = MISALIGNED_FETCH;
 	t_mem_tail.uncachable = 1'b0;
 	t_mem_tail.is_ll = 1'b0;
 `ifdef ENABLE_CYCLE_ACCOUNTING
-	t_mem_tail.fetch_cycle = mem_uq.fetch_cycle;
+	t_mem_tail.fetch_cycle = mem_uop.fetch_cycle;
 	t_mem_tail.restart_id = r_restart_counter;
-	t_mem_tail.uuid = mem_uq.uuid;
+	t_mem_tail.uuid = mem_uop.uuid;
 `endif
-	case(mem_uq.op)
+	case(mem_uop.op)
 	  SB:
 	    begin
 	       t_mem_tail.op = MEM_SB;
@@ -3300,8 +3358,8 @@ module exec(clk,
 	    begin
 	       t_mem_tail.op = MEM_SCW;
 	       t_mem_tail.is_atomic = 1'b1;
-	       t_mem_tail.dst_valid = mem_uq.dst_valid;
-	       t_mem_tail.dst_ptr = mem_uq.dst;
+	       t_mem_tail.dst_valid = mem_uop.dst_valid;
+	       t_mem_tail.dst_ptr = mem_uop.dst;
 	       t_mem_tail.spans_cacheline = (w_agu_addr[1:0] != 2'd0);
 	       t_mem_tail.unaligned = |w_agu_addr[1:0];
 	    end // case: SW
@@ -3309,8 +3367,8 @@ module exec(clk,
 	    begin
 	       t_mem_tail.op = MEM_SCD;
 	       t_mem_tail.is_atomic = 1'b1;
-	       t_mem_tail.dst_valid = mem_uq.dst_valid;
-	       t_mem_tail.dst_ptr = mem_uq.dst;
+	       t_mem_tail.dst_valid = mem_uop.dst_valid;
+	       t_mem_tail.dst_ptr = mem_uop.dst;
 	       t_mem_tail.spans_cacheline = (w_agu_addr[2:0] != 3'd0);
 	       t_mem_tail.unaligned = |w_agu_addr[2:0];
 	    end // case: SW
@@ -3318,8 +3376,8 @@ module exec(clk,
 	    begin
 	       t_mem_tail.op = MEM_AMOW;
 	       t_mem_tail.is_atomic = 1'b1;	       
-	       t_mem_tail.dst_valid = mem_uq.dst_valid;
-	       t_mem_tail.dst_ptr = mem_uq.dst;
+	       t_mem_tail.dst_valid = mem_uop.dst_valid;
+	       t_mem_tail.dst_ptr = mem_uop.dst;
 	       t_mem_tail.spans_cacheline = (w_agu_addr[1:0] != 2'd0);
 	       t_mem_tail.unaligned = |w_agu_addr[1:0];
 	    end // case: SW
@@ -3327,8 +3385,8 @@ module exec(clk,
 	    begin
 	       t_mem_tail.op = MEM_AMOD;
 	       t_mem_tail.is_atomic = 1'b1;
-	       t_mem_tail.dst_valid = mem_uq.dst_valid;
-	       t_mem_tail.dst_ptr = mem_uq.dst;
+	       t_mem_tail.dst_valid = mem_uop.dst_valid;
+	       t_mem_tail.dst_ptr = mem_uop.dst;
 	       t_mem_tail.spans_cacheline = (w_agu_addr[2:0] != 3'd0);
 	       t_mem_tail.unaligned = |w_agu_addr[2:0];
 	    end // case: SW
@@ -3336,8 +3394,8 @@ module exec(clk,
 	    begin
 	       t_mem_tail.op = MEM_LW;
 	       t_mem_tail.is_ll = 1'b1;	       
-	       t_mem_tail.dst_valid = mem_uq.dst_valid;
-	       t_mem_tail.dst_ptr = mem_uq.dst;
+	       t_mem_tail.dst_valid = mem_uop.dst_valid;
+	       t_mem_tail.dst_ptr = mem_uop.dst;
 	       t_mem_tail.spans_cacheline = (w_agu_addr[1:0] != 2'd0);
 	       t_mem_tail.unaligned = |w_agu_addr[1:0];
 	    end // case: SW
@@ -3345,8 +3403,8 @@ module exec(clk,
 	    begin
 	       t_mem_tail.op = MEM_LD;
 	       t_mem_tail.is_ll = 1'b1;
-	       t_mem_tail.dst_valid = mem_uq.dst_valid;
-	       t_mem_tail.dst_ptr = mem_uq.dst;
+	       t_mem_tail.dst_valid = mem_uop.dst_valid;
+	       t_mem_tail.dst_ptr = mem_uop.dst;
 	       t_mem_tail.spans_cacheline = (w_agu_addr[2:0] != 3'd0);
 	       t_mem_tail.unaligned = |w_agu_addr[2:0];
 	    end // case: SW	  // 	  
@@ -3354,7 +3412,7 @@ module exec(clk,
 	    begin
 	       t_mem_tail.is_load = 1'b1;
 	       t_mem_tail.op = w_bad_32b_addr ? MEM_NOP : MEM_LW;
-	       t_mem_tail.dst_valid = mem_uq.dst_valid;
+	       t_mem_tail.dst_valid = mem_uop.dst_valid;
 	       t_mem_tail.spans_cacheline = w_bad_32b_addr;
 	       t_mem_tail.unaligned = |w_agu_addr[1:0];
 	    end // case: LW
@@ -3362,7 +3420,7 @@ module exec(clk,
 	    begin
 	       t_mem_tail.is_load = 1'b1;
 	       t_mem_tail.op = w_bad_32b_addr ? MEM_NOP : MEM_LWU;
-	       t_mem_tail.dst_valid = mem_uq.dst_valid;
+	       t_mem_tail.dst_valid = mem_uop.dst_valid;
 	       t_mem_tail.spans_cacheline = w_bad_32b_addr;
 	       t_mem_tail.unaligned = |w_agu_addr[1:0];
 	    end // case: LW	  
@@ -3370,7 +3428,7 @@ module exec(clk,
 	    begin
 	       t_mem_tail.is_load = 1'b1;
 	       t_mem_tail.op = w_bad_64b_addr ? MEM_NOP : MEM_LD;
-	       t_mem_tail.dst_valid = mem_uq.dst_valid;
+	       t_mem_tail.dst_valid = mem_uop.dst_valid;
 	       t_mem_tail.spans_cacheline = w_bad_64b_addr;
 	       t_mem_tail.unaligned = |w_agu_addr[2:0];
 	    end // case: LW
@@ -3378,19 +3436,19 @@ module exec(clk,
 	    begin
 	       t_mem_tail.is_load = 1'b1;	       
 	       t_mem_tail.op = MEM_LB;
-	       t_mem_tail.dst_valid = mem_uq.dst_valid;
+	       t_mem_tail.dst_valid = mem_uop.dst_valid;
 	    end
 	  LBU:
 	    begin
 	       t_mem_tail.is_load = 1'b1;	       
 	       t_mem_tail.op = MEM_LBU;
-	       t_mem_tail.dst_valid = mem_uq.dst_valid;
+	       t_mem_tail.dst_valid = mem_uop.dst_valid;
 	    end // case: LBU
 	  LHU:
 	    begin
 	       t_mem_tail.is_load = 1'b1;
 	       t_mem_tail.op = MEM_LHU;
-	       t_mem_tail.dst_valid = mem_uq.dst_valid;
+	       t_mem_tail.dst_valid = mem_uop.dst_valid;
 	       t_mem_tail.spans_cacheline = w_agu_addr[0];
 	       t_mem_tail.unaligned = w_agu_addr[0];
 	    end // case: LBU
@@ -3398,7 +3456,7 @@ module exec(clk,
 	    begin
 	       t_mem_tail.is_load = 1'b1;
 	       t_mem_tail.op = w_bad_16b_addr ? MEM_NOP : MEM_LH;
-	       t_mem_tail.dst_valid = mem_uq.dst_valid;
+	       t_mem_tail.dst_valid = mem_uop.dst_valid;
 	       t_mem_tail.spans_cacheline = w_bad_16b_addr;
 	       t_mem_tail.unaligned = w_agu_addr[0];
 	    end // case: LH
@@ -3407,7 +3465,7 @@ module exec(clk,
 	    begin
 	       
 	    end
-	endcase // case (mem_uq.op)
+	endcase // case (mem_uop.op)
 
      end // always_comb
 
@@ -3423,12 +3481,14 @@ module exec(clk,
 
    always_comb
      begin
-	t_fwd_int_mem_srcA = r_start_int && t_wr_int_prf &&(t_mem_uq.srcA == int_uop.dst);
+	t_fwd_int_mem_srcA = r_start_int && t_wr_int_prf &&(t_picked_mem_uop.srcA == int_uop.dst);
 	t_fwd_int_mem_srcB = r_start_int && t_wr_int_prf &&(t_mem_dq.src_ptr == int_uop.dst);
-	t_fwd_int2_mem_srcA = r_start_int2 && t_wr_int_prf2 &&(t_mem_uq.srcA == int_uop2.dst);
+
+	t_fwd_int2_mem_srcA = r_start_int2 && t_wr_int_prf2 &&(t_picked_mem_uop.srcA == int_uop2.dst);
 	t_fwd_int2_mem_srcB = r_start_int2 && t_wr_int_prf2 &&(t_mem_dq.src_ptr == int_uop2.dst);
 	
-	t_fwd_mem_mem_srcA = mem_rsp_dst_valid && (t_mem_uq.srcA == mem_rsp_dst_ptr);
+	t_fwd_mem_mem_srcA = mem_rsp_dst_valid && (t_picked_mem_uop.srcA == mem_rsp_dst_ptr);
+	
 	t_fwd_mem_mem_srcB = mem_rsp_dst_valid && (t_mem_dq.src_ptr == mem_rsp_dst_ptr);
      end
    
@@ -3512,7 +3572,7 @@ module exec(clk,
 	   .reset(reset),
 	   .rdptr0(t_picked_uop.srcA),
 	   .rdptr1(t_picked_uop.srcB),
-	   .rdptr2(t_mem_uq.srcA),
+	   .rdptr2(t_picked_mem_uop.srcA),
 	   .rdptr3(t_mem_dq.src_ptr),
 	   .rdptr4(t_picked_uop2.srcA),
 	   .rdptr5(t_picked_uop2.srcB),
