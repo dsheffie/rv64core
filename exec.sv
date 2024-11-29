@@ -285,7 +285,7 @@ module exec(clk,
 
 
    /* mem scheduler signals */
-   logic [N_MEM_SCHED_ENTRIES-1:0] r_mem_sched_valid;
+   logic [N_MEM_SCHED_ENTRIES-1:0] r_mem_sched_valid, r_mem_sched_store;
    logic [`LG_MEM_SCHED_ENTRIES:0] t_mem_sched_alloc_ptr;
    logic [N_MEM_SCHED_ENTRIES-1:0] t_mem_alloc_entry, t_mem_select_entry;
    uop_t r_mem_sched_uops[N_MEM_SCHED_ENTRIES-1:0], t_picked_mem_uop;
@@ -3172,24 +3172,35 @@ module exec(clk,
 	     t_mem_select_entry[t_mem_sched_select_ptr[`LG_MEM_SCHED_ENTRIES-1:0]] = 1'b1;
 	  end
      end // always_comb
-   
+
+   logic t_is_load;
+   always_comb
+     begin
+	t_is_load = (t_mem_uq.op == LW) | (t_mem_uq.op == LWU) | (t_mem_uq.op == LD) |
+		    (t_mem_uq.op == LB) | (t_mem_uq.op == LBU) | (t_mem_uq.op == LHU) |
+		    (t_mem_uq.op == LH); 
+	
+     end
    
    always_ff@(posedge clk)
      begin
 	if(reset | t_flash_clear)
 	  begin
 	     r_mem_sched_valid <= 'd0;
+	     r_mem_sched_store <= 'd0;
 	  end
 	else
 	  begin
 	     if(t_pop_mem_uq)
 	       begin
 		  r_mem_sched_valid[t_mem_sched_alloc_ptr[`LG_MEM_SCHED_ENTRIES-1:0]] <= 1'b1;
-		  r_mem_sched_uops[t_mem_sched_alloc_ptr[`LG_MEM_SCHED_ENTRIES-1:0]] <= t_mem_uq;		  
+		  r_mem_sched_store[t_mem_sched_alloc_ptr[`LG_MEM_SCHED_ENTRIES-1:0]] <= (t_is_load==1'b0);		  
+		  r_mem_sched_uops[t_mem_sched_alloc_ptr[`LG_MEM_SCHED_ENTRIES-1:0]] <= t_mem_uq;
 	       end
 	     if(|w_mem_sched_oldest_ready)
 	       begin
 		  r_mem_sched_valid[t_mem_sched_select_ptr[`LG_MEM_SCHED_ENTRIES-1:0]] <= 1'b0;
+		  r_mem_sched_store[t_mem_sched_select_ptr[`LG_MEM_SCHED_ENTRIES-1:0]] <= 1'b0;		  
 	       end	     
 	  end
      end // always_ff@ (posedge clk)
@@ -3204,7 +3215,10 @@ module exec(clk,
    generate
       for(genvar i = 0; i < N_MEM_SCHED_ENTRIES; i=i+1)
 	begin
-	   assign w_mem_sched_oldest_ready[i] = t_mem_entry_reg_rdy[i] & ((|r_mem_sched_matrix[i]) == 1'b0);
+	   assign w_mem_sched_oldest_ready[i] = (|r_mem_sched_store) ? 
+						t_mem_entry_reg_rdy[i] & ((|r_mem_sched_matrix[i]) == 1'b0) :
+						t_mem_entry_reg_rdy[i] & (~(|(t_mem_entry_reg_rdy & r_mem_sched_matrix[i])));
+						;
 	   always_ff@(posedge clk)
 	     begin
 		if(reset | t_flash_clear)
