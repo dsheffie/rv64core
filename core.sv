@@ -1151,6 +1151,11 @@ module core(clk,
 	    end // case: ACTIVE
 	  DRAIN:	    
 	    begin
+	       $display("r_rob_inflight = %b, memq_empty = %b, t_divide_ready = %b", r_rob_inflight, memq_empty, t_divide_ready);
+	       for(integer i = 0; i < 32; i=i+1)
+		 begin
+		    if(r_rob_inflight[i]) $display("entry %d inflight", i);
+		 end
 	       if((r_rob_inflight == 'd0) & memq_empty & t_divide_ready /*& (r_arch_fault ? l2_empty : 1'b1)*/ )
 		 begin
 		    n_state = RAT;
@@ -1800,9 +1805,9 @@ module core(clk,
 	       end
 	     if(core_mem_rsp_valid)
 	       begin
-		  //$display("rob entry %d, dst ptr %x marked complete by mem port at cycle %d, fetch_cycle %d, dst valid %b",
-		  //core_mem_rsp.rob_ptr, core_mem_rsp.dst_ptr, r_cycle, r_rob[core_mem_rsp.rob_ptr].fetch_cycle,
-		  //core_mem_rsp.dst_valid);
+		  $display("rob entry %d, dst ptr %x marked complete by mem port at cycle %d, fetch_cycle %d, dst valid %b",
+			   core_mem_rsp.rob_ptr, core_mem_rsp.dst_ptr, r_cycle, r_rob[core_mem_rsp.rob_ptr].fetch_cycle,
+			   core_mem_rsp.dst_valid);
 		  r_rob_complete[core_mem_rsp.rob_ptr] <= 1'b1;
 	       end
 

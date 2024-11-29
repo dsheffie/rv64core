@@ -121,11 +121,12 @@ typedef struct packed {
    logic [`LG_PRF_ENTRIES-1:0] src_ptr;
 `ifdef ENABLE_CYCLE_ACCOUNTING
    logic [63:0] 	    fetch_cycle;
-`endif   
+   logic [63:0]		    pc;
+`endif
 } dq_t;
 
 typedef struct packed {
-   logic [`M_WIDTH-1:0] data;
+   logic [`M_WIDTH-1:0]	    data;
    logic [`LG_ROB_ENTRIES-1:0] rob_ptr;
 `ifdef ENABLE_CYCLE_ACCOUNTING
    logic [63:0] 	    fetch_cycle;

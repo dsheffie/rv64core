@@ -435,13 +435,13 @@ module exec(clk,
 
    always_comb
      begin
-	uq_full = t_uq_full || t_mem_uq_full || t_mem_dq_full;
-	uq_next_full = t_uq_next_full || t_mem_uq_next_full || t_mem_dq_next_full;
+	uq_full = t_uq_full | t_mem_uq_full | t_mem_dq_full;
+	uq_next_full = t_uq_next_full | t_mem_uq_next_full | t_mem_dq_next_full;
      end
    
    always_ff@(posedge clk)
      begin
-	if(reset || t_flash_clear)
+	if(reset | t_flash_clear)
 	  begin
 	     r_uq_head_ptr <= 'd0;
 	     r_uq_tail_ptr <= 'd0;
@@ -459,7 +459,7 @@ module exec(clk,
 
    always_ff@(posedge clk)
      begin
-	if(reset  || t_flash_clear)
+	if(reset | t_flash_clear)
 	  begin
 	     r_mem_uq_head_ptr <= 'd0;
 	     r_mem_uq_tail_ptr <= 'd0;
@@ -477,7 +477,7 @@ module exec(clk,
    
    always_ff@(posedge clk)
      begin
-	if(reset  || mem_dq_clr)
+	if(reset | mem_dq_clr)
 	  begin
 	     r_mem_dq_head_ptr <= 'd0;
 	     r_mem_dq_tail_ptr <= 'd0;
@@ -493,27 +493,6 @@ module exec(clk,
 	  end
      end // always_ff@ (posedge clk// )
    
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if(uq_push & uq_uop.pc == 64'hffffffff80270a84 &
-   // 	   uq_uop.rob_ptr == 'd27)
-   // 	  begin
-   // 	    $display("pushed bad uop for rob ptr %d",
-   // 		     uq_uop.rob_ptr);
-   // 	  end
-   // 	if(uq_push_two & uq_uop_two.pc == 64'hffffffff80270a84 &
-   // 	   uq_uop_two.rob_ptr == 'd27)
-   // 	  begin
-   // 	    $display("pushed bad uop for rob ptr %d, op %d, %d %d %b %b",
-   // 		     uq_uop_two.rob_ptr,
-   // 		     uq_uop_two.op,
-   // 		     uq_uop_two.srcA,
-   // 		     uq_uop_two.srcB,
-   // 		     uq_uop_two.srcA_valid,
-   // 		     uq_uop_two.srcB_valid);
-   // 	  end
-
-   //   end
 
    always_comb
      begin
@@ -674,6 +653,8 @@ module exec(clk,
 `ifdef ENABLE_CYCLE_ACCOUNTING
 	t_dq0.fetch_cycle = uq_uop.fetch_cycle;
 	t_dq1.fetch_cycle = uq_uop_two.fetch_cycle;
+	t_dq0.pc = uq_uop.pc;
+	t_dq1.pc = uq_uop_two.pc;
 `endif
      end
 
@@ -1872,9 +1853,9 @@ module exec(clk,
 	r_mq_tail_ptr <= reset ? 'd0 : n_mq_tail_ptr;
 	r_mq_next_tail_ptr <= reset ? 'd1 : n_mq_next_tail_ptr;
 
-	r_mdq_head_ptr <= (reset || mem_dq_clr) ? 'd0 : n_mdq_head_ptr;
-	r_mdq_tail_ptr <= (reset || mem_dq_clr) ? 'd0 : n_mdq_tail_ptr;
-	r_mdq_next_tail_ptr <= (reset || mem_dq_clr) ? 'd1 : n_mdq_next_tail_ptr;	
+	r_mdq_head_ptr <= (reset | mem_dq_clr) ? 'd0 : n_mdq_head_ptr;
+	r_mdq_tail_ptr <= (reset | mem_dq_clr) ? 'd0 : n_mdq_tail_ptr;
+	r_mdq_next_tail_ptr <= (reset | mem_dq_clr) ? 'd1 : n_mdq_next_tail_ptr;	
      end
 
    
@@ -3049,8 +3030,10 @@ module exec(clk,
    	
    always_comb
      begin
-	t_pop_mem_dq = (!t_mem_dq_empty) && !mem_dq_clr && w_dq_ready
-		       && (!(mem_mdq_next_full||mem_mdq_full)) ;
+	t_pop_mem_dq = (t_mem_dq_empty==1'b0) &
+		       (mem_dq_clr==1'b0) & 
+		       w_dq_ready &
+		       ((mem_mdq_next_full|mem_mdq_full)==1'b0) ;
      end
 
 
@@ -3067,15 +3050,15 @@ module exec(clk,
 	core_store_data_ptr_valid = r_dq_ready;
      end
 
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if(mem_rsp_dst_valid) $display("mem rsp ptr %d, r cycle %d", mem_rsp_dst_ptr, r_cycle);
-
-   // 	if(w_dq_ready & !t_pop_mem_dq)
-   // 	  begin
-   // 	     $display("dq rdy for src ptr %d dq_empty %b dq_clr %b next full %b full %b", 
-   // 		      t_mem_dq.src_ptr, t_mem_dq_empty, mem_dq_clr, mem_mdq_next_full, mem_mdq_full);
-   // 	  end
+   always_ff@(negedge clk)
+     begin
+    	if(w_dq_ready & (t_mem_dq_empty == 1'b0))
+    	  begin
+    	     $display("dq rdy for src ptr %d rob ptr %d pc %x, fetch cycle %d cycle %d", 
+		      t_mem_dq.src_ptr, t_mem_dq.rob_ptr, t_mem_dq.pc, t_mem_dq.fetch_cycle, r_cycle);
+	  end
+     end
+   
 	
    // 	if(r_dq_ready)
    // 	  $display("src ptr %d ready for rob ptr %d, r_cycle %d",
@@ -3288,24 +3271,28 @@ module exec(clk,
 	
    always_ff@(negedge clk)
      begin
-	if(|r_mem_sched_valid)
-	  begin
-	     for(integer i = 0; i < N_MEM_SCHED_ENTRIES; i=i+1)
-	       begin
-		  if(r_mem_sched_valid[i])
-		    begin
-		       $display("mem sched entry %d holds rob ptr %d", i, r_mem_sched_uops[i].rob_ptr);
-		    end
-	       end
-	  end
+	//if(|r_mem_sched_valid)
+	//begin
+	//for(integer i = 0; i < N_MEM_SCHED_ENTRIES; i=i+1)
+	//begin
+	//if(r_mem_sched_valid[i])
+	//begin
+	//$display("mem sched entry %d holds rob ptr %d", i, r_mem_sched_uops[i].rob_ptr);
+	//end
+	//end
+	//end
 	if(|t_mem_entry_rdy)
 	  begin
 	     $display("rdy = %b", t_mem_entry_rdy);
 	     for(integer i = 0; i < N_MEM_SCHED_ENTRIES; i=i+1)
 	       begin
-		  $display("%b : %b", t_mem_entry_rdy[i], r_mem_sched_matrix[i]);
+		  $display("%b : %b, pc %x, rob ptr %d", t_mem_entry_rdy[i], r_mem_sched_matrix[i], r_mem_sched_uops[i].pc, r_mem_sched_uops[i].rob_ptr);
 	       end
-	     $display("picked mem uop has pc %x, rob ptr %d, fetch cycle %d, slot %d", t_picked_mem_uop.pc, t_picked_mem_uop.rob_ptr, 
+	     $display("picked mem uop has pc %x, store %b, rob ptr %d, data ptr %d, fetch cycle %d, slot %d", 
+		      t_picked_mem_uop.pc,
+		      t_picked_mem_uop.is_store,
+		      t_picked_mem_uop.rob_ptr,
+		      t_picked_mem_uop.srcB,
 		      t_picked_mem_uop.fetch_cycle, t_mem_sched_select_ptr);
 	  end
 
@@ -3314,6 +3301,11 @@ module exec(clk,
 	  begin
 	     $display("allocate into slot %d, pc %x fetch cycle %d cycle %d", t_mem_sched_alloc_ptr[`LG_INT_SCHED_ENTRIES-1:0], t_mem_uq.pc, t_mem_uq.fetch_cycle, r_cycle);
 	     $display("age mask %b", t_mem_sched_mask_valid);
+	  end
+
+	if(restart_complete)
+	  begin
+	     $display("restart complete asserted at cycle %d", r_cycle);
 	  end
      end
 
