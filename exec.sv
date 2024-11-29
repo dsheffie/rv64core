@@ -1687,17 +1687,17 @@ module exec(clk,
 	//int_uop.pc, t_wr_csr, r_mstatus, r_cycle);
 	//end	
 
-	if((int_uop.op == SLLI) & r_start_int)
-	  begin
-	     $display("1 portA pc %x src A = %x, imm = %x, result %x", 
-		      int_uop.pc, t_srcA, t_shift_amt, t_result);
-	  end
+	// if((int_uop.op == SLLI) & r_start_int)
+	//   begin
+	//      $display("1 portA pc %x src A = %x, imm = %x, result %x", 
+	// 	      int_uop.pc, t_srcA, t_shift_amt, t_result);
+	//   end
 
-	if((int_uop2.op == SLLI) & r_start_int2)
-	  begin
-	     $display("2 portA pc %x src A = %x, imm = %x, result %x, cycle %d", 
-		      int_uop2.pc, t_srcA_2, t_shift_amt2, t_result2, r_cycle);
-	  end
+	// if((int_uop2.op == SLLI) & r_start_int2)
+	//   begin
+	//      $display("2 portA pc %x src A = %x, imm = %x, result %x, cycle %d", 
+	// 	      int_uop2.pc, t_srcA_2, t_shift_amt2, t_result2, r_cycle);
+	//   end
 
 
 	// if(t_start_mul&r_start_int)
@@ -3051,41 +3051,14 @@ module exec(clk,
 	core_store_data_ptr_valid = r_dq_ready;
      end
 
-   always_ff@(negedge clk)
-     begin
-    	if(w_dq_ready & (t_mem_dq_empty == 1'b0))
-    	  begin
-    	     $display("dq rdy for src ptr %d rob ptr %d pc %x, fetch cycle %d cycle %d", 
-		      t_mem_dq.src_ptr, t_mem_dq.rob_ptr, t_mem_dq.pc, t_mem_dq.fetch_cycle, r_cycle);
-	  end
-     end
-   
-	
-   // 	if(r_dq_ready)
-   // 	  $display("src ptr %d ready for rob ptr %d, r_cycle %d",
-   // 		   mem_dq.src_ptr, mem_dq.rob_ptr, r_cycle);
-
-   // 	if(t_push_two_dq)
-   // 	  begin
-   // 	     $display("push b src ptr %d, rob ptr %d at %d",
-   // 		      t_dq1.src_ptr, t_dq1.rob_ptr, r_cycle);
-   // 	     $display("push a src ptr %d, rob ptr %d at %d",
-   // 		      t_dq0.src_ptr, t_dq0.rob_ptr, r_cycle);
+   // always_ff@(negedge clk)
+   //   begin
+   //  	if(w_dq_ready & (t_mem_dq_empty == 1'b0))
+   //  	  begin
+   //  	     $display("dq rdy for src ptr %d rob ptr %d pc %x, fetch cycle %d cycle %d", 
+   // 		      t_mem_dq.src_ptr, t_mem_dq.rob_ptr, t_mem_dq.pc, t_mem_dq.fetch_cycle, r_cycle);
    // 	  end
-   // 	else if(t_push_one_dq)
-   // 	  begin
-   // 	     if(uq_uop.is_mem && uq_uop.srcB_valid)
-   // 	       begin
-   // 		  $display("push a src ptr %d, rob ptr %d at %d",
-   // 			   t_dq0.src_ptr, t_dq0.rob_ptr, r_cycle);
-   // 	       end
-   // 	     else
-   // 	       begin
-   // 		  $display("push b src ptr %d, rob ptr %d at %d",
-   // 			   t_dq1.src_ptr, t_dq1.rob_ptr, r_cycle);
-   // 	       end
-   // 	  end
-   //   end // always_ff@ (negedge clk)
+   //   end
    
    
    always_ff@(posedge clk)
@@ -3270,7 +3243,8 @@ module exec(clk,
    wire w_bad_32b_addr = (&w_agu_addr[3:2]) & (|w_agu_addr[1:0]);
    wire	w_bad_64b_addr = w_agu_addr[3] & (|w_agu_addr[2:0]);
 
-	
+
+`ifdef MEM_SCHED_DEBUG	
    always_ff@(negedge clk)
      begin
 	if(|w_mem_sched_oldest_ready)
@@ -3317,7 +3291,7 @@ module exec(clk,
 	       end
 	  end
      end
-
+`endif
    
    always_comb
      begin
@@ -3678,14 +3652,6 @@ module exec(clk,
 	     complete_bundle_1.data <= t_result;
 	  end
      end // always_ff@ (posedge clk)
-
-   always_ff@(negedge clk)
-     begin
-	if(complete_valid_1 & int_uop.rob_ptr == 'd24 & t_result == 'ha)
-	  begin
-	     $display("===> picking uop with pc %x, rob ptr %d, fetch_cycle %d", int_uop.pc, int_uop.rob_ptr, int_uop.fetch_cycle);
-	  end
-     end
 
 
 `ifdef VERILATOR

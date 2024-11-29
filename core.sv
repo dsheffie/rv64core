@@ -789,28 +789,6 @@ module core(clk,
      end // always_ff@ (posedge clk)
 
 
-   always_ff@(negedge clk)
-     begin
-	if(t_retire) $display("robA ptr %d, pc %x data %x", 
-			      r_rob_head_ptr[`LG_ROB_ENTRIES-1:0], 
-			      r_rob[r_rob_head_ptr[`LG_ROB_ENTRIES-1:0]].pc,
-			      r_rob[r_rob_head_ptr[`LG_ROB_ENTRIES-1:0]].data);
-	
-	if(t_retire_two) $display("robB ptr %d, pc %x data %x",
-				  r_rob_next_head_ptr[`LG_ROB_ENTRIES-1:0], 
-				  r_rob[r_rob_next_head_ptr[`LG_ROB_ENTRIES-1:0]].pc,
-				  r_rob[r_rob_next_head_ptr[`LG_ROB_ENTRIES-1:0]].data,
-				  );
-
-	
-	//if(retire_valid) $display("retireA pc %x", retire_pc);
-	//if(retire_two_valid) $display("retireB pc %x", retire_two_pc);
-	
-	if(retire_reg_valid) $display("A %x reg[%d] = %x", retire_pc, retire_reg_ptr, retire_reg_data);
-	if(retire_reg_two_valid) $display("B %x reg[%d] = %x", retire_two_pc, retire_reg_two_ptr, retire_reg_two_data);
-
-     end
-   
 `ifdef ENABLE_CYCLE_ACCOUNTING
    always_ff@(negedge clk)
      begin
@@ -1819,9 +1797,9 @@ module core(clk,
 	       end
 	     if(core_mem_rsp_valid)
 	       begin
-		  $display("rob entry %d, dst ptr %x marked complete by mem port at cycle %d, fetch_cycle %d, dst valid %b",
-			   core_mem_rsp.rob_ptr, core_mem_rsp.dst_ptr, r_cycle, r_rob[core_mem_rsp.rob_ptr].fetch_cycle,
-			   core_mem_rsp.dst_valid);
+		  //$display("rob entry %d, dst ptr %x marked complete by mem port at cycle %d, fetch_cycle %d, dst valid %b",
+		  //core_mem_rsp.rob_ptr, core_mem_rsp.dst_ptr, r_cycle, r_rob[core_mem_rsp.rob_ptr].fetch_cycle,
+		  //core_mem_rsp.dst_valid);
 		  r_rob_complete[core_mem_rsp.rob_ptr] <= 1'b1;
 	       end
 
@@ -1880,11 +1858,11 @@ module core(clk,
 `ifdef ENABLE_CYCLE_ACCOUNTING
 	     r_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].complete_cycle <= r_cycle;
 `endif
-	     $display("int1 write %x to rob ptr %d, pc %x", 
-		      t_complete_bundle_1.data, 
-		      t_complete_bundle_1.rob_ptr,
-		      t_complete_bundle_1.restart_pc
-		      );	     
+	     //$display("int1 write %x to rob ptr %d, pc %x", 
+	     //t_complete_bundle_1.data, 
+	     //t_complete_bundle_1.rob_ptr,
+	     //t_complete_bundle_1.restart_pc
+	     //);	     
 	  end // if (t_complete_valid_1)
 	if(t_complete_valid_2)
 	  begin
@@ -1897,15 +1875,15 @@ module core(clk,
 `ifdef ENABLE_CYCLE_ACCOUNTING
 	     r_rob[t_complete_bundle_2.rob_ptr[`LG_ROB_ENTRIES-1:0]].complete_cycle <= r_cycle;
 `endif
-	     $display("int2 write %x to rob ptr %d, pc %x", 
-		      t_complete_bundle_2.data, 
-		      t_complete_bundle_2.rob_ptr,
-		      t_complete_bundle_2.restart_pc);
+	     //$display("int2 write %x to rob ptr %d, pc %x", 
+	//	      t_complete_bundle_2.data, 
+	//	      t_complete_bundle_2.rob_ptr,
+	//	      t_complete_bundle_2.restart_pc);
 	     
 	  end // if (t_complete_valid_2)
 	if(core_mem_rsp_valid)
 	  begin
-	     $display("mem write %x to rob ptr %d", core_mem_rsp.data, core_mem_rsp.rob_ptr);
+	     //$display("mem write %x to rob ptr %d", core_mem_rsp.data, core_mem_rsp.rob_ptr);
 
 	     r_rob[core_mem_rsp.rob_ptr].data <= core_mem_rsp.data;
 	     r_rob[core_mem_rsp.rob_ptr].faulted <= core_mem_rsp.has_cause;
