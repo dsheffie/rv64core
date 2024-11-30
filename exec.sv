@@ -3109,12 +3109,12 @@ module exec(clk,
    always_comb
      begin
 	//allocation forwarding
-	t_mem_alloc_srcA_match = t_mem_uq.srcA_valid & (
-						      (mem_rsp_dst_valid & (mem_rsp_dst_ptr == t_mem_uq.srcA)) |
-						      (t_mul_complete & (w_mul_prf_ptr == t_mem_uq.srcA)) |
-						      (r_start_int2 & t_wr_int_prf2 & (int_uop2.dst == t_mem_uq.srcA)) |
-						      (r_start_int & t_wr_int_prf & (int_uop.dst == t_mem_uq.srcA))
-						      );
+	t_mem_alloc_srcA_match = (
+				  (mem_rsp_dst_valid & (mem_rsp_dst_ptr == t_mem_uq.srcA)) |
+				  (t_mul_complete & (w_mul_prf_ptr == t_mem_uq.srcA)) |
+				  (r_start_int2 & t_wr_int_prf2 & (int_uop2.dst == t_mem_uq.srcA)) |
+				  (r_start_int & t_wr_int_prf & (int_uop.dst == t_mem_uq.srcA))
+				  );
      end
    
    
@@ -3123,13 +3123,13 @@ module exec(clk,
 	begin
 	   always_comb
 	     begin
-		t_mem_srcA_match[i] = r_mem_sched_uops[i].srcA_valid & (
-									 (mem_rsp_dst_valid & (mem_rsp_dst_ptr == r_mem_sched_uops[i].srcA)) |
-									 (t_mul_complete & (w_mul_prf_ptr == r_mem_sched_uops[i].srcA)) |
-									 (r_div_complete & (r_div_prf_ptr == r_mem_sched_uops[i].srcA)) |
-									 (r_start_int2 & t_wr_int_prf2 & (int_uop2.dst == r_mem_sched_uops[i].srcA)) |			 
-									 (r_start_int & t_wr_int_prf & (int_uop.dst == r_mem_sched_uops[i].srcA))
-									 );		
+		t_mem_srcA_match[i] = (
+				       (mem_rsp_dst_valid & (mem_rsp_dst_ptr == r_mem_sched_uops[i].srcA)) |
+				       (t_mul_complete & (w_mul_prf_ptr == r_mem_sched_uops[i].srcA)) |
+				       (r_div_complete & (r_div_prf_ptr == r_mem_sched_uops[i].srcA)) |
+				       (r_start_int2 & t_wr_int_prf2 & (int_uop2.dst == r_mem_sched_uops[i].srcA)) |			 
+				       (r_start_int & t_wr_int_prf & (int_uop.dst == r_mem_sched_uops[i].srcA))
+				       );		
 		t_mem_entry_reg_rdy[i] = (r_mem_sched_valid[i] & (!(mem_q_next_full|mem_q_full))) ? (t_mem_srcA_match[i] |r_mem_srcA_rdy[i]) : 1'b0;
  	     end
 
@@ -3143,7 +3143,7 @@ module exec(clk,
 		  begin
 		     if(t_mem_alloc_entry[i])
 		       begin //allocating to this entry
-			  r_mem_srcA_rdy[i] <= t_mem_uq.srcA_valid ? (!r_prf_inflight[t_mem_uq.srcA] | t_mem_alloc_srcA_match) : 1'b1;
+			  r_mem_srcA_rdy[i] <= (!r_prf_inflight[t_mem_uq.srcA] | t_mem_alloc_srcA_match);
 		       end
 		     else if(t_mem_select_entry[i])
 		       begin
