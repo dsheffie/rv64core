@@ -3492,15 +3492,14 @@ module exec(clk,
 
    always_comb
      begin
-	t_fwd_int_mem_srcA = r_start_int && t_wr_int_prf &&(t_picked_mem_uop.srcA == int_uop.dst);
-	t_fwd_int_mem_srcB = r_start_int && t_wr_int_prf &&(t_mem_dq.src_ptr == int_uop.dst);
+	t_fwd_int_mem_srcA = r_start_int & t_wr_int_prf &&(t_picked_mem_uop.srcA == int_uop.dst);
+	t_fwd_int_mem_srcB = r_start_int & t_wr_int_prf &&(t_mem_dq.src_ptr == int_uop.dst);
 
-	t_fwd_int2_mem_srcA = r_start_int2 && t_wr_int_prf2 &&(t_picked_mem_uop.srcA == int_uop2.dst);
-	t_fwd_int2_mem_srcB = r_start_int2 && t_wr_int_prf2 &&(t_mem_dq.src_ptr == int_uop2.dst);
+	t_fwd_int2_mem_srcA = r_start_int2 & t_wr_int_prf2 &&(t_picked_mem_uop.srcA == int_uop2.dst);
+	t_fwd_int2_mem_srcB = r_start_int2 & t_wr_int_prf2 &&(t_mem_dq.src_ptr == int_uop2.dst);
 	
-	t_fwd_mem_mem_srcA = mem_rsp_dst_valid && (t_picked_mem_uop.srcA == mem_rsp_dst_ptr);
-	
-	t_fwd_mem_mem_srcB = mem_rsp_dst_valid && (t_mem_dq.src_ptr == mem_rsp_dst_ptr);
+	t_fwd_mem_mem_srcA = mem_rsp_dst_valid & (t_picked_mem_uop.srcA == mem_rsp_dst_ptr);
+	t_fwd_mem_mem_srcB = mem_rsp_dst_valid & (t_mem_dq.src_ptr == mem_rsp_dst_ptr);
      end
    
    always_ff@(posedge clk)
@@ -3513,71 +3512,24 @@ module exec(clk,
 	r_fwd_mem_mem_srcA <= t_fwd_mem_mem_srcA;
 	r_fwd_mem_mem_srcB <= t_fwd_mem_mem_srcB;
 	
-	r_fwd_int_srcA <= r_start_int && t_wr_int_prf && (t_picked_uop.srcA == int_uop.dst);
-	r_fwd_int_srcB <= r_start_int && t_wr_int_prf && (t_picked_uop.srcB == int_uop.dst);
-
-	r_fwd_mul_srcA <= t_mul_complete && (t_picked_uop.srcA == w_mul_prf_ptr);
-	r_fwd_mul_srcB <= t_mul_complete && (t_picked_uop.srcB == w_mul_prf_ptr);
-	
-	r_fwd_int2_srcA <= r_start_int2 && t_wr_int_prf2 && (t_picked_uop.srcA == int_uop2.dst);
-	r_fwd_int2_srcB <= r_start_int2 && t_wr_int_prf2 && (t_picked_uop.srcB == int_uop2.dst);
-
-	r_fwd_int_srcA2 <= r_start_int && t_wr_int_prf && (t_picked_uop2.srcA == int_uop.dst);
-	r_fwd_int_srcB2 <= r_start_int && t_wr_int_prf && (t_picked_uop2.srcB == int_uop.dst);
-
-	r_fwd_mul_srcA2 <= t_mul_complete && (t_picked_uop2.srcA == w_mul_prf_ptr);
-	r_fwd_mul_srcB2 <= t_mul_complete && (t_picked_uop2.srcB == w_mul_prf_ptr);
-	
-	r_fwd_int2_srcA2 <= r_start_int2 && t_wr_int_prf2 && (t_picked_uop2.srcA == int_uop2.dst);
-	r_fwd_int2_srcB2 <= r_start_int2 && t_wr_int_prf2 && (t_picked_uop2.srcB == int_uop2.dst);
-	
-	
-	r_fwd_mem_srcA <= mem_rsp_dst_valid && (t_picked_uop.srcA == mem_rsp_dst_ptr);
-	r_fwd_mem_srcB <= mem_rsp_dst_valid && (t_picked_uop.srcB == mem_rsp_dst_ptr);
-	r_fwd_mem_srcA2 <= mem_rsp_dst_valid && (t_picked_uop2.srcA == mem_rsp_dst_ptr);
-	r_fwd_mem_srcB2 <= mem_rsp_dst_valid && (t_picked_uop2.srcB == mem_rsp_dst_ptr);	
+	r_fwd_int_srcA <= r_start_int & t_wr_int_prf & (t_picked_uop.srcA == int_uop.dst);
+	r_fwd_int_srcB <= r_start_int & t_wr_int_prf & (t_picked_uop.srcB == int_uop.dst);
+	r_fwd_mul_srcA <= t_mul_complete & (t_picked_uop.srcA == w_mul_prf_ptr);
+	r_fwd_mul_srcB <= t_mul_complete & (t_picked_uop.srcB == w_mul_prf_ptr);
+	r_fwd_int2_srcA <= r_start_int2 & t_wr_int_prf2 & (t_picked_uop.srcA == int_uop2.dst);
+	r_fwd_int2_srcB <= r_start_int2 & t_wr_int_prf2 & (t_picked_uop.srcB == int_uop2.dst);
+	r_fwd_int_srcA2 <= r_start_int & t_wr_int_prf & (t_picked_uop2.srcA == int_uop.dst);
+	r_fwd_int_srcB2 <= r_start_int & t_wr_int_prf & (t_picked_uop2.srcB == int_uop.dst);
+	r_fwd_mul_srcA2 <= t_mul_complete & (t_picked_uop2.srcA == w_mul_prf_ptr);
+	r_fwd_mul_srcB2 <= t_mul_complete & (t_picked_uop2.srcB == w_mul_prf_ptr);
+	r_fwd_int2_srcA2 <= r_start_int2 & t_wr_int_prf2 & (t_picked_uop2.srcA == int_uop2.dst);
+	r_fwd_int2_srcB2 <= r_start_int2 & t_wr_int_prf2 & (t_picked_uop2.srcB == int_uop2.dst);
+	r_fwd_mem_srcA <= mem_rsp_dst_valid & (t_picked_uop.srcA == mem_rsp_dst_ptr);
+	r_fwd_mem_srcB <= mem_rsp_dst_valid & (t_picked_uop.srcB == mem_rsp_dst_ptr);
+	r_fwd_mem_srcA2 <= mem_rsp_dst_valid & (t_picked_uop2.srcA == mem_rsp_dst_ptr);
+	r_fwd_mem_srcB2 <= mem_rsp_dst_valid & (t_picked_uop2.srcB == mem_rsp_dst_ptr);	
      end
-
-   // always@(negedge clk)
-   //   begin
-   // 	if(r_fwd_int2_srcA | r_fwd_int2_srcB)
-   // 	  begin
-   // 	     $display("need forward (1->2) %b, %b, int_uop.pc %x",
-   // 		      r_fwd_int2_srcA, r_fwd_int2_srcB, int_uop.pc);
-   // 	     //$stop();
-   // 	  end
-	
-   // 	if(r_fwd_int_srcA2 | r_fwd_int_srcB2)
-   // 	  begin
-   // 	     $display("need forward (1->2) %b, %b, %x, %x, %x, %x, int_uop2.pc %x",
-   // 		      r_fwd_int_srcA2, r_fwd_int_srcB2,
-   // 		      t_srcA_2, t_srcB_2,
-   // 		      w_srcA_2, w_srcB_2,
-   // 		      int_uop2.pc);
-   // 	     //$stop();
-   // 	  end
-	
-   // 	if(r_fwd_int2_srcA2 | r_fwd_int2_srcB2)
-   // 	  begin
-   // 	     $display("need forward (2->2) %b, %b, int_uop2.pc %x",
-   // 		      r_fwd_int2_srcA2, r_fwd_int2_srcB2, int_uop2.pc);
-	     
-   // 	      //   $stop();
-   // 	   end	
-   //   end
    
-   
-   // always_ff@(negedge clk)
-   //   begin
-	
-   // 	$display("at cycle %d, mul ptr = %d %b, div ptr = %d %b, int_uop.dst %d", 
-   // 		 r_cycle, 
-   // 		 w_mul_prf_ptr, t_mul_complete,
-   // 		 w_div_prf_ptr, t_div_complete,
-   // 		 int_uop.dst);
-   //   end
-   
-
    rf6r3w #(.WIDTH(`M_WIDTH), .LG_DEPTH(`LG_PRF_ENTRIES)) 
    intprf (.clk(clk),
 	   .reset(reset),
