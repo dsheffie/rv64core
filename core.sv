@@ -1518,6 +1518,7 @@ module core(clk,
 	  end
      end // always_comb
 
+
    logic t_next_head_br;
    always_comb
      begin
@@ -1544,16 +1545,16 @@ module core(clk,
 	       begin
 		  t_free_reg = 1'b1;
 		  t_free_reg_ptr = t_rob_head.old_pdst;
-		  n_retire_prf_free[t_rob_head.pdst] = 1'b0;
-		  n_retire_prf_free[t_rob_head.old_pdst] = 1'b1;
+		  n_retire_prf_free[{1'b0, t_rob_head.pdst[`LG_PRF_ENTRIES-2:0]}] = 1'b0;
+		  n_retire_prf_free[{1'b0, t_rob_head.old_pdst[`LG_PRF_ENTRIES-2:0]}] = 1'b1;
 	       end
 
 	     if(t_retire_two && t_rob_next_head.valid_dst)
 	       begin
 		  t_free_reg_two = 1'b1;
 		  t_free_reg_two_ptr = t_rob_next_head.old_pdst;
-		  n_retire_prf_free[t_rob_next_head.pdst] = 1'b0;
-		  n_retire_prf_free[t_rob_next_head.old_pdst] = 1'b1;
+		  n_retire_prf_free[{1'b0, t_rob_next_head.pdst[`LG_PRF_ENTRIES-2:0]}] = 1'b0;
+		  n_retire_prf_free[{1'b0, t_rob_next_head.old_pdst[`LG_PRF_ENTRIES-2:0]}] = 1'b1;
 	       end
 	     
 	     n_branch_pc = t_next_head_br ? t_rob_next_head.pc : t_rob_head.pc;
@@ -2071,7 +2072,7 @@ module core(clk,
 
 
    generate
-      for(genvar i = 0; i < N_PRF_ENTRIES; i=i+2)
+      for(genvar i = 0; i < (N_PRF_ENTRIES/2); i=i+2)
 	begin
 	   assign w_prf_free_even[i] = r_prf_free[i];
 	   assign w_prf_free_even[i+1] = 1'b0;
@@ -2080,6 +2081,17 @@ module core(clk,
 	end
    endgenerate
 
+
+   generate
+      for(genvar i = (N_PRF_ENTRIES/2); i < N_PRF_ENTRIES; i=i+2)
+	begin
+	   assign w_prf_free_even[i] = 1'b0;
+	   assign w_prf_free_even[i+1] = 1'b0;
+	   assign w_prf_free_odd[i] = 1'b0;	   
+	   assign w_prf_free_odd[i+1] = 1'b0;
+	end
+   endgenerate
+   
 
    assign w_prf_free_even_full = (|w_prf_free_even) == 1'b0;
    assign w_prf_free_odd_full = (|w_prf_free_odd) == 1'b0;
@@ -2090,6 +2102,8 @@ module core(clk,
 
    find_first_set#(`LG_PRF_ENTRIES) ffs_gpr2(.in(w_prf_free_odd),
 					     .y(w_gpr_ffs_odd));
+
+
    always_ff@(posedge clk)
      begin
 	r_bank_sel <= reset ? 1'b0 : ~r_bank_sel;
@@ -2099,6 +2113,7 @@ module core(clk,
      begin
 	t_gpr_ffs  = r_bank_sel ? w_gpr_ffs_even : w_gpr_ffs_odd;
 	t_gpr_ffs2 = r_bank_sel ? w_gpr_ffs_odd : w_gpr_ffs_even;
+
 	t_gpr_ffs_full = r_bank_sel ? w_prf_free_even_full : w_prf_free_odd_full;
 	t_gpr_ffs2_full = r_bank_sel ? w_prf_free_odd_full : w_prf_free_even_full;
      end
@@ -2106,27 +2121,61 @@ module core(clk,
    always_comb
      begin
 	n_prf_free = r_prf_free;
-	n_prf_entry = t_gpr_ffs[`LG_PRF_ENTRIES-1:0];
-	n_prf_entry2 = t_gpr_ffs2[`LG_PRF_ENTRIES-1:0];
+	n_prf_entry = {t_uop.is_mem, t_gpr_ffs[`LG_PRF_ENTRIES-2:0]};
+	n_prf_entry2 = {t_uop2.is_mem, t_gpr_ffs2[`LG_PRF_ENTRIES-2:0]};
 	
 	if(t_alloc & t_uop.dst_valid)
 	  begin
-	     n_prf_free[n_prf_entry] = 1'b0;
+	     n_prf_free[{1'b0, t_gpr_ffs[`LG_PRF_ENTRIES-2:0]}] = 1'b0;
 	  end
 	if(t_alloc_two && t_uop2.dst_valid)
 	  begin
-	     n_prf_free[n_prf_entry2] = 1'b0;
+	     n_prf_free[{1'b0, t_gpr_ffs2[`LG_PRF_ENTRIES-2:0]}] = 1'b0;
 	  end
 	if(t_free_reg)
 	  begin
-	     n_prf_free[t_free_reg_ptr] = 1'b1;
+	     n_prf_free[{1'b0, t_free_reg_ptr[`LG_PRF_ENTRIES-2:0]}] = 1'b1;
 	  end
 	if(t_free_reg_two)
 	  begin
-	     n_prf_free[t_free_reg_two_ptr] = 1'b1;
+	     n_prf_free[{1'b0, t_free_reg_two_ptr[`LG_PRF_ENTRIES-2:0]}] = 1'b1;
 	  end
      end // always_comb
 
+
+   /*
+   always_ff@(posedge clk)
+     begin
+	if(t_alloc & t_uop.dst_valid)
+	  begin
+	     if(t_gpr_ffs[`LG_PRF_ENTRIES-1]) $stop();
+	     $display("allocating to prf entry %d (%d) for pc %x", n_prf_entry, t_uop.dst, t_uop.pc);
+	  end
+	if(t_alloc_two && t_uop2.dst_valid)
+	  begin
+	     if(t_gpr_ffs2[`LG_PRF_ENTRIES-1]) $stop();
+	     $display("allocating to prf2 entry %d (%d) for pc %x", n_prf_entry2, t_uop2.dst, t_uop2.pc);	     
+	  end
+	if(t_alloc & t_uop.srcA_valid)
+	  begin
+	     $display("renamed source A = %d (%d) for pc %x", w_rn_srcA_1, t_uop.srcA, t_uop.pc);
+	  end
+	if(t_alloc & t_uop.srcB_valid)
+	  begin
+	     $display("renamed source B = %d (%d) for pc %x", w_rn_srcB_1, t_uop.srcB, t_uop.pc);
+	  end	
+	if(t_alloc_two & t_uop2.srcA_valid)
+	  begin
+	     $display("renamed source A = %d (%d) for pc %x", w_rn_srcA_2, t_uop2.srcA, t_uop2.pc);
+	  end
+	if(t_alloc_two & t_uop2.srcB_valid)
+	  begin
+    $display("renamed source B = %d (%d) for pc %x", w_rn_srcB_2, t_uop2.srcB, t_uop2.pc);
+	  end	
+     end
+    */
+      
+   
    
    decode_riscv dec0 
      (
