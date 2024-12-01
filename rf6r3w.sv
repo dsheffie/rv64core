@@ -42,8 +42,10 @@ module rf6r3w(clk, reset,
    output logic [WIDTH-1:0]   rd5;   
    
    localparam DEPTH = 1<<LG_DEPTH;
-   logic [WIDTH-1:0] 	    r_ram_alu[DEPTH-1:0];
-   logic [WIDTH-1:0]	    r_ram_mem[DEPTH-1:0];   
+   localparam H_DEPTH = 1<<(LG_DEPTH-1);   
+   
+   logic [WIDTH-1:0] 	    r_ram_alu[H_DEPTH-1:0];
+   logic [WIDTH-1:0]	    r_ram_mem[H_DEPTH-1:0];   
    
 `ifdef SECOND_EXEC_PORT
    wire			    wen2_ = wen2;
@@ -82,29 +84,29 @@ module rf6r3w(clk, reset,
 	else
 	  begin
 `endif
-	     rd0 <= rdptr0=='d0 ? 'd0 : (rd0_mem ? r_ram_mem[rdptr0] : r_ram_alu[rdptr0]);	     
-	     rd1 <= rdptr1=='d0 ? 'd0 : (rd1_mem ? r_ram_mem[rdptr1] : r_ram_alu[rdptr1]);
-	     rd2 <= rdptr2=='d0 ? 'd0 : (rd2_mem ? r_ram_mem[rdptr2] : r_ram_alu[rdptr2]);
-	     rd3 <= rdptr3=='d0 ? 'd0 : (rd3_mem ? r_ram_mem[rdptr3] : r_ram_alu[rdptr3]);
-	     rd4 <= rdptr4_=='d0 ? 'd0 : (rd4_mem ? r_ram_mem[rdptr4_] : r_ram_alu[rdptr4_]);
-	     rd5 <= rdptr5_=='d0 ? 'd0 : (rd5_mem ? r_ram_mem[rdptr5_] : r_ram_alu[rdptr5_]);
+	     rd0 <= rdptr0=='d0 ? 'd0 : (rd0_mem ? r_ram_mem[rdptr0[LG_DEPTH-2:0]] : r_ram_alu[rdptr0[LG_DEPTH-2:0]]);	     
+	     rd1 <= rdptr1=='d0 ? 'd0 : (rd1_mem ? r_ram_mem[rdptr1[LG_DEPTH-2:0]] : r_ram_alu[rdptr1[LG_DEPTH-2:0]]);
+	     rd2 <= rdptr2=='d0 ? 'd0 : (rd2_mem ? r_ram_mem[rdptr2[LG_DEPTH-2:0]] : r_ram_alu[rdptr2[LG_DEPTH-2:0]]);
+	     rd3 <= rdptr3=='d0 ? 'd0 : (rd3_mem ? r_ram_mem[rdptr3[LG_DEPTH-2:0]] : r_ram_alu[rdptr3[LG_DEPTH-2:0]]);
+	     rd4 <= rdptr4_=='d0 ? 'd0 : (rd4_mem ? r_ram_mem[rdptr4_[LG_DEPTH-2:0]] : r_ram_alu[rdptr4_[LG_DEPTH-2:0]]);
+	     rd5 <= rdptr5_=='d0 ? 'd0 : (rd5_mem ? r_ram_mem[rdptr5_[LG_DEPTH-2:0]] : r_ram_alu[rdptr5_[LG_DEPTH-2:0]]);
 	     
 	     if(wen0)
 	       begin
 		  if(wrptr0[LG_DEPTH-1] == 1'b1) $stop();		  
-		  r_ram_alu[wrptr0] <= wr0;
+		  r_ram_alu[wrptr0[LG_DEPTH-2:0]] <= wr0;
 	       end
 	     
 	     if(wen1)
 	       begin
 		  if(wrptr1[LG_DEPTH-1] == 1'b0) $stop();
-		  r_ram_mem[wrptr1] <= wr1;
+		  r_ram_mem[wrptr1[LG_DEPTH-2:0]] <= wr1;
 	       end
 	     
 	     if(wen2_)
 	       begin
 		  if(wrptr2[LG_DEPTH-1] == 1'b1) $stop();		  		  
-		  r_ram_alu[wrptr2] <= wr2;
+		  r_ram_alu[wrptr2[LG_DEPTH-2:0]] <= wr2;
 	       end
 	  end
      end // always_ff@ (posedge clk)   
