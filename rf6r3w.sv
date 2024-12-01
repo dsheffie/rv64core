@@ -108,7 +108,9 @@ module rf6r3w(clk, reset,
 		  if(wrptr2[LG_DEPTH-1] == 1'b1) $stop();		  		  
 		  r_ram_alu[wrptr2[LG_DEPTH-2:0]] <= wr2;
 	       end
-	  end
+`ifdef VERILATOR
+	  end // else: !if(reset)
+`endif
      end // always_ff@ (posedge clk)   
 
    
