@@ -11,14 +11,14 @@
 //`define DISABLE_IRQ
 `define SECOND_EXEC_PORT 1
 //`define FOUR_CYCLE_L1D 1
-//`define TWO_SRC_CHEAP 1
+`define TWO_SRC_CHEAP 1
 
 `define LG_M_WIDTH 6
 
 `define MAX_VA 39
 
 `define LG_INT_SCHED_ENTRIES 3
-`define LG_MEM_SCHED_ENTRIES 4
+`define LG_MEM_SCHED_ENTRIES 3
 
 //gshare branch predictor
 `define LG_PHT_SZ 16
