@@ -34,16 +34,17 @@ typedef struct packed {
    logic       is_irq;
    logic       valid_dst;
    logic [4:0] ldst;
-
    logic [(`LG_PRF_ENTRIES-1):0] pdst;
    logic [(`LG_PRF_ENTRIES-1):0] old_pdst;
-   logic [(`M_WIDTH-1):0] 	 pc;
-   logic [(`M_WIDTH-1):0] 	 target_pc;
-   logic 			 is_br;
+   logic			 is_br;
    logic 			 is_indirect;
    logic 			 take_br;
-   logic [`M_WIDTH-1:0] 	 data;
-   logic [`LG_PHT_SZ-1:0] 	 pht_idx;
+
+`ifdef PC_IN_ROB
+   logic [(`M_WIDTH-1):0] 	 pc;
+`endif
+   logic [(`M_WIDTH-1):0] 	 target_pc;
+   
 
 `ifdef ENABLE_CYCLE_ACCOUNTING
    logic [63:0] 	    fetch_cycle;

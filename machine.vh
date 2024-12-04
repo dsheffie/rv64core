@@ -6,6 +6,7 @@
  //`define PERFECT_L1D
 `endif
 
+//`define PC_IN_ROB 1
 `define FPGA 1
 
 //`define DISABLE_IRQ
