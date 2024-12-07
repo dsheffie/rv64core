@@ -942,9 +942,6 @@ int main(int argc, char **argv) {
   // Initialize Verilators variables
   std::string sysArgs, pipelog;
   std::string rv32_binary = "dhrystone3";
-  std::string log_name = "log.txt";
-  std::string pushout_name = "pushout.txt";
-  std::string branch_name = "branch_info.txt";
   std::string retire_name;
   bool window, retiretrace = false, verbose = false;
   uint64_t heartbeat = 1UL<<36, start_trace_at = ~0UL;
@@ -967,9 +964,6 @@ int main(int argc, char **argv) {
       ("isdump,d", po::value<bool>(&use_checkpoint)->default_value(false), "is a dump")
       ("file,f", po::value<std::string>(&rv32_binary), "mips binary")
       ("heartbeat,h", po::value<uint64_t>(&heartbeat)->default_value(1<<24), "heartbeat for stats")
-      ("log,l", po::value<std::string>(&log_name), "stats log filename")
-      ("pushout", po::value<std::string>(&pushout_name), "pushout log filename")
-      ("branch", po::value<std::string>(&branch_name), "branch log filename")
       ("memlat,m", po::value<uint64_t>(&mem_lat)->default_value(4), "memory latency")
       ("pipelog,p", po::value<std::string>(&pipelog), "log for pipeline tracing")
       ("pipestart", po::value<uint64_t>(&pipestart)->default_value(0), "when to start logging")
@@ -995,10 +989,10 @@ int main(int argc, char **argv) {
   uint32_t max_insns_per_cycle = 4;
   uint32_t max_insns_per_cycle_hist_sz = 2*max_insns_per_cycle;
 
-  std::map<uint32_t, uint64_t> mispredicts;
-
+  use_checkpoint = not(is_rv64_elf(rv32_binary.c_str()));
   retiretrace = retire_name.size() != -0;
-    
+
+  std::map<uint32_t, uint64_t> mispredicts;
   uint64_t inflight[32] = {0};
   uint64_t *insns_delivered = new uint64_t[max_insns_per_cycle_hist_sz];
   memset(insns_delivered, 0, sizeof(uint64_t)*max_insns_per_cycle_hist_sz);
@@ -1020,6 +1014,11 @@ int main(int argc, char **argv) {
 
   
   globals::sysArgc = buildArgcArgv(rv32_binary.c_str(),sysArgs.c_str(),&globals::sysArgv);
+  std::string log_name = rv32_binary + "-log.txt";
+  std::string tip_name = rv32_binary + "-tip.txt";
+  std::string pushout_name = rv32_binary + "-pushout.txt";
+  std::string branch_name = rv32_binary + "-branch_info.txt";
+  
   initCapstone();
   tb = new Vcore_l1d_l1i;
   uint64_t last_match_pc = 0;
@@ -1031,15 +1030,13 @@ int main(int argc, char **argv) {
   bool got_putchar = false;
   bool was_in_flush_mode = false;
   bool pending_irq = false;
-  
+
   globals::syscall_emu = not(use_checkpoint);
   tb->syscall_emu = globals::syscall_emu;
+
   
   if(use_checkpoint) {
     loadState(*s, rv32_binary.c_str());
-    //for(int i = 0; i < 32; i++) {
-    //if(s->gpr[i] == 0);
-    //}
     loadState(*ss, rv32_binary.c_str());
   }
   else {
@@ -1915,7 +1912,7 @@ int main(int argc, char **argv) {
       tip_cycles += p.second;
     }
     std::cout << "tip cycles  = " << tip_cycles << "\n";
-    dump_tip("tip.txt", tip_map, insn_cnts, s);    
+    dump_tip(tip_name, tip_map, insn_cnts, s);    
     out.close();
 
     uint64_t total_ticks = 0;
