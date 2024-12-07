@@ -28,24 +28,58 @@
 
 static const uint8_t magicArr[4] = {0x7f, 'E', 'L', 'F'};
 
-bool checkElf(const Elf64_Ehdr *eh) {
+static bool checkElf(const Elf64_Ehdr *eh) {
   const uint8_t *identArr = reinterpret_cast<const uint8_t*>(eh->e_ident);
   return memcmp((void*)magicArr, identArr, 4)==0;
 }
 
-bool check32Bit(const Elf64_Ehdr *eh) {
+static bool check64Bit(const Elf64_Ehdr *eh) {
   return (eh->e_ident[EI_CLASS] == ELFCLASS64);
 }
 
-bool checkBigEndian(const Elf64_Ehdr *eh) {
-  return (eh->e_ident[EI_DATA] == ELFDATA2MSB);
-}
-
-bool checkLittleEndian(const Elf64_Ehdr *eh) {
+static bool checkLittleEndian(const Elf64_Ehdr *eh) {
   return (eh->e_ident[EI_DATA] == ELFDATA2LSB);
 }
 
-void load_elf(const char* fn, state_t *ms) {
+bool is_rv64_elf(const char* fn) {
+  struct stat s;
+  int fd = -1, rc = -1;
+  bool success = false;
+  Elf64_Ehdr *eh = nullptr;
+  fd = open(fn, O_RDONLY);
+  if(fd<0) {
+    printf("open() returned %d\n", fd);
+    exit(-1);
+  }
+  rc = fstat(fd,&s);
+  if(rc<0) {
+    printf("fstat() returned %d\n", rc);
+    exit(-1);
+  }
+  eh = (Elf64_Ehdr*)mmap(nullptr, s.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+    
+  if(not(checkElf(eh))) {
+    goto done;
+  }
+
+  if(not(check64Bit(eh))) {
+    goto done;
+  }
+  if(not(checkLittleEndian(eh))) {
+    goto done;
+  }
+  if((eh->e_machine) != 243) {
+    printf("Not a RISCV binary..goodbye got type %d\n", (eh->e_machine));
+    goto done;
+  }
+  success = true;
+ done:
+  munmap(reinterpret_cast<void*>(eh), s.st_size);
+  close(fd);
+  return success;
+}
+
+bool load_elf(const char* fn, state_t *ms) {
   struct stat s;
   Elf64_Ehdr *eh = nullptr;
   Elf64_Phdr* ph = nullptr;
@@ -74,22 +108,21 @@ void load_elf(const char* fn, state_t *ms) {
   eh = (Elf64_Ehdr *)buf;
   close(fd);
     
-  if(!checkElf(eh)) {
-    printf("Bogus binary - not ELF\n");
-    exit(-1);
+  if(not(checkElf(eh))) {
+    return false;
   }
 
-  if(!check32Bit(eh)) {
-    printf("Bogus binary - not ELF64\n");
-    exit(-1);
+  if(not(check64Bit(eh))) {
+    return false;
   }
-  assert(checkLittleEndian(eh));
+  if(not(checkLittleEndian(eh))) {
+    return false;
+  }
 
   if((eh->e_machine) != 243) {
     printf("Not a RISCV binary..goodbye got type %d\n", (eh->e_machine));
-    exit(-1);
+    return false;
   }
-
 
   e_phnum = (eh->e_phnum);
   ph = reinterpret_cast<Elf64_Phdr*>(buf + eh->e_phoff);
@@ -191,4 +224,5 @@ void load_elf(const char* fn, state_t *ms) {
   WRITE_WORD(0x101c, 0);
 
   ms->pc = 0x1000;
+  return true;
 }
