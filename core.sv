@@ -951,7 +951,17 @@ module core(clk,
    logic t_restart_complete;
    assign restart_complete = t_restart_complete;
    
-
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if(restart_valid & (n_got_restart_ack==1'b0))
+   // 	  begin
+   // 	     $display("send fe restart at cycle %d", r_cycle);
+   // 	  end
+   // 	if(n_got_restart_ack & (r_got_restart_ack == 1'b0))
+   // 	  begin
+   // 	     $display("restarted at cycle %d", r_cycle);
+   // 	  end
+   //   end
    always_comb
      begin
 	n_mode64 = r_mode64;
@@ -1153,17 +1163,9 @@ module core(clk,
 	    end // case: ACTIVE
 	  DRAIN:	    
 	    begin
-	       //$display("r_rob_inflight = %b, memq_empty = %b, t_divide_ready = %b", r_rob_inflight, memq_empty, t_divide_ready);
-	       //for(integer i = 0; i < 32; i=i+1)
-	       //begin
-	       //if(r_rob_inflight[i]) $display("entry %d inflight", i);
-	       // end
 	       if((r_rob_inflight == 'd0) & memq_empty & t_divide_ready /*& (r_arch_fault ? l2_empty : 1'b1)*/ )
 		 begin
 		    n_state = RAT;
-		    //if(!l2_empty) $stop();
-		    //$display(">>> clear pc %x, restart pc %x after fault at cycle %d at priv %d, paging enabled %b", 
-		    //r_restart_src_pc, r_restart_pc, r_cycle, priv, paging_active);
 		 end 
 	    end // case: DRAIN
 	  RAT:
