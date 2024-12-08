@@ -1113,6 +1113,11 @@ module l1d(clk,
 	       t_amo32_data = r_req.data[31:0];
 	       t_amo64_data = r_req.data[63:0];
 	    end
+	  5'd4: /* amoxor */
+	    begin
+	       t_amo32_data = t_shift[31:0] ^ r_req.data[31:0];
+	       t_amo64_data = t_shift[63:0] ^ r_req.data[63:0];
+	    end
 	  5'd8: /* amoor */
 	    begin
 	       t_amo32_data = t_shift[31:0] | r_req.data[31:0];
