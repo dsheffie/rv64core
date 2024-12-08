@@ -954,6 +954,26 @@ void execRiscv(state_t *s) {
 	    }
 	    break;	    
 	  }
+	  case 0x4: { /* amoxor.w */
+	    pa = s->translate(s->gpr[m.a.rs1], page_fault, 4, true);
+	    assert(!page_fault);
+	    int64_t x = s->load32(pa);
+	    s->store32(pa, s->gpr[m.a.rs2] ^ x);
+	    assert(not(atomic_queue.empty()));
+	    auto &t = atomic_queue.front();
+	    if(not(t.pc == s->pc and t.addr == pa and t.data == (s->gpr[m.a.rs2]+x))) {
+	      printf("you have an atomic error\n");
+	      printf("rtl %lx, %lx, %lx\n", t.pc, t.addr, t.data);
+	      printf("sim %lx, %lx, %lx\n", s->pc, pa, s->gpr[m.a.rs2]+x);
+	      exit(-1);
+	    }
+	    atomic_queue.pop_front();
+	    
+	    if(m.a.rd != 0) {
+	      s->sext_xlen(x, m.a.rd);
+	    }
+	    break;
+	  }
 	  case 0x8: {/* amoor.w */
 	    pa = s->translate(s->gpr[m.a.rs1], page_fault, 4, true);
 	    assert(!page_fault);
@@ -1087,6 +1107,26 @@ void execRiscv(state_t *s) {
 	    }
 	    break;
 	  }
+	  case 0x4: {/* amoxor.d */
+	    pa = s->translate(s->gpr[m.a.rs1], page_fault, 8, true);
+	    assert(!page_fault);
+	    int64_t x = s->load64(pa);
+
+	    assert(not(atomic_queue.empty()));
+	    auto &t = atomic_queue.front();
+	    if(not(t.pc == s->pc and t.addr == pa and t.data == (s->gpr[m.a.rs2]|x))) {
+	      printf("you have an atomic error\n");
+	      printf("rtl %lx, %lx, %lx\n", t.pc, t.addr, t.data);
+	      printf("sim %lx, %lx, %lx\n", s->pc, pa, s->gpr[m.a.rs2]|x);
+	      exit(-1);
+	    }
+	    atomic_queue.pop_front();
+	    s->store64(pa, s->gpr[m.a.rs2] ^ x);	    
+	    if(m.a.rd != 0) {
+	      s->gpr[m.a.rd] = x;
+	    }
+	    break;
+	  }	    
 	  case 0x8: {/* amoor.d */
 	    pa = s->translate(s->gpr[m.a.rs1], page_fault, 8, true);
 	    assert(!page_fault);
