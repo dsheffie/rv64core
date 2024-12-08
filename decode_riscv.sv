@@ -440,6 +440,11 @@ module decode_riscv(
 			   uop.op = insn[14:12]==3'd2 ? SCW : SCD;
 			   uop.srcB_valid = 1'b1;			   
 			end
+		      5'd4:
+			begin /* amoxor */
+			   uop.op = insn[14:12]==3'd2 ? SCW : SCD;
+			   uop.srcB_valid = 1'b1;			   
+			end
 		      5'd8:
 			begin /* amoor */
 			   uop.op = insn[14:12]==3'd2 ? AMOW : AMOD;
