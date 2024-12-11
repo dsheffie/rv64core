@@ -471,7 +471,7 @@ static int64_t read_csr(int csr_id, state_t *s, bool &undef) {
     case 0xf14:
       return s->mhartid;      
     default:
-      printf("rd csr id 0x%x unimplemented, pc %lx\n", csr_id, s->pc);
+      //printf("rd csr id 0x%x unimplemented, pc %lx\n", csr_id, s->pc);
       undef = true;
       break;
     }
@@ -576,7 +576,7 @@ static void write_csr(int csr_id, state_t *s, int64_t v, bool &undef) {
       //}
       break;
     default:
-      printf("wr csr id 0x%x unimplemented\n", csr_id);
+      //printf("wr csr id 0x%x unimplemented\n", csr_id);
       undef = true;
       break;
     }
@@ -1759,6 +1759,11 @@ void execRiscv(state_t *s) {
 
   s->icnt++;
   return;
+
+ report_unimplemented:
+  printf("taking csr exception at pc %lx\n", s->pc);
+  except_cause = CAUSE_ILLEGAL_INSTRUCTION;
+  tval = s->pc;
   
  handle_exception: {
     s->took_exception = true;
@@ -1808,15 +1813,15 @@ void execRiscv(state_t *s) {
   }
   return;
   
- report_unimplemented:
-  std::cout << std::hex << s->pc << std::dec
-	    << " : " << getAsmString(inst, s->pc)
-	    << " , raw " << std::hex
-	    << inst
-	    << std::dec
-	    << " , icnt " << s->icnt
-	    << "\n";  
-  abort();
+ // report_unimplemented:
+ //  std::cout << std::hex << s->pc << std::dec
+ // 	    << " : " << getAsmString(inst, s->pc)
+ // 	    << " , raw " << std::hex
+ // 	    << inst
+ // 	    << std::dec
+ // 	    << " , icnt " << s->icnt
+ // 	    << "\n";  
+ //  abort();
   
   
 }
