@@ -443,6 +443,8 @@ static int64_t read_csr(int csr_id, state_t *s, bool &undef) {
       return s->mie;
     case 0x305:
       return s->mtvec;
+    case 0x306:
+      return s->mcounteren;      
     case 0x340:
       return s->mscratch;
     case 0x341:
@@ -1759,6 +1761,18 @@ void execRiscv(state_t *s) {
 
   s->icnt++;
   return;
+
+ report_unimplemented:
+  except_cause = CAUSE_ILLEGAL_INSTRUCTION;
+  tval = s->pc;  
+  std::cout << std::hex << s->pc << std::dec
+	    << " : " << getAsmString(inst, s->pc)
+	    << " , raw " << std::hex
+	    << inst
+	    << std::dec
+	    << " , icnt " << s->icnt
+	    << "\n";  
+
   
  handle_exception: {
     s->took_exception = true;
@@ -1808,15 +1822,7 @@ void execRiscv(state_t *s) {
   }
   return;
   
- report_unimplemented:
-  std::cout << std::hex << s->pc << std::dec
-	    << " : " << getAsmString(inst, s->pc)
-	    << " , raw " << std::hex
-	    << inst
-	    << std::dec
-	    << " , icnt " << s->icnt
-	    << "\n";  
-  abort();
+  //abort();
   
   
 }
