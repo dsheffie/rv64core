@@ -47,6 +47,7 @@ typedef enum logic [5:0]
  RDL2HIT_CSR,
  RDL2ACCESS_CSR,  
  MHARTID,
+ MVENDORID,
  BADCSR
 } csr_t;
 
