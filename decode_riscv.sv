@@ -91,6 +91,10 @@ function csr_t decode_csr(logic [11:0] csr, logic [1:0] priv);
        x = RDL2ACCESS_CSR;
      12'hf11:
        x = (priv != 2'd3) ? BADCSR : MVENDORID;
+     12'hf12:
+       x = (priv != 2'd3) ? BADCSR : MARCHID;
+     12'hf13:
+       x = (priv != 2'd3) ? BADCSR : MIMPLID;
      12'hf14:
        x = (priv != 2'd3) ? BADCSR : MHARTID;
      default:
@@ -893,7 +897,10 @@ module decode_riscv(
 			     begin
 				if(rs1 == 'd0) /* fastpath */
 				  begin
-				     if((csr_id == MHARTID) | (csr_id == MVENDORID))
+				     if((csr_id == MHARTID) | 
+					(csr_id == MVENDORID) | 
+					(csr_id == MARCHID) | 
+					(csr_id == MIMPLID) )
 				       begin /* mhartid - always 0 */
 					  uop.op = (rd == 'd0) ? NOP : ADDU;
 					  uop.dst = rd;

@@ -1332,7 +1332,10 @@ int main(int argc, char **argv) {
 	  std::cout << "did not match, moving checker : RTL "
 		    << std::hex << tb->retire_pc
 		    << ", sim " << ss->pc
-		    << std::dec << "\n";
+		    << std::dec
+		    << " "
+		    << insns_retired
+		    << " insns retired\n";
 	  execRiscv(ss);
 	  exception |= ss->took_exception;
 	  cnt++;
