@@ -443,6 +443,8 @@ static int64_t read_csr(int csr_id, state_t *s, bool &undef) {
       return s->mie;
     case 0x305:
       return s->mtvec;
+    case 0x306:
+      return s->mcounteren;
     case 0x340:
       return s->mscratch;
     case 0x341:
@@ -452,7 +454,9 @@ static int64_t read_csr(int csr_id, state_t *s, bool &undef) {
     case 0x343:
       return s->mtvec;
     case 0x344:
-      return s->mip;      
+      return s->mip;
+    case 0x3a0:
+      return s->pmpcfg0;
     case 0x3b0:
       return s->pmpaddr0;
     case 0x3b1:
@@ -467,7 +471,11 @@ static int64_t read_csr(int csr_id, state_t *s, bool &undef) {
       //return csr_time;
       return 0;
     case 0xc03:
-      return 0;      
+      return 0;
+    case 0xf11:
+    case 0xf12:
+    case 0xf13:
+      return 0;
     case 0xf14:
       return s->mhartid;      
     default:
@@ -715,8 +723,16 @@ void execRiscv(state_t *s) {
 	int64_t disp64 = disp;
 	int64_t ea = ((disp64 << 32) >> 32) + s->gpr[m.l.rs1];
 	int sz = 1<<(m.s.sel & 3);
-	
 	int page_fault = 0;
+	
+	bool unaligned = (ea & (sz-1)) != 0;
+	if(unaligned) {
+	  printf("unaligned load fault for ea %lx, sz = %d\n", ea, sz);
+	  except_cause = CAUSE_MISALIGNED_LOAD;
+	  tval = ea;
+	  goto handle_exception;
+	}
+
 	int64_t pa = s->translate(ea, page_fault, sz);
 	if(page_fault) {
 	  except_cause = CAUSE_LOAD_PAGE_FAULT;
@@ -1276,6 +1292,14 @@ void execRiscv(state_t *s) {
       int sz = 1<<(m.s.sel);
       int64_t pa = s->translate(ea, fault, sz, true);
 
+      bool unaligned = (ea & (sz-1)) != 0;
+      if(unaligned) {
+	printf("unaligned store fault for ea %lx, sz = %d\n", ea, sz);
+	except_cause = CAUSE_MISALIGNED_STORE;
+	tval = ea;
+	goto handle_exception;
+      }
+
       
       if(fault) {
 	except_cause = CAUSE_STORE_PAGE_FAULT;
@@ -1813,6 +1837,7 @@ void execRiscv(state_t *s) {
   }
   return;
   
+<<<<<<< HEAD
  // report_unimplemented:
  //  std::cout << std::hex << s->pc << std::dec
  // 	    << " : " << getAsmString(inst, s->pc)
@@ -1822,6 +1847,9 @@ void execRiscv(state_t *s) {
  // 	    << " , icnt " << s->icnt
  // 	    << "\n";  
  //  abort();
+=======
+  //abort();
+>>>>>>> main
   
   
 }

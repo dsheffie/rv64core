@@ -2673,7 +2673,13 @@ module exec(clk,
 	  RDFAULTEDBRANCH_CSR:
 	    t_rd_csr = 'd0;
 	  RDTIME_CSR:
-	    t_rd_csr = r_mtime;
+	    begin
+`ifdef DISABLE_RDTIME
+	       t_rd_csr = 'd0;
+`else
+	       t_rd_csr = r_mtime;
+`endif
+	    end
 	  RDL1DTLBHIT_CSR:
 	    t_rd_csr = counters.dtlb_hits;
 	  RDL1DTLBACCESS_CSR:
