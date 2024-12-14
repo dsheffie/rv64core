@@ -1837,21 +1837,6 @@ void execRiscv(state_t *s) {
   }
   return;
   
-<<<<<<< HEAD
- // report_unimplemented:
- //  std::cout << std::hex << s->pc << std::dec
- // 	    << " : " << getAsmString(inst, s->pc)
- // 	    << " , raw " << std::hex
- // 	    << inst
- // 	    << std::dec
- // 	    << " , icnt " << s->icnt
- // 	    << "\n";  
- //  abort();
-=======
-  //abort();
->>>>>>> main
-  
-  
 }
 
 void runRiscv(state_t *s, uint64_t dumpIcnt) {
