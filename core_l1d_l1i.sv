@@ -29,6 +29,8 @@ module
 		   putchar_fifo_out,
 		   putchar_fifo_empty,
 		   putchar_fifo_pop,
+		   putchar_fifo_wptr,
+		   putchar_fifo_rptr,
 		   took_exc,
 		   paging_active,
 		   page_table_root,
@@ -43,6 +45,7 @@ module
 		   mem_req_store_data,
 		   mem_req_opcode,
 		   mem_rsp_valid,
+		   mem_req_gnt,
 		   mem_rsp_tag,
 		   mem_rsp_load_data,
 		   alloc_valid,
@@ -102,7 +105,9 @@ module
    output logic [7:0] putchar_fifo_out;
    output logic       putchar_fifo_empty;
    input logic 	      putchar_fifo_pop;
-   
+   output logic [3:0] putchar_fifo_wptr;
+   output logic [3:0] putchar_fifo_rptr;
+      
    output logic	took_exc;
    output logic	paging_active;
    output logic	[63:0] page_table_root;
@@ -139,6 +144,8 @@ module
    output logic [3:0] 				 mem_req_opcode;
    
    input logic 					 mem_rsp_valid;
+   input logic					 mem_req_gnt;
+   
    input logic [`LG_L2_REQ_TAGS-1:0]		 mem_rsp_tag;
    input logic [(1 << (`LG_L2_CL_LEN+3)) - 1:0]	 mem_rsp_load_data;
    
@@ -550,6 +557,7 @@ module
    
    always_comb
      begin
+	n_mem_req_valid = r_mem_req_valid;
 	n_pulse_fsm = r_pulse_fsm;
 	n_pulse_valid = (r_pulse_fsm==2'd0) & (w_mem_empty==1'b0);
 	n_save_req_tag = r_save_req_tag;
@@ -567,8 +575,16 @@ module
 	    end
 	  'd1:
 	    begin
+	       if(mem_req_gnt)
+		 begin
+		    n_mem_req_valid = 1'b0;
+		 end
+	       
 	       if(mem_rsp_valid)
 		 begin
+		    n_mem_req_valid = 1'b0;
+		    //$display("rsp at cycle %d", r_cycle);
+		    
 		    n_pulse_fsm = 2'd2;
 		    n_mem_rsp_load_data = mem_rsp_load_data;
 		    n_mem_rsp_valid = 1'b1;
@@ -578,6 +594,7 @@ module
 	    begin
 	       if(w_mem_empty == 1'b0)
 		 begin
+		    n_mem_req_valid = 1'b1;
 		    n_pulse_fsm = 2'd1;
 		    n_save_req_tag = mem_fifo[w_mem_head_ptr].tag;
 		 end
@@ -588,6 +605,7 @@ module
 	endcase // case (r_pulse_fsm)
      end // always_comb
    
+   logic n_mem_req_valid, r_mem_req_valid;
 
    always_ff@(posedge clk)
      begin
@@ -597,9 +615,10 @@ module
 	r_mem_rsp_valid <= reset ? 1'b0 : n_mem_rsp_valid;
 	r_mem_rsp_load_data <= n_mem_rsp_load_data;
 	r_mem_error <= reset ? 1'b0 : n_mem_error;
+	r_mem_req_valid <= reset ? 1'b0 : n_mem_req_valid;
      end
 
-   assign mem_req_valid = r_pulse_fsm==2'd1;
+   assign mem_req_valid = r_mem_req_valid;
    assign mem_req_addr = mem_fifo[w_mem_head_ptr].addr;
    assign mem_req_tag = mem_fifo[w_mem_head_ptr].tag;
    assign mem_req_store_data = mem_fifo[w_mem_head_ptr].data;
@@ -862,6 +881,8 @@ module
 	     .putchar_fifo_out(putchar_fifo_out),
 	     .putchar_fifo_empty(putchar_fifo_empty),
 	     .putchar_fifo_pop(putchar_fifo_pop),
+	     .putchar_fifo_wptr(putchar_fifo_wptr),
+	     .putchar_fifo_rptr(putchar_fifo_rptr),
 	     .restart_complete(w_restart_complete),
 	     .syscall_emu(syscall_emu),
 	     .core_state(core_state),
@@ -970,6 +991,8 @@ module core_l1d_l1i(clk,
 		    putchar_fifo_out,
 		    putchar_fifo_empty,
 		    putchar_fifo_pop,
+		    putchar_fifo_wptr,
+		    putchar_fifo_rptr,
 		    took_exc,
 		    paging_active,
 		    page_table_root,
@@ -984,6 +1007,7 @@ module core_l1d_l1i(clk,
 		    mem_req_store_data,
 		    mem_req_opcode,
 		    mem_rsp_valid,
+		    mem_req_gnt,
 		    mem_rsp_load_data,
 		    alloc_valid,
 		    alloc_two_valid,
@@ -1035,6 +1059,8 @@ module core_l1d_l1i(clk,
    output logic [7:0] putchar_fifo_out;
    output logic       putchar_fifo_empty;
    input logic 	      putchar_fifo_pop;
+   input logic [3:0]  putchar_fifo_wptr;
+   input logic [3:0]  putchar_fifo_rptr;
    
    output logic	took_exc;
    output logic	paging_active;
@@ -1061,7 +1087,8 @@ module core_l1d_l1i(clk,
    output logic [31:0] 		mem_req_addr;
    output logic [(1 << (`LG_L2_CL_LEN+3)) - 1:0] mem_req_store_data;
    output logic [3:0] 				 mem_req_opcode;
-   
+
+   input logic					 mem_req_gnt;
    input logic 					 mem_rsp_valid;
    input logic [(1 << (`LG_L2_CL_LEN+3)) - 1:0]  mem_rsp_load_data;
    
@@ -1128,6 +1155,8 @@ module core_l1d_l1i(clk,
 		     .putchar_fifo_out(putchar_fifo_out),
 		     .putchar_fifo_empty(putchar_fifo_empty),
 		     .putchar_fifo_pop(putchar_fifo_pop),
+		     .putchar_fifo_wptr(putchar_fifo_wptr),
+		     .putchar_fifo_rptr(putchar_fifo_rptr),
 		     .took_exc(took_exc),
 		     .paging_active(paging_active),
 		     .page_table_root(page_table_root),
@@ -1141,6 +1170,7 @@ module core_l1d_l1i(clk,
                      .mem_req_store_data(mem_req_store_data),
                      .mem_req_opcode(mem_req_opcode),
                      .mem_rsp_valid(mem_rsp_valid),
+		     .mem_req_gnt(mem_req_gnt),
                      .mem_rsp_load_data(mem_rsp_load_data),
                      .alloc_valid(alloc_valid),
                      .alloc_two_valid(alloc_two_valid),

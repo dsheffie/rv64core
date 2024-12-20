@@ -59,6 +59,8 @@ module exec(clk,
 	    putchar_fifo_out,
 	    putchar_fifo_empty,
 	    putchar_fifo_pop,
+	    putchar_fifo_wptr,
+	    putchar_fifo_rptr,
 	    cause,
 	    epc,
 	    tval,
@@ -119,6 +121,8 @@ module exec(clk,
    output logic [7:0] putchar_fifo_out;
    output logic       putchar_fifo_empty;
    input logic 	      putchar_fifo_pop;
+   output logic [3:0] putchar_fifo_wptr;
+   output logic [3:0] putchar_fifo_rptr;   
    
    output logic [1:0] priv;
    output logic       priv_update;
@@ -2607,6 +2611,9 @@ module exec(clk,
    assign putchar_fifo_out = r_pc_buf[r_rd_pc_idx[2:0]];
    assign putchar_fifo_empty = r_wr_pc_idx == r_rd_pc_idx;
    wire w_putchar_fifo_full = (r_wr_pc_idx[2:0] == r_rd_pc_idx[2:0]) & (r_wr_pc_idx[3] != r_rd_pc_idx[3]);
+   assign putchar_fifo_wptr = r_wr_pc_idx;
+   assign putchar_fifo_rptr = r_rd_pc_idx;
+   
 
    always_comb
      begin
@@ -2667,8 +2674,6 @@ module exec(clk,
 	  RDBRANCH_CSR:
 	    begin
 	       t_rd_csr = {63'd0, w_putchar_fifo_full};
-	       //$display("w_putchar_fifo_full = %b, putchar_fifo_empty = %b, t_rd_csr = %x, int_uop.op = %d", 
-	       //w_putchar_fifo_full, putchar_fifo_empty, t_rd_csr,int_uop.op);
 	    end
 	  RDFAULTEDBRANCH_CSR:
 	    t_rd_csr = 'd0;

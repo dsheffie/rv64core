@@ -62,6 +62,8 @@ module core(clk,
 	    putchar_fifo_out,
 	    putchar_fifo_empty,
 	    putchar_fifo_pop,
+	    putchar_fifo_wptr,
+	    putchar_fifo_rptr,
 	    core_state,
 	    restart_complete,
 	    syscall_emu,
@@ -159,6 +161,9 @@ module core(clk,
    output logic [7:0] putchar_fifo_out;
    output logic       putchar_fifo_empty;
    input logic 	      putchar_fifo_pop;
+   output logic [3:0] putchar_fifo_wptr;
+   output logic [3:0] putchar_fifo_rptr;
+   
    output logic [4:0] core_state;
    output logic	restart_complete;
    input logic syscall_emu;
@@ -2231,6 +2236,8 @@ module core(clk,
 	   .putchar_fifo_out(putchar_fifo_out),
 	   .putchar_fifo_empty(putchar_fifo_empty),
 	   .putchar_fifo_pop(putchar_fifo_pop),
+	   .putchar_fifo_wptr(putchar_fifo_wptr),
+	   .putchar_fifo_rptr(putchar_fifo_rptr),
 	   .priv(w_priv),
 	   .priv_update(w_priv_update),
 	   .paging_active(paging_active),

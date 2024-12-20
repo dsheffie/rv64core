@@ -1026,7 +1026,7 @@ int main(int argc, char **argv) {
   uint64_t mismatches = 0, n_stores = 0, n_loads = 0;
   uint64_t last_n_logged_loads = 0, last_total_load_lat = 0;
   uint64_t n_branches = 0, n_mispredicts = 0, n_checks = 0, n_flush_cycles = 0;
-  bool got_mem_req = false, got_mem_rsp = false, got_monitor = false, incorrect = false;
+  bool got_mem_rsp = false, got_monitor = false, incorrect = false;
   bool got_putchar = false;
   bool was_in_flush_mode = false;
   bool pending_irq = false;
@@ -1552,17 +1552,19 @@ int main(int argc, char **argv) {
 
     //negedge
     tb->mem_rsp_valid = 0;
-
+    tb->mem_req_gnt = 0;
+    
     if(tb->mem_req_valid && (mem_reply_cycle == -1)) {
       ++mem_reqs;
       int lat = (rand() % mem_lat) + 1;
       mem_reply_cycle = cycle + lat;
+      tb->mem_req_gnt = 1; 
     }
     
     if(/*tb->mem_req_valid*/mem_reply_cycle ==cycle) {
       last_retire = 0;
       mem_reply_cycle = -1;
-      assert(tb->mem_req_valid);
+      //assert(tb->mem_req_valid);
 
       
       if(tb->mem_req_opcode == 4) {/*load word */
@@ -1594,9 +1596,7 @@ int main(int argc, char **argv) {
     
     tb->clk = 0;
     tb->eval();
-    if(got_mem_req) {
-      got_mem_req = false;
-    }
+
     if(got_mem_rsp) {
       tb->mem_rsp_valid = 0;
       got_mem_rsp = false;
