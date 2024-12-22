@@ -498,7 +498,7 @@ module
 	  begin
 	     n_mem_tail_ptr = r_mem_tail_ptr + 'd1;
 	  end
-	if(mem_rsp_valid)
+	if(mem_req_gnt)
 	  begin
 	     n_mem_head_ptr = r_mem_head_ptr + 'd1;
 	  end
@@ -511,87 +511,21 @@ module
 	r_mem_head_ptr <= reset ? 'd0 : n_mem_head_ptr;
 	if(w_mem_req_valid)
 	  begin
+	     //$display("pushing address %x, tag %d",
+	     //t_mem_fifo.addr,
+	     //t_mem_fifo.tag);
 	     mem_fifo[w_mem_tail_ptr] <= t_mem_fifo;
 	  end
      end
    
-   logic [1:0] r_pulse_fsm, n_pulse_fsm;
-   logic r_pulse_valid, n_pulse_valid;
-   logic [`LG_L2_REQ_TAGS-1:0] r_save_req_tag, n_save_req_tag;
-   logic [127:0]	       r_mem_rsp_load_data,n_mem_rsp_load_data;
-   logic		       r_mem_rsp_valid, n_mem_rsp_valid;
-   logic		       n_mem_error, r_mem_error;
+   assign got_bad_addr = 1'b0;
 
-   assign got_bad_addr = r_mem_error;
-   
-   always_comb
-     begin
-	n_mem_req_valid = r_mem_req_valid;
-	n_pulse_fsm = r_pulse_fsm;
-	n_pulse_valid = (r_pulse_fsm==2'd0) & (w_mem_empty==1'b0);
-	n_save_req_tag = r_save_req_tag;
-	n_mem_rsp_load_data = r_mem_rsp_load_data;
-	n_mem_rsp_valid = 1'b0;
-	n_mem_error = r_mem_error | (mem_rsp_valid & w_mem_empty) | (w_mem_req_valid & w_mem_full);
-	case(r_pulse_fsm)
-	  'd2:
-	    begin
-	       if(mem_rsp_valid==1'b0)
-		 begin
-		    n_pulse_fsm = 2'd0;
-		    
-		 end
-	    end
-	  'd1:
-	    begin
-	       if(mem_req_gnt)
-		 begin
-		    n_mem_req_valid = 1'b0;
-		 end
-	       
-	       if(mem_rsp_valid)
-		 begin
-		    n_mem_req_valid = 1'b0;
-		    //$display("rsp at cycle %d", r_cycle);
-		    
-		    n_pulse_fsm = 2'd2;
-		    n_mem_rsp_load_data = mem_rsp_load_data;
-		    n_mem_rsp_valid = 1'b1;
-		 end
-	    end
-	  'd0:
-	    begin
-	       if(w_mem_empty == 1'b0)
-		 begin
-		    n_mem_req_valid = 1'b1;
-		    n_pulse_fsm = 2'd1;
-		    n_save_req_tag = mem_fifo[w_mem_head_ptr].tag;
-		 end
-	    end
-	  default:
-	    begin
-	    end
-	endcase // case (r_pulse_fsm)
-     end // always_comb
-   
-   logic n_mem_req_valid, r_mem_req_valid;
-
-   always_ff@(posedge clk)
-     begin
-	r_pulse_fsm <= reset ? 'd0 : n_pulse_fsm;
-	r_pulse_valid <= reset ? 1'b0 : n_pulse_valid;
-	r_save_req_tag <= reset ? 'd0 : n_save_req_tag;
-	r_mem_rsp_valid <= reset ? 1'b0 : n_mem_rsp_valid;
-	r_mem_rsp_load_data <= n_mem_rsp_load_data;
-	r_mem_error <= reset ? 1'b0 : n_mem_error;
-	r_mem_req_valid <= reset ? 1'b0 : n_mem_req_valid;
-     end
-
-   assign mem_req_valid = r_mem_req_valid;
+   assign mem_req_valid = (w_mem_empty==1'b0);
    assign mem_req_addr = mem_fifo[w_mem_head_ptr].addr;
    assign mem_req_tag = mem_fifo[w_mem_head_ptr].tag;
    assign mem_req_store_data = mem_fifo[w_mem_head_ptr].data;
    assign mem_req_opcode = mem_fifo[w_mem_head_ptr].opcode;
+   
    wire w_l2_empty;
    
       
@@ -631,9 +565,9 @@ module
 	       .mem_req_store_data(w_mem_req_store_data),
 	       .mem_req_opcode(w_mem_req_opcode),
 
-	       .mem_rsp_valid(r_mem_rsp_valid),
-	       .mem_rsp_tag(r_save_req_tag),
-	       .mem_rsp_load_data(r_mem_rsp_load_data),
+	       .mem_rsp_valid(mem_rsp_valid),
+	       .mem_rsp_tag(mem_rsp_tag),
+	       .mem_rsp_load_data(mem_rsp_load_data),
 		    
 	       .mmu_req_valid(w_mmu_req_valid),
 	       .mmu_req_addr(w_mmu_req_addr),

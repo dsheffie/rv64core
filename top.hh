@@ -356,7 +356,77 @@ void reset_core(Vcore_l1d_l1i *tb, uint64_t &cycle,
   tb->eval();
 }
 
+static state_t *s = nullptr;
 
+static inline long long translate(long long va, long long root, bool iside, bool store) {
+  uint64_t a = 0, u = 0;
+  int mask_bits = -1;
+  a = root + (((va >> 30) & 511)*8);
+  u = *reinterpret_cast<int64_t*>(s->mem + a);
+  //printf("1st level entry %lx\n", a);
+  if((u & 1) == 0) {
+    return (~0UL);
+  }
+  if((u>>1)&7) {
+    mask_bits = 30;
+    goto translation_complete;
+  }
 
+  //2nd level walk
+  root = ((u >> 10) & ((1UL<<44)-1)) * 4096;
+  a = root + (((va >> 21) & 511)*8);
+  u = *reinterpret_cast<int64_t*>(s->mem + a);
+  //printf("2nd level entry %lx\n", a);  
+  if((u & 1) == 0) {
+    return (~0UL);
+  }
+  if((u>>1)&7) {
+    mask_bits = 21;
+    goto translation_complete;
+  }
+  
+  //3rd level walk
+  root = ((u >> 10) & ((1UL<<44)-1)) * 4096;  
+  a = root + (((va >> 12) & 511)*8);
+  //printf("3rd level entry %lx\n", a);
+  u = *reinterpret_cast<int64_t*>(s->mem + a);
+  if((u & 1) == 0) {
+    return (~0UL);
+  }
+  assert((u>>1)&7);
+  mask_bits = 12;
+
+ translation_complete:
+  int64_t m = ((1L << mask_bits) - 1);
+
+  /* accessed bit */
+  bool accessed = ((u >> 6) & 1);
+  bool dirty = ((u >> 7) & 1);
+  if(!accessed) {
+    u |= 1 << 6;
+    *reinterpret_cast<int64_t*>(s->mem + a) = u;
+  }
+
+  if(store and not(dirty)) {
+    u |= 1<<7;
+    *reinterpret_cast<int64_t*>(s->mem + a) = u;    
+  }
+  
+  u = ((u >> 10) & ((1UL<<44)-1)) * 4096;
+  uint64_t pa = (u&(~m)) | (va & m);
+  // printf("translation complete, va %llx -> pa %llx!\n", va, pa);
+  //exit(-1);
+  return (pa & ((1UL<<32)-1));
+}
+
+static const char* l1d_stall_str[7] = {
+  "wasnt idle or hit", //0
+  "full memory queue", //1
+  "read retry", //2
+  "store to same set", //3
+  "tlb miss", //4
+  "cm block", //5
+  "rob ptr inflight"
+};
 
 #endif

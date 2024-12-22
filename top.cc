@@ -1,5 +1,6 @@
 
 #include "top.hh"
+#include <queue>
 #include <signal.h>
 #include <setjmp.h>
 #include "inst_record.hh"
@@ -15,7 +16,6 @@ uint32_t globals::fromhost_addr = 0;
 bool globals::log = false;
 std::map<std::string, uint32_t> globals::symtab;
 
-
 char **globals::sysArgv = nullptr;
 int globals::sysArgc = 0;
 
@@ -23,7 +23,6 @@ static uint64_t cycle = 0;
 static uint64_t fetch_slots = 0;
 static bool trace_retirement = false;
 static uint64_t mem_reqs = 0;
-static state_t *s = nullptr;
 static state_t *ss = nullptr;
 static uint64_t insns_retired = 0, insns_allocated = 0;
 static uint64_t cycles_in_faulted = 0, fetch_stalls = 0;
@@ -31,7 +30,6 @@ static uint64_t cycles_in_faulted = 0, fetch_stalls = 0;
 static uint64_t pipestart = 0, pipeend = ~(0UL), pipeip = 0, pipeipcnt = 0;
 
 
-static boost::dynamic_bitset<> touched_lines(1UL<<28);
 
 static pipeline_logger *pl = nullptr;
 
@@ -73,18 +71,6 @@ static std::map<int,uint64_t> fault_distribution;
 static std::map<int,uint64_t> branch_distribution;
 static std::map<int,uint64_t> fault_to_restart_distribution;
 
-static std::map<uint64_t, uint64_t> supervisor_histo;
-
-static const char* l1d_stall_str[7] =
-  {
-   "wasnt idle or hit", //0
-   "full memory queue", //1
-   "read retry", //2
-   "store to same set", //3
-   "tlb miss", //4
-   "cm block", //5
-   "rob ptr inflight"
-};
 static uint64_t l1d_stall_reasons[8] = {0};
 static bool enable_checker = true, use_checkpoint = false;
 static bool pending_fault = false;
@@ -267,66 +253,6 @@ void check_translation(long long addr, int paddr) {
 #endif
 }
 
-long long translate(long long va, long long root, bool iside, bool store) {
-  uint64_t a = 0, u = 0;
-  int mask_bits = -1;
-  a = root + (((va >> 30) & 511)*8);
-  u = *reinterpret_cast<int64_t*>(s->mem + a);
-  //printf("1st level entry %lx\n", a);
-  if((u & 1) == 0) {
-    return (~0UL);
-  }
-  if((u>>1)&7) {
-    mask_bits = 30;
-    goto translation_complete;
-  }
-
-  //2nd level walk
-  root = ((u >> 10) & ((1UL<<44)-1)) * 4096;
-  a = root + (((va >> 21) & 511)*8);
-  u = *reinterpret_cast<int64_t*>(s->mem + a);
-  //printf("2nd level entry %lx\n", a);  
-  if((u & 1) == 0) {
-    return (~0UL);
-  }
-  if((u>>1)&7) {
-    mask_bits = 21;
-    goto translation_complete;
-  }
-  
-  //3rd level walk
-  root = ((u >> 10) & ((1UL<<44)-1)) * 4096;  
-  a = root + (((va >> 12) & 511)*8);
-  //printf("3rd level entry %lx\n", a);
-  u = *reinterpret_cast<int64_t*>(s->mem + a);
-  if((u & 1) == 0) {
-    return (~0UL);
-  }
-  assert((u>>1)&7);
-  mask_bits = 12;
-
- translation_complete:
-  int64_t m = ((1L << mask_bits) - 1);
-
-  /* accessed bit */
-  bool accessed = ((u >> 6) & 1);
-  bool dirty = ((u >> 7) & 1);
-  if(!accessed) {
-    u |= 1 << 6;
-    *reinterpret_cast<int64_t*>(s->mem + a) = u;
-  }
-
-  if(store and not(dirty)) {
-    u |= 1<<7;
-    *reinterpret_cast<int64_t*>(s->mem + a) = u;    
-  }
-  
-  u = ((u >> 10) & ((1UL<<44)-1)) * 4096;
-  uint64_t pa = (u&(~m)) | (va & m);
-  // printf("translation complete, va %llx -> pa %llx!\n", va, pa);
-  //exit(-1);
-  return (pa & ((1UL<<32)-1));
-}
 
 long long dc_ld_translate(long long va, long long root) {
   return translate(va,root, false, false);
@@ -935,6 +861,20 @@ void catchUnixSignal(int n) {
   exit(-1);
 }
 
+struct mem_req_t {
+  bool is_store;
+  uint32_t addr;
+  uint32_t tag;
+  uint64_t reply_cycle;
+  uint32_t data[4] = {0};
+  mem_req_t(bool is_store, uint32_t addr,
+	    uint32_t tag, uint64_t reply_cycle) :
+    is_store(is_store), addr(addr), tag(tag),
+    reply_cycle(reply_cycle) {}
+};
+
+std::queue<mem_req_t> mem_queue;
+
 int main(int argc, char **argv) {
   static_assert(sizeof(itype) == 4, "itype must be 4 bytes");
   //std::fesetround(FE_TOWARDZERO);
@@ -1167,14 +1107,6 @@ int main(int argc, char **argv) {
       }      
       rt.get_records().emplace_back(pa,va,*reinterpret_cast<uint32_t*>(&s->mem[pa]));
     }
-
-    if(tb->retire_valid and ((tb->retire_pc >> 63) & 1)) {
-      supervisor_histo[tb->retire_pc]++;
-    }
-    
-    if(tb->retire_two_valid and ((tb->retire_two_pc >> 63) & 1)) {
-      supervisor_histo[tb->retire_two_pc]++;
-    }    
 
     
     if(tb->rob_empty) {
@@ -1554,43 +1486,52 @@ int main(int argc, char **argv) {
     tb->mem_rsp_valid = 0;
     tb->mem_req_gnt = 0;
     
-    if(tb->mem_req_valid && (mem_reply_cycle == -1)) {
+    if(tb->mem_req_valid) {
       ++mem_reqs;
-      int lat = (rand() % mem_lat) + 1;
+      int lat = mem_lat + 1;
       mem_reply_cycle = cycle + lat;
-      tb->mem_req_gnt = 1; 
+      tb->mem_req_gnt = 1;
+      mem_req_t req(tb->mem_req_opcode==7,
+		    tb->mem_req_addr,
+		    tb->mem_req_tag,
+		    cycle+lat);
+      memcpy(req.data, tb->mem_req_store_data, sizeof(int)*4);
+
+      //printf("got memory request for address %x of type %d, tag %d, will reply at cycle %lu, now %lu\n",
+      //tb->mem_req_addr, tb->mem_req_opcode, tb->mem_req_tag,
+      //cycle+lat,
+      //cycle);
+      
+      mem_queue.push(req);
     }
     
-    if(/*tb->mem_req_valid*/mem_reply_cycle ==cycle) {
+    if(not(mem_queue.empty()) and mem_queue.front().reply_cycle ==cycle) {
       last_retire = 0;
-      mem_reply_cycle = -1;
-      //assert(tb->mem_req_valid);
+      mem_req_t &req = mem_queue.front();
+      //printf("reply memory request for address %x tag %d\n",
+      //req.addr, req.tag);
 
-      
-      if(tb->mem_req_opcode == 4) {/*load word */
-	//printf("got dram read for %lx at cycle %lu\n",
-	//tb->mem_req_addr, cycle);	
+      if(not(req.is_store)) {/*load word */
 	for(int i = 0; i < 4; i++) {
-	  uint64_t ea = (tb->mem_req_addr + 4*i) & ((1UL<<32)-1);
+	  uint64_t ea = (req.addr + 4*i) & ((1UL<<32)-1);
 	  tb->mem_rsp_load_data[i] = mem_r32(s,ea);
 	}
-	last_load_addr = tb->mem_req_addr;
-	assert((tb->mem_req_addr & 0xf) == 0);
-	touched_lines[(tb->mem_req_addr & ((1UL<<32) - 1))>>4] = 1;
+	last_load_addr = req.addr;
+	assert((req.addr & 0xf) == 0);
 	++n_loads;
       }
-      else if(tb->mem_req_opcode == 7) { /* store word */
-	//printf("got dram write for %lx at cycle %lu\n",
-	//tb->mem_req_addr, cycle);		
+      else { /* store word */
 	for(int i = 0; i < 4; i++) {
-	  uint64_t ea = (tb->mem_req_addr + 4*i) & ((1UL<<32)-1);
-	  mem_w32(s, ea, tb->mem_req_store_data[i]);
+	  uint64_t ea = (req.addr + 4*i) & ((1UL<<32)-1);	  
+	  mem_w32(s, ea, req.data[i]);
 	}
-	last_store_addr = tb->mem_req_addr;
+	last_store_addr = req.addr;
 	++n_stores;
       }
-      last_addr = tb->mem_req_addr;
+      last_addr = req.addr;
       tb->mem_rsp_valid = 1;
+      tb->mem_rsp_tag = req.tag;
+      mem_queue.pop();
     }
 
     
@@ -1973,7 +1914,6 @@ int main(int argc, char **argv) {
   }
   avg_store_latency /= total_stores;
   std::cout << "avg store latency = " << (avg_store_latency) << "\n";
-  dump_histo("supervisor.txt", supervisor_histo);
   
   munmap(s->mem, 1UL<<32);
   munmap(ss->mem, 1UL<<32);
