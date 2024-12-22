@@ -504,16 +504,6 @@ module
 	  end
      end
 
-   //always_ff@(negedge clk)
-   //begin
-   //if(w_mem_req_valid) $display("bump wr mem ptr to %d, cycle %d", n_mem_tail_ptr, r_cycle);
-   //if(mem_rsp_valid) $display("bump rd mem ptr to %d, cycle %d", n_mem_head_ptr, r_cycle);
-   //if(mem_req_valid)
-   //begin
-   //$display("req for addr %d with tag %d", mem_req_addr, mem_req_tag);
-   //end
-   //end
-   
    
    always_ff@(posedge clk)
      begin
@@ -524,27 +514,6 @@ module
 	     mem_fifo[w_mem_tail_ptr] <= t_mem_fifo;
 	  end
      end
-
-   always_ff@(negedge clk)
-     begin
-	//if(r_inflight >= 'd2)
-	//$display("r_inflight = %d at cycle %d", r_inflight, r_cycle);
-
-	//if(n_pulse_fsm==2'd1 & r_pulse_fsm==2'd0)
-	//begin
-	//$display("new req at cycle %d", r_cycle);
-	//end
-	if(w_mem_req_valid & w_mem_full)
-	  begin
-	     $stop();
-	  end
-	if(mem_rsp_valid & w_mem_empty)
-	  begin
-	     $stop();
-	  end
-	     
-     end
-
    
    logic [1:0] r_pulse_fsm, n_pulse_fsm;
    logic r_pulse_valid, n_pulse_valid;
