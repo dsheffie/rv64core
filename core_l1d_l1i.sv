@@ -139,7 +139,7 @@ module
    /* mem port */
    output logic 			mem_req_valid;
    output logic [`PA_WIDTH-1:0]		mem_req_addr;
-   output logic [`LG_L2_REQ_TAGS-1:0] mem_req_tag;
+   output logic [`LG_L2_REQ_TAGS-1:0]	mem_req_tag;
    output logic [(1 << (`LG_L2_CL_LEN+3)) - 1:0] mem_req_store_data;
    output logic [3:0] 				 mem_req_opcode;
    
@@ -912,6 +912,8 @@ module core_l1d_l1i(clk,
 		    mem_rsp_valid,
 		    mem_req_gnt,
 		    mem_rsp_load_data,
+		    mem_req_tag,
+		    mem_rsp_tag,
 		    alloc_valid,
 		    alloc_two_valid,
 		    iq_one_valid,
@@ -994,6 +996,9 @@ module core_l1d_l1i(clk,
    input logic					 mem_req_gnt;
    input logic 					 mem_rsp_valid;
    input logic [(1 << (`LG_L2_CL_LEN+3)) - 1:0]  mem_rsp_load_data;
+
+   output logic [`LG_L2_REQ_TAGS-1:0]		 mem_req_tag;
+   input logic [`LG_L2_REQ_TAGS-1:0]		 mem_rsp_tag;
    
    output logic					 alloc_valid;
    output logic					 alloc_two_valid;
@@ -1075,6 +1080,8 @@ module core_l1d_l1i(clk,
                      .mem_rsp_valid(mem_rsp_valid),
 		     .mem_req_gnt(mem_req_gnt),
                      .mem_rsp_load_data(mem_rsp_load_data),
+		     .mem_rsp_tag(mem_rsp_tag),
+		     .mem_req_tag(mem_req_tag),
                      .alloc_valid(alloc_valid),
                      .alloc_two_valid(alloc_two_valid),
                      .iq_one_valid(iq_one_valid),
