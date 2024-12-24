@@ -200,7 +200,9 @@ module exec(clk,
    
 
    
-   localparam N_INT_SCHED_ENTRIES = 1<<`LG_INT_SCHED_ENTRIES;
+   localparam N_INT_SCHED0_ENTRIES = 1<<`LG_INT_SCHED0_ENTRIES;
+   localparam N_INT_SCHED1_ENTRIES = 1<<`LG_INT_SCHED1_ENTRIES;
+   
    localparam N_MEM_SCHED_ENTRIES = 1<<`LG_MEM_SCHED_ENTRIES;
    
    localparam N_MQ_ENTRIES = (1<<`LG_MQ_ENTRIES);
@@ -267,26 +269,37 @@ module exec(clk,
    logic 	t_srcs_rdy;
 
    /* int alu scheduler signals */
-   logic [N_INT_SCHED_ENTRIES-1:0] r_alu_sched_valid, r_alu_sched_valid2;
-   logic [`LG_INT_SCHED_ENTRIES:0] t_alu_sched_alloc_ptr, t_alu_sched_alloc_ptr2;
-   logic [N_INT_SCHED_ENTRIES-1:0] t_alu_alloc_entry, t_alu_select_entry, t_alu_alloc_entry2, t_alu_select_entry2;
+   logic [N_INT_SCHED0_ENTRIES-1:0] r_alu_sched_valid;
+   logic [N_INT_SCHED1_ENTRIES-1:0] r_alu_sched_valid2;   
+   logic [`LG_INT_SCHED0_ENTRIES:0] t_alu_sched_alloc_ptr;
+   logic [`LG_INT_SCHED1_ENTRIES:0] t_alu_sched_alloc_ptr2;   
+   logic [N_INT_SCHED0_ENTRIES-1:0]  t_alu_alloc_entry, t_alu_select_entry;
+   logic [N_INT_SCHED1_ENTRIES-1:0]  t_alu_alloc_entry2, t_alu_select_entry2;
    
-   uop_t r_alu_sched_uops[N_INT_SCHED_ENTRIES-1:0], t_picked_uop;
-   uop_t r_alu_sched_uops2[N_INT_SCHED_ENTRIES-1:0], t_picked_uop2;
-   logic [N_INT_SCHED_ENTRIES-1:0] t_alu_entry_rdy, t_alu_entry_rdy2;
-   logic [`LG_INT_SCHED_ENTRIES:0] t_alu_sched_select_ptr, t_alu_sched_select_ptr2;
+   uop_t r_alu_sched_uops[N_INT_SCHED0_ENTRIES-1:0], t_picked_uop;
+   uop_t r_alu_sched_uops2[N_INT_SCHED1_ENTRIES-1:0], t_picked_uop2;
+   logic [N_INT_SCHED0_ENTRIES-1:0] t_alu_entry_rdy;
+   logic [`LG_INT_SCHED0_ENTRIES:0] t_alu_sched_select_ptr;
+   logic [N_INT_SCHED1_ENTRIES-1:0] t_alu_entry_rdy2;
+   logic [`LG_INT_SCHED1_ENTRIES:0] t_alu_sched_select_ptr2;
+   
    
 	
-   logic [N_INT_SCHED_ENTRIES-1:0] r_alu_srcA_rdy, r_alu_srcB_rdy, r_alu_srcA_rdy2, r_alu_srcB_rdy2;
-   logic [N_INT_SCHED_ENTRIES-1:0] t_alu_srcA_match, t_alu_srcB_match, t_alu_srcA_match2, t_alu_srcB_match2;
+   logic [N_INT_SCHED0_ENTRIES-1:0]  r_alu_srcA_rdy, r_alu_srcB_rdy;
+   logic [N_INT_SCHED1_ENTRIES-1:0]  r_alu_srcA_rdy2, r_alu_srcB_rdy2;
    
-   logic 			   t_alu_alloc_srcA_match, t_alu_alloc_srcB_match, t_alu_alloc_srcA_match2, t_alu_alloc_srcB_match2;
+   logic [N_INT_SCHED0_ENTRIES-1:0]  t_alu_srcA_match, t_alu_srcB_match;
+   logic [N_INT_SCHED1_ENTRIES-1:0]  t_alu_srcA_match2, t_alu_srcB_match2;
    
-   wire [N_INT_SCHED_ENTRIES-1:0] w_alu_sched_oldest_ready, w_alu_sched_oldest_ready2;
-   logic [N_INT_SCHED_ENTRIES-1:0] t_alu_sched_mask_valid, t_alu_sched_mask_valid2;
-   logic [N_INT_SCHED_ENTRIES-1:0] r_alu_sched_matrix [N_INT_SCHED_ENTRIES-1:0];
-   logic [N_INT_SCHED_ENTRIES-1:0] r_alu_sched_matrix2 [N_INT_SCHED_ENTRIES-1:0];
-
+   logic			     t_alu_alloc_srcA_match, t_alu_alloc_srcB_match, t_alu_alloc_srcA_match2, t_alu_alloc_srcB_match2;
+   
+   wire [N_INT_SCHED0_ENTRIES-1:0]   w_alu_sched_oldest_ready;
+   wire [N_INT_SCHED1_ENTRIES-1:0]   w_alu_sched_oldest_ready2;   
+   logic [N_INT_SCHED0_ENTRIES-1:0]  t_alu_sched_mask_valid;
+   logic [N_INT_SCHED1_ENTRIES-1:0]  t_alu_sched_mask_valid2;
+   logic [N_INT_SCHED0_ENTRIES-1:0]  r_alu_sched_matrix [N_INT_SCHED0_ENTRIES-1:0];
+   logic [N_INT_SCHED1_ENTRIES-1:0]  r_alu_sched_matrix2 [N_INT_SCHED1_ENTRIES-1:0];
+   
 
    /* mem scheduler signals */
    logic [N_MEM_SCHED_ENTRIES-1:0] r_mem_sched_valid, r_mem_sched_store;
@@ -894,16 +907,16 @@ module exec(clk,
 		     w_mem_srcB;	
      end // always_comb
    
-   find_first_set#(`LG_INT_SCHED_ENTRIES) ffs_int_sched_alloc( .in(~r_alu_sched_valid),
+   find_first_set#(`LG_INT_SCHED0_ENTRIES) ffs_int_sched_alloc( .in(~r_alu_sched_valid),
 							      .y(t_alu_sched_alloc_ptr));
    
-   find_first_set#(`LG_INT_SCHED_ENTRIES) ffs_int_sched_select( .in(w_alu_sched_oldest_ready),
+   find_first_set#(`LG_INT_SCHED0_ENTRIES) ffs_int_sched_select( .in(w_alu_sched_oldest_ready),
 								.y(t_alu_sched_select_ptr));
 
-   find_first_set#(`LG_INT_SCHED_ENTRIES) ffs_int_sched_alloc2( .in(~r_alu_sched_valid2),
+   find_first_set#(`LG_INT_SCHED1_ENTRIES) ffs_int_sched_alloc2( .in(~r_alu_sched_valid2),
 								.y(t_alu_sched_alloc_ptr2));
    
-   find_first_set#(`LG_INT_SCHED_ENTRIES) ffs_int_sched_select2( .in(w_alu_sched_oldest_ready2),
+   find_first_set#(`LG_INT_SCHED1_ENTRIES) ffs_int_sched_select2( .in(w_alu_sched_oldest_ready2),
 								 .y(t_alu_sched_select_ptr2));
      
    always_comb
@@ -912,11 +925,11 @@ module exec(clk,
 	t_alu_select_entry = 'd0;
 	if(w_alloc_uq)
 	  begin
-	     t_alu_alloc_entry[t_alu_sched_alloc_ptr[`LG_INT_SCHED_ENTRIES-1:0]] = 1'b1;
+	     t_alu_alloc_entry[t_alu_sched_alloc_ptr[`LG_INT_SCHED0_ENTRIES-1:0]] = 1'b1;
 	  end
 	if(t_alu_entry_rdy != 'd0)
 	  begin
-	     t_alu_select_entry[t_alu_sched_select_ptr[`LG_INT_SCHED_ENTRIES-1:0]] = 1'b1;
+	     t_alu_select_entry[t_alu_sched_select_ptr[`LG_INT_SCHED0_ENTRIES-1:0]] = 1'b1;
 	  end
      end // always_comb
 
@@ -926,23 +939,23 @@ module exec(clk,
 	t_alu_select_entry2 = 'd0;
 	if(w_alloc_uq2)
 	  begin
-	     t_alu_alloc_entry2[t_alu_sched_alloc_ptr2[`LG_INT_SCHED_ENTRIES-1:0]] = 1'b1;
+	     t_alu_alloc_entry2[t_alu_sched_alloc_ptr2[`LG_INT_SCHED1_ENTRIES-1:0]] = 1'b1;
 	  end
 	if(t_alu_entry_rdy2 != 'd0)
 	  begin
-	     t_alu_select_entry2[t_alu_sched_select_ptr2[`LG_INT_SCHED_ENTRIES-1:0]] = 1'b1;
+	     t_alu_select_entry2[t_alu_sched_select_ptr2[`LG_INT_SCHED1_ENTRIES-1:0]] = 1'b1;
 	  end
      end // always_comb
 
 
    always_comb
      begin
-	t_picked_uop = r_alu_sched_uops[t_alu_sched_select_ptr[`LG_INT_SCHED_ENTRIES-1:0]];
+	t_picked_uop = r_alu_sched_uops[t_alu_sched_select_ptr[`LG_INT_SCHED0_ENTRIES-1:0]];
      end
 
    always_comb
      begin
-	t_picked_uop2 = r_alu_sched_uops2[t_alu_sched_select_ptr2[`LG_INT_SCHED_ENTRIES-1:0]];
+	t_picked_uop2 = r_alu_sched_uops2[t_alu_sched_select_ptr2[`LG_INT_SCHED1_ENTRIES-1:0]];
      end
    
    
@@ -1007,7 +1020,7 @@ module exec(clk,
      end
 
    generate
-      for(genvar i = 0; i < N_INT_SCHED_ENTRIES; i=i+1)
+      for(genvar i = 0; i < N_INT_SCHED0_ENTRIES; i=i+1)
 	begin
 	   assign w_alu_sched_oldest_ready[i] = t_alu_entry_rdy[i] & (~(|(t_alu_entry_rdy & r_alu_sched_matrix[i])));
 	   always_ff@(posedge clk)
@@ -1029,7 +1042,7 @@ module exec(clk,
    endgenerate
 
    generate
-      for(genvar i = 0; i < N_INT_SCHED_ENTRIES; i=i+1)
+      for(genvar i = 0; i < N_INT_SCHED1_ENTRIES; i=i+1)
 	begin
 	   assign w_alu_sched_oldest_ready2[i] = t_alu_entry_rdy2[i] & (~(|(t_alu_entry_rdy2 & r_alu_sched_matrix2[i])));
 	   always_ff@(posedge clk)
@@ -1075,7 +1088,7 @@ module exec(clk,
    
    
    generate
-      for(genvar i = 0; i < N_INT_SCHED_ENTRIES; i=i+1)
+      for(genvar i = 0; i < N_INT_SCHED0_ENTRIES; i=i+1)
 	begin
 	   always_comb
 	     begin
@@ -1135,7 +1148,7 @@ module exec(clk,
 
 
    generate
-      for(genvar i = 0; i < N_INT_SCHED_ENTRIES; i=i+1)
+      for(genvar i = 0; i < N_INT_SCHED1_ENTRIES; i=i+1)
 	begin
 	   always_comb
 	     begin
@@ -1592,12 +1605,12 @@ module exec(clk,
 	  begin
 	     if(w_alloc_uq)
 	       begin
-		  r_alu_sched_valid[t_alu_sched_alloc_ptr[`LG_INT_SCHED_ENTRIES-1:0]] <= 1'b1;
-		  r_alu_sched_uops[t_alu_sched_alloc_ptr[`LG_INT_SCHED_ENTRIES-1:0]] <= uq;
+		  r_alu_sched_valid[t_alu_sched_alloc_ptr[`LG_INT_SCHED0_ENTRIES-1:0]] <= 1'b1;
+		  r_alu_sched_uops[t_alu_sched_alloc_ptr[`LG_INT_SCHED0_ENTRIES-1:0]] <= uq;
 	       end
 	     if(t_alu_entry_rdy != 'd0)
 	       begin
-		  r_alu_sched_valid[t_alu_sched_select_ptr[`LG_INT_SCHED_ENTRIES-1:0]] <= 1'b0;
+		  r_alu_sched_valid[t_alu_sched_select_ptr[`LG_INT_SCHED0_ENTRIES-1:0]] <= 1'b0;
 	       end
 	  end // else: !if(reset)
      end // always_ff@ (posedge clk)
@@ -1613,12 +1626,12 @@ module exec(clk,
 	  begin
 	     if(w_alloc_uq2)
 	       begin
-		  r_alu_sched_valid2[t_alu_sched_alloc_ptr2[`LG_INT_SCHED_ENTRIES-1:0]] <= 1'b1;
-		  r_alu_sched_uops2[t_alu_sched_alloc_ptr2[`LG_INT_SCHED_ENTRIES-1:0]] <= uq2;
+		  r_alu_sched_valid2[t_alu_sched_alloc_ptr2[`LG_INT_SCHED1_ENTRIES-1:0]] <= 1'b1;
+		  r_alu_sched_uops2[t_alu_sched_alloc_ptr2[`LG_INT_SCHED1_ENTRIES-1:0]] <= uq2;
 	       end
 	     if(t_alu_entry_rdy2 != 'd0)
 	       begin
-		  r_alu_sched_valid2[t_alu_sched_select_ptr2[`LG_INT_SCHED_ENTRIES-1:0]] <= 1'b0;
+		  r_alu_sched_valid2[t_alu_sched_select_ptr2[`LG_INT_SCHED1_ENTRIES-1:0]] <= 1'b0;
 	       end
 	  end // else: !if(reset)
      end // always_ff@ (posedge clk)
@@ -1922,8 +1935,8 @@ module exec(clk,
 		    t_mem_uq_full ? 32'd1 : 32'd0,
 		    32'd0,
 		    32'd0,
-		    {{(32-N_INT_SCHED_ENTRIES){1'b0}}, t_alu_entry_rdy},
-		    {{(32-N_INT_SCHED_ENTRIES){1'b0}}, t_alu_entry_rdy2}
+		    {{(32-N_INT_SCHED0_ENTRIES){1'b0}}, t_alu_entry_rdy},
+		    {{(32-N_INT_SCHED1_ENTRIES){1'b0}}, t_alu_entry_rdy2}
 		    );
      end
 `endif //  `ifdef VERILATOR
