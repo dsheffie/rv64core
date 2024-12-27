@@ -111,7 +111,10 @@ module nu_l1d(clk,
 
    localparam L1D_NUM_SETS = 1 << `LG_L1D_NUM_SETS;
    localparam L1D_CL_LEN = 1 << `LG_L1D_CL_LEN;
-   localparam L1D_CL_LEN_BITS = 1 << (`LG_L1D_CL_LEN + 3);   
+   localparam L1D_CL_LEN_BITS = 1 << (`LG_L1D_CL_LEN + 3);
+
+   localparam L1D_ALIAS_SETS = 1 << (`LG_PG_SZ - `LG_L1D_CL_LEN);
+   
    input logic clk;
    input logic reset;
    input logic l2_empty;
@@ -254,15 +257,20 @@ module nu_l1d(clk,
    logic 				  t_rsp_dst_valid2;
    logic [63:0] 			  t_rsp_data2;
 
-
+   logic [19:0]				  r_alias_ram [L1D_ALIAS_SETS-1:0];
+   logic [L1D_ALIAS_SETS-1:0]		  r_alias_valid_ram;   
+   logic [19:0]				  r_alias;
+   logic				  r_alias_valid;
    
    logic [127:0]			  t_array_data;
    
    logic [`M_WIDTH-1:0] 		  t_addr;
    logic 				  t_got_req, t_got_req2, t_replay_req2;
    logic 				  t_tlb_xlat,t_tlb_xlat_replay;
-   logic 				  n_pending_tlb_miss, r_pending_tlb_miss;
+   logic				  n_pending_tlb_miss, r_pending_tlb_miss;
    logic				  n_pending_tlb_zero_page, r_pending_tlb_zero_page;
+   logic				  n_pending_alias,r_pending_alias;
+   
    logic				  t_got_miss, t_dirty_miss;
    logic				  t_pop_eb, t_push_eb;
    
@@ -438,10 +446,10 @@ module nu_l1d(clk,
       logic [15:0]		  t_m, m;
       logic			  b,s,w,d;
       
-      b = 	(r.op == MEM_SB || r.op == MEM_LB || r.op == MEM_LBU);
-      s = 	(r.op == MEM_SH || r.op == MEM_LH || r.op == MEM_LHU);
-      w = 	(r.op == MEM_SW || r.op == MEM_LW );
-      d	= 	(r.op == MEM_SD || r.op == MEM_LD );         
+      b = 	(r.op == MEM_SB | r.op == MEM_LB | r.op == MEM_LBU);
+      s = 	(r.op == MEM_SH | r.op == MEM_LH | r.op == MEM_LHU);
+      w = 	(r.op == MEM_SW | r.op == MEM_LW );
+      d	= 	(r.op == MEM_SD | r.op == MEM_LD );         
       t_m = b ? 16'h0001 :
 	    s ? 16'h0003 :
 	    w ? 16'h000f :
@@ -466,8 +474,6 @@ module nu_l1d(clk,
    logic			  r_last_early_valid;
    
    logic [IDX_STOP-IDX_START-1:0] r_mq_addr[N_MQ_ENTRIES-1:0];
-   logic [31:0]			  r_mq_dbg_addr[N_MQ_ENTRIES-1:0];
-   
    logic [15:0]			  r_mq_mask[N_MQ_ENTRIES-1:0];
    
    logic [`M_WIDTH-1:0] 	  r_mq_full_addr[N_MQ_ENTRIES-1:0];
@@ -855,7 +861,6 @@ module nu_l1d(clk,
 	  begin
 	     r_mem_q[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0] ] <= t_req2_pa;
 	     r_mq_addr[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]] <= r_req2.addr[IDX_STOP-1:IDX_START];
-	     r_mq_dbg_addr[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]] <= w_tlb_pa[31:0];	     
 
 	     r_mq_mask[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]] <= t_mq_mask & {16{r_req2.is_store}};	     
 	     r_mq_op[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]] <= r_req2.op;
@@ -934,23 +939,8 @@ module nu_l1d(clk,
 
 
 
-   // always_ff@(negedge clk)
-   //   begin
-   // 	for(integer i = 0; i < N_MQ_ENTRIES; i=i+1)
-   // 	  begin
-   // 	     if(w_hit_busy_addrs[i])
-   // 	       begin
-   // 		  $display("t_cache_idx %x matches entry %d, full addr %x, cycle %d", 
-   // 			   t_cache_idx, i, r_mq_dbg_addr[i], r_cycle);
-   // 	       end
-   // 	  end
-   //   end
-    
-
-
    always_ff@(posedge clk)
      begin
-	//r_array_wr_data <= t_array_wr_data;
 	r_array_wr_data <= t_array_data;
      end
 
@@ -972,6 +962,7 @@ module nu_l1d(clk,
 	     r_flush_was_active <= 1'b0;
 	     r_pending_tlb_miss <= 1'b0;
 	     r_pending_tlb_zero_page <= 1'b0;
+	     r_pending_alias <= 1'b0;
 	     r_tlb_addr <= 'd0;
 	     r_did_reload <= 1'b0;
 	     r_stall_store <= 1'b0;
@@ -1025,6 +1016,7 @@ module nu_l1d(clk,
 	     r_flush_was_active <= n_flush_was_active;
 	     r_pending_tlb_miss <= n_pending_tlb_miss;
 	     r_pending_tlb_zero_page <= n_pending_tlb_zero_page;
+	     r_pending_alias <= n_pending_alias;	     
 	     r_tlb_addr <= n_tlb_addr;
 	     r_did_reload <= n_did_reload;
 	     r_stall_store <= n_stall_store;
@@ -1126,8 +1118,21 @@ module nu_l1d(clk,
      begin
 	if(mem_rsp_reload & t_wr_array) $stop();
      end
+
+
    
- ram2r1w #(.WIDTH(N_TAG_BITS), .LG_DEPTH(`LG_L1D_NUM_SETS)) dc_tag
+			      
+   always_ff@(posedge clk)
+     begin
+	r_alias <= r_alias_ram[n_tlb_addr[11:IDX_START]];
+	
+	if(mem_rsp_reload)
+	  begin
+	     r_alias_ram[mem_rsp_addr[11:IDX_START]] <= mem_rsp_addr[`PA_WIDTH-1:12];
+	  end
+     end
+     
+   ram2r1w #(.WIDTH(N_TAG_BITS), .LG_DEPTH(`LG_L1D_NUM_SETS)) dc_tag
      (
       .clk(clk),
       .rd_addr0(t_cache_idx),
@@ -1206,6 +1211,7 @@ module nu_l1d(clk,
 	 
 	 if(t_got_req2)
 	   begin
+	      if(r_pending_alias) $stop();
 	      $display("ingest t_cache_idx2 = %x at cycle %d", t_cache_idx2, r_cycle);
 	   end
 	 if(t_replay_req2)
@@ -1329,6 +1335,30 @@ module nu_l1d(clk,
       );
 
 
+   always_ff@(posedge clk)
+     begin
+	r_alias_valid <= r_alias_valid_ram[n_tlb_addr[11:IDX_START]];
+	if(t_write_valid_en)
+	  begin
+	     r_alias_valid_ram[t_valid_wr_addr[7:0]] <= t_write_valid_en;
+	  end
+     end
+
+   wire w_could_alias = paging_active ? r_got_req2 & r_alias_valid & (r_alias== w_tlb_pa[`PA_WIDTH-1:12]) & !w_port2_hit_cache : 1'b0;
+   
+   always_ff@(negedge clk)
+     begin
+	if(w_could_alias)
+	  begin
+	     $display("pc %x : alias detected!, paging active %b, set %d, address %x, pending alias = %b, t_push_miss = %b",
+		      t_req2_pa.pc,
+		      paging_active, w_tlb_pa[IDX_STOP-1:IDX_START],
+		      w_tlb_pa, 
+		      n_pending_alias,
+		      t_push_miss);
+	     //$stop();
+	  end
+     end
 
 
    tlb #(.LG_N(5)) dtlb(
@@ -1500,28 +1530,12 @@ module nu_l1d(clk,
    wire	w_aborted_sc = t_hit_cache & ((r_req.op == MEM_SCD) | (r_req.op == MEM_SCW)) & (!w_match_link);
    always_ff@(negedge clk)
      begin
-	// if(n_link_reg_val & (r_link_reg_val==1'b0))	
-	//   begin
-	//      $display("set link reg at cycle %d", r_cycle);
-	//   end
-	// else if((n_link_reg_val==1'b0) & r_link_reg_val)
-	//   begin
-	//      $display("clear link reg at cycle %d, op %d", r_cycle,r_req.op);
-	//   end
-	
-	//if(w_aborted_sc)
-	//begin
-	//$display("r_link_reg_val = %b, r_link_reg = %x, r_req.addr = %x, link addr = %x",
-	//r_link_reg_val, r_link_reg, {r_req.addr[63:4], 4'd0}, r_link_reg);
-	///$stop();
-	//end
-	
 	l1d_port_util({31'd0,r_got_req}, {31'd0, r_got_req2});
 	record_l1d({31'd0,core_mem_va_req_valid},
 		   {31'd0,core_mem_va_req_ack},
 		   {31'd0, t_new_req},
 		   {31'd0, t_accept},
-		   {25'd0, t_new_req_c}
+		   {24'd0, t_new_req_c}
 		   );
 	if(t_wr_store)
 	  begin	     
@@ -1728,7 +1742,7 @@ module nu_l1d(clk,
    mem_rsp_t t_core_mem_rsp;
    logic t_core_mem_rsp_valid;
    wire	 w_got_reload_pf = page_walk_rsp_valid & page_walk_rsp.fault;
-   wire  w_port2_rd_hit = t_port2_hit_cache && (!r_hit_busy_addr2) & (!r_pending_tlb_miss);
+   wire  w_port2_rd_hit = t_port2_hit_cache & (!r_hit_busy_addr2) & (!r_pending_tlb_miss);
 
    always_comb
      begin
@@ -1769,13 +1783,15 @@ module nu_l1d(clk,
 	t_req2_pa = r_req2;
 	n_pending_tlb_miss  = r_pending_tlb_miss;
 	n_pending_tlb_zero_page = r_pending_tlb_zero_page;
-
+	n_pending_alias = r_pending_alias;
+	
 	if(r_got_req2)
 	  begin
 	     t_core_mem_rsp.data = r_req2.addr;
 	     t_core_mem_rsp.rob_ptr = r_req2.rob_ptr;
 	     t_core_mem_rsp.dst_ptr = r_req2.dst_ptr;
 	     t_req2_pa.addr = {32'd0, w_tlb_pa};
+	     t_req2_pa.is_alias = w_could_alias;
 	     
 	     if(r_pending_tlb_miss)
 	       begin
@@ -1829,14 +1845,16 @@ module nu_l1d(clk,
 		  t_core_mem_rsp.addr = r_req2.addr;
 		  t_core_mem_rsp_valid = 1'b1;			 
 	       end
-	     else if(r_req2.is_atomic || r_req2.is_ll)
+	     else if(r_req2.is_atomic | r_req2.is_ll)
 	       begin
 		  t_push_miss = 1'b1;
+		  n_pending_alias = r_pending_alias | w_could_alias;
 	       end
 	     else if(r_req2.is_store)
 	       begin
 		  //$display("store miss at cycle %d for rob pointer %d", r_cycle, r_req2.rob_ptr);
 		  t_push_miss = 1'b1;
+		  n_pending_alias = r_pending_alias | w_could_alias;
 		  t_incr_busy = 1'b1;
 		  n_stall_store = 1'b1;
 		  //ack early
@@ -1867,6 +1885,7 @@ module nu_l1d(clk,
 	     else
 	       begin
 		  t_push_miss = 1'b1;
+		  n_pending_alias = r_pending_alias | w_could_alias;		  
 	       end
 	  end // if (r_got_req2)
      end // always_comb
@@ -1950,7 +1969,7 @@ module nu_l1d(clk,
 	& !(t_mem_head.is_store | t_mem_head.is_atomic);
    
    logic t_new_req;
-   logic [6:0] t_new_req_c;
+   logic [7:0] t_new_req_c;
    
    logic t_accept;
 
@@ -1967,7 +1986,8 @@ module nu_l1d(clk,
 	t_new_req_c[4] = !(n_pending_tlb_miss | r_pending_tlb_miss);
 	t_new_req_c[5] = !t_cm_block_stall;
 	t_new_req_c[6] = !r_rob_inflight[core_mem_va_req.rob_ptr];
-	
+	t_new_req_c[7] = !(n_pending_alias | r_pending_alias);
+       
 	t_new_req = core_mem_va_req_valid & (&t_new_req_c);
      end // always_comb
 
@@ -1977,7 +1997,19 @@ module nu_l1d(clk,
      end
 
    
+   always_ff@(posedge clk)
+     begin
+	if(r_pending_alias & (!n_pending_alias))
+	  begin
+	     $stop();
+	  end
+	if((r_pending_alias | n_pending_alias)& t_accept)
+	  begin
+	     $stop();
+	  end
+     end
 
+   
    logic t_old_ack;
    always_comb
      begin
@@ -2221,6 +2253,11 @@ module nu_l1d(clk,
 				   t_force_clear_busy = 1'b1;
 				end
 			   end // if (t_mem_head.is_store)
+			 else if(t_mem_head.is_alias)
+			   begin
+			      $display("neeed to handle alias");
+			      $stop();
+			   end
 			 else
 			   begin
 			      t_pop_mq = 1'b1;
@@ -2241,7 +2278,7 @@ module nu_l1d(clk,
 	       begin
 		  t_old_ack = 1'b1;
 	       end  
-	     else if(r_flush_req && mem_q_empty && !(r_got_req && r_last_wr) && !w_eb_full)
+	     else if(r_flush_req & mem_q_empty & !(r_got_req & r_last_wr) & !w_eb_full)
 	       begin
 		  n_state = FLUSH_CACHE;
 		  if(!mem_q_empty) $stop();
@@ -2249,7 +2286,7 @@ module nu_l1d(clk,
 		  t_cache_idx = 'd0;
 		  n_flush_req = 1'b0;
 	       end
-	     else if(r_flush_cl_req & mem_q_empty & w_queues_drained & !(r_got_req && r_last_wr)
+	     else if(r_flush_cl_req & mem_q_empty & w_queues_drained & !(r_got_req & r_last_wr)
 		     & !(n_page_walk_req_valid | t_got_miss | r_wr_array | t_wr_array))
 	       begin
 		  if(!mem_q_empty) $stop();
@@ -2481,7 +2518,8 @@ module nu_l1d(clk,
 	     t_tlb_xlat = 1'b1;
 	     n_tlb_addr = core_mem_va_req.addr;
 	     n_last_wr2 = core_mem_va_req.is_store;
-	    
+
+	     if(r_pending_alias) $stop();
 `ifdef DEBUG
 	     $display("ingest new op at cycle %d atomic %b, ll %b pc %x rob ptr %d addr %x r_state = %d, n_state = %d, idx2 %d, miss idx = %d old ack %b, mem_rsp_valid = %b",
 	      	      r_cycle,

@@ -3341,6 +3341,7 @@ module exec(clk,
 	t_mem_tail.rob_ptr = mem_uop.rob_ptr;
 	t_mem_tail.dst_valid = 1'b0;
 	t_mem_tail.dst_ptr = mem_uop.dst;
+	t_mem_tail.is_alias = 1'b0;
 	t_mem_tail.is_load = 1'b0;
 	t_mem_tail.is_store = 1'b0;
 	t_mem_tail.is_atomic = 1'b0;
