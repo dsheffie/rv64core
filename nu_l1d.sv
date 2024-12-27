@@ -501,7 +501,8 @@ module nu_l1d(clk,
                              FLUSH_CL_WAIT, //9			     
                              HANDLE_RELOAD, //10
 			     TLB_RELOAD, //11
-			     TLB_TURNAROUND //12
+			     TLB_TURNAROUND, //12
+			     ALIAS_CHECK_DIRTY
                              } state_t;
 
    
@@ -2119,8 +2120,14 @@ module nu_l1d(clk,
 `ifdef DEBUG
 		    $display("---> port1 addr %x for pc %x, rob_ptr %d", r_req.addr, r_req.pc, r_req.rob_ptr);
 `endif
-		    
-		    if(w_got_hit)
+		    if(r_req.is_alias)
+		      begin
+			 n_state = ALIAS_CHECK_DIRTY;
+			 t_cache_idx = {~r_req.addr[IDX_STOP-1], r_req.addr[IDX_STOP-2:IDX_START]};
+			 t_cache_tag = r_req.addr[`PA_WIDTH-1:IDX_STOP];
+			 //t_addr = .addr;
+		      end		    
+		    else if(w_got_hit)
 		      begin /* valid cacheline - hit in cache */
 			 t_reset_graduated = r_req.is_store;
 `ifdef VERILATOR
@@ -2253,11 +2260,6 @@ module nu_l1d(clk,
 				   t_force_clear_busy = 1'b1;
 				end
 			   end // if (t_mem_head.is_store)
-			 else if(t_mem_head.is_alias)
-			   begin
-			      $display("neeed to handle alias");
-			      $stop();
-			   end
 			 else
 			   begin
 			      t_pop_mq = 1'b1;
@@ -2442,6 +2444,11 @@ module nu_l1d(clk,
 	       t_replay_req2 = 1'b1;
 	       t_tlb_xlat_replay = 1'b1;
 	    end
+	  ALIAS_CHECK_DIRTY:
+	    begin
+	       $display("valid = %b, dirty = %b", r_valid_out, r_dirty_out);
+	       $stop();
+	    end	  
 	  default:
 	    begin
 	    end
