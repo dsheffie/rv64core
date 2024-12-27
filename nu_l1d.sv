@@ -493,9 +493,9 @@ module nu_l1d(clk,
 			     ACTIVE, //2
                              INJECT_RELOAD, //3
 			     WAIT_INJECT_RELOAD, //4
-                             CLEAR_DIRTY, //3			     			     
-                             FLUSH_CACHE, //5
-                             FLUSH_CACHE_WAIT, //6
+                             CLEAR_DIRTY, //5			     			     
+                             FLUSH_CACHE, //6
+                             FLUSH_CACHE_WAIT, //7
 			     FLUSH_CACHE_LAST_WAIT, //7
                              FLUSH_CL, //8
                              FLUSH_CL_WAIT, //9			     
@@ -708,8 +708,8 @@ module nu_l1d(clk,
 	  begin
 	     if(r_got_req2 & !drain_ds_complete & t_push_miss)
 	       begin
-		  $display("rob entry %d enters at cycle %d for pc %x", 
-			   r_req2.rob_ptr, r_cycle, r_req2.pc);
+		  //$display("rob entry %d enters at cycle %d for pc %x", 
+		  //r_req2.rob_ptr, r_cycle, r_req2.pc);
 		  
 		  if(r_rob_inflight[r_req2.rob_ptr] == 1'b1)
 		    $display("entry %d should not be inflight\n", r_req2.rob_ptr);
@@ -726,8 +726,8 @@ module nu_l1d(clk,
 		       $stop();
 		      
 		    end
-		  $display("clearing rob entry %d, pc %x, uuid %d, cycle %d", 
-			   r_req.rob_ptr, r_req.pc, r_req.uuid, r_cycle);
+		  //$display("clearing rob entry %d, pc %x, uuid %d, cycle %d", 
+		  //r_req.rob_ptr, r_req.pc, r_req.uuid, r_cycle);
 		  
 		  r_rob_inflight[r_req.rob_ptr] <= 1'b0;
 	       end
@@ -2133,9 +2133,9 @@ module nu_l1d(clk,
 `endif
 		    if(r_req.is_alias)
 		      begin
+			 n_flush_req = 1'b1;
 			 $display("cycle %d : time to flush cache to process alias (rob ptr %d, pc %x, uuid %d)", 
 				  r_cycle, r_req.rob_ptr, r_req.pc, r_req.uuid);
-			 n_state = FLUSH_CACHE;
 		      end		    
 		    else if(w_got_hit)
 		      begin /* valid cacheline - hit in cache */
@@ -2383,6 +2383,7 @@ module nu_l1d(clk,
 	  FLUSH_CACHE:
 	    begin
 	       t_cache_idx = r_cache_idx + 'd1;
+	       
 	       //$display("flush line %x was %b, r_pending_alias = %b", 
 	       //{r_tag_out,r_cache_idx,{`LG_L1D_CL_LEN{1'b0}}}, 
 	       //r_dirty_out,
@@ -2396,6 +2397,7 @@ module nu_l1d(clk,
 		      begin
 			 n_state = r_pending_alias ? ALIAS_CHECK_DIRTY : ACTIVE;
 			 n_flush_complete = !r_pending_alias;
+			 //$display("n_state = %d", n_state);			 
 		      end
 		 end
 	       else
@@ -2720,6 +2722,12 @@ module nu_l1d(clk,
 	  end
      end
 `endif
+
+   // always@(negedge clk)
+   //   begin
+   // 	$display("cycle %d : n_state = %d, r_state = %d",
+   // 		 r_cycle, n_state, r_state);
+   //   end
    
 endmodule // l1d
 
