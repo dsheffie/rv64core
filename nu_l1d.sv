@@ -1025,7 +1025,7 @@ module nu_l1d(clk,
 	     r_flush_was_active <= n_flush_was_active;
 	     r_pending_tlb_miss <= n_pending_tlb_miss;
 	     r_pending_tlb_zero_page <= n_pending_tlb_zero_page;
-	     r_pending_alias <= t_clear_alias ? 1'b0 : n_pending_alias;	     
+	     r_pending_alias <= (t_clear_alias) ? 1'b0 : n_pending_alias;	     
 	     r_tlb_addr <= n_tlb_addr;
 	     r_did_reload <= n_did_reload;
 	     r_stall_store <= n_stall_store;
@@ -1086,28 +1086,24 @@ module nu_l1d(clk,
 	     r_must_forward2 <= t_cm_block & core_mem_va_req_ack;
 	  end
      end // always_ff@ (posedge clk)
-   
-   //always_ff@(negedge clk)
-   // begin
-     //  if(!memq_empty)
-   //begin
-   //$display("mem_q_empty = %b", mem_q_empty);
-   //$display("drain_ds_complete = %b", drain_ds_complete);
-   //end
-    //end
+
 
    // always_ff@(negedge clk)
-   //   begin
-   // 	if(memq_empty & !reset)
-   // 	  begin
-   // 	     if(l2_empty == 1'b0) 
-   // 	       begin
-   // 		  $display("memq_empty asserted but l2_empty aint empty at cycle %d", r_cycle);
-   // 		  $stop();
-   // 	       end
-   // 	  end
-   //   end
-   
+   //  begin
+   //     if(!memq_empty)
+   // 	 begin
+   // 	    $display("mem_q_empty = %b, w_drained = %b, n_mrq_credits = %b", mem_q_empty, w_drained, n_mrq_credits);
+   // 	    if(!w_drained)
+   // 	      begin
+   // 		 $display("r_rob_inflight = %b", r_rob_inflight);
+   // 		 for(integer i = 0; i < 32; i=i+1)
+   // 		   begin
+   // 		      if(r_rob_inflight[i]) $display("entry %d inflight", i);
+   // 		   end
+   // 	      end
+   // 	 end
+   //  end // always_ff@ (negedge clk)
+
    
    always_ff@(posedge clk)
      begin
@@ -1547,6 +1543,8 @@ module nu_l1d(clk,
 		   {31'd0, t_accept},
 		   {24'd0, t_new_req_c}
 		   );
+
+	
 	if(t_wr_store)
 	  begin	     
 	     wr_log(r_req.pc,
@@ -2133,9 +2131,15 @@ module nu_l1d(clk,
 `endif
 		    if(r_req.is_alias)
 		      begin
-			 n_flush_req = 1'b1;
 			 $display("cycle %d : time to flush cache to process alias (rob ptr %d, pc %x, uuid %d)", 
 				  r_cycle, r_req.rob_ptr, r_req.pc, r_req.uuid);
+			 if(n_flush_req) $stop();
+			 n_flush_req = 1'b1;
+			 
+			 if(r_pending_alias == 1'b0) 
+			   begin
+			      $stop();
+			   end
 		      end		    
 		    else if(w_got_hit)
 		      begin /* valid cacheline - hit in cache */
@@ -2268,6 +2272,10 @@ module nu_l1d(clk,
 				begin
 				   t_pop_mq = 1'b1;
 				   t_force_clear_busy = 1'b1;
+				   if(t_mem_head.is_alias & r_pending_alias)
+				     begin
+					t_clear_alias = 1'b1;
+				     end
 				end
 			   end // if (t_mem_head.is_store)
 			 else
@@ -2397,7 +2405,7 @@ module nu_l1d(clk,
 		      begin
 			 n_state = r_pending_alias ? ALIAS_CHECK_DIRTY : ACTIVE;
 			 n_flush_complete = !r_pending_alias;
-			 //$display("n_state = %d", n_state);			 
+			 $display("cycle %d : cache flush done, n_state = %d, pending_alias %b", r_cycle, n_state, r_pending_alias);			 
 		      end
 		 end
 	       else
@@ -2422,6 +2430,7 @@ module nu_l1d(clk,
 		     n_state = r_pending_alias ? ALIAS_CHECK_DIRTY : ACTIVE;
 		     n_inhibit_write = 1'b0;
 		     n_flush_complete = !r_pending_alias;
+		     $display("cycle %d : cache flush done, n_state = %d, pending_alias %b", r_cycle, n_state, r_pending_alias);			 		     
 		  end
 	    end	  
 	  FLUSH_CACHE_WAIT:
@@ -2459,8 +2468,8 @@ module nu_l1d(clk,
 	    end
 	  ALIAS_CHECK_DIRTY:
 	    begin
-	       $display("alias clear complete, r_req.is_store = %b, r_req.pc = %x, rob_ptr = %d", 
-			r_req.is_store, r_req.pc, r_req.rob_ptr);
+	       $display("alias clear complete, r_req.is_store = %b, r_req.pc = %x, rob_ptr = %d at cycle %d", 
+			r_req.is_store, r_req.pc, r_req.rob_ptr,r_cycle);
 	       t_clear_alias = 1'b1;
 	       n_req.is_alias = 1'b0;
 	       n_state = ACTIVE;
@@ -2723,11 +2732,18 @@ module nu_l1d(clk,
      end
 `endif
 
-   // always@(negedge clk)
-   //   begin
-   // 	$display("cycle %d : n_state = %d, r_state = %d",
-   // 		 r_cycle, n_state, r_state);
-   //   end
+   always@(negedge clk)
+     begin
+	if(r_flush_req)
+	  begin
+	     $display("waiting to flush at cycle %d", r_cycle);
+	  end
+	if(r_pending_alias==1'b0 & n_pending_alias)
+	  begin
+	     $display("pending alias set at cycle %d", r_cycle);
+	  end
+	
+     end
    
 endmodule // l1d
 

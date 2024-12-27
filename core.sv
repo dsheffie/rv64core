@@ -1168,6 +1168,8 @@ module core(clk,
 	    end // case: ACTIVE
 	  DRAIN:	    
 	    begin
+	       //$display("r_rob_inflight = %b, memq_empty = %b, t_divide_ready = %b",
+	       //r_rob_inflight, memq_empty, t_divide_ready);
 	       if((r_rob_inflight == 'd0) & memq_empty & t_divide_ready /*& (r_arch_fault ? l2_empty : 1'b1)*/ )
 		 begin
 		    n_state = RAT;
@@ -1234,8 +1236,8 @@ module core(clk,
 	    end
 	  FLUSH_CACHE:
 	    begin
-	       //$display("monitor flush %b %b", n_l1d_flush_complete, n_l2_flush_complete);
-	       if(n_l1i_flush_complete && n_l1d_flush_complete && n_l2_flush_complete)
+	       $display("monitor flush %b %b cycle %d", n_l1d_flush_complete, n_l2_flush_complete, r_cycle);
+	       if(n_l1i_flush_complete & n_l1d_flush_complete & n_l2_flush_complete)
 		 begin
 		    n_got_monitor = t_uop.op == MONITOR;
 		    n_state = (t_uop.op == MONITOR) ? HANDLE_MONITOR : ALLOC_FOR_SERIALIZE;
