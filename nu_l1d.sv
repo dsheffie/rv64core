@@ -706,7 +706,7 @@ module nu_l1d(clk,
 	  end
 	else
 	  begin
-	     if(r_got_req2 && !drain_ds_complete && t_push_miss)
+	     if(r_got_req2 & !drain_ds_complete & t_push_miss)
 	       begin
 		  //$display("rob entry %d enters at cycle %d", r_req2.rob_ptr, r_cycle);
 		  
@@ -715,12 +715,15 @@ module nu_l1d(clk,
 		  
 		  r_rob_inflight[r_req2.rob_ptr] <= 1'b1;
 	       end
-	     if(r_got_req && r_valid_out && (r_tag_out == r_cache_tag) )
+	     if(r_got_req & r_valid_out & (r_tag_out == r_cache_tag) )
 	       begin
 		  //$display("rob entry %d leaves at cycle %d", r_req.rob_ptr, r_cycle);
-		  if(r_rob_inflight[r_req.rob_ptr] == 1'b0) 
-		    $display("huh %d should be inflight....\n", r_req.rob_ptr);
-		  
+		  if(r_rob_inflight[r_req.rob_ptr] == 1'b0)
+		    begin
+		       $display("huh %d should be inflight....\n", r_req.rob_ptr);
+		    end
+		  $display("clearing rob entry %d, pc %x, cycle %d", 
+			   r_req.rob_ptr, r_req.pc, r_cycle);
 		  r_rob_inflight[r_req.rob_ptr] <= 1'b0;
 	       end
 	     if(t_force_clear_busy)
@@ -737,8 +740,8 @@ module nu_l1d(clk,
    
    wire w_req_port_free = r_got_req ? w_cache_port1_hit : 1'b1;
 
-   wire	w_port2_dirty_miss = r_valid_out2 && r_dirty_out2 && (r_tag_out2 != w_tlb_pa[`PA_WIDTH-1:IDX_STOP]);
-   wire	w_port2_hit_cache = r_valid_out2 && (r_tag_out2 == w_tlb_pa[`PA_WIDTH-1:IDX_STOP]);
+   wire	w_port2_dirty_miss = r_valid_out2 & r_dirty_out2 & (r_tag_out2 != w_tlb_pa[`PA_WIDTH-1:IDX_STOP]);
+   wire	w_port2_hit_cache = r_valid_out2 & (r_tag_out2 == w_tlb_pa[`PA_WIDTH-1:IDX_STOP]);
 
    wire w_hit_pop = r_pop_busy_addr2 ? (r_cache_idx == r_req2.addr[IDX_STOP-1:IDX_START]) : 1'b0;
 
@@ -2124,6 +2127,7 @@ module nu_l1d(clk,
 `endif
 		    if(r_req.is_alias)
 		      begin
+			 $display("time to process alias");
 			 n_state = FLUSH_CACHE;
 		      end		    
 		    else if(w_got_hit)
@@ -2372,9 +2376,10 @@ module nu_l1d(clk,
 	  FLUSH_CACHE:
 	    begin
 	       t_cache_idx = r_cache_idx + 'd1;
-	       //$display("flush line %x was %b", 
-	       //{r_tag_out,r_cache_idx,{`LG_L1D_CL_LEN{1'b0}}},
-	       //	r_dirty_out);
+	       //$display("flush line %x was %b, r_pending_alias = %b", 
+	       //{r_tag_out,r_cache_idx,{`LG_L1D_CL_LEN{1'b0}}}, 
+	       //r_dirty_out,
+	       //r_pending_alias);
 	       
 	       if(!r_dirty_out)
 		 begin
@@ -2405,9 +2410,9 @@ module nu_l1d(clk,
 	       //$display("stuck in flush cache at cycle %d", r_cycle);
 	       	if(mem_rsp_valid)
 		  begin
-		     n_state = ACTIVE;
+		     n_state = r_pending_alias ? ALIAS_CHECK_DIRTY : ACTIVE;
 		     n_inhibit_write = 1'b0;
-		     n_flush_complete = 1'b1;
+		     n_flush_complete = !r_pending_alias;
 		  end
 	    end	  
 	  FLUSH_CACHE_WAIT:
@@ -2445,13 +2450,16 @@ module nu_l1d(clk,
 	    end
 	  ALIAS_CHECK_DIRTY:
 	    begin
+	       $display("alias clear complete, r_req.is_store = %b, r_req.pc = %x, rob_ptr = %d", 
+			r_req.is_store, r_req.pc, r_req.rob_ptr);
 	       t_clear_alias = 1'b1;
 	       n_req.is_alias = 1'b0;
 	       n_state = ACTIVE;
 	       t_got_req = 1;
 	       t_cache_idx = r_req.addr[IDX_STOP-1:IDX_START];
 	       t_cache_tag = r_req.addr[`PA_WIDTH-1:IDX_STOP];
-	       t_addr  = r_req.addr;	       
+	       n_last_wr = r_req.is_store;	       
+	       t_addr = r_req.addr;	       
 	    end	  
 	  default:
 	    begin
