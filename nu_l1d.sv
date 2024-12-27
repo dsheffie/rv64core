@@ -708,22 +708,27 @@ module nu_l1d(clk,
 	  begin
 	     if(r_got_req2 & !drain_ds_complete & t_push_miss)
 	       begin
-		  //$display("rob entry %d enters at cycle %d", r_req2.rob_ptr, r_cycle);
+		  $display("rob entry %d enters at cycle %d for pc %x", 
+			   r_req2.rob_ptr, r_cycle, r_req2.pc);
 		  
 		  if(r_rob_inflight[r_req2.rob_ptr] == 1'b1)
 		    $display("entry %d should not be inflight\n", r_req2.rob_ptr);
 		  
 		  r_rob_inflight[r_req2.rob_ptr] <= 1'b1;
 	       end
-	     if(r_got_req & r_valid_out & (r_tag_out == r_cache_tag) )
+	     if(r_got_req & r_valid_out & (r_tag_out == r_cache_tag) & !r_req.is_alias)
 	       begin
 		  //$display("rob entry %d leaves at cycle %d", r_req.rob_ptr, r_cycle);
 		  if(r_rob_inflight[r_req.rob_ptr] == 1'b0)
 		    begin
-		       $display("huh %d should be inflight....\n", r_req.rob_ptr);
+		       $display("cycle %d : huh %d (pc %x) should be inflight, state = %d, uuid %d", 
+				r_cycle, r_req.rob_ptr, r_req.pc, r_state, r_req.uuid);
+		       $stop();
+		      
 		    end
-		  $display("clearing rob entry %d, pc %x, cycle %d", 
-			   r_req.rob_ptr, r_req.pc, r_cycle);
+		  $display("clearing rob entry %d, pc %x, uuid %d, cycle %d", 
+			   r_req.rob_ptr, r_req.pc, r_req.uuid, r_cycle);
+		  
 		  r_rob_inflight[r_req.rob_ptr] <= 1'b0;
 	       end
 	     if(t_force_clear_busy)
@@ -1350,19 +1355,20 @@ module nu_l1d(clk,
 
    wire w_could_alias = paging_active ? r_got_req2 & r_alias_valid & (r_alias== w_tlb_pa[`PA_WIDTH-1:12]) & !w_port2_hit_cache : 1'b0;
    
-   always_ff@(negedge clk)
-     begin
-	if(w_could_alias)
-	  begin
-	     $display("pc %x : alias detected!, paging active %b, set %d, address %x, pending alias = %b, t_push_miss = %b",
-		      t_req2_pa.pc,
-		      paging_active, w_tlb_pa[IDX_STOP-1:IDX_START],
-		      w_tlb_pa, 
-		      n_pending_alias,
-		      t_push_miss);
-	     //$stop();
-	  end
-     end
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if(w_could_alias)
+   // 	  begin
+   // 	     $display("pc %x : alias detected!, paging active %b, set %d, address %x, pending alias = %b, t_push_miss = %b, uuid %d",
+   // 		      t_req2_pa.pc,
+   // 		      paging_active, w_tlb_pa[IDX_STOP-1:IDX_START],
+   // 		      w_tlb_pa, 
+   // 		      n_pending_alias,
+   // 		      t_push_miss,
+   // 		      t_req2_pa.uuid);
+   // 	     //$stop();
+   // 	  end
+   //   end
 
 
    tlb #(.LG_N(5)) dtlb(
@@ -1565,7 +1571,7 @@ module nu_l1d(clk,
 		 (r_got_req && r_must_forward) ? r_array_wr_data : 
 		 r_array_out;
 	
-	t_hit_cache =  r_got_req & w_cache_port1_hit & (r_state == ACTIVE);
+	t_hit_cache =  r_got_req & w_cache_port1_hit & (r_state == ACTIVE) & (!r_req.is_alias);
 	t_array_data = 'd0;
 	t_wr_array = 1'b0;
 	t_wr_store = 1'b0;
@@ -2127,7 +2133,8 @@ module nu_l1d(clk,
 `endif
 		    if(r_req.is_alias)
 		      begin
-			 $display("time to process alias");
+			 $display("cycle %d : time to flush cache to process alias (rob ptr %d, pc %x, uuid %d)", 
+				  r_cycle, r_req.rob_ptr, r_req.pc, r_req.uuid);
 			 n_state = FLUSH_CACHE;
 		      end		    
 		    else if(w_got_hit)
@@ -2459,7 +2466,7 @@ module nu_l1d(clk,
 	       t_cache_idx = r_req.addr[IDX_STOP-1:IDX_START];
 	       t_cache_tag = r_req.addr[`PA_WIDTH-1:IDX_STOP];
 	       n_last_wr = r_req.is_store;	       
-	       t_addr = r_req.addr;	       
+	       t_addr = r_req.addr;
 	    end	  
 	  default:
 	    begin
