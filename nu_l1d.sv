@@ -269,8 +269,8 @@ module nu_l1d(clk,
    logic 				  t_tlb_xlat,t_tlb_xlat_replay;
    logic				  n_pending_tlb_miss, r_pending_tlb_miss;
    logic				  n_pending_tlb_zero_page, r_pending_tlb_zero_page;
-   logic				  n_pending_alias,r_pending_alias;
-   
+   logic				  n_pending_alias,r_pending_alias,t_clear_alias;
+      
    logic				  t_got_miss, t_dirty_miss;
    logic				  t_pop_eb, t_push_eb;
    
@@ -1017,7 +1017,7 @@ module nu_l1d(clk,
 	     r_flush_was_active <= n_flush_was_active;
 	     r_pending_tlb_miss <= n_pending_tlb_miss;
 	     r_pending_tlb_zero_page <= n_pending_tlb_zero_page;
-	     r_pending_alias <= n_pending_alias;	     
+	     r_pending_alias <= t_clear_alias ? 1'b0 : n_pending_alias;	     
 	     r_tlb_addr <= n_tlb_addr;
 	     r_did_reload <= n_did_reload;
 	     r_stall_store <= n_stall_store;
@@ -2087,6 +2087,8 @@ module nu_l1d(clk,
 	
 	n_did_reload = 1'b0;
 	n_lock_cache = r_lock_cache;
+
+	t_clear_alias = 1'b0;
 	
 	t_mh_block = r_got_req && r_last_wr && 
 		     (r_cache_idx == t_mem_head.addr[IDX_STOP-1:IDX_START] );
@@ -2122,10 +2124,7 @@ module nu_l1d(clk,
 `endif
 		    if(r_req.is_alias)
 		      begin
-			 n_state = ALIAS_CHECK_DIRTY;
-			 t_cache_idx = {~r_req.addr[IDX_STOP-1], r_req.addr[IDX_STOP-2:IDX_START]};
-			 t_cache_tag = r_req.addr[`PA_WIDTH-1:IDX_STOP];
-			 //t_addr = .addr;
+			 n_state = FLUSH_CACHE;
 		      end		    
 		    else if(w_got_hit)
 		      begin /* valid cacheline - hit in cache */
@@ -2383,8 +2382,8 @@ module nu_l1d(clk,
 		    t_cache_idx = r_cache_idx + 'd1;
 		    if(r_cache_idx == (L1D_NUM_SETS-1))
 		      begin
-			 n_state = ACTIVE;
-			 n_flush_complete = 1'b1;
+			 n_state = r_pending_alias ? ALIAS_CHECK_DIRTY : ACTIVE;
+			 n_flush_complete = !r_pending_alias;
 		      end
 		 end
 	       else
@@ -2446,8 +2445,13 @@ module nu_l1d(clk,
 	    end
 	  ALIAS_CHECK_DIRTY:
 	    begin
-	       $display("valid = %b, dirty = %b", r_valid_out, r_dirty_out);
-	       $stop();
+	       t_clear_alias = 1'b1;
+	       n_req.is_alias = 1'b0;
+	       n_state = ACTIVE;
+	       t_got_req = 1;
+	       t_cache_idx = r_req.addr[IDX_STOP-1:IDX_START];
+	       t_cache_tag = r_req.addr[`PA_WIDTH-1:IDX_STOP];
+	       t_addr  = r_req.addr;	       
 	    end	  
 	  default:
 	    begin
