@@ -760,8 +760,8 @@ module nu_l1d(clk,
 	(n_last_wr ? (t_cache_idx != r_req2.addr[IDX_STOP-1:IDX_START]) : 1'b1);
 
 
-   wire	w_could_early_req = !w_port2_dirty_miss & w_could_early_req_any;
-
+   //dsheffie - disable early requests
+   wire	w_could_early_req = !w_port2_dirty_miss & w_could_early_req_any & 1'b0;
    
    wire w_gen_early_req = w_could_early_req & (r_got_req ? w_cache_port1_hit : 1'b1);
    
@@ -1127,6 +1127,13 @@ module nu_l1d(clk,
 
    always_ff@(negedge clk)
      begin
+	if(mem_rsp_reload)
+	  begin
+	     //$display("got reload, addr %x, idx %d, data %x, state %d",
+	     //mem_rsp_addr, mem_rsp_addr[IDX_STOP-1:IDX_START],
+	     //mem_rsp_load_data,
+	     //r_state);
+	  end
 	if(mem_rsp_reload & t_wr_array) $stop();
      end
    
@@ -2089,7 +2096,14 @@ module nu_l1d(clk,
 	       if(r_got_req)
 		 begin
 `ifdef DEBUG
-		    $display("---> port1 addr %x for pc %x, rob_ptr %d", r_req.addr, r_req.pc, r_req.rob_ptr);
+		    $display("---> cycle %d port1 addr %x for pc %x, rob_ptr %d, hit %b, data %x, store %b, dirty %b, idx %d", 
+			     r_cycle, r_req.addr, r_req.pc, 
+			     r_req.rob_ptr, 
+			     w_got_hit, 
+			     t_rsp_data, 
+			     r_req.is_store,
+			     r_dirty_out,
+			     r_cache_idx);
 `endif
 		    
 		    if(w_got_hit)
@@ -2129,6 +2143,7 @@ module nu_l1d(clk,
 			      n_port1_req_addr = {r_tag_out,r_cache_idx[LG_MAX_SET-1:0],4'd0};
 			      n_port1_req_opcode = MEM_SW;
 			      n_port1_req_store_data = t_data;
+			      //$display("time to writeback address %x with data %x", n_port1_req_addr, t_data);
 			      n_inhibit_write = 1'b1;
 			      t_miss_idx = r_cache_idx;
 			      t_miss_addr = r_req.addr;
@@ -2147,7 +2162,7 @@ module nu_l1d(clk,
 				   n_state = CLEAR_DIRTY;				   
 				end
 			   end // if (!t_stall_for_busy)
-		      end
+		      end // if (r_valid_out && r_dirty_out && (r_tag_out != r_cache_tag) )
 		  else
 		    begin
 		       t_got_miss = 1'b1;
@@ -2338,9 +2353,9 @@ module nu_l1d(clk,
 	  FLUSH_CACHE:
 	    begin
 	       t_cache_idx = r_cache_idx + 'd1;
-	       //$display("flush line %x was %b", 
-	       //{r_tag_out,r_cache_idx,{`LG_L1D_CL_LEN{1'b0}}},
-	       //	r_dirty_out);
+	       //$display("flush idx %x was %b",
+	       //{r_tag_out,r_cache_idx[LG_MAX_SET-1:0],4'd0},
+	       //r_dirty_out);
 	       
 	       if(!r_dirty_out)
 		 begin
@@ -2602,25 +2617,7 @@ module nu_l1d(clk,
 	r_credits <= reset ? 'd0 : n_credits;
      end
    
-   //always_ff@(negedge clk)
-     //begin
-	//if(w_decr_credit)
-	//begin
-	  //   $display("decr credit value %d at cycle %d, tag %d", 
-	//n_mrq_credits, r_cycle, mem_req.tag);
-	  //end
-	//else if(w_incr_credit)
-	  //begin
-	     //$display("incr credit value %d at cycle %d, tag %d, addr %x", 
-	     //n_mrq_credits, r_cycle, mem_rsp_tag, mem_rsp_addr);
-	    // if(n_mrq_credits == 'd0)
-	//begin
-	//	  $display("overflow!");
-	///$stop();
-     //end	     
-     //end
-	// end
-   
+
 
    always_comb
      begin
@@ -2656,6 +2653,10 @@ module nu_l1d(clk,
 	if(n_port1_req_valid && n_port2_req_valid)
 	  begin
 	     $display("two requests - main state %d, next state %d", r_state, n_state);
+	     $stop();
+	  end
+	if(r_state == ACTIVE & r_got_req & w_got_hit & t_got_miss)
+	  begin
 	     $stop();
 	  end
      end

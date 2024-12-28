@@ -740,8 +740,9 @@ void execRiscv(state_t *s) {
 	  goto handle_exception;
 	}
 
-	//if(s->pc == 0xffffffff8030db54UL) {
-	// printf("ld for phys addr %lx, virt addr %lx\n", pa, ea);
+	
+	//if(s->pc == 0xffffffff80020578UL) {
+	//printf("ld for phys addr %lx, virt addr %lx\n", pa, ea);
 	//}
 	
 	switch(m.s.sel)
