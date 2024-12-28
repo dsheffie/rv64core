@@ -498,13 +498,14 @@ module nu_l1d(clk,
                              CLEAR_DIRTY, //5			     			     
                              FLUSH_CACHE, //6
                              FLUSH_CACHE_WAIT, //7
-			     FLUSH_CACHE_LAST_WAIT, //7
-                             FLUSH_CL, //8
-                             FLUSH_CL_WAIT, //9			     
-                             HANDLE_RELOAD, //10
+			     FLUSH_CACHE_LAST_WAIT, //8
+                             FLUSH_CL, //9
+                             FLUSH_CL_WAIT, //10
+                             HANDLE_RELOAD, //11
 			     TLB_RELOAD, //11
 			     TLB_TURNAROUND, //12
-			     ALIAS_CHECK_DIRTY
+			     ALIAS_CHECK_DIRTY,
+			     SLEEP_BEFORE_FLUSH
                              } state_t;
 
    
@@ -514,7 +515,7 @@ module nu_l1d(clk,
    logic 	n_did_reload, r_did_reload;
    logic r_got_rd_retry;
    
-   
+   logic [5:0] r_flush_sleep, n_flush_sleep;
    
    logic r_mem_req_valid, n_mem_req_valid;
    logic r_mem_req_uc, n_mem_req_uc;
@@ -974,6 +975,7 @@ module nu_l1d(clk,
 	     r_pending_tlb_miss <= 1'b0;
 	     r_pending_tlb_zero_page <= 1'b0;
 	     r_pending_alias <= 1'b0;
+	     r_flush_sleep <= 'd0;
 	     r_alias_block0 <= 1'b0;
 	     r_alias_block1 <= 1'b0;
 	     r_alias_block2 <= 1'b0;	     
@@ -1031,6 +1033,7 @@ module nu_l1d(clk,
 	     r_pending_tlb_miss <= n_pending_tlb_miss;
 	     r_pending_tlb_zero_page <= n_pending_tlb_zero_page;
 	     r_pending_alias <= (t_clear_alias) ? 1'b0 : n_pending_alias;
+	     r_flush_sleep <= n_flush_sleep;	     
 	     r_alias_block0 <= t_clear_alias;
 	     r_alias_block1 <= r_alias_block0;
 	     r_alias_block2 <= r_alias_block1;
@@ -1095,22 +1098,6 @@ module nu_l1d(clk,
 	  end
      end // always_ff@ (posedge clk)
 
-
-   // always_ff@(negedge clk)
-   //  begin
-   //     if(!memq_empty)
-   // 	 begin
-   // 	    $display("mem_q_empty = %b, w_drained = %b, n_mrq_credits = %b", mem_q_empty, w_drained, n_mrq_credits);
-   // 	    if(!w_drained)
-   // 	      begin
-   // 		 $display("r_rob_inflight = %b", r_rob_inflight);
-   // 		 for(integer i = 0; i < 32; i=i+1)
-   // 		   begin
-   // 		      if(r_rob_inflight[i]) $display("entry %d inflight", i);
-   // 		   end
-   // 	      end
-   // 	 end
-   //  end // always_ff@ (negedge clk)
 
    
    always_ff@(posedge clk)
@@ -1222,20 +1209,6 @@ module nu_l1d(clk,
 `ifdef DEBUG
     always_ff@(negedge clk)
       begin
-	 // for(integer i = 0; i < N_MQ_ENTRIES; i=i+1)
-	 //   begin
-	 //      if(r_mq_addr_valid[i])
-	 // 	begin
-	 // 	   $display("line %d has addr %x", i, r_mq_addr[i]);
-	 // 	end
-	 //      if(r_mq_inflight[i])
-	 // 	begin
-	 // 	   $display("line %d is inflight", i);
-	 // 	end
-	 //   end
-
-	 
-	 
 	 if(t_got_req2)
 	   begin
 	      if(r_pending_alias) $stop();
@@ -1286,18 +1259,6 @@ module nu_l1d(clk,
 		      r_state, n_state, r_req.pc, mem_rsp_tag);
 	     $stop();
 	  end
-	// if(t_wr_array)
-	//   begin
-	//      $display("pc %x op %d rob ptr %d: t_array_data = %x, t_data = %x, t_store_shift = %x, mem_rsp_valid = %b, fwd = %b",
-	// 	      r_req.pc,
-	// 	      r_req.op,
-	// 	      r_req.rob_ptr,
-	// 	      t_array_data,
-	// 	      t_data,
-	// 	      t_store_shift,
-	// 	      mem_rsp_valid, 
-	// 	      (r_got_req && r_must_forward));
-	//   end
      end
 `endif
    
@@ -2027,20 +1988,7 @@ module nu_l1d(clk,
 	r_got_rd_retry <= reset ? 1'b0 : w_got_rd_retry & t_new_req;
      end
 
-   
-   always_ff@(posedge clk)
-     begin
-	if(r_pending_alias & (!n_pending_alias))
-	  begin
-	     $stop();
-	  end
-	if((r_pending_alias | n_pending_alias)& t_accept)
-	  begin
-	     $stop();
-	  end
-     end
-
-   
+  
    logic t_old_ack;
    always_comb
      begin
@@ -2119,6 +2067,7 @@ module nu_l1d(clk,
 	n_lock_cache = r_lock_cache;
 
 	t_clear_alias = 1'b0;
+	n_flush_sleep = r_flush_sleep;
 	
 	t_mh_block = r_got_req && r_last_wr && 
 		     (r_cache_idx == t_mem_head.addr[IDX_STOP-1:IDX_START] );
@@ -2319,7 +2268,8 @@ module nu_l1d(clk,
 	       end  
 	     else if(r_flush_req & mem_q_empty & !(r_got_req & r_last_wr) & !w_eb_full)
 	       begin
-		  n_state = FLUSH_CACHE;
+		  n_state = SLEEP_BEFORE_FLUSH;
+		  n_flush_sleep = 'd63;
 		  if(!mem_q_empty) $stop();
 		  if(r_got_req && r_last_wr) $stop();
 		  t_cache_idx = 'd0;
@@ -2411,10 +2361,10 @@ module nu_l1d(clk,
 	    begin
 	       t_cache_idx = r_cache_idx + 'd1;
 	       
-	       $display("flush line %x was %b, r_pending_alias = %b", 
-			{r_tag_out,r_cache_idx,{`LG_L1D_CL_LEN{1'b0}}}, 
-			r_dirty_out,
-			r_pending_alias);
+	       //$display("flush line %x was %b, r_pending_alias = %b", 
+	       //{r_tag_out,r_cache_idx,{`LG_L1D_CL_LEN{1'b0}}}, 
+	       //r_dirty_out,
+	       //r_pending_alias);
 	       
 	       if(!r_dirty_out)
 		 begin
@@ -2499,7 +2449,15 @@ module nu_l1d(clk,
 	       t_cache_tag = r_req.addr[`PA_WIDTH-1:IDX_STOP];
 	       n_last_wr = r_req.is_store;	       
 	       t_addr = r_req.addr;
-	    end	  
+	    end // case: ALIAS_CHECK_DIRTY
+	  SLEEP_BEFORE_FLUSH:
+	    begin
+	       if(r_flush_sleep == 'd0)
+		 begin
+		    n_state = FLUSH_CACHE;
+		 end
+	       n_flush_sleep = r_flush_sleep - 'd1;
+	    end
 	  default:
 	    begin
 	    end
@@ -2755,6 +2713,11 @@ module nu_l1d(clk,
 
    always@(negedge clk)
      begin
+	if(r_state != n_state)
+	  begin
+	     $display("cycle %d : r_state %d, n_state %d", 
+		      r_cycle, r_state, n_state);
+	  end
 	if(t_clear_alias)
 	  begin
 	     $display("clearing alias at cycle %d", r_cycle);

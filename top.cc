@@ -357,13 +357,15 @@ void wr_log(long long pc,
 
   
   if(globals::log) {
-    printf("pc %llx, addr %llx, data %llx, atomic %d, store queue entries %d\n",
-	   pc, addr, data, is_atomic,
-	   static_cast<int>(store_queue.size()));
+    std::cout << std::hex << "pc " << pc << ",addr " << addr << ",data "
+	      << data << std::dec << ", atomic " << is_atomic
+	      << ", store queue entries " << store_queue.size()
+	      << "\n";
   }
 
-  if(addr == 0xfffff008)
-    printf("\n\nGOT STORE to mem location for pc %lx, data %llx, robptr %d, cycle %llu \n\n", pc, data, robptr, cycle);
+  if(addr == 0xfffff008) {
+    printf("\n\nGOT STORE to mem location for pc %lx, data %lx, robptr %d, cycle %lu \n\n", pc, data, robptr, cycle);
+  }
   
   if(is_atomic) {
     atomic_queue.emplace_back(pc, addr, data);

@@ -313,7 +313,7 @@ module l2_2way(clk,
 	begin
 	   $display("L1D RESP FOR ADDR %x TAG %d at cycle %d, data %x",
 		    l1d_rsp_addr, l1d_rsp_tag, r_cycle, l1_mem_load_data);
-	   if(r_cycle == 'd24602353) $stop();
+	   //if(r_cycle == 'd24602353) $stop();
 	end
 	if(mmu_rsp_valid)
 	  begin
@@ -1041,8 +1041,8 @@ module l2_2way(clk,
 	   end
     	if(r_state == CHECK_VALID_AND_TAG)
 	  begin
-	     $display("process adddress %x at cycle %d, hit %b, last_gnt %b, r_opcode %d, r_mmu %b", 
-		      r_addr, r_cycle, w_hit, r_last_gnt, r_opcode, r_mmu);
+	     $display("process adddress %x at cycle %d, hit %b, last_gnt %b, r_opcode %d, r_mmu %b, store data %x", 
+		      r_addr, r_cycle, w_hit, r_last_gnt, r_opcode, r_mmu, r_store_data);
 	  end
 	 if(l1i_rsp_valid)
 	   begin
