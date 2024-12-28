@@ -350,7 +350,8 @@ void wr_log(long long pc,
 	    int robptr,
 	    unsigned long long addr,
 	    unsigned long long data,
-	    int is_atomic) {
+	    int is_atomic,
+	    unsigned long long cycle) {
   if(not(enable_checker))
     return;
 
@@ -360,6 +361,9 @@ void wr_log(long long pc,
 	   pc, addr, data, is_atomic,
 	   static_cast<int>(store_queue.size()));
   }
+
+  if(addr == 0xfffff008)
+    printf("\n\nGOT STORE to mem location for pc %lx, data %llx, robptr %d, cycle %llu \n\n", pc, data, robptr, cycle);
   
   if(is_atomic) {
     atomic_queue.emplace_back(pc, addr, data);

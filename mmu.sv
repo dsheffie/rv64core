@@ -1,5 +1,5 @@
 `include "rob.vh"
-//`define VERBOSE_MMU
+`define VERBOSE_MMU
 
 `ifdef VERILATOR
 import "DPI-C" function void check_translation(input longint va, input int pa);
@@ -262,7 +262,7 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 	    begin
 	       n_addr = page_table_root + {52'd0, r_va[38:30], 3'd0};
 `ifdef VERBOSE_MMU
-	       $display("walker level 0 generates address %x", n_addr);	       
+	       $display("walker level 0 generates address %x, bad_va = %b", n_addr, w_bad_va);	       
 `endif
 	       
 	       if(w_bad_va)
@@ -282,7 +282,9 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 	    begin
 	       if(mem_rsp_valid)
 		 begin
-		    //$display("walker level 0 got %x, cycle %d", mem_rsp_data, r_cycle);
+`ifdef VERBOSE_MMU		    
+		    $display("walker level 0 got %x, cycle %d", mem_rsp_data, r_cycle);
+`endif
 		    n_addr = mem_rsp_data;
 		    n_last_addr = r_addr;
 
@@ -319,7 +321,9 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 		 begin
 		    n_addr = mem_rsp_data;
 		    n_last_addr = r_addr;
-		    //$display("walker level 1 got %x", mem_rsp_data);
+`ifdef VERBOSE_MMU		    
+		    $display("walker level 1 got %x", mem_rsp_data);
+`endif
 		    if(mem_rsp_data[0] == 1'b0)
 		      begin
 			 n_state = IDLE;

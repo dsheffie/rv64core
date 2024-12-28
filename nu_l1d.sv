@@ -41,10 +41,11 @@ import "DPI-C" function void log_l1d_miss(input int dirty);
 
    
 import "DPI-C" function void wr_log(input longint pc,
-				    input int 		   rob_ptr,
+				    input int		   rob_ptr,
 				    input longint unsigned addr, 
 				    input longint unsigned data, 
-				    int 		   is_atomic);
+				    input int		   is_atomic,
+				    input longint unsigned cycle);
 `endif
 
 //`define DEBUG
@@ -270,7 +271,8 @@ module nu_l1d(clk,
    logic				  n_pending_tlb_miss, r_pending_tlb_miss;
    logic				  n_pending_tlb_zero_page, r_pending_tlb_zero_page;
    logic				  n_pending_alias,r_pending_alias,t_clear_alias;
-      
+   logic				  r_alias_block0, r_alias_block1, r_alias_block2;
+   
    logic				  t_got_miss, t_dirty_miss;
    logic				  t_pop_eb, t_push_eb;
    
@@ -972,6 +974,9 @@ module nu_l1d(clk,
 	     r_pending_tlb_miss <= 1'b0;
 	     r_pending_tlb_zero_page <= 1'b0;
 	     r_pending_alias <= 1'b0;
+	     r_alias_block0 <= 1'b0;
+	     r_alias_block1 <= 1'b0;
+	     r_alias_block2 <= 1'b0;	     
 	     r_tlb_addr <= 'd0;
 	     r_did_reload <= 1'b0;
 	     r_stall_store <= 1'b0;
@@ -1025,7 +1030,10 @@ module nu_l1d(clk,
 	     r_flush_was_active <= n_flush_was_active;
 	     r_pending_tlb_miss <= n_pending_tlb_miss;
 	     r_pending_tlb_zero_page <= n_pending_tlb_zero_page;
-	     r_pending_alias <= (t_clear_alias) ? 1'b0 : n_pending_alias;	     
+	     r_pending_alias <= (t_clear_alias) ? 1'b0 : n_pending_alias;
+	     r_alias_block0 <= t_clear_alias;
+	     r_alias_block1 <= r_alias_block0;
+	     r_alias_block2 <= r_alias_block1;
 	     r_tlb_addr <= n_tlb_addr;
 	     r_did_reload <= n_did_reload;
 	     r_stall_store <= n_stall_store;
@@ -1163,6 +1171,20 @@ module nu_l1d(clk,
       .rd_data1(r_array_out2)
       );
 
+   always_ff@(negedge clk)
+     begin
+	if(t_array_wr_en)
+	  begin
+	     $display("writing to l1d rams at cycle %d for address %x, data %x, t_store_shift %x, t_wr_array = %b, t_hit_cache = %b, pending alias %b %b %b %b", 
+		      r_cycle, t_array_wr_addr, t_array_wr_data, t_store_shift, t_wr_array,
+		      t_hit_cache,
+		      r_pending_alias,
+		      r_alias_block0,
+		      r_alias_block1,
+		      r_alias_block2);
+	  end
+     end
+   
    logic t_dirty_value;
    logic t_write_dirty_en;
    logic [`LG_L1D_NUM_SETS-1:0] t_dirty_wr_addr;
@@ -1551,7 +1573,8 @@ module nu_l1d(clk,
 		    { {(32-`LG_ROB_ENTRIES){1'b0}}, r_req.rob_ptr},
 		    r_req.addr, 
 		    r_req.op == MEM_AMOD ? t_amo64_data : (r_req.op == MEM_AMOW ? {{32{t_amo32_data[31]}},t_amo32_data} : r_req.data), 
-		    r_req.is_atomic ? 32'd1 : 32'd0);
+		    r_req.is_atomic ? 32'd1 : 32'd0,
+		    r_cycle);
 `ifdef VERBOSE_L1D			    
 	     if(r_req.is_atomic)
 	        $display("firing atomic for pc %x addr %x with data %x t_shift %x, at cycle %d for rob ptr %d, r_cache_idx %d, match link %b", 
@@ -2131,15 +2154,11 @@ module nu_l1d(clk,
 `endif
 		    if(r_req.is_alias)
 		      begin
-			 //$display("cycle %d : time to flush cache to process alias (rob ptr %d, pc %x, uuid %d)", 
-			 //r_cycle, r_req.rob_ptr, r_req.pc, r_req.uuid);
+			 $display("cycle %d : time to flush cache to process alias (rob ptr %d, pc %x, uuid %d, r_last_wr = %b)", 
+				  r_cycle, r_req.rob_ptr, r_req.pc, r_req.uuid, r_last_wr);
 			 if(n_flush_req) $stop();
 			 n_flush_req = 1'b1;
-			 
-			 if(r_pending_alias == 1'b0) 
-			   begin
-			      $stop();
-			   end
+
 		      end		    
 		    else if(w_got_hit)
 		      begin /* valid cacheline - hit in cache */
@@ -2392,10 +2411,10 @@ module nu_l1d(clk,
 	    begin
 	       t_cache_idx = r_cache_idx + 'd1;
 	       
-	       //$display("flush line %x was %b, r_pending_alias = %b", 
-	       //{r_tag_out,r_cache_idx,{`LG_L1D_CL_LEN{1'b0}}}, 
-	       //r_dirty_out,
-	       //r_pending_alias);
+	       $display("flush line %x was %b, r_pending_alias = %b", 
+			{r_tag_out,r_cache_idx,{`LG_L1D_CL_LEN{1'b0}}}, 
+			r_dirty_out,
+			r_pending_alias);
 	       
 	       if(!r_dirty_out)
 		 begin
@@ -2468,10 +2487,12 @@ module nu_l1d(clk,
 	    end
 	  ALIAS_CHECK_DIRTY:
 	    begin
-	       //$display("alias clear complete, r_req.is_store = %b, r_req.pc = %x, rob_ptr = %d at cycle %d", 
-	       //r_req.is_store, r_req.pc, r_req.rob_ptr,r_cycle);
+	       $display("alias clear complete, r_req.is_store = %b, r_req.pc = %x, rob_ptr = %d at cycle %d, addr %x", 
+			r_req.is_store, r_req.pc, r_req.rob_ptr,r_cycle,r_req.addr);
+	       
 	       t_clear_alias = 1'b1;
 	       n_req.is_alias = 1'b0;
+	       n_req.was_alias = 1'b1;
 	       n_state = ACTIVE;
 	       t_got_req = 1;
 	       t_cache_idx = r_req.addr[IDX_STOP-1:IDX_START];
@@ -2732,18 +2753,26 @@ module nu_l1d(clk,
      end
 `endif
 
-   // always@(negedge clk)
-   //   begin
-   // 	if(r_flush_req)
-   // 	  begin
-   // 	     $display("waiting to flush at cycle %d", r_cycle);
-   // 	  end
-   // 	if(r_pending_alias==1'b0 & n_pending_alias)
-   // 	  begin
-   // 	     $display("pending alias set at cycle %d", r_cycle);
-   // 	  end
-	
-   //   end
+   always@(negedge clk)
+     begin
+	if(t_clear_alias)
+	  begin
+	     $display("clearing alias at cycle %d", r_cycle);
+	  end
+	if(r_flush_cl_req)
+	  begin
+	     $display("r_l2_probe_addr = %x",l2_probe_addr);
+	  end
+	if(r_state == ALIAS_CHECK_DIRTY) $display("next state = %d at cycle %d", n_state, r_cycle);
+	if(r_state == ACTIVE & r_got_req) $display("n_state = %d, got req for address %x, write %b, cycle %d, pending alias %b",
+						   n_state, r_req.addr, r_last_wr, r_cycle, r_pending_alias);
+   
+	if(r_pending_alias==1'b0 & n_pending_alias)
+	  begin
+	     $display("pending alias set at cycle %d", r_cycle);
+	  end
+     end
+
    
 endmodule // l1d
 

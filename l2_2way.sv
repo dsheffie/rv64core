@@ -6,7 +6,7 @@ import "DPI-C" function void l1_to_l2_queue_occupancy(int e);
 import "DPI-C" function void record_l2_state(int s);
 `endif
 
-//`define VERBOSE_L2
+`define VERBOSE_L2
 
 module l2_2way(clk,
 	       reset,
@@ -313,6 +313,7 @@ module l2_2way(clk,
 	begin
 	   $display("L1D RESP FOR ADDR %x TAG %d at cycle %d, data %x",
 		    l1d_rsp_addr, l1d_rsp_tag, r_cycle, l1_mem_load_data);
+	   if(r_cycle == 'd24602353) $stop();
 	end
 	if(mmu_rsp_valid)
 	  begin
@@ -796,7 +797,7 @@ module l2_2way(clk,
 	    begin
 	       if(mmu_req_valid)
 		 begin
-		    //$display("got probe req at cycle %d for addr %x", r_cycle, mmu_req_addr);
+		    $display("got probe req at cycle %d for addr %x", r_cycle, mmu_req_addr);
 		    n_pstate = PROBE_WAIT;
 		    n_l2_probe_val = 1'b1;
 		    n_l2_probe_addr = mmu_req_addr;
@@ -807,7 +808,7 @@ module l2_2way(clk,
 	    begin
 	       if(l2_probe_ack)
 		 begin
-		    //$display("got probe ack at cycle %d", r_cycle);
+		    $display("got probe ack at cycle %d", r_cycle);
 		    n_pstate = PROBE_IDLE;
 		    t_probe_mmu_req_valid = r_l2_probe_mmu;
 		    n_l2_probe_mmu = 1'b0;
