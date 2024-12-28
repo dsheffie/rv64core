@@ -1738,7 +1738,7 @@ module nu_l1d(clk,
    mem_rsp_t t_core_mem_rsp;
    logic t_core_mem_rsp_valid;
    wire	 w_got_reload_pf = page_walk_rsp_valid & page_walk_rsp.fault;
-   wire  w_port2_rd_hit = t_port2_hit_cache && (!r_hit_busy_addr2) & (!r_pending_tlb_miss) & 1'b0;
+   wire  w_port2_rd_hit = t_port2_hit_cache && (!r_hit_busy_addr2) & (!r_pending_tlb_miss);
 
    always_comb
      begin
@@ -1858,8 +1858,6 @@ module nu_l1d(clk,
 	       end // if (r_req2.is_store)
 	     else if(w_port2_rd_hit & !r_got_rd_retry)
 	       begin
-		  $stop();
-		  
 `ifdef DEBUG
 		  $display("cycle %d load on port2 hit cache for pc %x, addr %x, got data %x, t_data2 = %x, t_shift_2 = %x, shift = %d", 
 			   r_cycle, r_req2.pc, r_req2.addr, t_rsp_data2[`M_WIDTH-1:0], t_data2, t_shift_2, w_shift_amt2[6:3]);
