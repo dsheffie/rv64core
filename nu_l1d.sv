@@ -186,9 +186,12 @@ module nu_l1d(clk,
    localparam WORDS_PER_CL = 1<<(LG_WORDS_PER_CL);
    localparam BYTES_PER_CL = 1 << `LG_L1D_CL_LEN;
    
-   localparam N_TAG_BITS = `PA_WIDTH - `LG_L1D_NUM_SETS - `LG_L1D_CL_LEN;
+   localparam N_TAG_BITS = 20;
    localparam IDX_START = `LG_L1D_CL_LEN;
    localparam IDX_STOP  = `LG_L1D_CL_LEN + `LG_L1D_NUM_SETS;
+
+   localparam LG_MAX_SET = `LG_PG_SZ - `LG_L1D_CL_LEN;
+   
    localparam WORD_START = 2;
    localparam WORD_STOP = WORD_START+LG_WORDS_PER_CL;
    localparam DWORD_START = 3;
@@ -730,8 +733,8 @@ module nu_l1d(clk,
    
    wire w_req_port_free = r_got_req ? w_cache_port1_hit : 1'b1;
 
-   wire	w_port2_dirty_miss = r_valid_out2 && r_dirty_out2 && (r_tag_out2 != w_tlb_pa[`PA_WIDTH-1:IDX_STOP]);
-   wire	w_port2_hit_cache = r_valid_out2 && (r_tag_out2 == w_tlb_pa[`PA_WIDTH-1:IDX_STOP]);
+   wire	w_port2_dirty_miss = r_valid_out2 && r_dirty_out2 && (r_tag_out2 != w_tlb_pa[31:`LG_PG_SZ]);
+   wire	w_port2_hit_cache = r_valid_out2 && (r_tag_out2 == w_tlb_pa[`PA_WIDTH-1:`LG_PG_SZ]);
 
    wire w_hit_pop = r_pop_busy_addr2 ? (r_cache_idx == r_req2.addr[IDX_STOP-1:IDX_START]) : 1'b0;
 
@@ -1133,7 +1136,7 @@ module nu_l1d(clk,
       .rd_addr0(t_cache_idx),
       .rd_addr1(t_cache_idx2),
       .wr_addr(mem_rsp_addr[IDX_STOP-1:IDX_START]),
-      .wr_data(mem_rsp_addr[`PA_WIDTH-1:IDX_STOP]),
+      .wr_data(mem_rsp_addr[`PA_WIDTH-1:`LG_PG_SZ]),
       .wr_en(mem_rsp_reload),
       .rd_data0(r_tag_out),
       .rd_data1(r_tag_out2)
@@ -1722,13 +1725,13 @@ module nu_l1d(clk,
 
    wire	w_tlb_st_not_dirty = w_tlb_hit & paging_active & (r_req2.is_store | r_req2.is_atomic) & w_tlb_writable & !w_tlb_dirty;   
 
-   wire w_flush_hit = (r_tag_out == l2_probe_addr[`PA_WIDTH-1:IDX_STOP]) & r_valid_out;
+   wire w_flush_hit = (r_tag_out == l2_probe_addr[`PA_WIDTH-1:`LG_PG_SZ]) & r_valid_out;
 
 
    mem_rsp_t t_core_mem_rsp;
    logic t_core_mem_rsp_valid;
    wire	 w_got_reload_pf = page_walk_rsp_valid & page_walk_rsp.fault;
-   wire  w_port2_rd_hit = t_port2_hit_cache && (!r_hit_busy_addr2) & (!r_pending_tlb_miss);
+   wire  w_port2_rd_hit = t_port2_hit_cache && (!r_hit_busy_addr2) & (!r_pending_tlb_miss) & 1'b0;
 
    always_comb
      begin
@@ -1848,6 +1851,7 @@ module nu_l1d(clk,
 	       end // if (r_req2.is_store)
 	     else if(w_port2_rd_hit & !r_got_rd_retry)
 	       begin
+		  $stop();
 		  
 `ifdef DEBUG
 		  $display("cycle %d load on port2 hit cache for pc %x, addr %x, got data %x, t_data2 = %x, t_shift_2 = %x, shift = %d", 
@@ -2122,7 +2126,7 @@ module nu_l1d(clk,
 			 n_inhibit_write = 1'b1;
 			 if(r_hit_busy_addr && r_is_retry || !r_hit_busy_addr)
 			   begin
-			      n_port1_req_addr = {r_tag_out,r_cache_idx,4'd0};
+			      n_port1_req_addr = {r_tag_out,r_cache_idx[LG_MAX_SET-1:0],4'd0};
 			      n_port1_req_opcode = MEM_SW;
 			      n_port1_req_store_data = t_data;
 			      n_inhibit_write = 1'b1;
@@ -2156,7 +2160,7 @@ module nu_l1d(clk,
 			    
 			    if((rr_cache_idx == r_cache_idx) && rr_last_wr)
 			      begin
-				 n_port1_req_addr = {r_tag_out,r_cache_idx,4'd0};
+				 n_port1_req_addr = {r_tag_out,r_cache_idx[LG_MAX_SET-1:0],4'd0};
 				 //$display("lock cache at cycle %d (case 2)", r_cycle);				 
 				 n_lock_cache = 1'b1;
 				 n_port1_req_opcode = MEM_SW;
@@ -2209,7 +2213,7 @@ module nu_l1d(clk,
 				   n_req = t_mem_head;
 				   n_req.data = core_store_data.data;
 				   t_cache_idx = t_mem_head.addr[IDX_STOP-1:IDX_START];
-				   t_cache_tag = t_mem_head.addr[`PA_WIDTH-1:IDX_STOP];
+				   t_cache_tag = t_mem_head.addr[`PA_WIDTH-1:`LG_PG_SZ];
 				   t_addr = t_mem_head.addr;
 				   t_got_req = 1'b1;
 				   n_is_retry = 1'b1;
@@ -2226,7 +2230,7 @@ module nu_l1d(clk,
 			      t_pop_mq = 1'b1;
 			      n_req = t_mem_head;
 			      t_cache_idx = t_mem_head.addr[IDX_STOP-1:IDX_START];
-			      t_cache_tag = t_mem_head.addr[`PA_WIDTH-1:IDX_STOP];
+			      t_cache_tag = t_mem_head.addr[`PA_WIDTH-1:`LG_PG_SZ];
 			      t_addr = t_mem_head.addr;
 			      t_got_req = 1'b1;
 			      n_is_retry = 1'b1;
@@ -2270,7 +2274,7 @@ module nu_l1d(clk,
 	    begin
 	       //$display("now in clear dirty state..., sb empty %b sb full %b", w_eb_empty, w_eb_full);
 	       t_cache_idx = r_req.addr[IDX_STOP-1:IDX_START];
-	       t_cache_tag = r_req.addr[`PA_WIDTH-1:IDX_STOP];
+	       t_cache_tag = r_req.addr[`PA_WIDTH-1:`LG_PG_SZ];
 	       n_last_wr = r_req.is_store;
 	       t_got_req = 1'b1;
 	       t_addr  = r_req.addr;
@@ -2290,7 +2294,7 @@ module nu_l1d(clk,
 	  HANDLE_RELOAD:
 	    begin
 	       t_cache_idx = r_req.addr[IDX_STOP-1:IDX_START];
-	       t_cache_tag = r_req.addr[`PA_WIDTH-1:IDX_STOP];
+	       t_cache_tag = r_req.addr[`PA_WIDTH-1:`LG_PG_SZ];
 	       n_last_wr = r_req.is_store;
 	       t_got_req = 1'b1;
 	       t_addr  = r_req.addr;
@@ -2299,14 +2303,14 @@ module nu_l1d(clk,
 	    end
 	  FLUSH_CL:
 	    begin
-	       if(w_flush_hit & r_link_reg_val & (r_link_reg[31:0] == {r_tag_out,r_cache_idx,4'd0}))
+	       if(w_flush_hit & r_link_reg_val & (r_link_reg[31:0] == {r_tag_out,r_cache_idx[LG_MAX_SET-1:0],4'd0}))
 		 begin
 		    $stop();
 		 end
 	       
 	       if(r_dirty_out & w_flush_hit)
 		 begin
-		    n_port1_req_addr = {r_tag_out,r_cache_idx,4'd0};
+		    n_port1_req_addr = {r_tag_out,r_cache_idx[LG_MAX_SET-1:0],4'd0};
 		    n_port1_req_opcode = MEM_SW;
 		    n_port1_req_store_data = t_data;
 		    n_state = FLUSH_CL_WAIT;
@@ -2350,7 +2354,7 @@ module nu_l1d(clk,
 		 end
 	       else
 		 begin
-		    n_port1_req_addr = {r_tag_out,r_cache_idx,4'd0};
+		    n_port1_req_addr = {r_tag_out,r_cache_idx[LG_MAX_SET-1:0],4'd0};
 		    n_port1_req_opcode = MEM_SW;
 		    n_port1_req_store_data = t_data;
 		    n_port1_req_tag = {1'b1, {`LG_MRQ_ENTRIES{1'b1}}};		    
@@ -2463,7 +2467,7 @@ module nu_l1d(clk,
 	else if(t_replay_req2)
 	  begin
 	     t_cache_idx2 = r_req2.addr[IDX_STOP-1:IDX_START];
-	     t_cache_tag2 = r_req2.addr[`PA_WIDTH-1:IDX_STOP];
+	     t_cache_tag2 = r_req2.addr[`PA_WIDTH-1:`LG_PG_SZ];
 	     t_got_req2 = 1'b1;
 	     t_tlb_xlat = 1'b1;
 	     n_tlb_addr = r_req2.addr;
@@ -2474,7 +2478,7 @@ module nu_l1d(clk,
 	     //if(r_state != ACTIVE) $stop();
 	     //use 2nd read port
 	     t_cache_idx2 = core_mem_va_req.addr[IDX_STOP-1:IDX_START];
-	     t_cache_tag2 = core_mem_va_req.addr[`PA_WIDTH-1:IDX_STOP];
+	     t_cache_tag2 = core_mem_va_req.addr[`PA_WIDTH-1:`LG_PG_SZ];
 	     n_req2 = core_mem_va_req;
 	     core_mem_va_req_ack = 1'b1;
 	     t_got_req2 = 1'b1;
