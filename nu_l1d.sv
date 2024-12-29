@@ -16,7 +16,10 @@ import "DPI-C" function void pt_l1d_store_data_ready(input longint cycle,
 						     input int rob_id);
 
 import "DPI-C" function void pt_l1d_pass1_miss(input longint cycle,
-					       input int rob_id);
+					       input int	      rob_id,
+					       input int	      maybe_alias,
+					       input longint unsigned va,
+					       input longint unsigned pa);
 
 
 import "DPI-C" function void l1d_port_util(input int port1, input int port2);
@@ -740,6 +743,10 @@ module nu_l1d(clk,
    assign w_port2_hit_cache = r_valid_out2 & (r_tag_out2 == w_tlb_pa[`PA_WIDTH-1:`LG_PG_SZ]);
 
    assign w_port2_vapa_mismatch = r_req2.addr[LG_ALIAS_BITS+`LG_PG_SZ-1:`LG_PG_SZ] != w_tlb_pa[LG_ALIAS_BITS+`LG_PG_SZ-1:`LG_PG_SZ];
+   
+   wire	w_port2_almost_match = w_port2_vapa_mismatch & (r_tag_out2[N_TAG_BITS-1:LG_ALIAS_BITS] == w_tlb_pa[`PA_WIDTH-1:IDX_STOP]);
+
+   
    assign w_port2_missed_no_alias = w_port2_hit_cache ? 1'b0 : (!w_port2_vapa_mismatch);
    
 
@@ -771,7 +778,7 @@ module nu_l1d(clk,
 
    
    //dsheffie - disable early requests
-   wire	w_could_early_req = !w_port2_dirty_miss & w_could_early_req_any;
+   wire	w_could_early_req = !w_port2_dirty_miss & w_could_early_req_any & 1'b0;
    
    wire w_gen_early_req = w_could_early_req & (r_got_req ? w_cache_port1_hit : 1'b1);
    
@@ -1910,8 +1917,12 @@ module nu_l1d(clk,
 	if(t_push_miss)
 	  begin
 	     pt_l1d_pass1_miss(r_cycle,
-			      {{ (32-`LG_ROB_ENTRIES){1'b0}},
-			       r_req2.rob_ptr});				   
+			      {{ (32-`LG_ROB_ENTRIES){1'b0}},			       
+			       r_req2.rob_ptr},
+			       {31'd0, w_port2_almost_match},
+			       r_req2.addr,
+			       {32'd0, w_tlb_pa}
+			       );				   
 	  end
 
 	if(t_got_req & t_mem_head.is_load)
