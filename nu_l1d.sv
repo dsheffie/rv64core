@@ -243,8 +243,8 @@ module nu_l1d(clk,
    logic [127:0] 		  t_store_shift, t_store_mask;
 
    
-   
-   logic 				  t_got_rd_retry, t_port2_hit_cache;
+   wire				  w_port2_hit_cache;
+   logic			  t_got_rd_retry;
       
    logic 				  t_mark_invalid;
    logic 				  t_wr_array;
@@ -465,8 +465,8 @@ module nu_l1d(clk,
    
    logic [N_MQ_ENTRIES-1:0] r_mq_addr_valid;
    logic [N_MQ_ENTRIES-1:0] r_mq_inflight;
-   logic [IDX_STOP-IDX_START-1:0] r_last_early;
-   logic			  r_last_early_valid;
+   logic [27:0]		    r_last_early;
+   logic		    r_last_early_valid;
    
    logic [IDX_STOP-IDX_START-1:0] r_mq_addr[N_MQ_ENTRIES-1:0];
    logic [31:0]			  r_mq_dbg_addr[N_MQ_ENTRIES-1:0];
@@ -734,7 +734,7 @@ module nu_l1d(clk,
    wire w_req_port_free = r_got_req ? w_cache_port1_hit : 1'b1;
 
    wire	w_port2_dirty_miss = r_valid_out2 && r_dirty_out2 && (r_tag_out2 != w_tlb_pa[31:`LG_PG_SZ]);
-   wire	w_port2_hit_cache = r_valid_out2 && (r_tag_out2 == w_tlb_pa[`PA_WIDTH-1:`LG_PG_SZ]);
+   assign w_port2_hit_cache = r_valid_out2 && (r_tag_out2 == w_tlb_pa[`PA_WIDTH-1:`LG_PG_SZ]);
 
    wire w_hit_pop = r_pop_busy_addr2 ? (r_cache_idx == r_req2.addr[IDX_STOP-1:IDX_START]) : 1'b0;
 
@@ -749,9 +749,12 @@ module nu_l1d(clk,
    wire	w_three_free_credits = (r_mrq_credits > 'd2);
 
    wire	w_queues_drained = (&r_mrq_credits) & w_eb_empty;
-      
-   wire	w_could_early_req_any = t_push_miss & w_three_free_credits & !t_port2_hit_cache &
-	(r_last_early_valid ? (r_last_early != r_req2.addr[IDX_STOP-1:IDX_START]) : 1'b1) &
+
+   wire [`PA_WIDTH-1:0] w_req2_pa = {w_tlb_pa[`PA_WIDTH-1:`LG_PG_SZ], r_req2.addr[`LG_PG_SZ-1:0]};
+
+   
+   wire	w_could_early_req_any = t_push_miss & w_three_free_credits & !w_port2_hit_cache &
+	(r_last_early_valid ? (r_last_early != w_req2_pa[31:4]) : 1'b1) &
 	!(r_hit_busy_line2 | r_fwd_busy_addr2 | w_hit_pop ) &
 	(r_req2.is_load | r_req.is_store) &
 	w_tlb_hit &
@@ -770,7 +773,7 @@ module nu_l1d(clk,
    always_ff@(posedge clk)
      begin
 	r_last_early_valid <= reset ? 1'b0 : w_gen_early_req;
-	r_last_early <= r_req2.addr[IDX_STOP-1:IDX_START];
+	r_last_early <= w_req2_pa[31:4];
      end
    
 `ifdef DEBUG
@@ -1738,7 +1741,7 @@ module nu_l1d(clk,
    mem_rsp_t t_core_mem_rsp;
    logic t_core_mem_rsp_valid;
    wire	 w_got_reload_pf = page_walk_rsp_valid & page_walk_rsp.fault;
-   wire  w_port2_rd_hit = t_port2_hit_cache && (!r_hit_busy_addr2) & (!r_pending_tlb_miss);
+   wire  w_port2_rd_hit = w_port2_hit_cache && (!r_hit_busy_addr2) & (!r_pending_tlb_miss);
 
    always_comb
      begin
@@ -1998,7 +2001,6 @@ module nu_l1d(clk,
 	n_page_walk_req_valid = 1'b0;
 
 	t_got_rd_retry = 1'b0;
-	t_port2_hit_cache = w_port2_hit_cache;
 	
 	n_state = r_state;
 	t_miss_idx = r_miss_idx;
