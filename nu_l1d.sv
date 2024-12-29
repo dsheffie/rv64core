@@ -189,7 +189,8 @@ module nu_l1d(clk,
    localparam N_TAG_BITS = 20;
    localparam IDX_START = `LG_L1D_CL_LEN;
    localparam IDX_STOP  = `LG_L1D_CL_LEN + `LG_L1D_NUM_SETS;
-
+   localparam LG_ALIAS_BITS = (`LG_L1D_CL_LEN + `LG_L1D_NUM_SETS) - `LG_PG_SZ;
+   
    localparam LG_MAX_SET = `LG_PG_SZ - `LG_L1D_CL_LEN;
    
    localparam WORD_START = 2;
@@ -243,7 +244,9 @@ module nu_l1d(clk,
    logic [127:0] 		  t_store_shift, t_store_mask;
 
    
-   wire				  w_port2_hit_cache;
+   wire				  w_port2_hit_cache, w_port2_vapa_mismatch;
+   wire				  w_port2_missed_no_alias;
+   
    logic			  t_got_rd_retry;
       
    logic 				  t_mark_invalid;
@@ -733,8 +736,12 @@ module nu_l1d(clk,
    
    wire w_req_port_free = r_got_req ? w_cache_port1_hit : 1'b1;
 
-   wire	w_port2_dirty_miss = r_valid_out2 && r_dirty_out2 && (r_tag_out2 != w_tlb_pa[31:`LG_PG_SZ]);
-   assign w_port2_hit_cache = r_valid_out2 && (r_tag_out2 == w_tlb_pa[`PA_WIDTH-1:`LG_PG_SZ]);
+   wire	w_port2_dirty_miss = r_valid_out2 & r_dirty_out2 && (r_tag_out2 != w_tlb_pa[31:`LG_PG_SZ]);
+   assign w_port2_hit_cache = r_valid_out2 & (r_tag_out2 == w_tlb_pa[`PA_WIDTH-1:`LG_PG_SZ]);
+
+   assign w_port2_vapa_mismatch = r_req2.addr[LG_ALIAS_BITS+`LG_PG_SZ-1:`LG_PG_SZ] != w_tlb_pa[LG_ALIAS_BITS+`LG_PG_SZ-1:`LG_PG_SZ];
+   assign w_port2_missed_no_alias = w_port2_hit_cache ? 1'b0 : (!w_port2_vapa_mismatch);
+   
 
    wire w_hit_pop = r_pop_busy_addr2 ? (r_cache_idx == r_req2.addr[IDX_STOP-1:IDX_START]) : 1'b0;
 
@@ -753,7 +760,7 @@ module nu_l1d(clk,
    wire [`PA_WIDTH-1:0] w_req2_pa = {w_tlb_pa[`PA_WIDTH-1:`LG_PG_SZ], r_req2.addr[`LG_PG_SZ-1:0]};
 
    
-   wire	w_could_early_req_any = t_push_miss & w_three_free_credits & !w_port2_hit_cache &
+   wire	w_could_early_req_any = t_push_miss & w_three_free_credits & w_port2_missed_no_alias &
 	(r_last_early_valid ? (r_last_early != w_req2_pa[31:4]) : 1'b1) &
 	!(r_hit_busy_line2 | r_fwd_busy_addr2 | w_hit_pop ) &
 	(r_req2.is_load | r_req.is_store) &
@@ -762,9 +769,9 @@ module nu_l1d(clk,
 	(r_last_wr ? (r_cache_idx != r_req2.addr[IDX_STOP-1:IDX_START]) : 1'b1) &
 	(n_last_wr ? (t_cache_idx != r_req2.addr[IDX_STOP-1:IDX_START]) : 1'b1);
 
-
+   
    //dsheffie - disable early requests
-   wire	w_could_early_req = !w_port2_dirty_miss & w_could_early_req_any & 1'b0;
+   wire	w_could_early_req = !w_port2_dirty_miss & w_could_early_req_any;
    
    wire w_gen_early_req = w_could_early_req & (r_got_req ? w_cache_port1_hit : 1'b1);
    
