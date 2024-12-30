@@ -750,7 +750,7 @@ module nu_l1d(clk,
    assign w_port2_missed_no_alias = w_port2_hit_cache ? 1'b0 : (!w_port2_vapa_mismatch);
    
 
-   wire w_hit_pop = r_pop_busy_addr2 ? (r_cache_idx == r_req2.addr[IDX_STOP-1:IDX_START]) : 1'b0;
+   wire w_hit_pop = r_pop_busy_addr2 ? (r_cache_idx[`LG_L1D_NUM_SETS-LG_ALIAS_BITS-1:0] == r_req2.addr[`LG_PG_SZ-1:IDX_START]) : 1'b0;
 
    logic [`LG_MRQ_ENTRIES-1:0] r_mrq_credits, n_mrq_credits;
    always_ff@(posedge clk)
@@ -771,14 +771,14 @@ module nu_l1d(clk,
 	(r_last_early_valid ? (r_last_early != w_req2_pa[31:4]) : 1'b1) &
 	!(r_hit_busy_line2 | r_fwd_busy_addr2 | w_hit_pop ) &
 	(r_req2.is_load | r_req.is_store) &
-	w_tlb_hit &
-	(rr_last_wr ? (rr_cache_idx !=  r_req2.addr[IDX_STOP-1:IDX_START]) : 1'b1) &
-	(r_last_wr ? (r_cache_idx != r_req2.addr[IDX_STOP-1:IDX_START]) : 1'b1) &
-	(n_last_wr ? (t_cache_idx != r_req2.addr[IDX_STOP-1:IDX_START]) : 1'b1);
+	w_tlb_hit & 
+	(rr_last_wr ? (rr_cache_idx[`LG_L1D_NUM_SETS-LG_ALIAS_BITS-1:0] !=  r_req2.addr[`LG_PG_SZ-1:IDX_START]) : 1'b1) &
+	(r_last_wr ? (r_cache_idx[`LG_L1D_NUM_SETS-LG_ALIAS_BITS-1:0] != r_req2.addr[`LG_PG_SZ-1:IDX_START]) : 1'b1) &
+	(n_last_wr ? (t_cache_idx[`LG_L1D_NUM_SETS-LG_ALIAS_BITS-1:0] != r_req2.addr[`LG_PG_SZ-1:IDX_START]) : 1'b1);
 
    
    //dsheffie - disable early requests
-   wire	w_could_early_req = !w_port2_dirty_miss & w_could_early_req_any & 1'b0;
+   wire	w_could_early_req = !w_port2_dirty_miss & w_could_early_req_any & 1'b1;
    
    wire w_gen_early_req = w_could_early_req & (r_got_req ? w_cache_port1_hit : 1'b1);
    
@@ -932,7 +932,7 @@ module nu_l1d(clk,
 
 	   assign w_addr_intersect[i] = (|(r_mq_mask[i] & t_req_mask));
 	   
-	   assign w_hit_busy_line2[i] = r_mq_addr_valid[i] ? (r_mq_addr[i] == t_cache_idx2) : 1'b0;
+	   assign w_hit_busy_line2[i] = r_mq_addr_valid[i] ? (r_mq_addr[i][`LG_L1D_NUM_SETS-LG_ALIAS_BITS-1:0] == t_cache_idx2[`LG_L1D_NUM_SETS-LG_ALIAS_BITS-1:0]) : 1'b0;
 	   assign w_hit_busy_addrs2[i] = w_hit_busy_line2[i] & w_addr_intersect[i];
 
 	   assign w_unaligned_in_mq[i] = r_mq_addr_valid[i] ? r_mq_is_unaligned[i] : 1'b0;
@@ -944,7 +944,7 @@ module nu_l1d(clk,
 	r_hit_busy_addr <= reset ? 1'b0 : |w_hit_busy_addrs;
 	r_hit_busy_addr2 <= reset ? 1'b0 : |w_hit_busy_addrs2;
 	r_hit_busy_line2 <= reset ? 1'b0 : |w_hit_busy_line2;
-	r_fwd_busy_addr2 <=  reset ? 1'b0 : (t_push_miss & (t_cache_idx2 == r_cache_idx2));
+	r_fwd_busy_addr2 <=  reset ? 1'b0 : (t_push_miss & (t_cache_idx2[`LG_L1D_NUM_SETS-LG_ALIAS_BITS-1:0] == r_cache_idx2[`LG_L1D_NUM_SETS-LG_ALIAS_BITS-1:0]));
 	r_pop_busy_addr2 <= reset ? 1'b0 : t_pop_mq;
 	r_hit_busy_addrs <= t_got_req ? w_hit_busy_addrs : {{N_MQ_ENTRIES{1'b1}}};
 	r_hit_busy_addrs2 <= t_got_req2 ? w_hit_busy_addrs2 : {{N_MQ_ENTRIES{1'b1}}};
