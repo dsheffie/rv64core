@@ -934,7 +934,7 @@ int main(int argc, char **argv) {
   }
   uint32_t max_insns_per_cycle = 4;
   uint32_t max_insns_per_cycle_hist_sz = 2*max_insns_per_cycle;
-
+  globals::log = trace_retirement;
   use_checkpoint = not(is_rv64_elf(rv32_binary.c_str()));
   retiretrace = retire_name.size() != -0;
 

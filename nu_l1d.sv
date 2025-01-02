@@ -1534,6 +1534,17 @@ module nu_l1d(clk,
 		   {31'd0, t_accept},
 		   {25'd0, t_new_req_c}
 		   );
+
+
+	// $display("----->  r_got_req = %b, w_got_hit = %b, r_req.is_store = %b, r_req.is_atomic = %b, r_req.pc = %x, t_wr_store = %b, t_hit_cache = %b, retry = %b reload = %b, cause %b, op = %d", 
+	// 	 r_got_req,w_got_hit,r_req.is_store,r_req.is_atomic,r_req.pc,t_wr_store,
+	// 	 t_hit_cache,  
+	// 	 r_is_retry,
+	// 	 r_did_reload,
+	// 	 r_req.has_cause,
+	// 	 r_req.op
+	// 	 );
+	
 	if(t_wr_store)
 	  begin	     
 	     wr_log(r_req.pc,
@@ -1541,20 +1552,13 @@ module nu_l1d(clk,
 		    r_req.addr, 
 		    r_req.op == MEM_AMOD ? t_amo64_data : (r_req.op == MEM_AMOW ? {{32{t_amo32_data[31]}},t_amo32_data} : r_req.data), 
 		    r_req.is_atomic ? 32'd1 : 32'd0);
-//`ifdef VERBOSE_L1D			    
-	     if((r_req.addr == 64'hff43fc0))
-	       begin
+`ifdef VERBOSE_L1D			    
 		  if(r_req.is_atomic)
 	            $display("firing atomic for pc %x addr %x with data %x t_shift %x, at cycle %d for rob ptr %d, r_cache_idx %d, match link %b", 
 	     		     r_req.pc, r_req.addr, r_req.data, t_shift, r_cycle, r_req.rob_ptr, r_cache_idx, w_match_link);
-		  else
-		    $display("firing store for pc %x addr %x with data %x t_shift %x, at cycle %d for rob ptr %d, r_cache_idx %d", 
-	     		     r_req.pc, r_req.addr, r_req.data, t_shift, r_cycle, r_req.rob_ptr, r_cache_idx);
-		end
-
-	     
-//`endif	     
-	  end
+`endif	     
+	  end // if (t_wr_store)
+	
      end // always_ff@ (negedge clk)
 `endif
 
@@ -1699,8 +1703,8 @@ module nu_l1d(clk,
 	    begin
 	       t_rsp_data = {63'd0, ~w_match_link};	       
 	       t_array_data = (t_store_shift & t_store_mask) | ((~t_store_mask) & t_data);
-	       t_wr_store = w_match_link && t_hit_cache && 
-			    (r_is_retry || r_did_reload) & (!r_req.has_cause);
+	       t_wr_store = w_match_link & t_hit_cache & 
+			    (r_is_retry | r_did_reload) & (!r_req.has_cause);
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
 	       //n_link_reg_val = t_wr_store ? 1'b0 : r_link_reg_val;	       
 	    end
@@ -1711,7 +1715,7 @@ module nu_l1d(clk,
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
 	       t_store_shift = {96'd0, t_amo32_data} << {r_req.addr[`LG_L1D_CL_LEN-1:0], 3'd0};	       
 	       t_array_data = (t_store_shift & t_store_mask) | ((~t_store_mask) & t_data);
-	       t_wr_store = t_hit_cache && (r_is_retry || r_did_reload) & (!r_req.has_cause);
+	       t_wr_store = t_hit_cache & (r_is_retry | r_did_reload) & (!r_req.has_cause);
 	    end // case: MEM_AMOW
 	  MEM_AMOD:
 	    begin
@@ -1719,7 +1723,7 @@ module nu_l1d(clk,
 	       t_rsp_dst_valid = r_req.dst_valid & t_hit_cache;
 	       t_store_shift = {64'd0, t_amo64_data} << {r_req.addr[`LG_L1D_CL_LEN-1:0], 3'd0};
 	       t_array_data = (t_store_shift & t_store_mask) | ((~t_store_mask) & t_data);
-	       t_wr_store = t_hit_cache && (r_is_retry || r_did_reload) & (!r_req.has_cause);
+	       t_wr_store = t_hit_cache & (r_is_retry | r_did_reload) & (!r_req.has_cause);
 	    end
 	  
 	  default:
