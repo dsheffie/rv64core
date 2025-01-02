@@ -86,7 +86,8 @@ module
 		   inflight,
 		   epc,
 		   restart_ack,
-		   priv);
+		   priv,
+		   pending_irq);
 
    localparam L1D_CL_LEN = 1 << `LG_L1D_CL_LEN;
    localparam L1D_CL_LEN_BITS = 1 << (`LG_L1D_CL_LEN + 3);
@@ -177,6 +178,8 @@ module
    output logic [`M_WIDTH-1:0] 		  epc;
    output logic				  restart_ack;
    output logic [1:0]			  priv;
+   output logic				  pending_irq;
+   
    
    logic [(`M_WIDTH-1):0] 	restart_pc;
    logic [(`M_WIDTH-1):0] 	restart_src_pc;
@@ -875,7 +878,8 @@ module
 	     .core_mark_dirty_valid(w_core_mark_dirty_valid),
 	     .core_mark_dirty_addr(w_core_mark_dirty_addr),
 	     .core_mark_dirty_rsp_valid(w_core_mark_dirty_rsp_valid),
-	     .counters(t_counters)
+	     .counters(t_counters),
+	     .pending_irq(pending_irq)
 	     );
    
 
@@ -1120,7 +1124,8 @@ module core_l1d_l1i(clk,
                      .inflight(inflight),
                      .epc(w_epc64),
 		     .restart_ack(restart_ack),
-		     .priv(priv)
+		     .priv(priv),
+		     .pending_irq()
 		     );
 
    

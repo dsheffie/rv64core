@@ -793,14 +793,7 @@ module exec(clk,
 
    logic [63:0]	       r_mtime;
    logic [63:0]	       r_mtimecmp;
-   wire		       w_mtip = r_cycle >= r_mtimecmp;
-
-`ifdef VERILATOR
-   always_ff@(negedge clk)
-     begin
-	csr_puttime(r_mtime);
-     end
-`endif
+   wire		       w_mtip = r_mtime >= r_mtimecmp;
    
    always_ff@(posedge clk)
      begin
@@ -2692,11 +2685,7 @@ module exec(clk,
 	    t_rd_csr = 'd0;
 	  RDTIME_CSR:
 	    begin
-`ifdef DISABLE_RDTIME
-	       t_rd_csr = 'd0;
-`else
 	       t_rd_csr = r_mtime;
-`endif
 	    end
 	  RDL1DTLBHIT_CSR:
 	    t_rd_csr = counters.dtlb_hits;
@@ -2839,10 +2828,10 @@ module exec(clk,
 	  end
 	else
 	  begin
-`ifndef DISABLE_IRQ
-	     r_mtime <= r_mtime + 'd1;
+`ifdef TIME_IS_INST_RET
+	     r_mtime <= r_retired_insns;	     
 `else
-	     r_mtime <= 'd0;
+	     r_mtime <= r_mtime + 'd1;	     
 `endif
 	  end	
      end // always_ff@ (posedge clk)
@@ -3032,14 +3021,15 @@ module exec(clk,
 	  end // if (t_wr_csr_en)
 	else if(mtimecmp_val)
 	  begin
+	     /* $display("mtimecmp write at cycle %d", r_cycle); */
 	     r_mip <= {r_mip[63:8], 1'b0, r_mip[6:0]};
 	  end
 	else if(w_mtip)
 	  begin
-	     //if(r_mip[7] == 1'b0)
-	     //begin
-	     //$display("setting timer irq pending at cycle %d", r_cycle);
-	     //end
+	     // if(r_mip[7] == 1'b0)
+	     //   begin
+	     // 	  $display("setting timer irq pending at cycle %d", r_cycle);
+	     //   end
 	     r_mip <= {r_mip[63:8], 1'b1, r_mip[6:0]};
 	  end
 	 // else if(1'b1)

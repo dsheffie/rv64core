@@ -1266,8 +1266,12 @@ int main(int argc, char **argv) {
 		    << ", sim " << ss->pc
 		    << std::dec
 		    << " "
+		    << " pending irq "
+		    << static_cast<int>(tb->pending_irq)
+		    << " "
 		    << insns_retired
 		    << " insns retired\n";
+	  
 	  execRiscv(ss);
 	  exception |= ss->took_exception;
 	  cnt++;
@@ -1282,17 +1286,20 @@ int main(int argc, char **argv) {
 	}
 	
 	if(tb->retire_pc == ss->pc) {
-	  //std::cout << std::hex << tb->retire_pc << "," << ss->pc << std::dec << "\n";	  	
 	  execRiscv(ss);
-	  // if(static_cast<uint32_t>(ss->mem.at(0x4cadc)) == 3) {
-	  //   std::cout << "changed memory at " << std::hex << ss->pc << std::dec << "\n";
-	  //   exit(-1);
-	  // }
 	  
 	  bool diverged = false;
 	  if(ss->pc == (tb->retire_pc + 4)) {
+
+	    
 	    for(int i = 0; i < 32; i++) {
 	      if((ss->gpr[i] != s->gpr[i])) {
+		/* not really a bug? */
+		//if(ss->did_system) {
+		//ss->gpr[i] = s->gpr[i];
+		//break;
+		//}
+		
 		int wrong_bits = __builtin_popcountll(ss->gpr[i] ^ s->gpr[i]);
 		++mismatches;
 		std::cout << "register " << getGPRName(i)
@@ -1311,7 +1318,10 @@ int main(int argc, char **argv) {
 		  std::cout << "bit " << b << " differs\n";
 		}
 		//trace_retirement |= (wrong_bits != 0);
-		diverged = true;//(wrong_bits > 16);
+		diverged = true;
+
+		
+		//(wrong_bits > 16);
 		std::cout << "incorrect "
 			  << std::hex
 			  << ss->pc 

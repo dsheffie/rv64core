@@ -468,6 +468,7 @@ module decode_riscv(
 			end
 		      default:
 			begin
+			   uop.op = II; 			   
 			end
 		    endcase // case (insn[31:27])
 		 end
