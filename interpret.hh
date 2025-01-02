@@ -67,7 +67,8 @@ struct state_t{
   uint64_t maxicnt;
   uint64_t icnt;
   uint64_t link;
-  
+  bool did_system;
+  bool did_rdtime;  
   bool took_exception;
   riscv_priv priv;
   
@@ -104,6 +105,7 @@ struct state_t{
     return 64;
   }
   int64_t get_time() const;
+  void set_time(int64_t t);
   void sext_xlen(int64_t x, int i) {
     gpr[i] = (x << (64-xlen())) >> (64-xlen());
   }

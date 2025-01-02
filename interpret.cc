@@ -60,12 +60,11 @@ bool state_t::memory_map_check(uint64_t pa, bool store, int64_t x) {
       case 0x4000:	
 	if(store) {
 	  mtimecmp = x;
-	  //std::cout << mtimecmp_cnt << "\n";
-	  //dump_calls();
 	  printf(">> mtimecmp = %ld at icnt %ld\n", mtimecmp, icnt);
 	  csr_t cc(mip);
 	  cc.mie.mtie = 0;
-	  mip = cc.raw;	  
+	  printf("mip %lx -> %lx\n", mip, cc.raw);
+	  mip = cc.raw;
 	}
 	break;
       case 0xbff8:
@@ -145,8 +144,12 @@ void state_t::store64(uint64_t pa, int64_t x) {
 
 extern uint64_t csr_time;
 
+void state_t::set_time(int64_t t) {
+  csr_time = t;
+}
+
 int64_t state_t::get_time() const {
-  return csr_time;
+  return icnt;
 }
 
 //static std::unordered_map<uint64_t, std::pair<uint64_t, uint64_t>> tlb;
@@ -468,8 +471,8 @@ static int64_t read_csr(int csr_id, state_t *s, bool &undef) {
     case 0xc00:
       return s->icnt;
     case 0xc01:
-      //return csr_time;
-      return 0;
+      s->did_rdtime = 1;
+      return s->get_time();
     case 0xc03:
       return 0;
     case 0xf11:
@@ -600,7 +603,7 @@ void execRiscv(state_t *s) {
   int64_t irq = 0;
   riscv_t m(0);
   s->took_exception = false;
-
+  s->did_rdtime = s->did_system = false;
 
   csr_t c(s->mie);
   //if(c.mie.mtie) {
@@ -610,6 +613,7 @@ void execRiscv(state_t *s) {
   if(s->get_time() >= s->mtimecmp) {
     csr_t cc(0);
     cc.mip.mtip = 1;
+    //printf("setting interrupt pending at icnt %lu\n", s->icnt);
     s->mip |= cc.raw;
   }
   
@@ -1616,6 +1620,7 @@ void execRiscv(state_t *s) {
       bool is_ebreak = ((inst>>7) == 0x2000);
       bool bits19to7z = (((inst >> 7) & 8191) == 0);
       uint64_t upper7 = (inst>>25);
+      s->did_system = 1;
       if(is_ecall) { /* ecall and ebreak dont increment the retired instruction count */
 	if(globals::syscall_emu) {
 	  s->brk = 1;

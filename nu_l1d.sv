@@ -1415,10 +1415,13 @@ module nu_l1d(clk,
 	  end
 	else if(w_paging_toggle | w_priv_toggle)
 	  begin
+	     //$display("reset link reg on priv or paging toggle");
 	     r_link_reg <= 'd0;
 	  end
 	else if(t_wr_link_reg)
 	  begin
+	     //$display("writing link reg to %x at pc %x",
+	     //n_link_reg, r_req.pc);
 	     r_link_reg <= n_link_reg;
 	  end
      end
@@ -1525,6 +1528,7 @@ module nu_l1d(clk,
 
 `ifdef VERILATOR
    wire	w_aborted_sc = t_hit_cache & ((r_req.op == MEM_SCD) | (r_req.op == MEM_SCW)) & (!w_match_link);
+   wire	w_succces_sc = t_hit_cache & ((r_req.op == MEM_SCD) | (r_req.op == MEM_SCW)) & (w_match_link);   
    always_ff@(negedge clk)
      begin
 	// if(n_link_reg_val & (r_link_reg_val==1'b0))	
@@ -1536,12 +1540,19 @@ module nu_l1d(clk,
 	//      $display("clear link reg at cycle %d, op %d", r_cycle,r_req.op);
 	//   end
 	
-	//if(w_aborted_sc)
+	// if(w_aborted_sc)
+	//   begin
+	//      $display("r_link_reg_val = %b, r_link_reg = %x, r_req.addr = %x, link addr = %x, pc = %x",
+	// 	      r_link_reg_val, r_link_reg, {r_req.addr[63:4], 4'd0}, r_link_reg, r_req.pc);
+	//      $stop();
+	//   end
+	
+	//if(w_succces_sc)
 	//begin
-	//$display("r_link_reg_val = %b, r_link_reg = %x, r_req.addr = %x, link addr = %x",
-	//r_link_reg_val, r_link_reg, {r_req.addr[63:4], 4'd0}, r_link_reg);
-	///$stop();
+	// $display("r_link_reg_val = %b, r_link_reg = %x, r_req.addr = %x, link addr = %x",
+	//	      r_link_reg_val, r_link_reg, {r_req.addr[63:4], 4'd0}, r_link_reg);
 	//end
+	
 	
 	l1d_port_util({31'd0,r_got_req}, {31'd0, r_got_req2});
 	record_l1d({31'd0,core_mem_va_req_valid},
@@ -1557,11 +1568,19 @@ module nu_l1d(clk,
 		    r_req.addr, 
 		    r_req.op == MEM_AMOD ? t_amo64_data : (r_req.op == MEM_AMOW ? {{32{t_amo32_data[31]}},t_amo32_data} : r_req.data), 
 		    r_req.is_atomic ? 32'd1 : 32'd0);
-`ifdef VERBOSE_L1D			    
-	     if(r_req.is_atomic)
-	        $display("firing atomic for pc %x addr %x with data %x t_shift %x, at cycle %d for rob ptr %d, r_cache_idx %d, match link %b", 
-	     		 r_req.pc, r_req.addr, r_req.data, t_shift, r_cycle, r_req.rob_ptr, r_cache_idx, w_match_link);
-`endif	     
+//`ifdef VERBOSE_L1D			    
+	     if((r_req.addr == 64'hff43fc0))
+	       begin
+		  if(r_req.is_atomic)
+	            $display("firing atomic for pc %x addr %x with data %x t_shift %x, at cycle %d for rob ptr %d, r_cache_idx %d, match link %b", 
+	     		     r_req.pc, r_req.addr, r_req.data, t_shift, r_cycle, r_req.rob_ptr, r_cache_idx, w_match_link);
+		  else
+		    $display("firing store for pc %x addr %x with data %x t_shift %x, at cycle %d for rob ptr %d, r_cache_idx %d", 
+	     		     r_req.pc, r_req.addr, r_req.data, t_shift, r_cycle, r_req.rob_ptr, r_cache_idx);
+		end
+
+	     
+//`endif	     
 	  end
      end // always_ff@ (negedge clk)
 `endif
@@ -1604,6 +1623,11 @@ module nu_l1d(clk,
 	    begin
 	       t_amo32_data = r_req.data[31:0];
 	       t_amo64_data = r_req.data[63:0];
+	    end
+	  5'd4:
+	    begin
+	       t_amo32_data = t_shift[31:0] ^ r_req.data[31:0];
+	       t_amo64_data = t_shift[63:0] ^ r_req.data[63:0];
 	    end
 	  5'd8: /* amoor */
 	    begin

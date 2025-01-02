@@ -154,6 +154,7 @@ module core(clk,
 	    core_mark_dirty_valid,
 	    core_mark_dirty_addr,
 	    core_mark_dirty_rsp_valid,
+	    pending_irq,
 	    counters
 	    );
    input logic clk;
@@ -280,7 +281,9 @@ module core(clk,
    output logic				  core_mark_dirty_valid;
    output [63:0]			  core_mark_dirty_addr;
    input logic				  core_mark_dirty_rsp_valid;   
-
+   output logic				  pending_irq;
+   
+   
    input	      counters_t counters;
    
    
@@ -505,14 +508,19 @@ module core(clk,
 `else
    wire 	w_any_irq = (|w_enabled_irqs[31:0]) & (|w_pending_irq[31:0]);
 `endif
+
    
    wire [5:0] 	w_irq_id;
    find_first_set#(5) irq_ffs(.in(w_enabled_irqs[31:0]),
 			      .y(w_irq_id));
    
    logic t_divide_ready;
-   
-   
+
+   always_ff@(posedge clk)
+     begin
+	pending_irq <= reset ? 1'b0 : w_any_irq;
+     end
+      
    always_comb
      begin
 	core_mem_req_valid = t_mem_req_valid;
