@@ -9,6 +9,7 @@ namespace globals {
   extern char **sysArgv;
   extern bool silent;
   extern bool log;
+  extern bool checker_enable_irqs;
   extern std::map<std::string, uint32_t> symtab;
 
 };
