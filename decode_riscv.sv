@@ -101,8 +101,7 @@ function csr_t decode_csr(logic [11:0] csr, logic [1:0] priv);
        x = BADCSR;
    endcase // case (op)
    return x;
-endfunction // is_store
-
+endfunction // decode_csr
 
 
 module decode_riscv(
@@ -448,7 +447,7 @@ module decode_riscv(
 			end
 		      5'd4:
 			begin /* amoxor */
-			   uop.op = insn[14:12]==3'd2 ? SCW : SCD;
+			   uop.op = insn[14:12]==3'd2 ? AMOW : AMOD;
 			   uop.srcB_valid = 1'b1;			   
 			end
 		      5'd8:
