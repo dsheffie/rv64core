@@ -14,6 +14,7 @@ bool globals::syscall_emu = true;
 uint32_t globals::tohost_addr = 0;
 uint32_t globals::fromhost_addr = 0;
 bool globals::log = false;
+bool globals::checker_enable_irqs = false;
 std::map<std::string, uint32_t> globals::symtab;
 
 char **globals::sysArgv = nullptr;
@@ -265,6 +266,10 @@ long long ic_translate(long long va, long long root) {
 uint64_t page_table_root = ~0UL;
 std::list<store_rec> store_queue;
 std::list<store_rec> atomic_queue;
+
+int checker_irq_enabled() {
+  return globals::checker_enable_irqs;
+}
 
 void start_log(int l) {
   trace_retirement |= (l!=0);
@@ -917,6 +922,7 @@ int main(int argc, char **argv) {
       ("window,w", po::value<bool>(&window)->default_value(false), "report windowed ipc")
       ("retiretrace", po::value<std::string>(&retire_name), "retire trace filename")
       ("verbose,v", po::value<bool>(&verbose)->default_value(false), "verbose")
+      ("irq", po::value<bool>(&globals::checker_enable_irqs)->default_value(true), "enable irqs")
       ; 
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);

@@ -616,8 +616,9 @@ void execRiscv(state_t *s) {
     //printf("setting interrupt pending at icnt %lu\n", s->icnt);
     s->mip |= cc.raw;
   }
-  
-  irq = take_interrupt(s);
+  if( globals::checker_enable_irqs ) {
+    irq = take_interrupt(s);
+  }
   if(irq) {
     except_cause = CAUSE_INTERRUPT | irq;
     goto handle_exception;

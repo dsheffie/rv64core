@@ -20,6 +20,7 @@ import "DPI-C" function void record_faults(input int n_faults);
 import "DPI-C" function void record_branches(input int n_branches);
 import "DPI-C" function void record_exception_type(input int cause);
 
+import "DPI-C" function int checker_irq_enabled();
 
 import "DPI-C" function void start_log(input int startlog);
 
@@ -503,8 +504,20 @@ module core(clk,
 				  (w_priv == 2'd1 ? w_en_s_irqs : (~(64'd0) ))
 				  ) & w_pending_irq;
 
-`ifdef DISABLE_IRQ
-   wire		w_any_irq = 1'b0;
+
+`ifdef VERILATOR
+   logic	w_any_irq;
+   always_comb
+     begin
+	if(checker_irq_enabled()!=32'd0)
+	  begin
+	     w_any_irq = (|w_enabled_irqs[31:0]) & (|w_pending_irq[31:0]);	     
+	  end
+	else
+	  begin
+	     w_any_irq = 1'b0;
+	  end
+     end
 `else
    wire 	w_any_irq = (|w_enabled_irqs[31:0]) & (|w_pending_irq[31:0]);
 `endif
