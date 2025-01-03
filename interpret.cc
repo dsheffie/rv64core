@@ -21,6 +21,27 @@ extern std::list<store_rec> atomic_queue;
 static uint64_t last_tval = 0;
 static std::stack<int64_t> calls;
 
+/* 16 byte cachelines assumed */
+static inline bool splits_cacheline(uint64_t ea, int sz) {
+  bool split = false;
+  switch(sz)
+    {
+    case 2:
+      split = (ea&0xf)==0xf;
+      break;
+    case 4:
+      split = (((ea>>2)&3)==3) and (ea&3);
+      break;
+    case 8:
+      split = ((ea>>3)&1) and (ea&7);
+      break;
+    default:
+      break;
+    }
+  return split;
+}
+
+
 static void dump_calls() {
   int cnt = 0;
   while(!calls.empty() && (cnt < 5)) {
@@ -730,9 +751,7 @@ void execRiscv(state_t *s) {
 	int sz = 1<<(m.s.sel & 3);
 	int page_fault = 0;
 	
-	bool unaligned = (ea & (sz-1)) != 0;
-	if(unaligned) {
-	  printf("unaligned load fault for ea %lx, sz = %d\n", ea, sz);
+	if(splits_cacheline(ea,sz)) {
 	  except_cause = CAUSE_MISALIGNED_LOAD;
 	  tval = ea;
 	  goto handle_exception;
@@ -1298,8 +1317,7 @@ void execRiscv(state_t *s) {
       int sz = 1<<(m.s.sel);
       int64_t pa = s->translate(ea, fault, sz, true);
 
-      bool unaligned = (ea & (sz-1)) != 0;
-      if(unaligned) {
+      if(splits_cacheline(ea,sz)) {
 	printf("unaligned store fault for ea %lx, sz = %d\n", ea, sz);
 	except_cause = CAUSE_MISALIGNED_STORE;
 	tval = ea;
