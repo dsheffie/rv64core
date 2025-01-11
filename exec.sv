@@ -3575,21 +3575,13 @@ module exec(clk,
 	   
 	   );
    
-
-   
+//`define FLOP_EXEC_COMPLETE
+`ifdef FLOP_EXEC_COMPLETE
    always_ff@(posedge clk)
      begin
-	if(reset)
-	  begin
-	     complete_valid_1 <= 1'b0;
-	     complete_valid_2 <= 1'b0;
-	  end
-	else
-	  begin
-	     complete_valid_1 <= (r_start_int & t_alu_valid) | t_mul_complete | t_div_complete;
-	     complete_valid_2 <= r_start_int2;
-	  end
-     end // always_ff@ (posedge clk)
+	complete_valid_1 <= reset ? 1'b0 :(r_start_int & t_alu_valid) | t_mul_complete | t_div_complete;
+	complete_valid_2 <= reset ? 1'b0 : r_start_int2;
+     end
 
    always_ff@(posedge clk)
      begin
@@ -3602,16 +3594,12 @@ module exec(clk,
 	complete_bundle_2.take_br <= t_take_br2;
 	complete_bundle_2.data <= t_result2;
      end
-     
-
    
    always_ff@(posedge clk)
      begin
-	if(t_mul_complete || t_div_complete)
+	if(t_mul_complete | t_div_complete)
 	  begin
-	     complete_bundle_1.rob_ptr <= t_mul_complete ? 
-					  t_rob_ptr_out : 
-					  t_div_rob_ptr;
+	     complete_bundle_1.rob_ptr <= t_mul_complete ? t_rob_ptr_out :  t_div_rob_ptr;
 	     complete_bundle_1.complete <= 1'b1;
 	     complete_bundle_1.faulted <= 1'b0;
 	     complete_bundle_1.restart_pc <= 'd0;
@@ -3632,7 +3620,51 @@ module exec(clk,
 	     complete_bundle_1.data <= t_result;
 	  end
      end // always_ff@ (posedge clk)
+`else
+   always_comb
+     begin
+	complete_valid_1 = (r_start_int & t_alu_valid) | t_mul_complete | t_div_complete;
+	complete_valid_2 = r_start_int2;
+     end
 
+   always_comb
+     begin
+	complete_bundle_2.rob_ptr = int_uop2.rob_ptr;
+	complete_bundle_2.complete = t_alu_valid2;
+	complete_bundle_2.faulted = t_mispred_br2;
+	complete_bundle_2.restart_pc = t_pc_2;
+	complete_bundle_2.cause = MISALIGNED_FETCH;
+	complete_bundle_2.has_cause = 1'b0;
+	complete_bundle_2.take_br = t_take_br2;
+	complete_bundle_2.data = t_result2;
+     end
+   
+   always_comb
+     begin
+	if(t_mul_complete | t_div_complete)
+	  begin
+	     complete_bundle_1.rob_ptr = t_mul_complete ? t_rob_ptr_out :  t_div_rob_ptr;
+	     complete_bundle_1.complete = 1'b1;
+	     complete_bundle_1.faulted = 1'b0;
+	     complete_bundle_1.restart_pc = 'd0;
+	     complete_bundle_1.cause = MISALIGNED_FETCH;
+	     complete_bundle_1.has_cause = 1'b0;	     
+	     complete_bundle_1.take_br = 1'b0;
+	     complete_bundle_1.data = t_mul_complete ? t_mul_result : t_div_result;
+	  end
+	else
+	  begin
+	     complete_bundle_1.rob_ptr = int_uop.rob_ptr;
+	     complete_bundle_1.complete = t_alu_valid;
+	     complete_bundle_1.faulted = t_mispred_br || t_has_cause;
+	     complete_bundle_1.restart_pc = t_pc;
+	     complete_bundle_1.cause = t_cause;
+	     complete_bundle_1.has_cause = t_has_cause;
+	     complete_bundle_1.take_br = t_take_br;
+	     complete_bundle_1.data = t_result;
+	  end
+     end // always_ff@ (posedge clk)
+`endif
 
 `ifdef VERILATOR
    always_ff@(negedge clk)
