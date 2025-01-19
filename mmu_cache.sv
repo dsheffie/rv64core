@@ -4,6 +4,7 @@
 `ifdef VERILATOR
 import "DPI-C" function void check_translation(input longint va, input int pa);
 import "DPI-C" function void mark_accessed_checker(input longint addr);
+import "DPI-C" function void log_mmu_walk_lat(input longint cycle, input byte hit_lvl);
 `endif
 
 module mmu_cache(clk, reset, clear_tlb, page_table_root, 
@@ -88,7 +89,7 @@ module mmu_cache(clk, reset, clear_tlb, page_table_root,
    
    logic	       r_core_mark_dirty_rsp_valid, n_core_mark_dirty_rsp_valid;
 
-   localparam LG_TLB_C_SZ = 8;
+   localparam LG_TLB_C_SZ = 20;
    wire [`M_WIDTH-(13+LG_TLB_C_SZ):0] w_cache_tag;
    wire				      w_cache_valid;
    logic			      r_cache_valid, n_cache_valid;
@@ -157,6 +158,27 @@ module mmu_cache(clk, reset, clear_tlb, page_table_root,
      begin
 	r_cycle <= reset ? 64'd0 : (r_cycle + 64'd1);
      end
+
+`ifdef VERILATOR
+   logic [63:0] r_walk_cycles;
+   always_ff@(posedge clk)
+     begin
+	if((r_state == IDLE) && (n_state != IDLE))
+	  begin
+	     r_walk_cycles <= 'd0;
+	  end
+	else
+	  begin
+	     r_walk_cycles <= r_walk_cycles + 'd1;
+	  end
+	
+	if((r_state != IDLE) && (n_state == IDLE))
+	  begin
+	     log_mmu_walk_lat(r_walk_cycles, {6'd0, r_hit_lvl});
+	  end
+     end
+`endif
+   
    
 `ifdef VERBOSE_MMU   
    always_ff@(posedge clk)
@@ -187,19 +209,19 @@ module mmu_cache(clk, reset, clear_tlb, page_table_root,
      end
 `endif //  `ifdef VERBOSE_MMU
 
-   always_ff@(negedge clk)
-     begin
-	if(clear_tlb) $display("tlb clear at cycle %d", r_cycle);
-	if(r_state == LOAD0 & (r_do_dirty == 1'b0))
-	  begin
-	     $display("r_va %x, w_tlb_cache_hit = %b, iside %b, dside %d at cycle %d",
-		      {r_va[63:12], 12'd0},
-		      w_tlb_cache_hit,
-		      r_do_l1i,
-		      r_do_l1d,
-		      r_cycle);
-	  end
-     end
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if(clear_tlb) $display("tlb clear at cycle %d", r_cycle);
+   // 	if(r_state == LOAD0 & (r_do_dirty == 1'b0))
+   // 	  begin
+   // 	     $display("r_va %x, w_tlb_cache_hit = %b, iside %b, dside %d at cycle %d",
+   // 		      {r_va[63:12], 12'd0},
+   // 		      w_tlb_cache_hit,
+   // 		      r_do_l1i,
+   // 		      r_do_l1d,
+   // 		      r_cycle);
+   // 	  end
+   //   end
 
    always_comb
      begin
