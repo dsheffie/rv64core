@@ -81,7 +81,7 @@
 `define LG_L1I_NUM_SETS 8
 
 //size 13 -> 2-way assoc * 16 byte lines * 2^13 -> 2^5 * 2^13 -> 2^18 (256k cache)
-//size 14 -> 2-way assoc * 16 byte lines * 2^14 -> 2^5 * 2^13 -> 2^19 (512k cache)
+//size 14 -> 2-way assoc * 16 byte lines * 2^14 -> 2^5 * 2^14 -> 2^19 (512k cache)
 `define LG_L2_NUM_SETS 13
 
 `define LG_L2_REQ_TAGS 2
