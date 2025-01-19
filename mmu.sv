@@ -4,6 +4,7 @@
 `ifdef VERILATOR
 import "DPI-C" function void check_translation(input longint va, input int pa);
 import "DPI-C" function void mark_accessed_checker(input longint addr);
+import "DPI-C" function void log_mmu_walk_lat(input longint cycle, input byte hit_lvl);
 `endif
 
 module mmu(clk, reset, clear_tlb, page_table_root, 
@@ -150,6 +151,26 @@ module mmu(clk, reset, clear_tlb, page_table_root,
      begin
 	r_cycle <= reset ? 64'd0 : (r_cycle + 64'd1);
      end
+
+`ifdef VERILATOR
+   logic [63:0] r_walk_cycles;
+   always_ff@(posedge clk)
+     begin
+	if((r_state == IDLE) && (n_state != IDLE))
+	  begin
+	     r_walk_cycles <= 'd0;
+	  end
+	else
+	  begin
+	     r_walk_cycles <= r_walk_cycles + 'd1;
+	  end
+	
+	if((r_state != IDLE) && (n_state == IDLE))
+	  begin
+	     log_mmu_walk_lat(r_walk_cycles, {6'd0, r_hit_lvl});
+	  end
+     end
+`endif
    
 `ifdef VERBOSE_MMU   
    always_ff@(posedge clk)

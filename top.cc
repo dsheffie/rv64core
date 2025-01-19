@@ -71,6 +71,7 @@ static std::map<int,uint64_t> restart_ds_distribution;
 static std::map<int,uint64_t> fault_distribution;
 static std::map<int,uint64_t> branch_distribution;
 static std::map<int,uint64_t> fault_to_restart_distribution;
+static std::map<int,uint64_t> mmu_walk_lat;
 
 static uint64_t l1d_stall_reasons[8] = {0};
 static bool enable_checker = true, use_checkpoint = false;
@@ -303,6 +304,13 @@ void retire_uuid(long long uuid) {
   } while(true);
 }
 
+void log_mmu_walk_lat(long long walk_lat, char hit_lvl) {
+  mmu_walk_lat[walk_lat]++;
+  //  std::cout << "mmu walk took " << walk_lat
+  //<< " cycles with hit at "
+  //<< static_cast<int>(hit_lvl)
+  //<< " in the page table\n";
+}
 
 static uint64_t log_l1d_accesses = 0;
 static uint64_t log_l1d_push_miss = 0;
@@ -1833,6 +1841,9 @@ int main(int argc, char **argv) {
     std::cout << "total_retire = " << total_retire << "\n";
     std::cout << "total_cycle  = " << total_cycle << "\n";
     std::cout << "total ipc    = " << static_cast<double>(total_retire) / total_cycle << "\n";
+
+    std::cout << "mmu walks    = " << count_histo(mmu_walk_lat) << "\n";
+    std::cout << "avg mmu lat  = " << avg_histo(mmu_walk_lat) << "\n";
 
     uint64_t l1i_misses = tb->l1i_cache_accesses -
       tb->l1i_cache_hits;

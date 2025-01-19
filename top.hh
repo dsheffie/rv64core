@@ -186,6 +186,24 @@ static inline uint32_t get_insn(uint64_t pc, const state_t *s) {
   return *reinterpret_cast<uint32_t*>(&s->mem[pc]);
 }
 
+template<typename X, typename Y>
+static inline Y count_histo(const std::map<X,Y> &histo) {
+  Y sum = static_cast<Y>(0);
+  for(auto p : histo) {
+    sum += p.second;
+  }
+  return sum;
+}
+
+template<typename X, typename Y>
+static inline double avg_histo(const std::map<X,Y> &histo) {
+  Y cnt = count_histo(histo), sum = 0;
+  for(auto p : histo) {
+    sum += p.second * static_cast<Y>(p.first);
+  }
+  return static_cast<double>(sum)/cnt;
+}
+
 
 template<typename X, typename Y>
 static inline void dump_histo(const std::string &fname,
