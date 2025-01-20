@@ -914,7 +914,6 @@ int main(int argc, char **argv) {
   uint64_t max_cycle = 0, max_icnt = 0, mem_lat = 1;
   uint64_t last_store_addr = 0, last_load_addr = 0, last_addr = 0;
   int misses_inflight = 0;
-  std::map<uint64_t, uint64_t> pushout_histo;
   int64_t mem_reply_cycle = -1L;
   retire_trace rt;
   std::map<int64_t, double> &tip_map = rt.tip;
@@ -983,7 +982,6 @@ int main(int argc, char **argv) {
   globals::sysArgc = buildArgcArgv(rv32_binary.c_str(),sysArgs.c_str(),&globals::sysArgv);
   std::string log_name = rv32_binary + "-log.txt";
   std::string tip_name = rv32_binary + "-tip.txt";
-  std::string pushout_name = rv32_binary + "-pushout.txt";
   std::string branch_name = rv32_binary + "-branch_info.txt";
   
   initCapstone();
@@ -1181,15 +1179,6 @@ int main(int argc, char **argv) {
     
     if(tb->retire_valid) {
       ++insns_retired;
-
-
-      if(last_retire > 1) {
-	uint64_t pa = tb->retire_pc;
-	if(tb->paging_active) {
-	  pa = translate(tb->retire_pc, tb->page_table_root, true, false);
-	}
-	pushout_histo[pa] += last_retire;
-      }
       last_retire = 0;
 
       last_retired_pc = tb->retire_pc;
@@ -1800,12 +1789,6 @@ int main(int argc, char **argv) {
     //out << p.first << " cycles before restart, " << p.second << " times\n";
     //}
     dump_histo(branch_name, mispredicts, s);
-    uint64_t total_pushout = 0;
-    for(auto &p : pushout_histo) {
-      total_pushout += p.second;
-    }
-    out << total_pushout << " cycles of pushout\n";
-    dump_histo(pushout_name, pushout_histo, s);
     
     uint64_t total_retire = 0, total_cycle = 0;
     for(auto &p : retire_map) {
