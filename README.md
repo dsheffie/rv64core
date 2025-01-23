@@ -1,8 +1,14 @@
 # rv64core
 
-Known working with Verilator 4.210
+This is the RISCV that lives in my heart - a polished MIPS64. It may or may not be the RISCV that lives in RISCV documentation.
 
-Pedagogical SystemVerilog model for an RV64m CPU. Relatively simple uarch - two-wide renamed, OOO microarchitecture. 1 mem FU, 2 int FU.  Each int FU backed by matrix-style scheduler.
+It does not support compressed ISA. I am a recovering x86 archtitect. I have had enough variable length ISA for one lifetime.
+
+There is no FPU.  Getting FPUs correct is hard and I'm not going to punt and use someone else's design. 
+
+That said, it boots Linux and runs "stuff".
+
+Relatively simple uarch - two-wide renamed, OOO microarchitecture. 1 mem FU, 2 int FU.  Each int FU backed by matrix-style scheduler.
 
 Caches - direct mapped. Keep things simple and actually implementable on FPGA. Make'em really big because you can do that these days. Never spent time on any elaborate forwarding schemes because it killed cycle time on my FPGA. 
 
@@ -19,3 +25,5 @@ Execute - Nothing exciting.  Fully bypassed RF.
 Complete - Write back results to PRF.  Completion status to the ROB.
 
 Graduate - Check for faults. If fault, rollback to state in retirement RAT.  Bitvectors make flash restart snappy.  
+
+Known working with Verilator 4.210
