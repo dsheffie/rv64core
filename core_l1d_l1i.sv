@@ -377,6 +377,8 @@ module
    wire [`PA_WIDTH-1:0]		    w_mmu_req_addr;
    wire [63:0]			    w_mmu_req_data;
    wire [63:0]			    w_mmu_rsp_data;
+   wire [127:0]			    w_mmu_rsp_cacheline;
+   
    wire				    w_mmu_rsp_valid;
    wire 			    w_mmu_gnt_l1i, 
 				    w_mmu_gnt_l1d;
@@ -578,7 +580,8 @@ module
 	       .mmu_req_store(w_mmu_req_store),
 	       .mmu_rsp_valid(w_mmu_rsp_valid),
 	       .mmu_rsp_data(w_mmu_rsp_data),
-
+	       .mmu_rsp_cacheline(w_mmu_rsp_cacheline),
+		    
 	       .mem_mark_valid(w_mem_mark_valid),
 	       .mem_mark_accessed(w_mem_mark_accessed),
 	       .mem_mark_dirty(w_mem_mark_dirty),
@@ -706,7 +709,7 @@ module
 	    .mem_req_store(w_mmu_req_store),
 	    .mem_rsp_valid(w_mmu_rsp_valid),
 	    .mem_rsp_data(w_mmu_rsp_data),
-
+	    .mem_rsp_cacheline(w_mmu_rsp_cacheline),
 	    .page_walk_rsp(page_walk_rsp),
 	    
 	    .l1d_rsp_valid(w_l1d_rsp_valid),

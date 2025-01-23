@@ -61,7 +61,7 @@ module tlb(clk,
    logic [51:0]	       r_pa_data[N-1:0];
 
    
-   wire [N-1:0]	       w_hits4k, w_hits2m, w_hits1g;
+   wire [N-1:0]	       w_hits4k, w_hits8k, w_hits2m, w_hits1g;
    wire [N-1:0]	       w_hits;
 
    
@@ -69,10 +69,11 @@ module tlb(clk,
    generate
       for(genvar i = 0; i < N; i=i+1)
 	begin : hits
+	   assign w_hits8k[i] = r_valid[i] ? (r_pgsize[i] == 2'd3) & (r_va_tags[i][27:1] == va[39:13]) : 1'b0;	   
 	   assign w_hits4k[i] = r_valid[i] ? (r_pgsize[i] == 2'd2) & (r_va_tags[i] == va[39:12]) : 1'b0;
 	   assign w_hits2m[i] = r_valid[i] ? (r_pgsize[i] == 2'd1) & (r_va_tags[i][27:9] == va[39:21]) : 1'b0;
 	   assign w_hits1g[i] = r_valid[i] ? (r_pgsize[i] == 2'd0) & (r_va_tags[i][27:18] == va[39:30]) : 1'b0;
-	   assign w_hits[i] = w_hits1g[i] | w_hits2m[i] | w_hits4k[i];
+	   assign w_hits[i] = w_hits1g[i] | w_hits2m[i] | w_hits4k[i] | w_hits8k[i];
 	end
    endgenerate
 
@@ -93,7 +94,9 @@ module tlb(clk,
    wire [63:0] w_pa_sel = 
 	       (r_pgsize[w_idx[LG_N-1:0]] == 2'd0) ? {r_pa_data[w_idx[LG_N-1:0]][51:18], va[29:0]} :
 	       (r_pgsize[w_idx[LG_N-1:0]] == 2'd1) ? {r_pa_data[w_idx[LG_N-1:0]][51:9], va[20:0]} :
-	       {r_pa_data[w_idx[LG_N-1:0]], va[11:0]};
+	       (r_pgsize[w_idx[LG_N-1:0]] == 2'd2) ? {r_pa_data[w_idx[LG_N-1:0]], va[11:0]} :
+	       {r_pa_data[w_idx[LG_N-1:0]][51:1], va[12:0]};
+	       
 	       	          
    find_first_set#(.LG_N(LG_N)) 
    ffs(.in(w_hits),

@@ -60,7 +60,7 @@ module l2_2way(clk,
 	       mmu_req_store,
 	       mmu_rsp_valid,
 	       mmu_rsp_data,	   
-	       
+	       mmu_rsp_cacheline,
 	       mem_mark_valid,
 	       mem_mark_accessed,
 	       mem_mark_dirty,
@@ -121,6 +121,7 @@ module l2_2way(clk,
    input logic					 mmu_req_store;
    output logic					 mmu_rsp_valid;
    output logic [63:0]				 mmu_rsp_data;
+   output logic [127:0]				 mmu_rsp_cacheline;   
    
    
    input logic					 mem_mark_valid;
@@ -134,6 +135,7 @@ module l2_2way(clk,
    output logic				  l2_empty;
    
    logic [63:0]				  r_mmu_rsp_data, n_mmu_rsp_data;
+   logic [127:0]			  r_mmu_rsp_cl, n_mmu_rsp_cl;
    logic				  r_mmu_rsp_valid, n_mmu_rsp_valid;
    logic				  n_mem_mark_rsp_valid, r_mem_mark_rsp_valid;
    
@@ -141,6 +143,8 @@ module l2_2way(clk,
    
    assign mmu_rsp_valid = r_mmu_rsp_valid;
    assign mmu_rsp_data = r_mmu_rsp_data;
+   assign mmu_rsp_cacheline = r_mmu_rsp_cl;
+   
    assign mem_mark_rsp_valid = r_mem_mark_rsp_valid;
    
    localparam LG_L2_LINES = `LG_L2_NUM_SETS;
@@ -606,6 +610,7 @@ module l2_2way(clk,
 	     r_was_busy <= 1'b0;
 	     r_mark_pte <= 1'b0;
 	     r_mmu_rsp_data <= 'd0;
+	     r_mmu_rsp_cl <= 'd0;
 	     r_mmu_rsp_valid <= 1'b0;
 	     r_mem_mark_rsp_valid <= 1'b0;
 	     r_state <= INITIALIZE;
@@ -656,6 +661,7 @@ module l2_2way(clk,
 	     r_was_busy <= n_was_busy;
 	     r_mark_pte <= n_mark_pte;
 	     r_mmu_rsp_data <= n_mmu_rsp_data;
+	     r_mmu_rsp_cl <= n_mmu_rsp_cl;
 	     r_mmu_rsp_valid <= n_mmu_rsp_valid;
 	     r_l1d_rsp_tag <= n_l1d_rsp_tag;
 	     r_mem_mark_rsp_valid <= n_mem_mark_rsp_valid;
@@ -721,14 +727,7 @@ module l2_2way(clk,
 	  end
      end
 `endif // unmatched `else, `elsif or `endif
-   
-	//$display("l1i_flush_req = %b", l1i_flush_req);
-	//$display("l1d_flush_req = %b", l1d_flush_req);
-	
-   //if((l1d_flush_complete||l1i_flush_complete) && (r_flush_state == WAIT_FOR_FLUSH)) 
-   //$stop();
-   //end
-   
+
    always_comb
      begin
 	n_flush_state = r_flush_state;
@@ -994,6 +993,7 @@ module l2_2way(clk,
 	n_mem_mark_rsp_valid = 1'b0;
 	
 	n_mmu_rsp_data = r_mmu_addr3 ? w_d[127:64] : w_d[63:0];
+	n_mmu_rsp_cl = w_d;
 	n_mmu_rsp_valid = 1'b0;
 	
 	t_d0 = r_data;
