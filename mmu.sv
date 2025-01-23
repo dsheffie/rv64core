@@ -10,7 +10,9 @@ import "DPI-C" function void log_mmu_walk_lat(input longint cycle, input byte hi
 module mmu(clk, reset, clear_tlb, page_table_root, 
 	   l1i_req, l1i_va, l1d_req, l1d_st, l1d_va,
 	   mem_req_valid, mem_req_addr, mem_req_data,  mem_req_store,
-	   mem_rsp_valid, mem_rsp_data,
+	   mem_rsp_valid, 
+	   mem_rsp_data,
+	   mem_rsp_cacheline,
 	   page_walk_rsp,
 	   l1d_rsp_valid, 
 	   l1i_rsp_valid,
@@ -50,6 +52,7 @@ module mmu(clk, reset, clear_tlb, page_table_root,
       
    input logic	       mem_rsp_valid;
    input logic [63:0]  mem_rsp_data;
+   input logic [127:0] mem_rsp_cacheline;
 
    output 	       page_walk_rsp_t page_walk_rsp;
    output logic	       l1d_rsp_valid;
@@ -104,6 +107,22 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 
    assign core_mark_dirty_rsp_valid = r_core_mark_dirty_rsp_valid;
    
+   logic [127:0]       r_cl;
+`ifdef COALESCE_8K_MMU
+   wire		       w_meta_8k = (r_cl[7:0] == r_cl[71:64]) & r_cl[0];
+   wire		       w_ppn_8k = (r_cl[53:11] == r_cl[117:75]) & (r_cl[10]==1'b0) & r_cl[74];
+   wire		       w_make_8k = (r_hit_lvl == 2'd2) & w_meta_8k & w_ppn_8k;
+`else
+   wire		       w_make_8k = 1'b0;
+`endif
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if(w_make_8k & r_state == WALK_DONE)
+   // 	  begin
+   // 	     $display("ppn0 = %x, ppn1 = %x", r_cl[53:10], r_cl[64+53:64+10]);
+   // 	  end
+   //   end
+   
    always_comb
      begin
 	page_walk_rsp.paddr = r_pa;
@@ -113,7 +132,7 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 	page_walk_rsp.writable = r_page_write;
 	page_walk_rsp.executable = r_page_executable;
 	page_walk_rsp.user = r_page_user;
-	page_walk_rsp.pgsize = r_hit_lvl;
+	page_walk_rsp.pgsize = w_make_8k ? 2'd3 : r_hit_lvl;
      end
 
    assign mem_req_data = 'd0;
@@ -199,8 +218,15 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 	     $display("MMU translate dside %x", l1d_va[38:12]);
 	  end	
      end
-`endif	      
-	     
+`endif	    
+
+   always_ff@(posedge clk)
+     begin
+	r_cl <= mem_rsp_cacheline;
+     end
+
+  
+   
    always_comb
      begin
 	n_l1i_req = r_l1i_req | l1i_req;
@@ -392,7 +418,11 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 	    end
 	  WALK_DONE:
 	    begin
-	       if(r_hit_lvl == 2'd2)
+	       if(w_make_8k)
+		 begin
+		    n_pa = {8'd0, r_cl[53:11], r_va[12], 12'd0};
+		 end
+	       else if(r_hit_lvl == 2'd2)
 		 begin /* 4k page */
 		    n_pa = {8'd0, r_addr[53:10], 12'd0};
 		 end
