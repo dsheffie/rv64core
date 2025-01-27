@@ -51,7 +51,7 @@ import "DPI-C" function void record_retirement(input longint pc,
 					       input int     paging_active,
 					       input longint page_table_root);
 
-import "DPI-C" function void record_restart(input int restart_cycles);
+import "DPI-C" function void record_restart(input int restart_cycles, input longint cycle);
 import "DPI-C" function void record_ds_restart(input int delay_cycles);
 import "DPI-C" function int check_insn_bytes(input longint pc, input int data);
 
@@ -887,7 +887,7 @@ module core(clk,
    	  end // if (t_retire_two)
 	if(r_state == RAT && n_state == ACTIVE)
 	  begin
-	     record_restart(r_restart_cycles);
+	     record_restart(r_restart_cycles,r_cycle);
 	  end
 	if(r_state == DRAIN && n_state == RAT)
 	  begin

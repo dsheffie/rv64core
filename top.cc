@@ -26,7 +26,7 @@ static bool trace_retirement = false;
 static uint64_t mem_reqs = 0;
 static state_t *ss = nullptr;
 static uint64_t insns_retired = 0, insns_allocated = 0;
-static uint64_t cycles_in_faulted = 0, fetch_stalls = 0;
+static uint64_t cycles_in_faulted = 0, fetch_stalls = 0, mispred_to_restart_cycles = 0;
 
 static uint64_t pipestart = 0, pipeend = ~(0UL), pipeip = 0, pipeipcnt = 0;
 
@@ -96,12 +96,21 @@ void record_faults(int n_faults) {
   }
 }
 
-void record_restart(int cycles) {
+static long long mispred_cycle = -1L;
+void record_exec_mispred(long long curr_cycle) {
+  if(mispred_cycle == -1) {
+    mispred_cycle = curr_cycle;
+  }
+}
+
+void record_restart(int cycles, long long curr_cycle) {
   restart_distribution[cycles]++;
   pending_fault = false;
 
   fault_to_restart_distribution[(cycle - fault_start_cycle)]++;
   fault_start_cycle = 0;
+  mispred_to_restart_cycles += static_cast<uint64_t>( curr_cycle -  mispred_cycle );
+  mispred_cycle = -1UL;
   //std::cout << "clearing fault took "
   //<< (cycle - fault_start_cycle)
   //<< " cycles\n";
@@ -220,6 +229,7 @@ void record_sched(int p) {
 void record_sched_alloc(int p) {
   ++schedules_alloc[p&1];
 }
+
 
 void csr_putchar(char c) {
   if(c==0) std::cout << "\n";
@@ -1623,6 +1633,7 @@ int main(int argc, char **argv) {
     out << insns_allocated << " insns allocated\n";
     out << cycles_in_faulted*2 << " slots in faulted\n";
     out << fetch_stalls << " fetch stalls\n";
+    out << mispred_to_restart_cycles << " cycles from mispred detect to restart\n";
     
     uint64_t totalSlots = 2*cycle;
     uint64_t badSpecSlots = insns_allocated - insns_retired + (2*cycles_in_faulted);

@@ -11,6 +11,8 @@ import "DPI-C" function void pt_complete(input longint cycle,
 import "DPI-C" function void record_sched(input int p);
 import "DPI-C" function void record_sched_alloc(input int p);
 
+import "DPI-C" function void record_exec_mispred(input longint cycle);
+
 import "DPI-C" function void csr_putchar(input byte x);
 import "DPI-C" function void csr_puttime(input longint mtime);
 import "DPI-C" function void term_sim();
@@ -3574,6 +3576,20 @@ module exec(clk,
 	   .rd5(w_srcB_2)
 	   
 	   );
+
+`ifdef VERILATOR
+always_ff@(negedge clk)
+  begin
+     if(r_start_int & t_alu_valid & t_mispred_br)
+       begin
+	  record_exec_mispred(r_cycle);
+       end
+     if(r_start_int2 & t_mispred_br2)
+       begin
+	  record_exec_mispred(r_cycle);
+       end
+  end
+`endif
    
 //`define FLOP_EXEC_COMPLETE
 `ifdef FLOP_EXEC_COMPLETE
