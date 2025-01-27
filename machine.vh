@@ -7,7 +7,7 @@
 `endif
 
 `define FPGA 1
-
+`define COALESCE_8K_MMU 1
 //`define DISABLE_IRQ
 
 `define SECOND_EXEC_PORT 1
