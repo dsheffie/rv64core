@@ -620,11 +620,13 @@ struct pt_ {
   uint64_t l1d_p1_hit;
   uint64_t l1d_p1_miss;
   uint64_t l1d_replay;
+  bool maybe_alias;
   std::list<uint64_t> l1d_blocks;
   std::list<uint64_t> l1d_sd;
   void clear() {
     fetch = alloc = sched = NI;
     complete = retire = NI;
+    maybe_alias = false;
     l1d_p1_hit = l1d_p1_miss = l1d_replay = NI;
     l1d_blocks.clear();
     l1d_sd.clear();
@@ -664,10 +666,21 @@ void pt_l1d_pass1_hit(long long cycle, int rob_id) {
   }
 }
 
-void pt_l1d_pass1_miss(long long cycle, int rob_id) {
+void pt_l1d_pass1_miss(long long cycle, int rob_id, int maybe_alias,
+		       unsigned long long va,
+		       unsigned long long pa) {
   if(pl != nullptr) {
     auto &r = records[rob_id & (ROB_ENTRIES-1)];
     r.l1d_p1_miss = cycle;
+    r.maybe_alias = maybe_alias;
+    // if(maybe_alias) {
+    //   std::cout << "op at " << std::hex << r.pc
+    // 		<< std::dec
+    // 		<<" could alias\n";
+    //   uint64_t m = (1UL<<14)-1;
+    //   std::cout << "va = " << std::hex << (va & m) << " , pa "
+    // 		<<  (pa & m) << std::dec << "\n";
+    // }
   }
 }
 
