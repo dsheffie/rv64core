@@ -438,7 +438,7 @@ module nu_l1d(clk,
 
    wire					  mem_rsp_reload = mem_rsp_valid & 
 					  (r_l2q[r_l2q_head_ptr[`LG_MRQ_ENTRIES-1:0]].writeback == 1'b0);
-   wire					  mem_rsp_cachable = r_l2q[r_l2q_head_ptr[`LG_MRQ_ENTRIES-1:0]].uncacheable==1'b0;
+   wire					  mem_rsp_cacheable = r_l2q[r_l2q_head_ptr[`LG_MRQ_ENTRIES-1:0]].uncacheable==1'b0;
    
 
    //always_ff@(negedge clk)
@@ -510,7 +510,8 @@ module nu_l1d(clk,
                              FLUSH_CL_WAIT, //9			     
                              HANDLE_RELOAD, //10
 			     TLB_RELOAD, //11
-			     TLB_TURNAROUND //12
+			     TLB_TURNAROUND, //12
+			     UC_LOAD
                              } state_t;
 
    
@@ -772,7 +773,8 @@ module nu_l1d(clk,
 
    wire [`PA_WIDTH-1:0] w_req2_pa = {w_tlb_pa[`PA_WIDTH-1:`LG_PG_SZ], r_req2.addr[`LG_PG_SZ-1:0]};
 
-   wire			w_uncacheable = 1'b0 & (w_tlb_pa != 32'd0);   
+   wire			w_uncacheable = 1'b1;
+   
    wire			w_could_early_req_any = t_push_miss & (w_uncacheable == 1'b0) & w_three_free_credits 
 			& w_port2_missed_no_alias &
 			(r_last_early_valid ? (r_last_early != w_req2_pa[31:4]) : 1'b1) &
@@ -1146,7 +1148,7 @@ module nu_l1d(clk,
      begin
 	t_array_wr_addr = mem_rsp_reload ? mem_rsp_addr[IDX_STOP-1:IDX_START] : r_cache_idx;
 	t_array_wr_data = mem_rsp_reload ? mem_rsp_load_data : t_store_shift;
-	t_array_wr_en = (mem_rsp_reload & mem_rsp_cachable) | t_wr_array;
+	t_array_wr_en = (mem_rsp_reload & mem_rsp_cacheable) | t_wr_array;
      end
 
    always_ff@(negedge clk)
@@ -1168,7 +1170,7 @@ module nu_l1d(clk,
       .rd_addr1(t_cache_idx2),
       .wr_addr(mem_rsp_addr[IDX_STOP-1:IDX_START]),
       .wr_data(mem_rsp_addr[`PA_WIDTH-1:`LG_PG_SZ]),
-      .wr_en(mem_rsp_reload & mem_rsp_cachable),
+      .wr_en(mem_rsp_reload & mem_rsp_cacheable),
       .rd_data0(r_tag_out),
       .rd_data1(r_tag_out2)
       );
@@ -1207,7 +1209,7 @@ module nu_l1d(clk,
 	     t_dirty_wr_addr = n_port1_req_addr[IDX_STOP-1:IDX_START];	     
 	     t_write_dirty_en = 1'b1;
 	  end	
-	else if(mem_rsp_reload & mem_rsp_cachable)
+	else if(mem_rsp_reload & mem_rsp_cacheable)
 	  begin
 	     t_dirty_wr_addr = mem_rsp_addr[IDX_STOP-1:IDX_START];
 	     t_write_dirty_en = 1'b1;
@@ -2040,7 +2042,7 @@ module nu_l1d(clk,
 	r_got_rd_retry <= reset ? 1'b0 : w_got_rd_retry & t_new_req;
      end
 
-   
+   wire [127:0] w_uc_shift =  mem_rsp_load_data >> {r_req.addr[`LG_L1D_CL_LEN-1:0], 3'd0};
 
    logic t_old_ack;
    always_comb
@@ -2159,7 +2161,17 @@ module nu_l1d(clk,
 `endif
 		    if(r_req.uncacheable)
 		      begin
-			 $stop();
+			 if(r_req.is_store)
+			   begin
+			      $stop();
+			   end
+			 n_port1_req_addr = {r_req.addr[`PA_WIDTH-1:`LG_L1D_CL_LEN], 4'd0};
+			 $display("--> UC ADDR %x, r_req.is_load = %b", n_port1_req_addr, r_req.is_load);
+			 n_port1_req_opcode = MEM_LW;
+			 n_port1_req_tag = (1 << `LG_MRQ_ENTRIES);
+			 n_port1_req_uc = 1'b1;
+			 n_state = UC_LOAD;
+			 n_port1_req_valid = 1'b1;
 		      end
 		    else if(w_got_hit)
 		      begin /* valid cacheline - hit in cache */
@@ -2351,6 +2363,50 @@ module nu_l1d(clk,
 	       n_did_reload = 1'b1;
 	       n_state = ACTIVE;
 	       
+	    end // case: CLEAR_DIRTY
+	  UC_LOAD:
+	    begin
+	       if(mem_rsp_reload && (mem_rsp_tag == (1 << `LG_MRQ_ENTRIES)))
+		 begin		    
+		    case(r_req.op)
+		      MEM_LB:
+			begin
+			   n_core_mem_rsp.data = {{56{w_uc_shift[7]}}, w_uc_shift[7:0]};
+			end
+		      MEM_LBU:
+			begin
+			   n_core_mem_rsp.data = {56'd0, w_uc_shift[7:0]};	       
+			end
+		      MEM_LH:
+			begin
+			   n_core_mem_rsp.data = {{48{w_uc_shift[15]}}, w_uc_shift[15:0]};	       
+			end
+		      MEM_LHU:
+			begin
+			   n_core_mem_rsp.data = {48'd0, w_uc_shift[15:0]};
+			end
+		      MEM_LW:
+			begin
+			   n_core_mem_rsp.data = {{32{w_uc_shift[31]}}, w_uc_shift[31:0]};
+			end
+		      MEM_LWU:
+			begin
+			   n_core_mem_rsp.data = {32'd0, w_uc_shift[31:0]};
+			end	  
+		      MEM_LD:
+			begin
+			   n_core_mem_rsp.data = w_uc_shift[63:0];
+			end
+		      default:
+			begin
+			end
+		    endcase
+		    n_core_mem_rsp.dst_valid = 1'b1;
+		    n_core_mem_rsp_valid = 1'b1;
+		    n_state = ACTIVE;
+		    $display("mem_rsp_cacheable=%b, data %x", mem_rsp_cacheable, n_core_mem_rsp.data);
+		    //$stop();
+		 end
 	    end
 	  INJECT_RELOAD:
 	    begin
