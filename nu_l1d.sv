@@ -103,7 +103,8 @@ module nu_l1d(clk,
 	   l2_rsp_load_data,
 	   l2_rsp_tag,
 	   l2_rsp_writeback,
-	   l2_rsp_addr,	      
+	   l2_rsp_addr,
+           l2_rsp_uc,	      
 	   mtimecmp,
 	   mtimecmp_val,
 	   cache_accesses,
@@ -171,6 +172,7 @@ module nu_l1d(clk,
    input logic [`LG_MRQ_ENTRIES:0] 	  l2_rsp_tag;
    input logic [`PA_WIDTH-1:0] 		  l2_rsp_addr;
    input logic				  l2_rsp_writeback;
+   input logic				  l2_rsp_uc;
    
 
    output logic [63:0]			  mtimecmp;
@@ -319,8 +321,9 @@ module nu_l1d(clk,
    typedef struct 	     packed {
       logic [(`PA_WIDTH-1):0] addr;
       logic [127:0] 	      data;
-      logic [`LG_MRQ_ENTRIES:0] tag;
+      logic [`LG_MRQ_ENTRIES:0]	tag;
       logic			writeback;
+      logic			uncacheable;
    } queue_t;
    
    queue_t r_l2q[N_MQ_ENTRIES-1:0];
@@ -423,6 +426,7 @@ module nu_l1d(clk,
 	     r_l2q[r_l2q_tail_ptr[`LG_MRQ_ENTRIES-1:0]].data <= l2_rsp_load_data;
 	     r_l2q[r_l2q_tail_ptr[`LG_MRQ_ENTRIES-1:0]].tag  <= l2_rsp_tag;
 	     r_l2q[r_l2q_tail_ptr[`LG_MRQ_ENTRIES-1:0]].writeback <= l2_rsp_writeback;
+	     r_l2q[r_l2q_tail_ptr[`LG_MRQ_ENTRIES-1:0]].uncacheable <= l2_rsp_uc;	     
 	     //$display("got l2 reply, writeback bit %b", l2_rsp_writeback);
 	  end
      end
@@ -434,6 +438,8 @@ module nu_l1d(clk,
 
    wire					  mem_rsp_reload = mem_rsp_valid & 
 					  (r_l2q[r_l2q_head_ptr[`LG_MRQ_ENTRIES-1:0]].writeback == 1'b0);
+   wire					  mem_rsp_cachable = r_l2q[r_l2q_head_ptr[`LG_MRQ_ENTRIES-1:0]].uncacheable==1'b0;
+   
 
    //always_ff@(negedge clk)
    //begin
@@ -571,7 +577,7 @@ module nu_l1d(clk,
 	mem_req.data = r_mem_req_store_data;
 	mem_req.opcode = r_mem_req_opcode;
 	mem_req.tag = r_mem_req_tag;
-	mem_req.uncachable = r_mem_req_uc;
+	mem_req.uncacheable = r_mem_req_uc;
      end
 
    
@@ -766,20 +772,21 @@ module nu_l1d(clk,
 
    wire [`PA_WIDTH-1:0] w_req2_pa = {w_tlb_pa[`PA_WIDTH-1:`LG_PG_SZ], r_req2.addr[`LG_PG_SZ-1:0]};
 
+   wire			w_uncacheable = 1'b0 & (w_tlb_pa != 32'd0);   
+   wire			w_could_early_req_any = t_push_miss & (w_uncacheable == 1'b0) & w_three_free_credits 
+			& w_port2_missed_no_alias &
+			(r_last_early_valid ? (r_last_early != w_req2_pa[31:4]) : 1'b1) &
+			!(r_hit_busy_line2 | r_fwd_busy_addr2 | w_hit_pop ) &
+			(r_req2.is_load | r_req.is_store) &
+			w_tlb_hit & 
+			(rr_last_wr ? (rr_cache_idx[`LG_L1D_NUM_SETS-LG_ALIAS_BITS-1:0] !=  r_req2.addr[`LG_PG_SZ-1:IDX_START]) : 1'b1) &
+			(r_last_wr ? (r_cache_idx[`LG_L1D_NUM_SETS-LG_ALIAS_BITS-1:0] != r_req2.addr[`LG_PG_SZ-1:IDX_START]) : 1'b1) &
+			(n_last_wr ? (t_cache_idx[`LG_L1D_NUM_SETS-LG_ALIAS_BITS-1:0] != r_req2.addr[`LG_PG_SZ-1:IDX_START]) : 1'b1);
    
-   wire	w_could_early_req_any = t_push_miss & w_three_free_credits & w_port2_missed_no_alias &
-	(r_last_early_valid ? (r_last_early != w_req2_pa[31:4]) : 1'b1) &
-	!(r_hit_busy_line2 | r_fwd_busy_addr2 | w_hit_pop ) &
-	(r_req2.is_load | r_req.is_store) &
-	w_tlb_hit & 
-	(rr_last_wr ? (rr_cache_idx[`LG_L1D_NUM_SETS-LG_ALIAS_BITS-1:0] !=  r_req2.addr[`LG_PG_SZ-1:IDX_START]) : 1'b1) &
-	(r_last_wr ? (r_cache_idx[`LG_L1D_NUM_SETS-LG_ALIAS_BITS-1:0] != r_req2.addr[`LG_PG_SZ-1:IDX_START]) : 1'b1) &
-	(n_last_wr ? (t_cache_idx[`LG_L1D_NUM_SETS-LG_ALIAS_BITS-1:0] != r_req2.addr[`LG_PG_SZ-1:IDX_START]) : 1'b1);
-
    
    //dsheffie - disable early requests
    wire	w_could_early_req = !w_port2_dirty_miss & w_could_early_req_any & 1'b1;
-   
+
    wire w_gen_early_req = w_could_early_req & (r_got_req ? w_cache_port1_hit : 1'b1);
    
    wire	w_early_rsp = mem_rsp_valid ? (mem_rsp_tag != (1 << `LG_MRQ_ENTRIES)) : 1'b0;
@@ -1139,7 +1146,7 @@ module nu_l1d(clk,
      begin
 	t_array_wr_addr = mem_rsp_reload ? mem_rsp_addr[IDX_STOP-1:IDX_START] : r_cache_idx;
 	t_array_wr_data = mem_rsp_reload ? mem_rsp_load_data : t_store_shift;
-	t_array_wr_en = (mem_rsp_reload) | t_wr_array;
+	t_array_wr_en = (mem_rsp_reload & mem_rsp_cachable) | t_wr_array;
      end
 
    always_ff@(negedge clk)
@@ -1161,7 +1168,7 @@ module nu_l1d(clk,
       .rd_addr1(t_cache_idx2),
       .wr_addr(mem_rsp_addr[IDX_STOP-1:IDX_START]),
       .wr_data(mem_rsp_addr[`PA_WIDTH-1:`LG_PG_SZ]),
-      .wr_en(mem_rsp_reload),
+      .wr_en(mem_rsp_reload & mem_rsp_cachable),
       .rd_data0(r_tag_out),
       .rd_data1(r_tag_out2)
       );
@@ -1200,7 +1207,7 @@ module nu_l1d(clk,
 	     t_dirty_wr_addr = n_port1_req_addr[IDX_STOP-1:IDX_START];	     
 	     t_write_dirty_en = 1'b1;
 	  end	
-	else if(mem_rsp_reload)
+	else if(mem_rsp_reload & mem_rsp_cachable)
 	  begin
 	     t_dirty_wr_addr = mem_rsp_addr[IDX_STOP-1:IDX_START];
 	     t_write_dirty_en = 1'b1;
@@ -1804,7 +1811,6 @@ module nu_l1d(clk,
 `endif
      end // always_comb
    
-
    always_comb
      begin
 	t_core_mem_rsp.data = r_req.addr;
@@ -1831,7 +1837,7 @@ module nu_l1d(clk,
 	     t_core_mem_rsp.rob_ptr = r_req2.rob_ptr;
 	     t_core_mem_rsp.dst_ptr = r_req2.dst_ptr;
 	     t_req2_pa.addr = {32'd0, w_tlb_pa};
-	     
+	     t_req2_pa.uncacheable = w_uncacheable;
 	     if(r_pending_tlb_miss)
 	       begin
 		  n_pending_tlb_miss = 1'b0;
@@ -1884,7 +1890,7 @@ module nu_l1d(clk,
 		  t_core_mem_rsp.addr = r_req2.addr;
 		  t_core_mem_rsp_valid = 1'b1;			 
 	       end
-	     else if(r_req2.is_atomic || r_req2.is_ll)
+	     else if(r_req2.is_atomic | r_req2.is_ll | w_uncacheable)
 	       begin
 		  t_push_miss = 1'b1;
 	       end
@@ -2151,8 +2157,11 @@ module nu_l1d(clk,
 			     r_dirty_out,
 			     r_cache_idx);
 `endif
-		    
-		    if(w_got_hit)
+		    if(r_req.uncacheable)
+		      begin
+			 $stop();
+		      end
+		    else if(w_got_hit)
 		      begin /* valid cacheline - hit in cache */
 			 t_reset_graduated = r_req.is_store;
 `ifdef VERILATOR
@@ -2265,7 +2274,7 @@ module nu_l1d(clk,
 		 begin		    
 		    if(!t_mh_block & (r_mq_inflight[r_mq_head_ptr[`LG_MRQ_ENTRIES-1:0]] == 1'b0)  )
 		      begin
-			 if(t_mem_head.is_store | t_mem_head.is_atomic)
+			 if((t_mem_head.is_store | t_mem_head.is_atomic))
 			   begin
 			      if(w_st_amo_grad && (core_store_data_valid ? (t_mem_head.rob_ptr == core_store_data.rob_ptr) : 1'b0) )
 				begin
@@ -2285,7 +2294,7 @@ module nu_l1d(clk,
 				   t_pop_mq = 1'b1;
 				   t_force_clear_busy = 1'b1;
 				end
-			   end // if (t_mem_head.is_store)
+			   end // if (t_mem_head.is_store)			 
 			 else
 			   begin
 			      t_pop_mq = 1'b1;

@@ -22,6 +22,7 @@ module l2_2way(clk,
 	       l1d_rsp_tag,
 	       l1d_rsp_addr,
 	       l1d_rsp_writeback,
+	       l1d_rsp_uc,	       
 	       l1i_flush_req,
 	       l1d_flush_req,
 	       
@@ -89,6 +90,7 @@ module l2_2way(clk,
    output logic [`LG_MRQ_ENTRIES:0] l1d_rsp_tag;
    output logic [`PA_WIDTH-1:0]     l1d_rsp_addr;
    output logic			    l1d_rsp_writeback;
+   output logic			    l1d_rsp_uc;   
       
    input logic l1i_flush_req;
    input logic l1d_flush_req;
@@ -194,6 +196,7 @@ module l2_2way(clk,
    logic [(1 << (`LG_L1D_CL_LEN+3)) - 1:0] 	   r_rsp_data, n_rsp_data;
    logic [(1 << (`LG_L1D_CL_LEN+3)) - 1:0] 	   r_store_data, n_store_data;
    logic [`LG_MRQ_ENTRIES:0] 			   r_l1d_rsp_tag, n_l1d_rsp_tag;
+   logic					   r_uc, n_uc;
    
    
    typedef enum logic  {
@@ -273,6 +276,7 @@ module l2_2way(clk,
 	l1d_rsp_tag <= r_l1d_rsp_tag;
 	l1d_rsp_addr <= r_saveaddr;
 	l1d_rsp_writeback <= (r_opcode == MEM_SW);
+	l1d_rsp_uc <= r_uc;
      end
    assign l1_mem_load_data = r_rsp_data;
 
@@ -356,12 +360,13 @@ module l2_2way(clk,
    logic [`LG_L2_REQ_TAGS:0] r_rob_head_ptr, n_rob_head_ptr;
    logic [`LG_L2_REQ_TAGS:0] r_rob_tail_ptr, n_rob_tail_ptr;      
    logic [N_ROB_ENTRIES-1:0] r_rob_valid, r_rob_done, r_rob_hitbusy;
-   logic [N_ROB_ENTRIES-1:0] r_rob_was_wb, r_rob_was_st, r_rob_mmu_addr3;
+   logic [N_ROB_ENTRIES-1:0] r_rob_was_wb, r_rob_was_st, r_rob_mmu_addr3, r_rob_was_uc;
    logic [N_ROB_ENTRIES-1:0] r_rob_was_mmu, r_rob_was_mark_dirty;
       
    logic [31:0]		     r_rob_addr [N_ROB_ENTRIES-1:0];
    logic [`LG_MRQ_ENTRIES:0] r_rob_l1tag [N_ROB_ENTRIES-1:0];
    logic		     r_rob_replace[N_ROB_ENTRIES-1:0];
+
    req_t	     r_rob_req_ty[N_ROB_ENTRIES-1:0];
    
    logic [127:0]	     r_rob_data [N_ROB_ENTRIES-1:0];
@@ -490,6 +495,7 @@ module l2_2way(clk,
 	     r_rob_was_wb <= 'd0;
 	     r_rob_was_st <= 'd0;
 	     r_rob_was_mmu <= 'd0;
+	     r_rob_was_uc <= 'd0;
 	     r_rob_was_mark_dirty <= 'd0;
 	  end
 	else
@@ -501,6 +507,7 @@ module l2_2way(clk,
 		  r_rob_hitbusy[r_rob_tail_ptr[`LG_L2_REQ_TAGS-1:0]] <= w_hit_inflight;
 		  r_rob_was_mmu[r_rob_tail_ptr[`LG_L2_REQ_TAGS-1:0]] <= (n_req_ty == MMU);
 		  r_rob_was_mark_dirty[r_rob_tail_ptr[`LG_L2_REQ_TAGS-1:0]] <= (n_req_ty == MARK_PTE);
+		  r_rob_was_uc[r_rob_tail_ptr[`LG_L2_REQ_TAGS-1:0]] <= n_uc;
 `ifdef VERBOSE_L2
 		  if(w_hit_inflight)
 		    begin
@@ -522,7 +529,6 @@ module l2_2way(clk,
 		  r_rob_st_data[r_rob_tail_ptr[`LG_L2_REQ_TAGS-1:0]] <= r_store_data;
 		  r_rob_mmu_addr3[r_rob_tail_ptr[`LG_L2_REQ_TAGS-1:0]] <= r_mmu_addr3;
 	       end
-	     
 	     if(mem_rsp_valid & (r_state != FLUSH_STORE))
 	       begin
 		  r_rob_done[mem_rsp_tag] <= 1'b1;
@@ -556,7 +562,6 @@ module l2_2way(clk,
 	     r_rob_l1tag[w_rob_tail_ptr] <= n_l1d_rsp_tag;
 	     r_rob_replace[w_rob_tail_ptr] <= n_replace;
 	     r_rob_req_ty[w_rob_tail_ptr] <= r_req_ty;
-	     
 	  end
      end
 
@@ -652,6 +657,7 @@ module l2_2way(clk,
 	     r_replace <= 1'b0;
 	     r_wb1 <= 1'b0;
 	     r_last_idle <= 1'b0;
+	     r_uc <= 1'b0;
 	  end
 	else
 	  begin
@@ -704,6 +710,7 @@ module l2_2way(clk,
 	     r_replace <= n_replace;
 	     r_wb1 <= n_wb1;
 	     r_last_idle <= n_last_idle;
+	     r_uc <= n_uc;
 	  end
      end // always_ff@ (posedge clk)
 
@@ -1143,6 +1150,7 @@ module l2_2way(clk,
 	n_need_wb = r_need_wb;
 	
 	n_saveaddr = r_saveaddr;
+	n_uc = r_uc;
 	
 	n_req_ack = 1'b0;
 	n_mem_req = 1'b0;
@@ -1242,6 +1250,7 @@ module l2_2way(clk,
 		    n_was_st = 1'b0;
 		    n_mmu = 1'b0;
 		    n_store_data = r_rob_st_data[w_rob_head_ptr];
+		    n_uc = r_rob_was_uc[w_rob_head_ptr];
 		    
 		    if(r_rob_hitbusy[w_rob_head_ptr]) 
 		      begin
@@ -1347,6 +1356,7 @@ module l2_2way(clk,
 			 n_tag = mem_mark_addr[(`PA_WIDTH-1):LG_L2_LINES+`LG_L2_CL_LEN];
 			 n_addr = {mem_mark_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
 			 n_saveaddr = {mem_mark_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
+			 n_uc = 1'b0;			 
 			 n_opcode = MEM_LW;
 			 n_mark_pte = 1'b1;
 			 n_state = CHECK_VALID_AND_TAG;
@@ -1362,6 +1372,7 @@ module l2_2way(clk,
 			 n_tag = mmu_req_addr[(`PA_WIDTH-1):LG_L2_LINES+`LG_L2_CL_LEN];
 			 n_addr = {mmu_req_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
 			 n_saveaddr = {mmu_req_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
+	     		 n_uc = 1'b0;			 
 			 n_opcode = MEM_LW;
 			 n_state = CHECK_VALID_AND_TAG;
 			 n_mmu = 1'b1;
@@ -1381,6 +1392,7 @@ module l2_2way(clk,
 			      n_last_l1i_addr = l1i_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN];
 			      n_addr = {l1i_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
 			      n_saveaddr = {l1i_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
+			      n_uc = 1'b0;
 			      n_opcode = MEM_LW;
 			      n_l1i_req = 1'b0;
 			      t_gnt_l1i = 1'b1;
@@ -1395,6 +1407,7 @@ module l2_2way(clk,
 			      n_addr = {t_l1dq.addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
 			      n_last_l1d_addr = t_l1dq.addr[(`PA_WIDTH-1):`LG_L2_CL_LEN];			 
 			      n_saveaddr = {t_l1dq.addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
+			      n_uc = t_l1dq.uncacheable;
 			      n_store_data = t_l1dq.data;
 			      n_opcode = t_l1dq.opcode;
 			      n_l1d_req = 1'b0;
