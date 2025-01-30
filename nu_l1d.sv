@@ -724,7 +724,7 @@ module nu_l1d(clk,
 		  
 		  r_rob_inflight[r_req2.rob_ptr] <= 1'b1;
 	       end
-	     if(r_got_req && r_valid_out && (r_tag_out == r_cache_tag) )
+	     if(r_got_req & ( (r_valid_out & (r_tag_out == r_cache_tag)) | r_req.uncacheable) )
 	       begin
 		  //$display("rob entry %d leaves at cycle %d", r_req.rob_ptr, r_cycle);
 		  if(r_rob_inflight[r_req.rob_ptr] == 1'b0) 
@@ -962,21 +962,6 @@ module nu_l1d(clk,
      end // always_ff@ (posedge clk)
 
 
-
-   // always_ff@(negedge clk)
-   //   begin
-   // 	for(integer i = 0; i < N_MQ_ENTRIES; i=i+1)
-   // 	  begin
-   // 	     if(w_hit_busy_addrs[i])
-   // 	       begin
-   // 		  $display("t_cache_idx %x matches entry %d, full addr %x, cycle %d", 
-   // 			   t_cache_idx, i, r_mq_dbg_addr[i], r_cycle);
-   // 	       end
-   // 	  end
-   //   end
-    
-
-
    always_ff@(posedge clk)
      begin
 	//r_array_wr_data <= t_array_wr_data;
@@ -990,7 +975,21 @@ module nu_l1d(clk,
      end
 
    wire w_drained = (|r_rob_inflight) == 1'b0;
-      
+   
+   wire [10:0] w_memq_empty = {
+			       mem_q_empty, //0
+			       w_drained,  //1
+			       (&n_mrq_credits), //2 
+			       !core_mem_va_req_valid, //3
+			       w_eb_empty, //4
+			       !t_got_req, //5
+			       !t_got_req2, //6
+			       !t_push_miss, //7
+			       !n_mem_req_valid, //8 
+			       !mem_rsp_valid, //9
+			       (r_n_inflight == 'd0) //10
+			       };
+   
    always_ff@(posedge clk)
      begin
 	if(reset)
@@ -1097,32 +1096,27 @@ module nu_l1d(clk,
 	     r_core_mem_rsp_valid <= n_core_mem_rsp_valid;
 	     r_store_stalls <= n_store_stalls;
 	     r_inhibit_write <= n_inhibit_write;
-	     memq_empty <= mem_q_empty
-			   & w_drained
-			   & (&n_mrq_credits)
-			     & !core_mem_va_req_valid
-			   & w_eb_empty
-			   & !t_got_req 
-			   & !t_got_req2 
-			   & !t_push_miss
-			   & !n_mem_req_valid
-			   & !mem_rsp_valid
-			   & (r_n_inflight == 'd0);
-
+	     memq_empty <= &w_memq_empty;
 	     r_q_priority <= n_q_priority;
 	     r_must_forward  <= t_mh_block & t_pop_mq;
 	     r_must_forward2 <= t_cm_block & core_mem_va_req_ack;
 	  end
      end // always_ff@ (posedge clk)
    
-   //always_ff@(negedge clk)
-   // begin
-     //  if(!memq_empty)
-   //begin
-   //$display("mem_q_empty = %b", mem_q_empty);
-   //$display("drain_ds_complete = %b", drain_ds_complete);
-   //end
-    //end
+   always_ff@(negedge clk)
+    begin
+       if(!memq_empty)
+	 begin
+	    for(integer i = 0; i < 11; i=i+1)
+	      begin
+		 if(w_memq_empty[i]==1'b0)
+		   begin
+		      $display("%d prevents memq_empty, mem_rsp_valid = %b, n_mem_req_valid = %b, w_drained = %b, cycle %d ", 
+			       i, mem_rsp_valid, n_mem_req_valid, w_drained, r_cycle);
+		   end
+	      end
+	 end
+    end
 
    // always_ff@(negedge clk)
    //   begin
@@ -2037,6 +2031,16 @@ module nu_l1d(clk,
 	t_new_req = core_mem_va_req_valid & (&t_new_req_c);
      end // always_comb
 
+   always_ff@(negedge clk)
+     begin
+	if(core_mem_va_req_valid & !t_new_req)
+	  begin
+	     $display("can't accept new txn at cycle %d", r_cycle);
+	  end
+     end
+
+       
+   
    always_ff@(posedge clk)
      begin
 	r_got_rd_retry <= reset ? 1'b0 : w_got_rd_retry & t_new_req;

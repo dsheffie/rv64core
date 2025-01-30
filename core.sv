@@ -1189,6 +1189,7 @@ module core(clk,
 	    end // case: ACTIVE
 	  DRAIN:	    
 	    begin
+	       //$display("in drain at cycle %d, memq_empty = %b, r_rob_inflight = %b", r_cycle, memq_empty, r_rob_inflight);
 	       if((r_rob_inflight == 'd0) & memq_empty & t_divide_ready /*& (r_arch_fault ? l2_empty : 1'b1)*/ )
 		 begin
 		    n_state = RAT;
