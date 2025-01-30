@@ -682,16 +682,7 @@ module nu_l1d(clk,
 	n_mq_tail_ptr = r_mq_tail_ptr;
 	t_mq_tail_ptr_plus_one = r_mq_tail_ptr + 'd1;
 	
-	if(t_push_miss)
-	  begin
-	     n_mq_tail_ptr = r_mq_tail_ptr + 'd1;
-	  end
-	
-	if(t_pop_mq)
-	  begin
-	     n_mq_head_ptr = r_mq_head_ptr + 'd1;
-	  end
-	
+
 	t_mem_head = r_mem_q[r_mq_head_ptr[`LG_MRQ_ENTRIES-1:0]];
 	
 	mem_q_empty = (r_mq_head_ptr == r_mq_tail_ptr);
@@ -702,8 +693,30 @@ module nu_l1d(clk,
 	mem_q_almost_full = (r_mq_head_ptr != t_mq_tail_ptr_plus_one) &
 			    (r_mq_head_ptr[`LG_MRQ_ENTRIES-1:0] == t_mq_tail_ptr_plus_one[`LG_MRQ_ENTRIES-1:0]);
 	
+	if(t_push_miss)
+	  begin
+	     n_mq_tail_ptr = r_mq_tail_ptr + 'd1;
+	  end
 	
+	if(t_pop_mq)
+	  begin
+	     n_mq_head_ptr = r_mq_head_ptr + 'd1;
+	  end
      end // always_comb
+
+   always_ff@(negedge clk)
+     begin
+	if(t_push_miss & mem_q_full)
+	  begin
+	     $stop();
+	  end
+	
+	if(t_pop_mq & mem_q_empty)
+	  begin
+	     $stop();
+	  end
+
+     end
 
 
 
@@ -726,7 +739,6 @@ module nu_l1d(clk,
 	       end
 	     if(r_got_req & ( (r_valid_out & (r_tag_out == r_cache_tag)) | r_req.uncacheable) )
 	       begin
-		  //$display("rob entry %d leaves at cycle %d", r_req.rob_ptr, r_cycle);
 		  if(r_rob_inflight[r_req.rob_ptr] == 1'b0) 
 		    $display("huh %d should be inflight....\n", r_req.rob_ptr);
 		  
@@ -976,19 +988,20 @@ module nu_l1d(clk,
 
    wire w_drained = (|r_rob_inflight) == 1'b0;
    
-   wire [10:0] w_memq_empty = {
-			       mem_q_empty, //0
-			       w_drained,  //1
-			       (&n_mrq_credits), //2 
-			       !core_mem_va_req_valid, //3
-			       w_eb_empty, //4
-			       !t_got_req, //5
-			       !t_got_req2, //6
-			       !t_push_miss, //7
-			       !n_mem_req_valid, //8 
-			       !mem_rsp_valid, //9
-			       (r_n_inflight == 'd0) //10
-			       };
+   wire [10:0] w_memq_empty;
+   assign w_memq_empty[0] = mem_q_empty; //0
+   assign w_memq_empty[1] =w_drained;  //1
+   assign w_memq_empty[2] =(&n_mrq_credits); //2 
+   assign w_memq_empty[3] =!core_mem_va_req_valid; //3
+   assign w_memq_empty[4] =w_eb_empty; //4
+   assign w_memq_empty[5] =!t_got_req; //5
+   assign w_memq_empty[6] =!t_got_req2; //6
+   assign w_memq_empty[7] =!t_push_miss; //7
+   assign w_memq_empty[8] =!n_mem_req_valid; //8 
+   assign w_memq_empty[9] =!mem_rsp_valid; //9
+   assign w_memq_empty[10] =(r_n_inflight == 'd0);
+
+
    
    always_ff@(posedge clk)
      begin
@@ -1103,33 +1116,26 @@ module nu_l1d(clk,
 	  end
      end // always_ff@ (posedge clk)
    
-   always_ff@(negedge clk)
-    begin
-       if(!memq_empty)
-	 begin
-	    for(integer i = 0; i < 11; i=i+1)
-	      begin
-		 if(w_memq_empty[i]==1'b0)
-		   begin
-		      $display("%d prevents memq_empty, mem_rsp_valid = %b, n_mem_req_valid = %b, w_drained = %b, cycle %d ", 
-			       i, mem_rsp_valid, n_mem_req_valid, w_drained, r_cycle);
-		   end
-	      end
-	 end
-    end
-
    // always_ff@(negedge clk)
    //   begin
-   // 	if(memq_empty & !reset)
+   // 	if((&w_memq_empty) & (memq_empty==1'b0))
    // 	  begin
-   // 	     if(l2_empty == 1'b0) 
-   // 	       begin
-   // 		  $display("memq_empty asserted but l2_empty aint empty at cycle %d", r_cycle);
-   // 		  $stop();
-   // 	       end
+   // 	     $display("mem queue will clear at cycle %d", r_cycle + 'd1);
+   // 	     $stop();
    // 	  end
-   //   end
-   
+   //     if(!memq_empty)
+   // 	 begin
+   // 	    for(integer i = 0; i < 11; i=i+1)
+   // 	      begin
+   // 		 if(w_memq_empty[i]==1'b0)
+   // 		   begin
+   // 		      $display("%d prevents memq_empty r_mq_head_ptr = %d, r_mq_tail_ptr = %d, drain_ds_complete = %b, cycle = %d",
+   // 			       i, r_mq_head_ptr, r_mq_tail_ptr, drain_ds_complete, r_cycle);
+   // 		   end
+   // 	      end
+   // 	 end
+   //  end
+
    
    always_ff@(posedge clk)
      begin
@@ -1886,8 +1892,9 @@ module nu_l1d(clk,
 		  t_core_mem_rsp.addr = r_req2.addr;
 		  t_core_mem_rsp_valid = 1'b1;			 
 	       end
-	     else if(r_req2.is_atomic | r_req2.is_ll | w_uncacheable)
+	     else if(r_req2.is_atomic | r_req2.is_ll | (w_uncacheable & r_req.is_load))
 	       begin
+		  $display("PUSHING MISS AT CYCLE %d, rob id %d", r_cycle, r_req2.rob_ptr);
 		  t_push_miss = 1'b1;
 	       end
 	     else if(r_req2.is_store)
@@ -2287,13 +2294,17 @@ module nu_l1d(clk,
 	       
 	       /* not qualified on r_got_req */
 	       if(!mem_q_empty & !t_got_miss & !r_lock_cache & !n_pending_tlb_miss &!w_eb_port1_hit & !w_eb_full & w_two_free_credits)
-		 begin		    
+		 begin
+		    $display("made it A at cycle %d", r_cycle);
 		    if(!t_mh_block & (r_mq_inflight[r_mq_head_ptr[`LG_MRQ_ENTRIES-1:0]] == 1'b0)  )
 		      begin
+			 $display("made it B at cycle %d", r_cycle);			 
 			 if((t_mem_head.is_store | t_mem_head.is_atomic))
 			   begin
+			      $display("made it C at cycle %d, t_mem_head.pc = %x, uncacheable = %b, w_st_amo_grad = %b, store = %b", 
+				       r_cycle, t_mem_head.pc, t_mem_head.uncacheable, w_st_amo_grad, t_mem_head.is_store);			      
 			      if(w_st_amo_grad && (core_store_data_valid ? (t_mem_head.rob_ptr == core_store_data.rob_ptr) : 1'b0) )
-				begin
+				begin				   
 				   t_pop_mq = 1'b1;
 				   core_store_data_ack = 1'b1;
 				   n_req = t_mem_head;
@@ -2313,6 +2324,7 @@ module nu_l1d(clk,
 			   end // if (t_mem_head.is_store)			 
 			 else
 			   begin
+			      $display("made it D at cycle %d", r_cycle);
 			      t_pop_mq = 1'b1;
 			      n_req = t_mem_head;
 			      t_cache_idx = t_mem_head.addr[IDX_STOP-1:IDX_START];
@@ -2408,6 +2420,7 @@ module nu_l1d(clk,
 		    n_core_mem_rsp.dst_valid = 1'b1;
 		    n_core_mem_rsp_valid = 1'b1;
 		    n_state = ACTIVE;
+		    
 		    $display("mem_rsp_cacheable=%b, data %x", mem_rsp_cacheable, n_core_mem_rsp.data);
 		    //$stop();
 		 end
