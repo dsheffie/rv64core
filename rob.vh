@@ -90,7 +90,7 @@ typedef struct packed {
    logic 	unaligned;
    logic	has_cause;
    cause_t 	cause;
-   logic	uncachable;
+   logic	uncacheable;
    logic [`LG_ROB_ENTRIES-1:0] rob_ptr;
    logic [`LG_PRF_ENTRIES-1:0] dst_ptr;
    logic 		       dst_valid;
@@ -108,7 +108,7 @@ typedef struct packed {
 } mem_req_t;
 
 typedef struct packed {
-   logic       uncachable;
+   logic       uncacheable;
    logic [`PA_WIDTH-1:0] addr;
    logic [`LG_MRQ_ENTRIES:0] tag;
    logic [(1 << (`LG_L1D_CL_LEN + 3))-1:0] data;

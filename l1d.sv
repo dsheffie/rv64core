@@ -500,7 +500,7 @@ module l1d(clk,
 		  
 		  r_rob_inflight[r_req2.rob_ptr] <= 1'b1;
 	       end
-	     if(r_got_req && r_valid_out && (r_tag_out == r_cache_tag) && !r_req.uncachable || t_ack_ld_early)
+	     if(r_got_req && r_valid_out && (r_tag_out == r_cache_tag) && !r_req.uncacheable || t_ack_ld_early)
 	       begin
 		  //$display("rob entry %d leaves at cycle %d", r_req.rob_ptr, r_cycle);
 		  if(r_rob_inflight[r_req.rob_ptr] == 1'b0) 
@@ -1082,7 +1082,7 @@ module l1d(clk,
 	
 	t_hit_cache = r_valid_out && (r_tag_out == r_cache_tag) && r_got_req && 
 		      (r_state == ACTIVE) && 
-		      (r_req.uncachable==1'b0);
+		      (r_req.uncacheable==1'b0);
 	t_array_data = 'd0;
 	t_wr_array = 1'b0;
 	t_wr_store = 1'b0;
@@ -1264,7 +1264,7 @@ module l1d(clk,
 
    wire w_flush_hit = (r_tag_out == l2_probe_addr[`M_WIDTH-1:IDX_STOP]) & r_valid_out;
 
-   wire	w_uncachable = (w_tlb_pa >= `UC_START) && (w_tlb_pa < `UC_END) && 1'b0;
+   wire	w_uncacheable = (w_tlb_pa >= `UC_START) && (w_tlb_pa < `UC_END) && 1'b0;
    
    always_comb
      begin
@@ -1393,7 +1393,7 @@ module l1d(clk,
 		    n_core_mem_rsp.rob_ptr = r_req2.rob_ptr;
 		    n_core_mem_rsp.dst_ptr = r_req2.dst_ptr;
 		    t_req2_pa.addr = w_tlb_pa;
-		    t_req2_pa.uncachable = w_uncachable;
+		    t_req2_pa.uncacheable = w_uncachable;
 
 		    if(r_pending_tlb_miss)
 		      begin
@@ -1429,7 +1429,7 @@ module l1d(clk,
 			 n_core_mem_rsp.addr = r_req2.addr;
 			 n_core_mem_rsp_valid = 1'b1;			 
 		      end
-		    else if(w_uncachable & !(r_req2.is_store))
+		    else if(w_uncacheable & !(r_req2.is_store))
 		      begin
 			 t_push_miss = 1'b1;			 
 		      end
@@ -1488,12 +1488,12 @@ module l1d(clk,
 `ifdef VERBOSE_L1D
 		       $display("req 1 : cycle %d, rob ptr %d, r_is_retry %b, addr %x, is store %b, r_cache_idx = %d, r_cache_tag = %d, valid %b, uc %b",
 				r_cycle, r_req.rob_ptr, r_is_retry, r_req.addr, r_req.is_store, r_cache_idx, r_cache_tag, 
-				r_valid_out, r_req.uncachable);
+				r_valid_out, r_req.uncacheable);
 
 `endif
 
 		    
-		    if(r_valid_out && (r_tag_out == r_cache_tag) && !r_req.uncachable)
+		    if(r_valid_out && (r_tag_out == r_cache_tag) && !r_req.uncacheable)
 		      begin /* valid cacheline - hit in cache */
 			 if(r_req.is_store)
 			   begin
@@ -1515,7 +1515,7 @@ module l1d(clk,
 			      
 			   end // else: !if(r_req.is_store)
 		      end // if (r_valid_out && (r_tag_out == r_cache_tag))
-		    else if(r_valid_out && r_dirty_out && (r_tag_out != r_cache_tag) && !r_req.uncachable)
+		    else if(r_valid_out && r_dirty_out && (r_tag_out != r_cache_tag) && !r_req.uncacheable)
 		      begin
 			 t_got_miss = 1'b1;
 			 n_inhibit_write = 1'b1;
@@ -1548,7 +1548,7 @@ module l1d(clk,
 		    begin
 		       t_got_miss = 1'b1;
 		       n_inhibit_write = 1'b0;	
-		       if(r_req.uncachable)
+		       if(r_req.uncacheable)
 			 begin
 			    n_state = r_req.is_store ? UC_STORE : UC_LOAD;
 			    n_mem_req_store_data = {64'd0, r_req.data};
@@ -1625,7 +1625,7 @@ module l1d(clk,
 	  
 		  if(!t_mh_block)
 		    begin
-		       //if(t_mem_head.uncachable) $display("uncachable op");
+		       //if(t_mem_head.uncacheable) $display("uncachable op");
 		       if(t_mem_head.is_store || t_mem_head.is_atomic)
 			 begin
 			    if(w_st_amo_grad && (core_store_data_valid ? (t_mem_head.rob_ptr == core_store_data.rob_ptr) : 1'b0) )

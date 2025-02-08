@@ -81,8 +81,6 @@ module nu_l1d(clk,
 	   dead_rob_mask,
 	   flush_req,
 	   flush_complete,
-	   flush_cl_req,
-	   flush_cl_addr,
 	   //inputs from core
 	   core_mem_va_req_valid,
 	   core_mem_va_req,
@@ -145,8 +143,6 @@ module nu_l1d(clk,
    input logic [(1<<`LG_ROB_ENTRIES)-1:0] dead_rob_mask;
    
    
-   input logic flush_cl_req;
-   input logic [`M_WIDTH-1:0] flush_cl_addr;
    input logic 		      flush_req;
    output logic 	      flush_complete;
 
@@ -473,6 +469,10 @@ module nu_l1d(clk,
    logic [N_MQ_ENTRIES-1:0] r_mq_inflight;
    logic [27:0]		    r_last_early;
    logic		    r_last_early_valid;
+
+   logic		    n_pending_evict,r_pending_evict;
+   logic [31:0]		    n_pending_evict_addr,r_pending_evict_addr;
+   
    
    logic [IDX_STOP-IDX_START-1:0] r_mq_addr[N_MQ_ENTRIES-1:0];
    logic [31:0]			  r_mq_dbg_addr[N_MQ_ENTRIES-1:0];
@@ -482,7 +482,9 @@ module nu_l1d(clk,
    logic [`M_WIDTH-1:0] 	  r_mq_full_addr[N_MQ_ENTRIES-1:0];
    logic 			  r_mq_is_load[N_MQ_ENTRIES-1:0];
    logic 			  r_mq_is_unaligned[N_MQ_ENTRIES-1:0];
-
+   logic			  r_mq_is_uncacheable[N_MQ_ENTRIES-1:0];   
+   wire				  w_any_uncacheable;
+   
    mem_op_t r_mq_op[N_MQ_ENTRIES-1:0];
    
    logic [`M_WIDTH-3:0] 	  r_mq_word_addr[N_MQ_ENTRIES-1:0];
@@ -555,6 +557,7 @@ module nu_l1d(clk,
    logic	n_page_walk_req_valid, r_page_walk_req_valid;
    logic 	r_page_walk_gnt, n_page_walk_gnt;
    logic 	n_flush_was_active, r_flush_was_active;
+   logic	n_evict_was_active, r_evict_was_active;   
    
    logic [63:0] 	       r_store_stalls, n_store_stalls;
    
@@ -571,7 +574,7 @@ module nu_l1d(clk,
 	mem_req.data = r_mem_req_store_data;
 	mem_req.opcode = r_mem_req_opcode;
 	mem_req.tag = r_mem_req_tag;
-	mem_req.uncachable = r_mem_req_uc;
+	mem_req.uncacheable = r_mem_req_uc;
      end
 
    
@@ -766,8 +769,11 @@ module nu_l1d(clk,
 
    wire [`PA_WIDTH-1:0] w_req2_pa = {w_tlb_pa[`PA_WIDTH-1:`LG_PG_SZ], r_req2.addr[`LG_PG_SZ-1:0]};
 
+   wire			w_uncacheable = 1'b1;
+   wire			w_cacheable = !w_uncacheable;
+   assign w_any_uncacheable = (|w_uncacheable_in_mq);
    
-   wire	w_could_early_req_any = t_push_miss & w_three_free_credits & w_port2_missed_no_alias &
+   wire	w_could_early_req_any = t_push_miss & w_three_free_credits & w_cacheable & w_port2_missed_no_alias &
 	(r_last_early_valid ? (r_last_early != w_req2_pa[31:4]) : 1'b1) &
 	!(r_hit_busy_line2 | r_fwd_busy_addr2 | w_hit_pop ) &
 	(r_req2.is_load | r_req.is_store) &
@@ -881,6 +887,7 @@ module nu_l1d(clk,
 	     r_mq_op[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]] <= r_req2.op;
 	     r_mq_is_load[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]] <= r_req2.is_load;
 	     r_mq_is_unaligned[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]] <= r_req2.unaligned;
+	     r_mq_is_uncacheable[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]] <= w_uncacheable;	     
 	     
 	     r_mq_full_addr[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]] <= r_req2.addr;
 	     r_mq_word_addr[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]] <= r_req2.addr[`M_WIDTH-1:2];
@@ -918,7 +925,7 @@ module nu_l1d(clk,
    logic [N_MQ_ENTRIES-1:0] r_hit_busy_addrs2;
    logic		    r_hit_busy_addr2, r_hit_busy_line2;
 
-   wire [N_MQ_ENTRIES-1:0] w_unaligned_in_mq;
+   wire [N_MQ_ENTRIES-1:0] w_unaligned_in_mq, w_uncacheable_in_mq;
    logic 		   r_any_unaligned;
    logic		   r_fwd_busy_addr2, r_pop_busy_addr2;
 
@@ -936,8 +943,11 @@ module nu_l1d(clk,
 	   assign w_hit_busy_addrs2[i] = w_hit_busy_line2[i] & w_addr_intersect[i];
 
 	   assign w_unaligned_in_mq[i] = r_mq_addr_valid[i] ? r_mq_is_unaligned[i] : 1'b0;
+	   assign w_uncacheable_in_mq[i] = r_mq_addr_valid[i] ? r_mq_is_uncacheable[i] : 1'b0;
 	end
    endgenerate
+
+	 
    
    always_ff@(posedge clk)
      begin
@@ -990,6 +1000,7 @@ module nu_l1d(clk,
 	     r_page_walk_req_valid <= 1'b0;
 	     r_page_walk_gnt <= 1'b0;
 	     r_flush_was_active <= 1'b0;
+	     r_evict_was_active <= 1'b0;
 	     r_pending_tlb_miss <= 1'b0;
 	     r_pending_tlb_zero_page <= 1'b0;
 	     r_tlb_addr <= 'd0;
@@ -1036,6 +1047,8 @@ module nu_l1d(clk,
 	     r_q_priority <= 1'b0;
 	     r_must_forward <= 1'b0;
 	     r_must_forward2 <= 1'b0;
+	     r_pending_evict <= 1'b0;
+	     r_pending_evict_addr <= 32'd0;
 	  end
 	else
 	  begin
@@ -1043,6 +1056,7 @@ module nu_l1d(clk,
 	     r_page_walk_req_valid <= n_page_walk_req_valid;
 	     r_page_walk_gnt <= n_page_walk_gnt;
 	     r_flush_was_active <= n_flush_was_active;
+	     r_evict_was_active <= n_evict_was_active;
 	     r_pending_tlb_miss <= n_pending_tlb_miss;
 	     r_pending_tlb_zero_page <= n_pending_tlb_zero_page;
 	     r_tlb_addr <= n_tlb_addr;
@@ -1103,13 +1117,16 @@ module nu_l1d(clk,
 	     r_q_priority <= n_q_priority;
 	     r_must_forward  <= t_mh_block & t_pop_mq;
 	     r_must_forward2 <= t_cm_block & core_mem_va_req_ack;
+	     r_pending_evict <= n_pending_evict;
+	     r_pending_evict_addr <= n_pending_evict_addr;
 	  end
      end // always_ff@ (posedge clk)
    
-   //always_ff@(negedge clk)
-   // begin
-     //  if(!memq_empty)
-   //begin
+   always_ff@(negedge clk)
+     begin
+	if(r_pending_evict & (!n_pending_evict))
+	  $stop();
+     end
    //$display("mem_q_empty = %b", mem_q_empty);
    //$display("drain_ds_complete = %b", drain_ds_complete);
    //end
@@ -1214,7 +1231,7 @@ module nu_l1d(clk,
 
    
 
-`ifdef DEBUG
+//`ifdef DEBUG
     always_ff@(negedge clk)
       begin
 	 // for(integer i = 0; i < N_MQ_ENTRIES; i=i+1)
@@ -1293,7 +1310,7 @@ module nu_l1d(clk,
 	// 	      (r_got_req && r_must_forward));
 	//   end
      end
-`endif
+//`endif
    
    
    ram2r1w #(.WIDTH(1), .LG_DEPTH(`LG_L1D_NUM_SETS)) dc_dirty
@@ -1822,6 +1839,8 @@ module nu_l1d(clk,
 	
 	t_push_miss = 1'b0;
 	t_req2_pa = r_req2;
+	t_req2_pa.uncacheable = w_uncacheable;
+	
 	n_pending_tlb_miss  = r_pending_tlb_miss;
 	n_pending_tlb_zero_page = r_pending_tlb_zero_page;
 
@@ -1884,7 +1903,7 @@ module nu_l1d(clk,
 		  t_core_mem_rsp.addr = r_req2.addr;
 		  t_core_mem_rsp_valid = 1'b1;			 
 	       end
-	     else if(r_req2.is_atomic || r_req2.is_ll)
+	     else if(r_req2.is_atomic | r_req2.is_ll | (r_req2.is_load & w_uncacheable))
 	       begin
 		  t_push_miss = 1'b1;
 	       end
@@ -2041,6 +2060,8 @@ module nu_l1d(clk,
      begin
 	t_old_ack = 1'b0;
 	n_flush_was_active = r_flush_was_active;
+	n_evict_was_active = r_evict_was_active;
+	
 	n_page_walk_gnt = r_page_walk_gnt | page_walk_rsp_gnt;
 	n_l2_probe_ack = 1'b0;
 	t_reload_tlb = 1'b0;
@@ -2111,6 +2132,9 @@ module nu_l1d(clk,
 	
 	n_did_reload = 1'b0;
 	n_lock_cache = r_lock_cache;
+
+	n_pending_evict = r_pending_evict;
+	n_pending_evict_addr = r_pending_evict_addr;
 	
 	t_mh_block = r_got_req && r_last_wr && 
 		     (r_cache_idx == t_mem_head.addr[IDX_STOP-1:IDX_START] );
@@ -2155,6 +2179,14 @@ module nu_l1d(clk,
 		    if(w_got_hit)
 		      begin /* valid cacheline - hit in cache */
 			 t_reset_graduated = r_req.is_store;
+			 if(r_pending_evict)
+			   begin
+			      $stop();
+			   end
+			 n_pending_evict = 1'b1;
+			 n_pending_evict_addr = {r_req.addr[31:4],4'd0};
+
+			 if(r_pending_evict) $stop();
 `ifdef VERILATOR
 			 if(r_req.is_store)
 			   begin
@@ -2261,7 +2293,7 @@ module nu_l1d(clk,
 		 end
 	       
 	       /* not qualified on r_got_req */
-	       if(!mem_q_empty & !t_got_miss & !r_lock_cache & !n_pending_tlb_miss &!w_eb_port1_hit & !w_eb_full & w_two_free_credits)
+	       if(!mem_q_empty & !t_got_miss & !r_lock_cache & !n_pending_tlb_miss & !n_pending_evict & !w_eb_port1_hit & !w_eb_full & w_two_free_credits)
 		 begin		    
 		    if(!t_mh_block & (r_mq_inflight[r_mq_head_ptr[`LG_MRQ_ENTRIES-1:0]] == 1'b0)  )
 		      begin
@@ -2300,8 +2332,6 @@ module nu_l1d(clk,
 		      end
 		 end // if (!mem_q_empty && !t_got_miss && !r_lock_cache && !n_pending_tlb_miss)
 	       
-	       
-	       
 	     if(t_new_req)
 	       begin
 		  t_old_ack = 1'b1;
@@ -2324,6 +2354,17 @@ module nu_l1d(clk,
 		  n_flush_was_active = 1'b1;
 		  n_state = FLUSH_CL;
 	       end
+	     else if(r_pending_evict & mem_q_empty & w_queues_drained & !(r_got_req && r_last_wr)
+		     & !(n_page_walk_req_valid | t_got_miss | r_wr_array | t_wr_array))
+	       begin
+		  $display("pending evict will be handled");
+		  if(!mem_q_empty) $stop();
+		  if(r_got_req && r_last_wr) $stop();
+		  t_cache_idx =r_pending_evict_addr[IDX_STOP-1:IDX_START];
+		  n_pending_evict = 1'b0;
+		  n_evict_was_active = 1'b1;
+		  n_state = FLUSH_CL;
+	       end	       
 	    end // case: ACTIVE
 	  WAIT_INJECT_RELOAD:
 	    begin
@@ -2364,6 +2405,7 @@ module nu_l1d(clk,
 	    end
 	  FLUSH_CL:
 	    begin
+	       $display("flushing CL");
 	       if(w_flush_hit & r_link_reg_val & (r_link_reg[31:0] == {r_tag_out,r_cache_idx[LG_MAX_SET-1:0],4'd0}))
 		 begin
 		    $stop();
@@ -2380,20 +2422,22 @@ module nu_l1d(clk,
 		 end
 	       else
 		 begin
-		    n_state = r_flush_was_active ? ACTIVE : TLB_RELOAD;
-		    n_flush_was_active = 1'b0;
+		    n_state = (r_flush_was_active|r_evict_was_active) ? ACTIVE : TLB_RELOAD;
+		    n_flush_was_active = r_flush_was_active ? 1'b0 : r_flush_was_active;
+		    n_evict_was_active = r_evict_was_active ? 1'b0 : r_evict_was_active;		    
 		    t_mark_invalid = w_flush_hit;		 
-		    n_l2_probe_ack = 1'b1;
+		    n_l2_probe_ack = r_flush_was_active;
 		 end // else: !if(r_dirty_out)
 	    end
 	  FLUSH_CL_WAIT:
 	    begin
 	       	if(w_queues_drained)
 		  begin
-		     n_state = n_flush_was_active ? ACTIVE : TLB_RELOAD;
-		     n_flush_was_active = 1'b0;
+		     n_state = (n_flush_was_active|r_evict_was_active) ? ACTIVE : TLB_RELOAD;
 		     n_inhibit_write = 1'b0;
-		     n_l2_probe_ack = 1'b1;
+		     n_l2_probe_ack = r_flush_was_active;
+		     n_flush_was_active = r_flush_was_active ? 1'b0 : r_flush_was_active;
+		     n_evict_was_active = r_evict_was_active ? 1'b0 : r_evict_was_active;	
 		  end	       
 	    end
 	  FLUSH_CACHE:
@@ -2502,6 +2546,13 @@ module nu_l1d(clk,
 			 (r_state != ACTIVE)) | 
 	((core_mem_va_req.addr[IDX_STOP-1:IDX_START] == t_miss_idx) & t_got_miss);
    
+
+   logic t_almost_accept;
+   logic r_uncacheable;
+   always_ff@(posedge clk)
+     begin
+	r_uncacheable <= reset ? 1'b0 : w_uncacheable;
+     end
    
    always_comb
      begin
@@ -2514,8 +2565,9 @@ module nu_l1d(clk,
 	n_last_wr2 = 1'b0;
 	t_tlb_xlat = 1'b0;
 	n_tlb_addr = r_tlb_addr;
-	
-	t_accept = t_new_req & (t_got_req ? n_last_wr : 1'b1) & !w_reload_line;
+
+	t_almost_accept = t_new_req & (t_got_req ? n_last_wr : 1'b1) & !w_reload_line;
+	t_accept = t_almost_accept & (!(w_any_uncacheable | (r_got_req2 & w_uncacheable) ));
 
 	if(w_got_reload_pf)
 	  begin
@@ -2536,8 +2588,7 @@ module nu_l1d(clk,
 	  end
         else if(t_accept)
 	  begin
-	     //if(r_state != ACTIVE) $stop();
-	     //use 2nd read port
+	     $display("ACCEPTING TXN at cycle %d", r_cycle);
 	     t_cache_idx2 = core_mem_va_req.addr[IDX_STOP-1:IDX_START];
 	     t_cache_tag2 = core_mem_va_req.addr[`PA_WIDTH-1:`LG_PG_SZ];
 	     n_req2 = core_mem_va_req;
@@ -2575,7 +2626,20 @@ module nu_l1d(clk,
 	     
 	  end // if (core_mem_va_req_valid &&...
      end // always_comb
-   
+
+
+   always_ff@(negedge clk)
+     begin
+	//$display("w_any_uncacheable = %b at cycle %d\n", w_any_uncacheable, r_cycle);
+	
+	if(t_accept)
+	  begin
+	     $display("accept at cycle %d\n", r_cycle);
+	  end
+	///if(t_almost_accept & (!t_accept))
+	//$display("almost accept at cycle %d\n", r_cycle);
+	
+     end
 
    always_comb
      begin

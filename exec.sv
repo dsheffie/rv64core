@@ -3343,7 +3343,7 @@ module exec(clk,
 	t_mem_tail.pc = mem_uop.pc;
 	t_mem_tail.has_cause = 1'b0;
 	t_mem_tail.cause = MISALIGNED_FETCH;
-	t_mem_tail.uncachable = 1'b0;
+	t_mem_tail.uncacheable = 1'b0;
 	t_mem_tail.is_ll = 1'b0;
 `ifdef ENABLE_CYCLE_ACCOUNTING
 	t_mem_tail.fetch_cycle = mem_uop.fetch_cycle;

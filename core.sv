@@ -85,8 +85,6 @@ module core(clk,
 	    ready_for_resume,
 	    flush_req_l1d,
 	    flush_req_l1i,
-	    flush_cl_req,
-	    flush_cl_addr,
 	    l1d_flush_complete,
 	    l1i_flush_complete,
 	    l2_flush_complete,
@@ -189,8 +187,6 @@ module core(clk,
    output logic 		flush_req_l1d;
    output logic 		flush_req_l1i;
    
-   output logic flush_cl_req;
-   output logic [(`M_WIDTH-1):0] flush_cl_addr;
    input logic 	l1d_flush_complete;
    input logic 	l1i_flush_complete;
    input logic 	l2_flush_complete;
@@ -441,8 +437,6 @@ module core(clk,
    logic 		     n_flush_req_l1d, r_flush_req_l1d;
    logic 		     n_flush_req_l1i, r_flush_req_l1i;
    
-   logic 		     n_flush_cl_req, r_flush_cl_req;
-   logic [(`M_WIDTH-1):0]    n_flush_cl_addr, r_flush_cl_addr;
    logic 		     r_ds_done, n_ds_done;
    logic		     n_mmu_mark_dirty, r_mmu_mark_dirty;
 
@@ -550,8 +544,6 @@ module core(clk,
    
    assign flush_req_l1d = r_flush_req_l1d;
    assign flush_req_l1i = r_flush_req_l1i;
-   assign flush_cl_req = r_flush_cl_req;
-   assign flush_cl_addr = r_flush_cl_addr;
 
    assign took_irq = r_took_irq;
    assign got_break = r_got_break;
@@ -635,8 +627,6 @@ module core(clk,
 	     r_update_csr_exc <= 1'b0;
 	     r_flush_req_l1i <= 1'b0;
 	     r_flush_req_l1d <= 1'b0;
-	     r_flush_cl_req <= 1'b0;
-	     r_flush_cl_addr <= 'd0;
 	     r_restart_pc <= 'd0;
 	     r_restart_src_pc <= 'd0;
 	     r_restart_src_is_indirect <= 1'b0;
@@ -673,8 +663,6 @@ module core(clk,
 	     r_update_csr_exc <= n_update_csr_exc;
 	     r_flush_req_l1d <= n_flush_req_l1d;
 	     r_flush_req_l1i <= n_flush_req_l1i;
-	     r_flush_cl_req <= n_flush_cl_req;
-	     r_flush_cl_addr <= n_flush_cl_addr;
 	     r_restart_pc <= n_restart_pc;
 	     r_restart_src_pc <= n_restart_src_pc;
 	     r_restart_src_is_indirect <= n_restart_src_is_indirect;
@@ -1032,8 +1020,6 @@ module core(clk,
 	n_ds_done = r_ds_done;
 	n_flush_req_l1d = 1'b0;
 	n_flush_req_l1i = 1'b0;
-	n_flush_cl_req = 1'b0;
-	n_flush_cl_addr = r_flush_cl_addr;
 	n_got_break = r_got_break;
 	n_pending_break = r_pending_break;
 	n_got_ud = r_got_ud;

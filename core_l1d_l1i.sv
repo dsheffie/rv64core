@@ -214,8 +214,6 @@ module
 
 
    wire 				  flush_req_l1i, flush_req_l1d;
-   logic 				  flush_cl_req;
-   logic [`M_WIDTH-1:0] 		  flush_cl_addr;
    wire 				  l1d_flush_complete;
    wire 				  l1i_flush_complete;
 
@@ -628,8 +626,6 @@ module
 	       .drain_ds_complete(drain_ds_complete),
 	       .dead_rob_mask(dead_rob_mask),
 	       .flush_req(flush_req_l1d),
-	       .flush_cl_req(flush_cl_req),
-	       .flush_cl_addr(flush_cl_addr),
 	       .flush_complete(l1d_flush_complete),
 	       .core_mem_va_req_valid(core_mem_req_valid),
 	       .core_mem_va_req(core_mem_req),
@@ -812,8 +808,6 @@ module
 	     .ready_for_resume(ready_for_resume),  
 	     .flush_req_l1d(flush_req_l1d),
 	     .flush_req_l1i(flush_req_l1i),	     
-	     .flush_cl_req(flush_cl_req),
-	     .flush_cl_addr(flush_cl_addr),	     
 	     .l1d_flush_complete(l1d_flush_complete),
 	     .l1i_flush_complete(l1i_flush_complete),
 	     .l2_flush_complete(w_l2_flush_complete),
