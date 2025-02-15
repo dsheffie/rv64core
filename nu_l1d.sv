@@ -1787,7 +1787,7 @@ module nu_l1d(clk,
 
    always_comb
      begin
-`ifdef COUNT_DCACHE_HITS
+`ifdef VERILATOR
 	n_cache_hits = r_cache_hits;
 	n_cache_accesses = r_cache_accesses;
 	if(r_got_req2)
