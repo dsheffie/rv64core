@@ -140,10 +140,6 @@ struct state_t{
   void store32(uint64_t pa, int32_t x);
   void store64(uint64_t pa, int64_t x);
 
-  uint64_t page_lookup(uint64_t ea, int &fault, int sz, bool verbose = false) const;
-
-
-  
   uint64_t translate(uint64_t ea, int &fault, int sz,
 		     bool store = false, bool fetch = false,
 		     bool force = false) const;

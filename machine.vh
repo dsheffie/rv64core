@@ -7,7 +7,6 @@
 `endif
 
 `define FPGA 1
-`define COALESCE_8K_MMU 1
 //`define DISABLE_IRQ
 
 `define SECOND_EXEC_PORT 1
@@ -78,7 +77,7 @@
 
 //number of sets in direct mapped cache
 `define LG_L1D_NUM_SETS 12
-`define LG_L1I_NUM_SETS 8
+`define LG_L1I_NUM_SETS 11
 
 //size 13 -> 2-way assoc * 16 byte lines * 2^13 -> 2^5 * 2^13 -> 2^18 (256k cache)
 //size 14 -> 2-way assoc * 16 byte lines * 2^14 -> 2^5 * 2^14 -> 2^19 (512k cache)

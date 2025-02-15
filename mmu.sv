@@ -2,7 +2,6 @@
 //`define VERBOSE_MMU
 
 `ifdef VERILATOR
-import "DPI-C" function void check_translation(input longint va, input int pa);
 import "DPI-C" function void mark_accessed_checker(input longint addr);
 import "DPI-C" function void log_mmu_walk_lat(input longint cycle, input byte hit_lvl);
 `endif
@@ -108,13 +107,8 @@ module mmu(clk, reset, clear_tlb, page_table_root,
    assign core_mark_dirty_rsp_valid = r_core_mark_dirty_rsp_valid;
    
    logic [127:0]       r_cl;
-`ifdef COALESCE_8K_MMU
-   wire		       w_meta_8k = (r_cl[7:0] == r_cl[71:64]) & r_cl[0];
-   wire		       w_ppn_8k = (r_cl[53:11] == r_cl[117:75]) & (r_cl[10]==1'b0) & r_cl[74];
-   wire		       w_make_8k = (r_hit_lvl == 2'd2) & w_meta_8k & w_ppn_8k;
-`else
-   wire		       w_make_8k = 1'b0;
-`endif
+   wire		       w_make_64k = (r_hit_lvl == 2'd2) & r_addr[63];
+   
    // always_ff@(negedge clk)
    //   begin
    // 	if(w_make_8k & r_state == WALK_DONE)
@@ -132,7 +126,7 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 	page_walk_rsp.writable = r_page_write;
 	page_walk_rsp.executable = r_page_executable;
 	page_walk_rsp.user = r_page_user;
-	page_walk_rsp.pgsize = w_make_8k ? 2'd3 : r_hit_lvl;
+	page_walk_rsp.pgsize = w_make_64k ? 2'd3 : r_hit_lvl;
      end
 
    assign mem_req_data = 'd0;
@@ -418,13 +412,13 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 	    end
 	  WALK_DONE:
 	    begin
-	       if(w_make_8k)
+	       if(w_make_64k)
 		 begin
-		    n_pa = {8'd0, r_cl[53:11], r_va[12], 12'd0};
+		    n_pa = {8'd0, r_addr[53:14], 16'd0};
 		 end
 	       else if(r_hit_lvl == 2'd2)
 		 begin /* 4k page */
-		    n_pa = {8'd0, r_addr[53:10], 12'd0};
+		    n_pa = {8'd0, r_addr[53:10], 12'd0};		    
 		 end
 	       else if(r_hit_lvl == 2'd1)
 		 begin /* 2mbyte page */
@@ -436,10 +430,6 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 		 begin /* 1gig page */
 		    n_pa = {8'd0, r_addr[53:28], r_va[29:12], 12'd0};
 		 end
-
-`ifdef VERILATOR
-	       check_translation(r_va, n_pa[31:0]);
-`endif
 
 	       
 `ifdef VERBOSE_MMU
@@ -455,6 +445,9 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 	       n_page_executable = r_addr[3];	       
 	       n_page_user = r_addr[4];
 
+	       //$display("va %x translated to pa %x, n bit %b, hit lvl %d, pte %x", 
+	       //r_va, n_pa, r_addr[63], r_hit_lvl, r_addr);
+	       //if(r_addr[63]) $stop();
 	       
 	       if(r_do_dirty)
 		 begin

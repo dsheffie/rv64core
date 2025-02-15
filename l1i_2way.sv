@@ -511,13 +511,17 @@ endfunction
    wire [127:0]	w_array = w_hit0 ? w_array_out0 : w_array_out1;
    wire [(3*WORDS_PER_CL)-1:0] w_jump = w_hit0 ? w_jump_out0 : w_jump_out1;
 
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if(r_req)
-   // 	  begin
-   // 	     $display("cycle %d, hit 0 %b, hit 1 %b", r_cycle, w_hit0, w_hit1);
-   // 	  end
-   //   end
+   always_ff@(negedge clk)
+     begin
+    	if(w_tlb_hit & r_req && paging_active)
+	  begin
+	     if(w_tlb_pc[15:IDX_STOP] != r_cache_pc[15:IDX_STOP])
+	       begin
+		  $display("mismatch in i cache va / pa %x, %x", w_tlb_pc[15:IDX_STOP], r_cache_pc[15:IDX_STOP]);
+	       end
+	  end
+     end
+   
    logic			r_reload, n_reload;
    logic [63:0]			t_br_disp, t_j_disp;
    logic [15:0]			n_wait_cycles,r_wait_cycles;

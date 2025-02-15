@@ -244,26 +244,6 @@ void mark_accessed_checker(long long pa) {
   ss->store64(pa, pte);
 }
 
-void check_translation(long long addr, int paddr) {
-#if 0
-  if(not(enable_checker)) {
-    return;
-  }
-  int fault = 0;
-  uint64_t pa = ss->page_lookup(addr, fault, 1, false);
-  uint32_t upa = paddr;
-  if(!fault) {
-    pa &= ((1UL<<32)-1);
-    if(pa != upa) {
-      printf("---> %d va %lx, sw %lx, hw %lx, delta %lx\n",
-             (pa==upa),
-             addr,
-             pa, upa,
-             (pa^upa));
-    }
-  }
-#endif
-}
 
 
 long long dc_ld_translate(long long va, long long root) {
