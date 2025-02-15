@@ -296,7 +296,7 @@ module core(clk,
    localparam HI_EBITS = `M_WIDTH-32;
 
    logic 				  t_push_dq_one, t_push_dq_two;
-   logic [`LG_PRF_ENTRIES-1:0]		  n_init_rat, r_init_rat;
+   
    uop_t r_dq[N_DQ_ENTRIES-1:0];
 
    
@@ -459,25 +459,24 @@ module core(clk,
    
    
    typedef enum logic [4:0] {
-			     INIT_RAT = 'd0,
-			     FLUSH_FOR_HALT = 'd1,
-			     HALT = 'd2, 
-			     ACTIVE = 'd3,
-			     DRAIN = 'd4, 
-			     RAT = 'd5, 
-			     ALLOC_FOR_SERIALIZE ='d6,
-			     FLUSH_CACHE = 'd7,
-			     HANDLE_MONITOR = 'd8,
-			     ALLOC_FOR_MONITOR = 'd9,			    
-			     WAIT_FOR_MONITOR = 'd10,
-			     HALT_WAIT_FOR_RESTART = 'd11,
-			     WAIT_FOR_SERIALIZE_AND_RESTART = 'd12,
-			     WAIT_FOR_ACK = 'd13,
-			     MONITOR_WAIT_FOR_ACK = 'd14,
-			     ARCH_FAULT = 'd15,
-			     WRITE_CSRS = 'd16,
-			     WAIT_FOR_CSR_WRITE = 'd17,
-			     WAIT_FOR_MMU = 'd18
+			     FLUSH_FOR_HALT = 'd0,
+			     HALT = 'd1, 
+			     ACTIVE = 'd2,
+			     DRAIN = 'd3, 
+			     RAT = 'd4, 
+			     ALLOC_FOR_SERIALIZE ='d5,
+			     FLUSH_CACHE = 'd6,
+			     HANDLE_MONITOR = 'd7,
+			     ALLOC_FOR_MONITOR = 'd8,			    
+			     WAIT_FOR_MONITOR = 'd9,
+			     HALT_WAIT_FOR_RESTART = 'd10,
+			     WAIT_FOR_SERIALIZE_AND_RESTART = 'd11,
+			     WAIT_FOR_ACK = 'd12,
+			     MONITOR_WAIT_FOR_ACK = 'd13,
+			     ARCH_FAULT = 'd14,
+			     WRITE_CSRS = 'd15,
+			     WAIT_FOR_CSR_WRITE = 'd16,
+			     WAIT_FOR_MMU = 'd17
 			     } state_t;
    
    state_t r_state, n_state;
@@ -713,7 +712,7 @@ module core(clk,
 	if(reset)
 	  begin
 	     r_mode64 <= 1'b1;	     
-	     r_state <= INIT_RAT;
+	     r_state <= FLUSH_FOR_HALT;
 	     r_irq <= 1'b0;
 	     r_restart_cycles <= 'd0;
 	     r_machine_clr <= 1'b0;
@@ -721,7 +720,6 @@ module core(clk,
 	     r_cause <= MISALIGNED_FETCH;
 	     r_tval <= 'd0;
 	     r_pending_fault <= 1'b0;
-	     r_init_rat <= 'd0;
 	  end
 	else
 	  begin
@@ -734,7 +732,6 @@ module core(clk,
 	     r_cause <= n_cause;
 	     r_tval <= n_tval;
 	     r_pending_fault <= n_pending_fault;
-	     r_init_rat <= n_init_rat;
 	  end
      end // always_ff@ (posedge clk)
 
@@ -1074,16 +1071,7 @@ module core(clk,
 	t_arch_fault = (t_rob_head.faulted & t_rob_head.has_cause);
 	n_arch_fault = r_arch_fault;
 	
-	n_init_rat = r_init_rat;
 	unique case (r_state)
-	  INIT_RAT:
-	    begin
-	       n_init_rat = r_init_rat + 'd1;
-	       if(r_init_rat == 'd31)
-		 begin
-		    n_state = FLUSH_FOR_HALT;
-		 end
-	    end
 	  ACTIVE:
 	    begin
 	       if(t_can_retire_rob_head)
@@ -1201,7 +1189,6 @@ module core(clk,
 	    end // case: ACTIVE
 	  DRAIN:	    
 	    begin
-	       //$display("in drain at cycle %d, memq_empty = %b, r_rob_inflight = %b", r_cycle, memq_empty, r_rob_inflight);
 	       if((r_rob_inflight == 'd0) & memq_empty & t_divide_ready /*& (r_arch_fault ? l2_empty : 1'b1)*/ )
 		 begin
 		    n_state = RAT;
@@ -1477,9 +1464,12 @@ module core(clk,
 
    always_ff@(posedge clk)
      begin
-	if(r_state == INIT_RAT)
+	if(reset)
 	  begin
-	     r_alloc_rat[r_init_rat[4:0]] <= r_init_rat;
+	     for(logic [`LG_PRF_ENTRIES-1:0] i_rat = 'd0; i_rat < 'd32; i_rat = i_rat + 'd1)
+	       begin
+		  r_alloc_rat[i_rat[4:0]] <= i_rat;
+	       end
 	  end
 	else if(t_rat_copy)
 	  begin
@@ -1503,9 +1493,12 @@ module core(clk,
    
    always_ff@(posedge clk)
      begin
-	if(r_state == INIT_RAT)
+	if(reset)
 	  begin
-	     r_retire_rat[r_init_rat[4:0]] <= r_init_rat;	     
+	     for(logic [`LG_PRF_ENTRIES-1:0] i_rat = 'd0; i_rat < 'd32; i_rat = i_rat + 'd1)
+	       begin
+		  r_retire_rat[i_rat[4:0]] <= i_rat;
+	       end
 	  end
 	else 
 	  begin
