@@ -412,7 +412,7 @@ static inline long long translate(long long va, long long root, bool iside, bool
     return (~0UL);
   }
   assert((u>>1)&7);
-  mask_bits = 12;
+  mask_bits = ((u>>63)&1) ? 16 : 12;
 
  translation_complete:
   int64_t m = ((1L << mask_bits) - 1);

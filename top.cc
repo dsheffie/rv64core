@@ -918,7 +918,7 @@ int main(int argc, char **argv) {
       ("checker,c", po::value<bool>(&enable_checker)->default_value(true), "use checker")
       ("isdump,d", po::value<bool>(&use_checkpoint)->default_value(false), "is a dump")
       ("file,f", po::value<std::string>(&rv32_binary), "mips binary")
-      ("heartbeat,h", po::value<uint64_t>(&heartbeat)->default_value(1<<24), "heartbeat for stats")
+      ("heartbeat,h", po::value<uint64_t>(&heartbeat)->default_value(1UL<<24), "heartbeat for stats")
       ("memlat,m", po::value<uint64_t>(&mem_lat)->default_value(4), "memory latency")
       ("pipelog,p", po::value<std::string>(&pipelog), "log for pipeline tracing")
       ("pipestart", po::value<uint64_t>(&pipestart)->default_value(0), "when to start logging")
