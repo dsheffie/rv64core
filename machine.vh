@@ -77,7 +77,7 @@
 
 //number of sets in direct mapped cache
 `define LG_L1D_NUM_SETS 12
-`define LG_L1I_NUM_SETS 11
+`define LG_L1I_NUM_SETS 10
 
 //size 13 -> 2-way assoc * 16 byte lines * 2^13 -> 2^5 * 2^13 -> 2^18 (256k cache)
 //size 14 -> 2-way assoc * 16 byte lines * 2^14 -> 2^5 * 2^14 -> 2^19 (512k cache)
@@ -114,17 +114,5 @@ typedef enum logic [3:0] {
    MEM_AMOW = 4'd14,
    MEM_AMOD = 4'd15			  			  
 } mem_op_t;
-
-function logic [31:0] bswap32(logic [31:0] in);
-   return in;
-endfunction
-
-function logic [15:0] bswap16(logic [15:0] in);
-   return in;
-endfunction
-
-function logic sext16(logic [15:0] in);
-   return in[15];
-endfunction
 
 `endif
