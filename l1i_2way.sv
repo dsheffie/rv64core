@@ -1241,7 +1241,7 @@ endfunction
 
 
    
-   tlb #(.LG_N(4), .ISIDE(1)) 
+   tlb #(.N(16), .ISIDE(1)) 
    itlb(
 	.clk(clk), 
 	.reset(reset),

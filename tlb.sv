@@ -49,23 +49,38 @@ module tlb(clk,
    
    /* bits 39 down to 12 */
 
-   parameter	       LG_N = 2;
+   parameter	       N = 2;
    parameter	       ISIDE = 0;
    
-   localparam	       N = 1<<LG_N;
-
-   logic [N-1:0]       r_valid, r_dirty, r_readable, r_writable, r_executable, r_user;
+   localparam	       LG_N = $clog2(N);
+   localparam	       NN = 1 << LG_N;
    
-   logic [1:0]	       r_pgsize[N-1:0];
-   logic [27:0]	       r_va_tags[N-1:0];
-   logic [51:0]	       r_pa_data[N-1:0];
-
+   logic [NN-1:0]       r_valid, r_dirty, r_readable, r_writable, r_executable, r_user;
    
-   wire [N-1:0]	       w_hits4k, w_hits64k, w_hits2m, w_hits1g;
-   wire [N-1:0]	       w_hits;
+   logic [1:0]	       r_pgsize[NN-1:0];
+   logic [27:0]	       r_va_tags[NN-1:0];
+   logic [51:0]	       r_pa_data[NN-1:0];
 
    
-   wire [LG_N:0]	       w_idx;   
+   wire [NN-1:0]	       w_hits4k, w_hits64k, w_hits2m, w_hits1g;
+   wire [NN-1:0]	       w_hits;
+
+
+   
+   
+   wire [LG_N:0]	       w_idx;
+   generate
+      for(genvar i = N; i < NN; i=i+1)
+	begin
+	   assign w_hits64k[i] =  1'b0;	   
+	   assign w_hits4k[i] = 1'b0;
+	   assign w_hits2m[i] = 1'b0;
+	   assign w_hits1g[i] = 1'b0;
+	   assign w_hits[i] = 1'b0;
+	end
+   endgenerate
+   
+   
    generate
       for(genvar i = 0; i < N; i=i+1)
 	begin : hits
@@ -77,20 +92,7 @@ module tlb(clk,
 	end
    endgenerate
 
-   logic [15:0] r_lfsr, n_lfsr;
-   always_ff@(posedge clk)
-     begin
-	r_lfsr <= reset ? 'd1 : n_lfsr;
-     end
-   always_comb
-     begin
-	n_lfsr = r_lfsr;
-	if(active & req & ((|w_hits) == 1'b0))
-	  begin
-	     n_lfsr = {r_lfsr[14:0], r_lfsr[15] ^ r_lfsr[13] ^ r_lfsr[12] ^ r_lfsr[10]};
-	  end
-     end
-
+   
    wire [63:0] w_pa_sel = 
 	       (r_pgsize[w_idx[LG_N-1:0]] == 2'd0) ? {r_pa_data[w_idx[LG_N-1:0]][51:18], va[29:0]} :
 	       (r_pgsize[w_idx[LG_N-1:0]] == 2'd1) ? {r_pa_data[w_idx[LG_N-1:0]][51:9], va[20:0]} :
@@ -141,15 +143,23 @@ module tlb(clk,
      begin
 	r_cycle <= reset ? 'd0 : (r_cycle + 'd1);
      end
+
+   logic [LG_N-1:0] r_replace, n_replace;
    
-   //always@(negedge clk)
-     //begin
-   //if(active & req & ((|w_hits) == 1'b1) && (r_pgsize[w_idx[LG_N-1:0]] == 2'd0))
-   //begin
-   //$display("tlb hit for addr %x at cycle %d, translated to %x", 
-   //va, r_cycle, w_pa_sel);
-   //end
-   //end
+   always@(posedge clk)
+     begin
+	r_replace <= reset ? 'd0 : n_replace;
+     end
+
+   always_comb
+     begin
+	n_replace = r_replace+'d1;
+	if({1'b0, r_replace} == (N-1))
+	  begin
+	     n_replace = 'd0;
+	  end
+     end
+   wire [LG_N-1:0] w_replace = r_replace;
 
    always_ff@(posedge clk)
      begin   
@@ -159,9 +169,7 @@ module tlb(clk,
 	  end
 	else if(replace)
 	  begin
-	     //$display("tlb replace entry %d with %x, ISIDE=%d", 
-	     //r_lfsr[LG_N:1], {page_walk_rsp.paddr[63:12], 12'd0}, ISIDE);
-	     r_valid[r_lfsr[LG_N:1]] <= 1'b1;
+	     r_valid[w_replace] <= 1'b1;
 	  end
      end // always_ff@ (posedge clk)
    
@@ -169,14 +177,14 @@ module tlb(clk,
      begin
 	if(replace)
 	  begin
-	     r_dirty[r_lfsr[LG_N:1]] <= page_walk_rsp.dirty;
-	     r_readable[r_lfsr[LG_N:1]] <= page_walk_rsp.readable;
-	     r_writable[r_lfsr[LG_N:1]] <= page_walk_rsp.writable;
-	     r_executable[r_lfsr[LG_N:1]] <= page_walk_rsp.executable;
-	     r_user[r_lfsr[LG_N:1]] <= page_walk_rsp.user;
-	     r_va_tags[r_lfsr[LG_N:1]] <= replace_va[39:12];
-	     r_pgsize[r_lfsr[LG_N:1]] <= page_walk_rsp.pgsize;
-	     r_pa_data[r_lfsr[LG_N:1]] <= page_walk_rsp.paddr[63:12];
+	     r_dirty[w_replace] <= page_walk_rsp.dirty;
+	     r_readable[w_replace] <= page_walk_rsp.readable;
+	     r_writable[w_replace] <= page_walk_rsp.writable;
+	     r_executable[w_replace] <= page_walk_rsp.executable;
+	     r_user[w_replace] <= page_walk_rsp.user;
+	     r_va_tags[w_replace] <= replace_va[39:12];
+	     r_pgsize[w_replace] <= page_walk_rsp.pgsize;
+	     r_pa_data[w_replace] <= page_walk_rsp.paddr[63:12];
 	  end
      end // always_ff@ (posedge clk)
    

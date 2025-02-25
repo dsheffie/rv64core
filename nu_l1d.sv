@@ -1358,7 +1358,7 @@ module nu_l1d(clk,
 
 
 
-   tlb #(.LG_N(5)) dtlb(
+   tlb #(.N(34)) dtlb(
     	    .clk(clk), 
     	    .reset(reset),
 	    .priv(priv),
