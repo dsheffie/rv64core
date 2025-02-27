@@ -27,15 +27,9 @@ static uint64_t mem_reqs = 0;
 static state_t *ss = nullptr;
 static uint64_t insns_retired = 0, insns_allocated = 0;
 static uint64_t cycles_in_faulted = 0, fetch_stalls = 0, mispred_to_restart_cycles = 0;
-
 static uint64_t pipestart = 0, pipeend = ~(0UL), pipeip = 0, pipeipcnt = 0;
-
-
-
 static pipeline_logger *pl = nullptr;
-
 static uint64_t l1d_misses = 0, l1d_insns = 0;
-
 static uint64_t last_retire_cycle = 0, last_retire_pc  = 0;
 
 static std::map<uint64_t, uint64_t> retire_map;
@@ -726,8 +720,14 @@ void pt_retire(long long cycle,
       }
     }
     if((record_insns_retired >= pipestart) and (record_insns_retired < pipeend)) {
-      uint32_t insn = get_insn(r.pc, s);
-      uint32_t opcode = insn & 127;
+      uint32_t insn = 0, opcode = 0;
+      if(paging_active) {
+	insn = get_insn(translate(r.pc, page_table_root, true, false), s);
+      }
+      else {
+	insn = get_insn(r.pc, s);
+      }
+      opcode = insn & 127;
       auto disasm = getAsmString(r.pc, page_table_root, paging_active);
       riscv_t m(insn);
       if(opcode == 0x3 ) {
