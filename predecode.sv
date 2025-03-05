@@ -47,7 +47,7 @@ module predecode(insn, pd);
 	       else
 		 begin
 		    /* jalr */
-		    pd = 'd6;
+		    pd = rs1_is_link ? 'd6 /* jalr */ : 'd4 /* jr */;
 		 end
 
 	    end
