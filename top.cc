@@ -902,6 +902,7 @@ int main(int argc, char **argv) {
   bool window, retiretrace = false, verbose = false;
   uint64_t heartbeat = 1UL<<36, start_trace_at = ~0UL;
   uint64_t max_cycle = 0, max_icnt = 0, mem_lat = 1;
+  size_t mlp = 0;
   uint64_t last_store_addr = 0, last_load_addr = 0, last_addr = 0;
   int misses_inflight = 0;
   int64_t mem_reply_cycle = -1L;
@@ -933,6 +934,7 @@ int main(int argc, char **argv) {
       ("retiretrace", po::value<std::string>(&retire_name), "retire trace filename")
       ("verbose,v", po::value<bool>(&verbose)->default_value(false), "verbose")
       ("irq", po::value<bool>(&globals::checker_enable_irqs)->default_value(true), "enable irqs")
+      ("mlp", po::value<size_t>(&mlp)->default_value(~0UL), "dram mlp")
       ; 
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);
@@ -1502,7 +1504,7 @@ int main(int argc, char **argv) {
     tb->mem_rsp_valid = 0;
     tb->mem_req_gnt = 0;
     
-    if(tb->mem_req_valid) {
+    if(tb->mem_req_valid and (mem_queue.size() < mlp)) {
       ++mem_reqs;
       int lat = mem_lat + 1;
       mem_reply_cycle = cycle + lat;
