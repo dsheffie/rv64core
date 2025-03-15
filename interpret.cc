@@ -241,7 +241,7 @@ uint64_t state_t::translate(uint64_t ea, int &fault, int sz, bool store, bool fe
   }
   assert(r.sv39.x || r.sv39.w || r.sv39.r);
   mask_bits = r.sv39.n ? 16 : 12;
-  assert(r.sv39.n);
+  /* assert(r.sv39.n); */
   
  translation_complete:
 
@@ -1185,12 +1185,21 @@ void execRiscv(state_t *s) {
 	  int32_t c = b ? a/b : ~0;
 	  s->sext_xlen(c, m.r.rd);
 	}
+	else if((m.r.sel == 2) & (m.r.special == 16)) { /* sh1add.uw */
+	  uint64_t bb = static_cast<uint64_t>(s->get_reg_u32(m.r.rs1)) << 1;
+	  uint64_t c = bb + *reinterpret_cast<uint64_t*>(&s->gpr[m.r.rs2]);
+	  s->sext_xlen(c, m.r.rd);
+	}	
 	else if((m.r.sel == 4) & (m.r.special == 16)) { /* sh2add.uw */
 	  uint64_t bb = static_cast<uint64_t>(s->get_reg_u32(m.r.rs1)) << 2;
 	  uint64_t c = bb + *reinterpret_cast<uint64_t*>(&s->gpr[m.r.rs2]);
 	  s->sext_xlen(c, m.r.rd);
 	}
-	
+	else if((m.r.sel == 6) & (m.r.special == 16)) { /* sh3add.uw */
+	  uint64_t bb = static_cast<uint64_t>(s->get_reg_u32(m.r.rs1)) << 3;
+	  uint64_t c = bb + *reinterpret_cast<uint64_t*>(&s->gpr[m.r.rs2]);
+	  s->sext_xlen(c, m.r.rd);
+	}
 	else if((m.r.sel == 5) & (m.r.special == 0)) { /* srlw */
 	  uint32_t c = s->get_reg_u32(m.r.rs1) >> (s->gpr[m.r.rs2]&31);
 	  int32_t rr =  *reinterpret_cast<int32_t*>(&c);	  
