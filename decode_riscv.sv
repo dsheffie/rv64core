@@ -714,6 +714,13 @@ module decode_riscv(
 			 uop.is_cheap_int = 1'b1;
 `endif
 		      end
+		    else if(insn[14:12] == 'd4 && insn[31:25] == 'd16)
+		      begin
+			 uop.op = (rd != 'd0) ? SH2ADD_UW : NOP;
+`ifdef TWO_SRC_CHEAP			 
+			 uop.is_cheap_int = 1'b1;
+`endif
+		      end
 		    else if(insn[14:12] == 'd0 && insn[31:25] == 'd1)
 		      begin
 			 uop.op = (rd != 'd0) ? MULW : NOP;

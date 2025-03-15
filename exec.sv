@@ -1237,25 +1237,23 @@ module exec(clk,
    wire [63:0] w_as64_, w_as64_2_;
 
    wire [63:0] w_srcA_shl = 
-	       (int_uop.op == SH1ADD | int_uop.op == SH1ADD_UW) ? 
-	       {t_srcA[62:0], 1'b0} :
-	       (int_uop.op == SH2ADD | int_uop.op == SH2ADD_UW) ? 
-	       {t_srcA[61:0], 2'b0} :
-	       (int_uop.op == SH3ADD | int_uop.op == SH3ADD_UW) ? 
-	       {t_srcA[60:0], 3'b0} :
-	       (int_uop.op == ADD_UW) ?
-	       {32'd0, t_srcA[31:0]} :
+	       (int_uop.op == SH1ADD) ? {t_srcA[62:0], 1'b0} :
+	       (int_uop.op == SH2ADD) ? {t_srcA[61:0], 2'b0} :
+	       (int_uop.op == SH3ADD) ? {t_srcA[60:0], 3'b0} :
+	       (int_uop.op == SH1ADD_UW) ? {31'd0, t_srcA[31:0], 1'b0} :
+	       (int_uop.op == SH2ADD_UW) ? {30'd0, t_srcA[31:0], 2'b0} :
+	       (int_uop.op == SH3ADD_UW) ? {29'd0, t_srcA[31:0], 3'b0} :	       
+	       (int_uop.op == ADD_UW) ? {32'd0, t_srcA[31:0]} :
 	       t_srcA;
 
    wire [63:0] w_srcA_shl_2 = 
-	       (int_uop2.op == SH1ADD | int_uop2.op == SH1ADD_UW) ? 
-	       {t_srcA_2[62:0], 1'b0} :
-	       (int_uop2.op == SH2ADD | int_uop2.op == SH2ADD_UW) ? 
-	       {t_srcA_2[61:0], 2'b0} :
-	       (int_uop2.op == SH3ADD | int_uop2.op == SH3ADD_UW) ? 
-	       {t_srcA_2[60:0], 3'b0} :
-	       (int_uop2.op == ADD_UW) ?
-	       {32'd0, t_srcA_2[31:0]} :	       
+	       (int_uop2.op == SH1ADD) ? {t_srcA_2[62:0], 1'b0} :
+	       (int_uop2.op == SH2ADD) ? {t_srcA_2[61:0], 2'b0} :
+	       (int_uop2.op == SH3ADD) ? {t_srcA_2[60:0], 3'b0} :
+	       (int_uop2.op == SH1ADD_UW) ? {31'd0, t_srcA_2[31:0], 1'b0} :
+	       (int_uop2.op == SH2ADD_UW) ? {30'd0, t_srcA_2[31:0], 2'b0} :
+	       (int_uop2.op == SH3ADD_UW) ? {29'd0, t_srcA_2[31:0], 3'b0} :	       
+	       (int_uop2.op == ADD_UW) ? {32'd0, t_srcA_2[31:0]} :	       
 	       t_srcA_2;
 
    
@@ -1421,6 +1419,24 @@ module exec(clk,
 	       t_alu_valid2 = 1'b1;
 	       t_wr_int_prf2 = 1'b1;
 	    end
+	  SH1ADD_UW:
+	    begin
+	       t_result2 = w_as64_2;
+	       t_alu_valid2 = 1'b1;
+	       t_wr_int_prf2 = 1'b1;
+	    end
+	  SH2ADD_UW:
+	    begin
+	       t_result2 = w_as64_2;
+	       t_alu_valid2 = 1'b1;
+	       t_wr_int_prf2 = 1'b1;
+	    end
+	  SH3ADD_UW:
+	    begin
+	       t_result2 = w_as64_2;
+	       t_alu_valid2 = 1'b1;
+	       t_wr_int_prf2 = 1'b1;
+	    end	  
 	  ADD_UW:
 	    begin
 	       t_result2 = w_as64_2;
@@ -2128,6 +2144,24 @@ module exec(clk,
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
+	  SH1ADD_UW:
+	    begin
+	       t_result = w_as64;	       
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;
+	    end
+	  SH2ADD_UW:
+	    begin
+	       t_result = w_as64;	       
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;
+	    end
+	  SH3ADD_UW:
+	    begin
+	       t_result = w_as64;	       
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;
+	    end	  
 	  ADD_UW:
 	    begin
 	       t_result = w_as64;	       

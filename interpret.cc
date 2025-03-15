@@ -1185,6 +1185,12 @@ void execRiscv(state_t *s) {
 	  int32_t c = b ? a/b : ~0;
 	  s->sext_xlen(c, m.r.rd);
 	}
+	else if((m.r.sel == 4) & (m.r.special == 16)) { /* sh2add.uw */
+	  uint64_t bb = static_cast<uint64_t>(s->get_reg_u32(m.r.rs1)) << 2;
+	  uint64_t c = bb + *reinterpret_cast<uint64_t*>(&s->gpr[m.r.rs2]);
+	  s->sext_xlen(c, m.r.rd);
+	}
+	
 	else if((m.r.sel == 5) & (m.r.special == 0)) { /* srlw */
 	  uint32_t c = s->get_reg_u32(m.r.rs1) >> (s->gpr[m.r.rs2]&31);
 	  int32_t rr =  *reinterpret_cast<int32_t*>(&c);	  
