@@ -149,7 +149,7 @@ typedef enum logic [6:0]
    SRLW,
    CZEQZ,
    CZNEZ,
-   ADDUW,
+   ADD_UW,
    SH1ADD,
    SH1ADD_UW,
    SH2ADD,

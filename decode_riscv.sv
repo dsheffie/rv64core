@@ -537,6 +537,14 @@ module decode_riscv(
 			     uop.is_cheap_int = 1'b1;
 `endif
 			  end
+			7'd16:
+			  begin
+			     uop.op = (rd != 'd0) ? SH1ADD : NOP;
+`ifdef TWO_SRC_CHEAP
+			     uop.is_cheap_int = 1'b1;
+`endif			     
+			  end
+			       
 			default:
 			  begin
 			  end
@@ -631,6 +639,13 @@ module decode_riscv(
 			  begin
 			     uop.op = (rd != 'd0) ? REM : NOP;
 			  end
+			7'h10:
+			  begin
+			     uop.op = (rd != 'd0) ? SH3ADD : NOP;
+`ifdef TWO_SRC_CHEAP
+			     uop.is_cheap_int = 1'b1;
+`endif			     
+			  end
 			default:
 			  begin
 			  end
@@ -702,6 +717,13 @@ module decode_riscv(
 		    else if(insn[14:12] == 'd0 && insn[31:25] == 'd1)
 		      begin
 			 uop.op = (rd != 'd0) ? MULW : NOP;
+		      end
+		    else if(insn[14:12] == 'd0 && insn[31:25] == 'd4)
+		      begin
+			 uop.op = (rd != 'd0) ? ADD_UW : NOP;
+`ifdef TWO_SRC_CHEAP			 
+			 uop.is_cheap_int = 1'b1;
+`endif			 
 		      end
 		    else if(insn[14:12] == 'd1 && insn[31:25] == 'd0)
 		      begin

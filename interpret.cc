@@ -1167,7 +1167,12 @@ void execRiscv(state_t *s) {
 	else if((m.r.sel == 0) & (m.r.special == 1)) { /* mulw */
 	  int32_t c = a*b;
 	  s->sext_xlen(c, m.r.rd);
-	}	
+	}
+	else if((m.r.sel == 0) & (m.r.special == 4)) { /* add.uw */
+	  uint64_t c = static_cast<uint64_t>(s->get_reg_u32(m.r.rs1)) +
+	    *reinterpret_cast<uint64_t*>(&s->gpr[m.r.rs2]);
+	  s->sext_xlen(c, m.r.rd);
+	}
 	else if((m.r.sel == 0) & (m.r.special == 32)) { /* subw */
 	  int32_t c = a-b;
 	  s->sext_xlen(c, m.r.rd);
@@ -1387,8 +1392,12 @@ void execRiscv(state_t *s) {
 	      case 0x0:
 		s->gpr[m.r.rd] = s->gpr[m.r.rs1] < s->gpr[m.r.rs2];
 		break;
+	      case 0x10: /* sh1add */
+		s->sext_xlen(((s->gpr[m.r.rs1]<<1) + s->gpr[m.r.rs2]), m.r.rd);
+		break;
 	      default:
 		std::cout << "sel = " << m.r.sel << ", special = " << m.r.special << "\n";
+		
 		assert(0);		
 	      }
 	    break;
@@ -1456,7 +1465,10 @@ void execRiscv(state_t *s) {
 		break;
 	      case 0x1:
 		s->gpr[m.r.rd] = s->gpr[m.r.rs2] ? s->gpr[m.r.rs1] % s->gpr[m.r.rs2] : ~(0L);
-		break;		
+		break;
+	      case 0x10: /* sh3add */
+		s->sext_xlen(((s->gpr[m.r.rs1]<<3) + s->gpr[m.r.rs2]), m.r.rd);		
+		break;
 	      default:
 		std::cout << "sel = " << m.r.sel << ", special = " << m.r.special << "\n";
 		assert(0);
