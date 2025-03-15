@@ -1223,7 +1223,6 @@ module exec(clk,
  
    logic  t_sub2, t_addi_2;
    wire [31:0] w_s_sub32, w_c_sub32;
-   wire [31:0] w_add32;
 
    logic       t_sub, t_addi;
 
@@ -1234,15 +1233,31 @@ module exec(clk,
 		       .s(w_s_sub32), 
 		       .cout(w_c_sub32) );
    
-   wire [31:0] w_add32_srcA = {w_c_sub32[30:0], 1'b0};
-   wire [31:0] w_add32_srcB = w_s_sub32;
-
-   assign w_add32 = w_add32_srcA+w_add32_srcB;
 
    wire [63:0] w_as64_, w_as64_2_;
+
+   wire [63:0] w_srcA_shl = 
+	       (int_uop.op == SH1ADD | int_uop.op == SH1ADD_UW) ? 
+	       {t_srcA[62:0], 1'b0} :
+	       (int_uop.op == SH2ADD | int_uop.op == SH2ADD_UW) ? 
+	       {t_srcA[61:0], 2'b0} :
+	       (int_uop.op == SH3ADD | int_uop.op == SH3ADD_UW) ? 
+	       {t_srcA[60:0], 3'b0} :
+	       t_srcA;
+
+   wire [63:0] w_srcA_shl_2 = 
+	       (int_uop2.op == SH1ADD | int_uop2.op == SH1ADD_UW) ? 
+	       {t_srcA_2[62:0], 1'b0} :
+	       (int_uop2.op == SH2ADD | int_uop2.op == SH2ADD_UW) ? 
+	       {t_srcA_2[61:0], 2'b0} :
+	       (int_uop2.op == SH3ADD | int_uop2.op == SH3ADD_UW) ? 
+	       {t_srcA_2[60:0], 3'b0} :
+	       t_srcA_2;
+
+   
    addsub #(.W(64)) as0 
      (
-      .A(t_srcA), 
+      .A(w_srcA_shl), 
       .B(t_addi ? int_uop.rvimm : t_srcB), 
       .is_sub(t_sub), 
       .Y(w_as64_)
@@ -1250,7 +1265,7 @@ module exec(clk,
    
    addsub #(.W(64)) as1
      (
-      .A(t_srcA_2), 
+      .A(w_srcA_shl_2), 
       .B(t_addi_2 ? int_uop2.rvimm : t_srcB_2), 
       .is_sub(t_sub2), 
       .Y(w_as64_2_)
@@ -1379,6 +1394,12 @@ module exec(clk,
 	    end
 `ifdef TWO_SRC_CHEAP	  
 	  ADDU:
+	    begin
+	       t_result2 = w_as64_2;
+	       t_alu_valid2 = 1'b1;
+	       t_wr_int_prf2 = 1'b1;
+	    end
+	  SH2ADD:
 	    begin
 	       t_result2 = w_as64_2;
 	       t_alu_valid2 = 1'b1;
@@ -2062,6 +2083,12 @@ module exec(clk,
 	       t_alu_valid = 1'b1;
 	    end	  
 	  ADDU:
+	    begin
+	       t_result = w_as64;	       
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;
+	    end
+	  SH2ADD:
 	    begin
 	       t_result = w_as64;	       
 	       t_wr_int_prf = 1'b1;
