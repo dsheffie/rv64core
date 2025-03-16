@@ -2204,7 +2204,6 @@ module core(clk,
     */
       
    
-   
    decode_riscv dec0 
      (
       .mode64(r_mode64),

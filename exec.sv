@@ -1207,11 +1207,15 @@ module exec(clk,
    logic	       t_zero_shift_upper2;
    logic [5:0] t_shift_amt2;   
    wire [63:0] w_pc2_4;
+
+   wire [63:0] w_shift2_srcA = 
+	       t_zero_shift_upper2 ? {{32{(t_signed_shift2 ? t_srcA_2[31] : 1'b0)}}, t_srcA_2[31:0]} : 
+	       t_srcA_2;
    
    shift_right #(.LG_W(6))
    s1(.is_left(t_left_shift2), 
       .is_signed(t_signed_shift2), 
-      .data(t_zero_shift_upper2 ? {{32{(t_signed_shift2 ? t_srcA_2[31] : 1'b0)}}, t_srcA_2[31:0]} : t_srcA_2), 
+      .data(w_shift2_srcA), 
       .distance(t_shift_amt2), 
       .y(w_shifter_out2));
 
@@ -1625,6 +1629,15 @@ module exec(clk,
 	       t_left_shift2 = 1'b1;
 	       t_shift_amt2 = int_uop2.rvimm[5:0];	       
 	       t_result2 = {{32{w_shifter_out2[31]}}, w_shifter_out2[31:0]};
+	       t_wr_int_prf2 = 1'b1;
+	       t_alu_valid2 = 1'b1;
+	    end
+	  SLLI_UW:
+	    begin
+	       t_left_shift2 = 1'b1;
+	       t_shift_amt2 = int_uop2.rvimm[5:0];
+	       t_zero_shift_upper2 = 1'b1;
+	       t_result2 = w_shifter_out2;
 	       t_wr_int_prf2 = 1'b1;
 	       t_alu_valid2 = 1'b1;
 	    end	  
@@ -2368,6 +2381,15 @@ module exec(clk,
 	       t_left_shift = 1'b1;
 	       t_shift_amt = {1'b0, int_uop.rvimm[4:0]};	       
 	       t_result = {{32{w_shifter_out[31]}}, w_shifter_out[31:0]};
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;
+	    end
+	  SLLI_UW:
+	    begin
+	       t_left_shift = 1'b1;
+	       t_shift_amt = {1'b0, int_uop.rvimm[4:0]};
+	       t_zero_shift_upper = 1'b1;	       	       
+	       t_result = w_shifter_out;
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end

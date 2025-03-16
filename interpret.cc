@@ -790,8 +790,18 @@ void execRiscv(state_t *s) {
 	    break;
 	  }
 	  case 1: { /*SLLIW*/
-	    int32_t r = *reinterpret_cast<int32_t*>(&s->gpr[m.i.rs1]) << shamt;
-	    s->sext_xlen(r, rd);
+	    uint32_t sel = ((inst>>26)&3);
+	    if(sel == 0) {
+	      int32_t r = *reinterpret_cast<int32_t*>(&s->gpr[m.i.rs1]) << shamt;
+	      s->sext_xlen(r, rd);
+	    }
+	    else if(sel == 2) {
+	      uint64_t c = static_cast<uint64_t>(s->get_reg_u32(m.i.rs1)) << shamt;
+	      s->sext_xlen(c, m.r.rd);	      
+	    }
+	    else {
+	      goto report_unimplemented;
+	    }
 	    break;
 	  }
 	  case 5: { 

@@ -366,7 +366,10 @@ module decode_riscv(
 			end
 		      3'd1: /* slliw */
 			begin
-			   uop.op = (rd == 'd0) ? NOP : SLLIW;
+			   uop.op = (rd == 'd0) ? NOP : 
+				    (insn[27:26] == 2'd0) ? SLLIW :
+				    (insn[27:26] == 2'd2) ? SLLI_UW :
+				    II;			   
 			   uop.is_cheap_int = 1'b1;
 			end
 		      3'd5: /* sraiw */
