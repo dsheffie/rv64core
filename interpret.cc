@@ -1422,7 +1422,6 @@ void execRiscv(state_t *s) {
 		break;
 	      default:
 		std::cout << "sel = " << m.r.sel << ", special = " << m.r.special << "\n";
-		
 		assert(0);		
 	      }
 	    break;
