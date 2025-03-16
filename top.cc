@@ -981,6 +981,7 @@ int main(int argc, char **argv) {
   uint64_t last_match_pc = 0;
   uint64_t last_retire = 0, last_check = 0, last_restart = 0;
   uint64_t mismatches = 0, n_stores = 0, n_loads = 0;
+  uint64_t dram_queue_occupancy = 0;
   uint64_t last_n_logged_loads = 0, last_total_load_lat = 0;
   uint64_t n_branches = 0, n_mispredicts = 0, n_checks = 0, n_flush_cycles = 0;
   bool got_mem_rsp = false, got_monitor = false, incorrect = false;
@@ -1503,6 +1504,8 @@ int main(int argc, char **argv) {
     //negedge
     tb->mem_rsp_valid = 0;
     tb->mem_req_gnt = 0;
+
+    dram_queue_occupancy += mem_queue.size();
     
     if(tb->mem_req_valid and (mem_queue.size() < mlp)) {
       ++mem_reqs;
@@ -1813,7 +1816,8 @@ int main(int argc, char **argv) {
     out << "l1d_acks = " << l1d_acks << "\n";
     out << "l1d_new_reqs = " << l1d_new_reqs << "\n";
     out << "l1d_accept   = " << l1d_accept << "\n";
-
+    out << "avg dram queue length " << (static_cast<double>(dram_queue_occupancy) / cycle) << "\n";
+    
     for(size_t i = 0; i < (sizeof(l1d_block_reason)/sizeof(l1d_block_reason[0])); i++) {
       std::cout << l1d_stall_str[i] << " = " << l1d_block_reason[i] << "\n";
     }
