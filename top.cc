@@ -263,6 +263,12 @@ void start_log(int l) {
 static std::map<int, uint64_t> l1_to_l2_dist;
 static std::map<int, uint64_t> l2_state;
 
+static uint64_t l1i_reqs_at_l2 = 0;
+
+void new_l1i_req_at_l2() {
+  l1i_reqs_at_l2++;
+}
+
 void l1_to_l2_queue_occupancy(int e) {
   l1_to_l2_dist[e]++;
 }
@@ -1849,6 +1855,9 @@ int main(int argc, char **argv) {
     double l1d_mpki = static_cast<double>(l1d_misses) / (total_retire/1000);
     double l2_mpki = static_cast<double>(l2_misses) / (total_retire/1000);
     double jpki = static_cast<double>(n_mispredicts) / (total_retire/1000);
+    std::cout << "l1i misses (rtl) = " << l1i_misses << "\n";
+    std::cout << "l1i reqs for l2  = " << l1i_reqs_at_l2 << "\n";
+    
     std::cout << "jpki         = " << jpki << "\n";
     std::cout << "l1i mpki     = " << l1i_mpki << "\n";
     std::cout << "l1d mpki     = " << l1d_mpki << "\n";

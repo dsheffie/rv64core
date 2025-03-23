@@ -4,6 +4,7 @@
 `ifdef VERILATOR
 import "DPI-C" function void l1_to_l2_queue_occupancy(int e);
 import "DPI-C" function void record_l2_state(int s);
+import "DPI-C" function void new_l1i_req_at_l2();
 `endif
 
 //`define VERBOSE_L2
@@ -986,6 +987,16 @@ module l2_2way(clk,
      begin
 	r_data <= r_rob_data[w_rob_head_ptr];
      end
+
+`ifdef VERILATOR
+   always_ff@(posedge clk)
+     begin
+	if((n_l1i_req==1'b1) & (r_l1i_req == 1'b0))
+	  begin
+	     new_l1i_req_at_l2();
+	  end
+     end
+`endif
    
    always_comb
      begin
