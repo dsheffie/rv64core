@@ -988,10 +988,11 @@ module l2_2way(clk,
 	r_data <= r_rob_data[w_rob_head_ptr];
      end
 
+   logic t_picked_icache;
 `ifdef VERILATOR
    always_ff@(posedge clk)
      begin
-	if((n_l1i_req==1'b1) & (r_l1i_req == 1'b0))
+	if(t_picked_icache)
 	  begin
 	     new_l1i_req_at_l2();
 	  end
@@ -1117,6 +1118,7 @@ module l2_2way(clk,
    
    always_comb
      begin
+	t_picked_icache = 1'b0;
 	n_last_gnt = r_last_gnt;
 	n_l1i_req = r_l1i_req | l1i_req;
 	n_l1d_req = r_l1d_req | l1d_req_valid;
@@ -1386,6 +1388,7 @@ module l2_2way(clk,
 			 
 			 if(w_pick_l1i)
 			   begin
+			      t_picked_icache = 1'b1;
 			      n_last_gnt = 1'b0;			 
 			      t_idx = l1i_addr[LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN];
 			      n_tag = l1i_addr[(`PA_WIDTH-1):LG_L2_LINES+`LG_L2_CL_LEN];

@@ -301,6 +301,7 @@ endfunction
    logic		  w_valid_out0, w_valid_out1;
    
    logic 		  t_miss, t_hit;
+   logic		  t_qual_miss, t_qual_hit;
    
    logic 		  t_push_insn, t_push_insn2,
 			  t_push_insn3, t_push_insn4;
@@ -552,8 +553,11 @@ endfunction
 	t_next_spec_rs_tos = r_spec_rs_tos+'d1;
 	n_restart_req = restart_valid | r_restart_req;
 		
-	t_miss = r_req && !w_hit;
-	t_hit = r_req && w_hit;
+	t_miss = r_req & !w_hit;
+	t_hit = r_req & w_hit;
+	t_qual_miss = 1'b0;
+	t_qual_hit = 1'b0;
+	
 
 	t_insn_idx = r_cache_pc[WORD_STOP-1:WORD_START];
 	
@@ -754,6 +758,7 @@ endfunction
 		 end
 	       else if(t_miss)
 		 begin
+		    t_qual_miss = 1'b1;
 		    n_state = INJECT_RELOAD;
 		    n_mem_req_addr = paging_active ? {32'd0, w_tlb_pc[`PA_WIDTH-1:`LG_L1D_CL_LEN], {`LG_L1D_CL_LEN{1'b0}}} : 
 				     {r_cache_pc[`M_WIDTH-1:`LG_L1D_CL_LEN], {`LG_L1D_CL_LEN{1'b0}}};
@@ -772,6 +777,7 @@ endfunction
 		 end
 	       else if(t_hit && !fq_full)
 		 begin
+		    t_qual_hit = 1'b1;
 		    if((t_taken_branch_idx == 'd3) & !fq_full4 & (t_first_pd == 3'd1 | t_first_pd == 3'd3))
 		      begin
 			 t_update_spec_hist = 1'b1;
@@ -884,6 +890,7 @@ endfunction
 		 end // if (t_hit && !fq_full)
 	       else if(t_hit && fq_full)
 		 begin
+		    t_qual_hit = 1'b1;
 		    //$display("full insn queue at cycle %d", r_cycle);
 		    n_pc = r_pc;
 		    n_miss_pc = r_cache_pc;
@@ -1013,34 +1020,21 @@ endfunction
 	    end
 	endcase // case (r_state)
      end // always_comb
-
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if(t_page_fault)
-   // 	  begin
-   // 	     $display("took instruction page fault for va %x, got pa %x at cycle %d, priv %d",
-   // 		      r_cache_pc,
-   // 		      r_cache_pc_pa, 
-   // 		      r_cycle, 
-   // 		      priv);
-   // 	  end
-   //   end
-
    
    always_comb
      begin
 	n_cache_accesses = r_cache_accesses;
 	n_cache_hits = r_cache_hits;	
-	if(t_hit)
+	if(t_qual_hit)
 	  begin
 	     n_cache_hits = r_cache_hits + 'd1;
 	  end
-	if(r_req)
+	if(t_qual_hit | t_qual_miss)
 	  begin
 	     n_cache_accesses = r_cache_accesses + 'd1;
 	  end
-     end
-   
+     end // always_comb
+
    always_comb
      begin
 	t_insn.insn_bytes = t_insn_data;
