@@ -157,6 +157,7 @@ typedef enum logic [6:0]
    SH3ADD,
    SH3ADD_UW,   
    SLLI_UW,
+   ZEXTH,
    FENCEI,
    FETCH_PF,
    IRQ,

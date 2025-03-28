@@ -36,7 +36,7 @@ if __name__ == '__main__':
                             '-I/usr/include/csmith/', test, '-o', r+'.rv64', '-specs=htif.specs'], stderr=o, stdout=o)
 
         with open('/dev/null', 'w') as o:
-            subprocess.run(['/opt/riscv64/bin/riscv64-unknown-elf-gcc', '-O3', '-march=rv64ima_zicsr_zba', '-mcmodel=medany', \
+            subprocess.run(['/opt/riscv64/bin/riscv64-unknown-elf-gcc', '-O3', '-march=rv64ima_zicsr_zba_zbb', '-mcmodel=medany', \
                             '-I/usr/include/csmith/', test, '-o', r+'.zba.rv64', '-specs=htif.specs'], stderr=o, stdout=o)
 
             

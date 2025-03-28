@@ -1199,7 +1199,11 @@ void execRiscv(state_t *s) {
 	  uint64_t bb = static_cast<uint64_t>(s->get_reg_u32(m.r.rs1)) << 1;
 	  uint64_t c = bb + *reinterpret_cast<uint64_t*>(&s->gpr[m.r.rs2]);
 	  s->sext_xlen(c, m.r.rd);
-	}	
+	}
+	else if((m.r.sel == 4) & (m.r.special == 4)) { /* zext.h */
+	  int64_t z64 = s->get_reg_u64(m.r.rs1) & ((1L<<16)-1);
+	  s->sext_xlen(z64, m.r.rd);
+	}
 	else if((m.r.sel == 4) & (m.r.special == 16)) { /* sh2add.uw */
 	  uint64_t bb = static_cast<uint64_t>(s->get_reg_u32(m.r.rs1)) << 2;
 	  uint64_t c = bb + *reinterpret_cast<uint64_t*>(&s->gpr[m.r.rs2]);

@@ -1640,7 +1640,13 @@ module exec(clk,
 	       t_result2 = w_shifter_out2;
 	       t_wr_int_prf2 = 1'b1;
 	       t_alu_valid2 = 1'b1;
-	    end	  
+	    end
+	  ZEXTH:
+	    begin
+	       t_result2 = { 48'd0, t_srcA_2[15:0] };
+	       t_alu_valid2 = 1'b1;
+	       t_wr_int_prf2 = 1'b1;
+	    end
 	  AUIPC:
 	    begin
 	       t_result2 = int_uop2.rvimm;
@@ -2241,6 +2247,12 @@ module exec(clk,
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
+	  ZEXTH:
+	    begin
+	       t_result = { 48'd0, t_srcA[15:0] };
+	       t_alu_valid = 1'b1;
+	       t_wr_int_prf = 1'b1;
+	    end	  
 	  AUIPC:
 	    begin
 	       t_result = int_uop.rvimm;
