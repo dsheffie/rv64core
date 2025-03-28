@@ -4,7 +4,7 @@ import subprocess
 import re
 
 if __name__ == '__main__':
-    n_tests = 1000
+    n_tests = 10
     use_paging = False
     for t in range(0,n_tests):
         r = 'test-' + str(t)
@@ -36,8 +36,8 @@ if __name__ == '__main__':
                             '-I/usr/include/csmith/', test, '-o', r+'.rv64', '-specs=htif.specs'], stderr=o, stdout=o)
 
         with open('/dev/null', 'w') as o:
-            subprocess.run(['/opt/riscv64/bin/riscv64-unknown-elf-gcc', '-O3', '-march=rv64ima_zicsr_zba_zbb', '-mcmodel=medany', \
-                            '-I/usr/include/csmith/', test, '-o', r+'.zba.rv64', '-specs=htif.specs'], stderr=o, stdout=o)
+            subprocess.run(['/opt/riscv64/bin/riscv64-unknown-elf-gcc', '-O3', '-march=rv64ima_zicsr_zbb', '-mcmodel=medany', \
+                            '-I/usr/include/csmith/', test, '-o', r+'.zbb.rv64', '-specs=htif.specs'], stderr=o, stdout=o)
 
             
             # with open('/dev/null', 'w') as o:

@@ -730,8 +730,20 @@ void execRiscv(state_t *s) {
 	    s->sext_xlen(s->gpr[m.i.rs1] + simm64, rd);
 	    break;
 	  }
-	  case 1: /* slli */
-	    s->sext_xlen((*reinterpret_cast<uint64_t*>(&s->gpr[m.i.rs1])) << shamt, rd);
+	  case 1: 
+	    if( (inst>>20) == 0x604) { /* sext.b */
+	      int64_t z8 = s->gpr[m.i.rs1];
+	      int64_t z64 = (z8 << 56) >> 56;
+	      s->sext_xlen(z64, rd);
+	    }
+	    else if( (inst>>20) == 0x605) { /* sext.h */
+	      int64_t z16 = s->gpr[m.i.rs1];
+	      int64_t z64 = (z16 << 48) >> 48;
+	      s->sext_xlen(z64, rd);
+	    }	    
+	    else { /* slli */
+	      s->sext_xlen((*reinterpret_cast<uint64_t*>(&s->gpr[m.i.rs1])) << shamt, rd);
+	    }
 	    break;
 	  case 2: /* slti */
 	    s->gpr[rd] = (s->gpr[m.i.rs1] < simm64);

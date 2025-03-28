@@ -1647,6 +1647,18 @@ module exec(clk,
 	       t_alu_valid2 = 1'b1;
 	       t_wr_int_prf2 = 1'b1;
 	    end
+	  SEXTB:
+	    begin
+	       t_result2 = { {56{t_srcA_2[7]}}, t_srcA_2[7:0] };
+	       t_alu_valid2 = 1'b1;
+	       t_wr_int_prf2 = 1'b1;
+	    end
+	  SEXTH:
+	    begin
+	       t_result2 = { {48{t_srcA_2[15]}}, t_srcA_2[15:0] };
+	       t_alu_valid2 = 1'b1;
+	       t_wr_int_prf2 = 1'b1;
+	    end	  
 	  AUIPC:
 	    begin
 	       t_result2 = int_uop2.rvimm;
@@ -2252,7 +2264,19 @@ module exec(clk,
 	       t_result = { 48'd0, t_srcA[15:0] };
 	       t_alu_valid = 1'b1;
 	       t_wr_int_prf = 1'b1;
-	    end	  
+	    end
+	  SEXTB:
+	    begin
+	       t_result = { {56{t_srcA[7]}}, t_srcA[7:0] };
+	       t_alu_valid = 1'b1;
+	       t_wr_int_prf = 1'b1;
+	    end
+	  SEXTH:
+	    begin
+	       t_result = { {48{t_srcA[15]}}, t_srcA[15:0] };
+	       t_alu_valid = 1'b1;
+	       t_wr_int_prf = 1'b1;
+	    end
 	  AUIPC:
 	    begin
 	       t_result = int_uop.rvimm;
