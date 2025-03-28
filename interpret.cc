@@ -1512,6 +1512,9 @@ void execRiscv(state_t *s) {
 	      case 0x1:
 		s->gpr[m.r.rd] = s->gpr[m.r.rs2] ? s->gpr[m.r.rs1] % s->gpr[m.r.rs2] : ~(0L);
 		break;
+	      case 0x5: /* max */
+		s->gpr[m.r.rd] = std::max(s->gpr[m.r.rs1], s->gpr[m.r.rs2]);	
+		break;
 	      case 0x10: /* sh3add */
 		s->sext_xlen(((s->gpr[m.r.rs1]<<3) + s->gpr[m.r.rs2]), m.r.rd);		
 		break;
