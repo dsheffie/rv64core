@@ -1534,6 +1534,9 @@ void execRiscv(state_t *s) {
 		s->gpr[m.r.rd] = s->gpr[m.r.rs2]!=0 ? 0 : s->gpr[m.r.rs1];
 		break;
 	      }
+	      case 0x20: /* andn */
+		s->gpr[m.r.rd] = s->gpr[m.r.rs1] & (~s->gpr[m.r.rs2]);
+		break;
 	      default:
 		std::cout << "sel = " << m.r.sel << ", special = " << m.r.special << "\n";
 		assert(0);
