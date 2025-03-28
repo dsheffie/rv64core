@@ -13,7 +13,7 @@ module shift_right#(parameter LG_W=5)(y, is_left, is_signed, is_circular, data, 
    output [W-1:0] y;
      
    wire w_sb = is_signed ? data[W-1] : 1'b0;
-   wire [(2*W)-1:0] w_data = is_left ? {data, {W{1'b0}}} : {{W{w_sb}}, data};
+   wire [(2*W)-1:0] w_data = is_circular ? {data,data} : (is_left ? {data, {W{1'b0}}} : {{W{w_sb}}, data});
 
    wire [LG_W:0]    w_inv_dist = (W - {1'b0,distance});
    wire [LG_W:0]    w_distance = is_left ? w_inv_dist[LG_W:0] : {1'b0, distance};
