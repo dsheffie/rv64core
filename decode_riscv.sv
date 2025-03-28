@@ -643,6 +643,13 @@ module decode_riscv(
 			  begin
 			     uop.op = (rd != 'd0) ? DIVU : NOP;
 			  end
+			7'h5:
+			  begin
+			     uop.op = (rd != 'd0) ? MINU : NOP;
+`ifdef TWO_SRC_CHEAP
+			     uop.is_cheap_int = 1'b1;
+`endif			     			     
+			  end
 			7'h7:
 			  begin
 			     uop.op = (rd != 'd0) ? CZEQZ : NOP;
@@ -712,6 +719,13 @@ module decode_riscv(
 			7'h1:
 			  begin
 			     uop.op = (rd != 'd0) ? REMU : NOP;
+			  end
+			7'h5:
+			  begin
+			     uop.op = (rd != 'd0) ? MAXU : NOP;
+`ifdef TWO_SRC_CHEAP
+			     uop.is_cheap_int = 1'b1;
+`endif			     			     
 			  end
 			7'h7:
 			  begin
