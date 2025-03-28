@@ -334,6 +334,11 @@ module decode_riscv(
 			     uop.op = (rd == 'd0) ? NOP : SRAI;
 			     uop.is_cheap_int = 1'b1;
 			  end
+			6'h18:
+			  begin
+			     uop.op = (rd == 'd0) ? NOP : RORI;
+			     /* uop.is_cheap_int = 1'b1; */
+			  end
 			6'h1a:
 			  begin
 			     uop.op = (rd == 'd0) ? NOP : REV8;
@@ -696,7 +701,7 @@ module decode_riscv(
 			  end
 			7'h20:
 			  begin
-			     uop.op = (rd != 'd0) ? OR : NOP;
+			     uop.op = (rd != 'd0) ? ORN : NOP;
 `ifdef TWO_SRC_CHEAP
 			     uop.is_cheap_int = 1'b1;
 `endif			     

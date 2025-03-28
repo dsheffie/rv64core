@@ -14,6 +14,10 @@
 #include "helper.hh"
 #include "globals.hh"
 
+static inline uint64_t ror64(const uint64_t x, int amt) {
+ return (x >> amt) | (x << (64 - amt));
+}
+
 #include <stack>
 extern std::list<store_rec> store_queue;
 extern std::list<store_rec> atomic_queue;
@@ -764,6 +768,9 @@ void execRiscv(state_t *s) {
 	    }
 	    else if(sel == 16) { /* srai */
 	      s->gpr[rd] = s->gpr[m.i.rs1] >> shamt;
+	    }
+	    else if(sel == 0x18) { /* rori */
+	      s->gpr[rd] = ror64(s->get_reg_u64(m.i.rs1), shamt);
 	    }
 	    else if(sel == 0x1a) { /* rev8 */
 	      s->gpr[rd] = __builtin_bswap64(s->gpr[m.i.rs1]);
