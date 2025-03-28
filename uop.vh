@@ -173,6 +173,7 @@ typedef enum logic [6:0]
    RORI,
    RORIW,
    RORW,
+   REV8,
    FENCEI,
    FETCH_PF,
    IRQ,

@@ -334,6 +334,11 @@ module decode_riscv(
 			     uop.op = (rd == 'd0) ? NOP : SRAI;
 			     uop.is_cheap_int = 1'b1;
 			  end
+			6'h1a:
+			  begin
+			     uop.op = (rd == 'd0) ? NOP : REV8;
+			     uop.is_cheap_int = 1'b1;
+			  end
 			default:
 			  begin
 			  end

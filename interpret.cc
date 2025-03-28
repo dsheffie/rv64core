@@ -765,6 +765,9 @@ void execRiscv(state_t *s) {
 	    else if(sel == 16) { /* srai */
 	      s->gpr[rd] = s->gpr[m.i.rs1] >> shamt;
 	    }
+	    else if(sel == 0x1a) { /* rev8 */
+	      s->gpr[rd] = __builtin_bswap64(s->gpr[m.i.rs1]);
+	    }
 	    else {
 	      assert(0);
 	    }

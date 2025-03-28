@@ -1293,6 +1293,13 @@ module exec(clk,
    
    wire	       w_signed_A_lt_B_2 = $signed(t_srcA_2) < $signed(t_srcB_2);
    wire	       w_A_lt_B_2 = t_srcA_2 < t_srcB_2;   
+   wire [63:0]	       w_bswap_srcA_2;
+   generate
+      for(genvar i = 0; i < 8; i=i+1)
+	begin
+	   assign w_bswap_srcA_2[(i+1)*8-1:(i*8)] = t_srcA_2[(8*(8-i))-1:8*(8-(i+1))];
+	end
+   endgenerate
 
    
    always_comb
@@ -1636,6 +1643,36 @@ module exec(clk,
 	       t_wr_int_prf2 = 1'b1;
 	       t_alu_valid2 = 1'b1;
 	    end
+	  MAX:
+	    begin
+	       t_result2 = w_signed_A_lt_B_2 ? t_srcB_2 : t_srcA_2;
+	       t_alu_valid2 = 1'b1;
+	       t_wr_int_prf2 = 1'b1;
+	    end
+	  MAXU:
+	    begin
+	       t_result2 = w_A_lt_B_2 ? t_srcB_2 : t_srcA_2;
+	       t_alu_valid2 = 1'b1;
+	       t_wr_int_prf2 = 1'b1;
+	    end	  
+	  MIN:
+	    begin
+	       t_result2 = w_signed_A_lt_B_2 ? t_srcA_2 : t_srcB_2;
+	       t_alu_valid2 = 1'b1;
+	       t_wr_int_prf2 = 1'b1;
+	    end
+	  MINU:
+	    begin
+	       t_result2 = w_A_lt_B_2 ? t_srcA_2 : t_srcB_2;
+	       t_alu_valid2 = 1'b1;
+	       t_wr_int_prf2 = 1'b1;
+	    end
+	  REV8:
+	    begin
+	       t_result2 = w_bswap_srcA_2;
+	       t_alu_valid2 = 1'b1;
+	       t_wr_int_prf2 = 1'b1;
+	    end
 `endif
 	  SLLI:
 	    begin
@@ -1680,30 +1717,6 @@ module exec(clk,
 	       t_alu_valid2 = 1'b1;
 	       t_wr_int_prf2 = 1'b1;
 	    end
-	  MAX:
-	    begin
-	       t_result2 = w_signed_A_lt_B_2 ? t_srcB_2 : t_srcA_2;
-	       t_alu_valid2 = 1'b1;
-	       t_wr_int_prf2 = 1'b1;
-	    end
-	  MAXU:
-	    begin
-	       t_result2 = w_A_lt_B_2 ? t_srcB_2 : t_srcA_2;
-	       t_alu_valid2 = 1'b1;
-	       t_wr_int_prf2 = 1'b1;
-	    end	  
-	  MIN:
-	    begin
-	       t_result2 = w_signed_A_lt_B_2 ? t_srcA_2 : t_srcB_2;
-	       t_alu_valid2 = 1'b1;
-	       t_wr_int_prf2 = 1'b1;
-	    end
-	  MINU:
-	    begin
-	       t_result2 = w_A_lt_B_2 ? t_srcA_2 : t_srcB_2;
-	       t_alu_valid2 = 1'b1;
-	       t_wr_int_prf2 = 1'b1;
-	    end	  
 	  AUIPC:
 	    begin
 	       t_result2 = int_uop2.rvimm;
@@ -2085,6 +2098,14 @@ module exec(clk,
    
    wire		       w_signed_A_lt_B = $signed(t_srcA) < $signed(t_srcB);
    wire		       w_A_lt_B = t_srcA < t_srcB;
+   wire [63:0]	       w_bswap_srcA;
+   generate
+      for(genvar i = 0; i < 8; i=i+1)
+	begin
+	   assign w_bswap_srcA[(i+1)*8-1:(i*8)] = t_srcA[(8*(8-i))-1:8*(8-(i+1))];
+	end
+   endgenerate
+
    
    always_comb
      begin
@@ -2605,6 +2626,13 @@ module exec(clk,
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
+	  REV8:
+	    begin
+	       t_result = w_bswap_srcA;
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;
+	    end
+	  
 	  XOR:
 	    begin
 	       t_result = t_srcA ^ t_srcB;
