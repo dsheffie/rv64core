@@ -1534,6 +1534,12 @@ module exec(clk,
 	       t_alu_valid2 = 1'b1;
 	       t_wr_int_prf2 = 1'b1;
 	    end
+	  XNOR:
+	    begin
+	       t_result2 = ~(t_srcA_2 ^ t_srcB_2);
+	       t_alu_valid2 = 1'b1;
+	       t_wr_int_prf2 = 1'b1;
+	    end	  
 	  SRL:
 	    begin
 	       t_shift_amt2 = {(mode64 ? t_srcB_2[5] : 1'b0), t_srcB_2[4:0]};	
@@ -2581,6 +2587,12 @@ module exec(clk,
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
+	  XNOR:
+	    begin
+	       t_result = ~(t_srcA ^ t_srcB);
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;
+	    end	  
 	  SRET:
 	    begin
 	       t_rd_csr_en = 1'b1;
