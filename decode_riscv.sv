@@ -598,6 +598,13 @@ module decode_riscv(
 			  begin
 			     uop.op = (rd != 'd0) ? DIV : NOP;
 			  end
+			7'h5:
+			  begin
+			     uop.op = (rd != 'd0) ? MIN : NOP;
+`ifdef TWO_SRC_CHEAP
+			     uop.is_cheap_int = 1'b1;
+`endif			     			     
+			  end
 			7'h10:
 			  begin
 			     uop.op = (rd != 'd0) ? SH2ADD : NOP;
