@@ -3,10 +3,11 @@
 
 `include "machine.vh"
 
-module shift_right#(parameter LG_W=5)(y, is_left, is_signed, data, distance);
+module shift_right#(parameter LG_W=5)(y, is_left, is_signed, is_circular, data, distance);
    localparam W = 1<<LG_W;
    input logic is_left;
    input logic is_signed;
+   input logic is_circular;
    input logic [W-1:0] data;
    input logic [LG_W-1:0] distance;
    output [W-1:0] y;

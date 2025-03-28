@@ -375,7 +375,7 @@ module exec(clk,
    assign mideleg = r_mideleg;
    assign mstatus = r_mstatus;
    
-   logic 	t_signed_shift;
+   logic 	t_signed_shift, t_circular_shift;
    logic 	t_left_shift;
 
    logic	t_zero_shift_upper;
@@ -1202,7 +1202,7 @@ module exec(clk,
    
    
 
-   logic t_left_shift2, t_signed_shift2;
+   logic t_left_shift2, t_signed_shift2,t_circular_shift2;
    wire [63:0] w_shifter_out2;
    logic	       t_zero_shift_upper2;
    logic [5:0] t_shift_amt2;   
@@ -1214,7 +1214,8 @@ module exec(clk,
    
    shift_right #(.LG_W(6))
    s1(.is_left(t_left_shift2), 
-      .is_signed(t_signed_shift2), 
+      .is_signed(t_signed_shift2),
+      .is_circular(t_circular_shift2),
       .data(w_shift2_srcA), 
       .distance(t_shift_amt2), 
       .y(w_shifter_out2));
@@ -1311,6 +1312,7 @@ module exec(clk,
 	t_pc_2 = int_uop2.pc;
 	t_left_shift2 = 1'b0;
 	t_signed_shift2 = 1'b0;
+	t_circular_shift2 = 1'b0;
 	t_shift_amt2 = 'd0;
 	t_alu_valid2 = 1'b0;
 	t_result2 = 'd0;
@@ -1784,7 +1786,8 @@ module exec(clk,
    
    shift_right #(.LG_W(`LG_M_WIDTH)) 
    s0(.is_left(t_left_shift), 
-      .is_signed(t_signed_shift), 
+      .is_signed(t_signed_shift),
+      .is_circular(t_circular_shift),
       .data(t_zero_shift_upper ? {{32{(t_signed_shift ? t_srcA[31] : 1'b0)}}, t_srcA[31:0]} : t_srcA),
       .distance(t_shift_amt), 
       .y(w_shifter_out));
@@ -2127,6 +2130,7 @@ module exec(clk,
 	t_alu_valid = 1'b0;
 	t_got_break = 1'b0;
 	t_signed_shift = 1'b0;
+	t_circular_shift = 1'b0;
 	t_left_shift = 1'b0;
 	t_shift_amt = 'd0;
 	t_start_mul = 1'b0;
