@@ -158,6 +158,7 @@ typedef enum logic [6:0]
    SH3ADD_UW,   
    SLLI_UW,
    ANDN,
+   ORN,
    XNOR,
    SEXTB,
    SEXTH,   

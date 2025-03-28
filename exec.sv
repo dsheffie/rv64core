@@ -1534,6 +1534,12 @@ module exec(clk,
 	       t_alu_valid2 = 1'b1;
 	       t_wr_int_prf2 = 1'b1;
 	    end
+	  ORN:
+	    begin
+	       t_result2 = t_srcA_2 | (~t_srcB_2);
+	       t_alu_valid2 = 1'b1;
+	       t_wr_int_prf2 = 1'b1;
+	    end	  
 	  XOR:
 	    begin
 	       t_result2 = t_srcA_2 ^ t_srcB_2;
@@ -2450,6 +2456,12 @@ module exec(clk,
 	   OR:
 	     begin
 		t_result = t_srcA | t_srcB;	       
+		t_wr_int_prf = 1'b1;
+		t_alu_valid = 1'b1;
+	     end
+	   ORN:
+	     begin
+		t_result = t_srcA | (~t_srcB);	       
 		t_wr_int_prf = 1'b1;
 		t_alu_valid = 1'b1;
 	     end

@@ -1512,6 +1512,9 @@ void execRiscv(state_t *s) {
 	      case 0x10: /* sh3add */
 		s->sext_xlen(((s->gpr[m.r.rs1]<<3) + s->gpr[m.r.rs2]), m.r.rd);		
 		break;
+	      case 0x20: /* orn */
+		s->gpr[m.r.rd] = s->gpr[m.r.rs1] | (~s->gpr[m.r.rs2]);
+		break;		
 	      default:
 		std::cout << "sel = " << m.r.sel << ", special = " << m.r.special << "\n";
 		assert(0);
