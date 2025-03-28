@@ -1291,6 +1291,9 @@ module exec(clk,
    
    wire	       w_mispredicted_indirect2 = w_indirect_target2 != w_fe_indirect_target2;
    
+   wire	       w_signed_A_lt_B_2 = $signed(t_srcA_2) < $signed(t_srcB_2);
+   wire	       w_A_lt_B_2 = t_srcA_2 < t_srcB_2;   
+
    
    always_comb
      begin
@@ -1455,13 +1458,13 @@ module exec(clk,
 	    end
 	  SLT:
 	    begin
-	       t_result2 = {w_zf, $signed(t_srcA_2) < $signed(t_srcB_2)};
+	       t_result2 = {w_zf, w_signed_A_lt_B_2};
 	       t_alu_valid2 = 1'b1;
 	       t_wr_int_prf2 = 1'b1;
 	    end
 	  SLTU:
 	    begin
-	       t_result2 = {w_zf, t_srcA_2 < t_srcB_2};
+	       t_result2 = {w_zf, w_A_lt_B_2};
 	       t_alu_valid2 = 1'b1;
 	       t_wr_int_prf2 = 1'b1;
 	    end
@@ -1656,6 +1659,30 @@ module exec(clk,
 	  SEXTH:
 	    begin
 	       t_result2 = { {48{t_srcA_2[15]}}, t_srcA_2[15:0] };
+	       t_alu_valid2 = 1'b1;
+	       t_wr_int_prf2 = 1'b1;
+	    end
+	  MAX:
+	    begin
+	       t_result2 = w_signed_A_lt_B_2 ? t_srcB_2 : t_srcA_2;
+	       t_alu_valid2 = 1'b1;
+	       t_wr_int_prf2 = 1'b1;
+	    end
+	  MAXU:
+	    begin
+	       t_result2 = w_A_lt_B_2 ? t_srcB_2 : t_srcA_2;
+	       t_alu_valid2 = 1'b1;
+	       t_wr_int_prf2 = 1'b1;
+	    end	  
+	  MIN:
+	    begin
+	       t_result2 = w_signed_A_lt_B_2 ? t_srcA_2 : t_srcB_2;
+	       t_alu_valid2 = 1'b1;
+	       t_wr_int_prf2 = 1'b1;
+	    end
+	  MINU:
+	    begin
+	       t_result2 = w_A_lt_B_2 ? t_srcA_2 : t_srcB_2;
 	       t_alu_valid2 = 1'b1;
 	       t_wr_int_prf2 = 1'b1;
 	    end	  
@@ -2038,6 +2065,8 @@ module exec(clk,
 
    wire		       w_srcB_is_zero = (t_srcB == 64'd0);
    
+   wire		       w_signed_A_lt_B = $signed(t_srcA) < $signed(t_srcB);
+   wire		       w_A_lt_B = t_srcA < t_srcB;
    
    always_comb
      begin
@@ -2277,6 +2306,30 @@ module exec(clk,
 	       t_alu_valid = 1'b1;
 	       t_wr_int_prf = 1'b1;
 	    end
+	  MAX:
+	    begin
+	       t_result = w_signed_A_lt_B ? t_srcB : t_srcA;
+	       t_alu_valid = 1'b1;
+	       t_wr_int_prf = 1'b1;	       
+	    end
+	  MAXU:
+	    begin
+	       t_result = w_A_lt_B ? t_srcB : t_srcA;
+	       t_alu_valid = 1'b1;
+	       t_wr_int_prf = 1'b1;	       
+	    end
+	  MIN:
+	    begin
+	       t_result = w_signed_A_lt_B ? t_srcA : t_srcB;
+	       t_alu_valid = 1'b1;
+	       t_wr_int_prf = 1'b1;	       
+	    end
+	  MINU:
+	    begin
+	       t_result = w_A_lt_B ? t_srcA : t_srcB;
+	       t_alu_valid = 1'b1;
+	       t_wr_int_prf = 1'b1;	       
+	    end
 	  AUIPC:
 	    begin
 	       t_result = int_uop.rvimm;
@@ -2431,13 +2484,13 @@ module exec(clk,
 	    end
 	  SLT:
 	    begin
-	       t_result = {w_zf, $signed(t_srcA) < $signed(t_srcB)};	       
+	       t_result = {w_zf, w_signed_A_lt_B};	       
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
 	  SLTU:
 	    begin
-	       t_result = {w_zf, t_srcA < t_srcB};
+	       t_result = {w_zf, w_A_lt_B};
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
