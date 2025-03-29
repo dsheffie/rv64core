@@ -2625,6 +2625,15 @@ module exec(clk,
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
+	  ROL:
+	    begin
+	       t_circular_shift = 1'b1;
+	       t_left_shift = 1'b1;	       
+	       t_shift_amt = {(mode64 ? t_srcB[5] : 1'b0), t_srcB[4:0]};	       	       
+	       t_result = w_shifter_out;
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;
+	    end
 	  ROLW:
 	    begin
 	       t_circular_shift = 1'b1;

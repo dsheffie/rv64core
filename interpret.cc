@@ -23,6 +23,9 @@ static inline uint32_t ror32(const uint32_t x, int amt) {
  return (x >> amt) | (x << (32 - amt));
 }
 
+static inline uint64_t rol64(const uint64_t x, int amt) {
+  return (x << amt) | (x >> (64 - amt));
+}
 
 static inline uint32_t rol32(const uint32_t x, int amt) {
   return (x << amt) | (x >> (32 - amt));
@@ -1456,6 +1459,9 @@ void execRiscv(state_t *s) {
 		s->gpr[m.r.rd] = (t>>64);
 		break;
 	      }
+	      case 0x30: /* rol */
+		s->gpr[rd] = rol64(s->get_reg_u64(m.i.rs1), s->gpr[m.r.rs2] & (s->xlen()-1));		
+		break;
 	      default:
 		std::cout << "sel = " << m.r.sel << ", special = " << m.r.special << "\n";
 		std::cout << std::hex << s->pc << std::dec << "\n";
@@ -1535,6 +1541,9 @@ void execRiscv(state_t *s) {
 	      }		
 	      case 0x20: /* sra */
 		s->gpr[rd] = s->gpr[m.r.rs1] >> (s->gpr[m.r.rs2] & (s->xlen()-1));
+		break;
+	      case 0x30: /* ror */
+		s->gpr[rd] = ror64(s->get_reg_u64(m.i.rs1), s->gpr[m.r.rs2] & (s->xlen()-1));
 		break;
 	      default:
 		std::cout << "sel = " << m.r.sel << ", special = " << m.r.special << "\n";
