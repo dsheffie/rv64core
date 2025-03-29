@@ -705,7 +705,11 @@ module decode_riscv(
 `ifdef TWO_SRC_CHEAP
 			     uop.is_cheap_int = 1'b1;
 `endif			     
-			  end			
+			  end
+			7'h30:
+			  begin
+			     uop.op = (rd != 'd0) ? ROR : NOP;
+			  end
 			default:
 			  begin
 			  end

@@ -18,6 +18,11 @@ static inline uint64_t ror64(const uint64_t x, int amt) {
  return (x >> amt) | (x << (64 - amt));
 }
 
+static inline int64_t sext(int32_t r) {
+  return ((r < 0) ? 0xffffffff00000000 : 0UL) | r;
+}
+
+
 #include <stack>
 extern std::list<store_rec> store_queue;
 extern std::list<store_rec> atomic_queue;
@@ -803,19 +808,16 @@ void execRiscv(state_t *s) {
 	uint32_t shamt = (inst>>20) & 31;
 	switch(m.i.sel)
 	  {
-	  case 0: {
+	  case 0: { /* addiw */
 	    int32_t r = simm32 + *reinterpret_cast<int32_t*>(&s->gpr[m.i.rs1]);
-	    //std::cout << std::hex << simm32 << std::dec << "\n";
-	    //std::cout << std::hex << s->gpr[m.i.rs1] << std::dec << "\n";
-	    //std::cout << std::hex << r << std::dec << "\n";
-	    s->sext_xlen(r, rd);
+	    s->gpr[m.i.rd] = sext(r);
 	    break;
 	  }
 	  case 1: { /*SLLIW*/
 	    uint32_t sel = ((inst>>26)&3);
 	    if(sel == 0) {
 	      int32_t r = *reinterpret_cast<int32_t*>(&s->gpr[m.i.rs1]) << shamt;
-	      s->sext_xlen(r, rd);
+	      s->gpr[m.i.rd] = sext(r);
 	    }
 	    else if(sel == 2) {
 	      uint64_t c = static_cast<uint64_t>(s->get_reg_u32(m.i.rs1)) << shamt;
@@ -831,14 +833,11 @@ void execRiscv(state_t *s) {
 	    if(sel == 0) { /* SRLIW */
 	      uint32_t r = *reinterpret_cast<uint32_t*>(&s->gpr[m.i.rs1]) >> shamt;
 	      int32_t rr =  *reinterpret_cast<int32_t*>(&r);
-	      //std::cout << std::hex << *reinterpret_cast<uint32_t*>(&s->gpr[m.i.rs1])
-	      //<< std::dec << "\n";
-	      //std::cout << "rr = " << std::hex << rr << std::dec << "\n";
-	      s->sext_xlen(rr, rd);
+	      s->gpr[m.i.rd] = sext(rr);
 	    }
 	    else if(sel == 32){ /* SRAIW */
 	      int32_t r = *reinterpret_cast<int32_t*>(&s->gpr[m.i.rs1]) >> shamt;
-	      s->sext_xlen(r, rd);	      
+	      s->gpr[m.i.rd] = sext(r);
 	    }
 	    else {
 	      assert(0);

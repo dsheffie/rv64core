@@ -17,6 +17,6 @@ if __name__ == '__main__':
 
     with open('jobs.txt', 'w') as o:
         for test in tests:
-            o.write('../rv64_core -f %s --maxicnt %d &> %s.out\n' % (test, 16*1024*1024, test)) 
+            o.write('../rv64_core -f %s --maxicnt %d &> %s.out\n' % (test, 8*1024*1024, test)) 
 
 

@@ -4,7 +4,7 @@ import subprocess
 import re
 
 if __name__ == '__main__':
-    n_tests = 1000
+    n_tests = 10000
     use_paging = False
     for t in range(0,n_tests):
         r = 'test-' + str(t)
