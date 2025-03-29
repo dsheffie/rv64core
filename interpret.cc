@@ -23,6 +23,11 @@ static inline uint32_t ror32(const uint32_t x, int amt) {
  return (x >> amt) | (x << (32 - amt));
 }
 
+
+static inline uint32_t rol32(const uint32_t x, int amt) {
+  return (x << amt) | (x >> (32 - amt));
+}
+
 static inline uint64_t sext(int32_t r) {
   uint32_t x = *reinterpret_cast<uint32_t*>(&r);
   uint32_t s = (x>>31)&1;
@@ -1221,6 +1226,12 @@ void execRiscv(state_t *s) {
 	  int32_t c = a << (s->gpr[m.r.rs2]&31);
 	  s->sext_xlen(c, m.r.rd);
 	}
+	else if((m.r.sel == 1) & (m.r.special == 0x30)) { /* rol.w */
+	  uint32_t x = *reinterpret_cast<uint32_t*>(&s->gpr[m.r.rs1]);
+	  int amt = (s->gpr[m.r.rs2]&31);
+	  uint32_t xx = rol32(x, amt);
+	  s->gpr[m.i.rd] = sext(xx);
+	}	
 	else if((m.r.sel == 4) & (m.r.special == 1)) { /* divw */
 	  int32_t c = b ? a/b : ~0;
 	  s->sext_xlen(c, m.r.rd);
@@ -1238,6 +1249,12 @@ void execRiscv(state_t *s) {
 	  uint64_t bb = static_cast<uint64_t>(s->get_reg_u32(m.r.rs1)) << 2;
 	  uint64_t c = bb + *reinterpret_cast<uint64_t*>(&s->gpr[m.r.rs2]);
 	  s->sext_xlen(c, m.r.rd);
+	}
+	else if((m.r.sel == 5) & (m.r.special == 0x30)) { /* ror.w */
+	  uint32_t x = *reinterpret_cast<uint32_t*>(&s->gpr[m.r.rs1]);
+	  int amt = (s->gpr[m.r.rs2]&31);
+	  uint32_t xx = ror32(x, amt);
+	  s->gpr[m.i.rd] = sext(xx);
 	}
 	else if((m.r.sel == 6) & (m.r.special == 16)) { /* sh3add.uw */
 	  uint64_t bb = static_cast<uint64_t>(s->get_reg_u32(m.r.rs1)) << 3;

@@ -19,4 +19,5 @@ if __name__ == '__main__':
         for test in tests:
             o.write('../rv64_core -f %s --maxicnt %d &> %s.out\n' % (test, 8*1024*1024, test)) 
 
-
+    with open('jobs.txt', 'r') as in_:
+        subprocess.run(['parallel'], stdin=in_)

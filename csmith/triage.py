@@ -11,12 +11,14 @@ if __name__ == '__main__':
     badvas = []
     
     timeout = []
+    failedtests = []
     zero_disp_loops = 0
     for test in glob.glob('*.out'):
         failed = False
         succeed = False
         badva = False
-        icnt = None
+        asserted = False
+        icnt = -1
         zero_disp_loop = False
         with open(test, 'r') as in_:
             for line in in_:
@@ -25,6 +27,11 @@ if __name__ == '__main__':
                     succeed = True
                     successes.append(test)
                     break
+                m = re.search(r'Assertion', line)
+                if m != None:
+                    print(line)
+                    failed = True
+                    
                 m = re.search(r'register [a-z0-9]+ does not match', line)
                 if m != None:
                     failed = True
@@ -40,6 +47,7 @@ if __name__ == '__main__':
                     zero_disp_loop = True
 
         if failed:
+            failedtests.append(test)
             failures.append((icnt, test))
 
         if badva:
@@ -63,6 +71,13 @@ if __name__ == '__main__':
 
     print('%d successes, %d failures, %d badva, %d timeout' % (len(successes), len(failures), len(badvas), len(timeout)))
 
+    with open('fjobs.txt', 'w') as o:
+        for test in failedtests:
+            t = test.split('.out')
+            job =t[0]
+            o.write('../rv64_core -f %s --maxicnt %d &> %s\n' % (job, 8*1024*1024, test)) 
+
+    
     with open('timeout.txt', 'w') as o:
         for t in timeout:
             icnt = None

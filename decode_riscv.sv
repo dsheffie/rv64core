@@ -564,6 +564,10 @@ module decode_riscv(
 			  begin
 			     uop.op = (rd != 'd0) ? MULH : NOP;
 			  end
+			7'h30:
+			  begin
+			     uop.op = (rd != 'd0) ? ROL : NOP;
+			  end
 			default:
 			  begin
 			  end
@@ -810,6 +814,10 @@ module decode_riscv(
 			 uop.is_cheap_int = 1'b1;
 `endif
 		      end
+		    else if(insn[14:12] == 'd1 && insn[31:25] == 'h30)
+		      begin
+			 uop.op = (rd != 'd0) ? ROLW : NOP;
+		      end
 		    else if(insn[14:12] == 'd2 && insn[31:25] == 'd16)
 		      begin
 			 uop.op = (rd != 'd0) ? SH1ADD_UW : NOP;
@@ -832,7 +840,11 @@ module decode_riscv(
 `ifdef TWO_SRC_CHEAP			 
 			 uop.is_cheap_int = 1'b1;
 `endif			 
-		      end		    
+		      end
+		    else if(insn[14:12] == 'd5 && insn[31:25] == 'h30)
+		      begin
+			 uop.op = (rd != 'd0) ? RORW : NOP;
+		      end
 		    else if(insn[14:12] == 'd6 && insn[31:25] == 'd16)
 		      begin
 			 uop.op = (rd != 'd0) ? SH3ADD_UW : NOP;

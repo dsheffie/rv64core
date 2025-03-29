@@ -2615,7 +2615,27 @@ module exec(clk,
 	       t_result = {{32{w_shifter_out[31]}}, w_shifter_out[31:0]};	       
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
-	    end	  	  
+	    end
+	  RORW:
+	    begin
+	       t_circular_shift = 1'b1;
+	       t_dup_shift_upper = 1'b1;
+	       t_shift_amt = {1'b0,t_srcB[4:0]};
+	       t_result = {{32{w_shifter_out[31]}}, w_shifter_out[31:0]};	       
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;
+	    end
+	  ROLW:
+	    begin
+	       t_circular_shift = 1'b1;
+	       t_left_shift = 1'b1;	       
+	       t_dup_shift_upper = 1'b1;
+	       t_shift_amt = {1'b0,t_srcB[4:0]};
+	       t_result = {{32{w_shifter_out[31]}}, w_shifter_out[31:0]};	       
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;
+	    end
+	  
 	  SRAW:
 	    begin
 	       t_signed_shift = 1'b1;
