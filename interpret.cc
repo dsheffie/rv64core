@@ -19,6 +19,10 @@ static inline uint64_t ror64(const uint64_t x, int amt) {
  return (x >> amt) | (x << (64 - amt));
 }
 
+static inline uint32_t ror32(const uint32_t x, int amt) {
+ return (x >> amt) | (x << (32 - amt));
+}
+
 static inline uint64_t sext(int32_t r) {
   uint32_t x = *reinterpret_cast<uint32_t*>(&r);
   uint32_t s = (x>>31)&1;
@@ -838,7 +842,13 @@ void execRiscv(state_t *s) {
 	      int32_t r = *reinterpret_cast<int32_t*>(&s->gpr[m.i.rs1]) >> shamt;
 	      s->gpr[m.i.rd] = sext(r);
 	    }
+	    else if(sel == 0x30) { /* roriw */
+	      uint32_t x = *reinterpret_cast<uint32_t*>(&s->gpr[m.i.rs1]);
+	      uint32_t xx = ror32(x, shamt);
+	      s->gpr[m.i.rd] = sext(xx);
+	    }
 	    else {
+	      printf("pc %lx failure\n", s->pc);
 	      assert(0);
 	    }
 	    break;	    

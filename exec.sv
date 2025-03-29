@@ -378,7 +378,7 @@ module exec(clk,
    logic 	t_signed_shift, t_circular_shift;
    logic 	t_left_shift;
 
-   logic	t_zero_shift_upper;
+   logic	t_zero_shift_upper, t_dup_shift_upper;
    logic [5:0] 	t_shift_amt;
    wire [63:0] w_shifter_out;
 
@@ -1782,13 +1782,17 @@ module exec(clk,
      end // always_ff@ (posedge clk)
    
    
+   wire [63:0] w_shift_src = t_dup_shift_upper ? {t_srcA[31:0], t_srcA[31:0]} : 
+	       t_zero_shift_upper ? 
+	       {{32{(t_signed_shift ? t_srcA[31] : 1'b0)}}, t_srcA[31:0]} : 
+	       t_srcA;
    
    
    shift_right #(.LG_W(`LG_M_WIDTH)) 
    s0(.is_left(t_left_shift), 
       .is_signed(t_signed_shift),
       .is_circular(t_circular_shift),
-      .data(t_zero_shift_upper ? {{32{(t_signed_shift ? t_srcA[31] : 1'b0)}}, t_srcA[31:0]} : t_srcA),
+      .data(w_shift_src),
       .distance(t_shift_amt), 
       .y(w_shifter_out));
 
@@ -2142,6 +2146,7 @@ module exec(clk,
 	t_start_div32 = 1'b0;
 	t_start_div64 = 1'b0;	
 	t_zero_shift_upper = 1'b0;
+	t_dup_shift_upper = 1'b0;
 	
 	case(int_uop.op)
 	  //riscv
@@ -2597,11 +2602,20 @@ module exec(clk,
 	  RORI:
 	    begin
 	       t_circular_shift = 1'b1;
-	       t_shift_amt = {(mode64 ? int_uop.rvimm[5] : 1'b0), int_uop.rvimm[4:0]};	       	       
+	       t_shift_amt = {(mode64 ? int_uop.rvimm[5] : 1'b0), int_uop.rvimm[4:0]};	  
 	       t_result = w_shifter_out;
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
-	    end	  
+	    end
+	  RORIW:
+	    begin
+	       t_circular_shift = 1'b1;
+	       t_dup_shift_upper = 1'b1;
+	       t_shift_amt = {(mode64 ? int_uop.rvimm[5] : 1'b0), int_uop.rvimm[4:0]};	  
+	       t_result = {{32{w_shifter_out[31]}}, w_shifter_out[31:0]};	       
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;
+	    end	  	  
 	  SRAW:
 	    begin
 	       t_signed_shift = 1'b1;
