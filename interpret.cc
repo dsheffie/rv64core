@@ -1233,6 +1233,7 @@ void execRiscv(state_t *s) {
 	  uint32_t x = *reinterpret_cast<uint32_t*>(&s->gpr[m.r.rs1]);
 	  int amt = (s->gpr[m.r.rs2]&31);
 	  uint32_t xx = rol32(x, amt);
+	  printf("rol32 : x = %x, amt = %d, xx = %x\n", x, amt, xx);
 	  s->gpr[m.i.rd] = sext(xx);
 	}	
 	else if((m.r.sel == 4) & (m.r.special == 1)) { /* divw */
