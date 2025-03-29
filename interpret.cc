@@ -7,6 +7,7 @@
 #include <set>
 #include <list>
 #include <unordered_map>
+#include <stack>
 
 #include "interpret.hh"
 #include "temu_code.hh"
@@ -18,15 +19,13 @@ static inline uint64_t ror64(const uint64_t x, int amt) {
  return (x >> amt) | (x << (64 - amt));
 }
 
-static inline int64_t sext(int32_t r) {
-  return ((r < 0) ? 0xffffffff00000000 : 0UL) | r;
+static inline uint64_t sext(int32_t r) {
+  uint32_t x = *reinterpret_cast<uint32_t*>(&r);
+  uint32_t s = (x>>31)&1;
+  return (s ? 0xffffffff00000000UL : 0UL) | static_cast<uint64_t>(x);
 }
 
-
-#include <stack>
-extern std::list<store_rec> store_queue;
-extern std::list<store_rec> atomic_queue;
-
+extern std::list<store_rec> store_queue, atomic_queue;
 static uint64_t last_tval = 0;
 static std::stack<int64_t> calls;
 
