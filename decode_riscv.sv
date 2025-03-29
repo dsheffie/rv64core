@@ -817,6 +817,7 @@ module decode_riscv(
 		    else if(insn[14:12] == 'd1 && insn[31:25] == 'h30)
 		      begin
 			 uop.op = (rd != 'd0) ? ROLW : NOP;
+			 uop.srcB_valid = 1'b1;
 		      end
 		    else if(insn[14:12] == 'd2 && insn[31:25] == 'd16)
 		      begin
@@ -844,6 +845,7 @@ module decode_riscv(
 		    else if(insn[14:12] == 'd5 && insn[31:25] == 'h30)
 		      begin
 			 uop.op = (rd != 'd0) ? RORW : NOP;
+			 uop.srcB_valid = 1'b1;	
 		      end
 		    else if(insn[14:12] == 'd6 && insn[31:25] == 'd16)
 		      begin

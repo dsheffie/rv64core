@@ -2629,7 +2629,7 @@ module exec(clk,
 	    begin
 	       t_circular_shift = 1'b1;
 	       t_left_shift = 1'b1;	       
-	       t_shift_amt = {(mode64 ? t_srcB[5] : 1'b0), t_srcB[4:0]};	       	       
+	       t_shift_amt = {(mode64 ? t_srcB[5] : 1'b0), t_srcB[4:0]};	       
 	       t_result = w_shifter_out;
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
@@ -2640,7 +2640,7 @@ module exec(clk,
 	       t_left_shift = 1'b1;	       
 	       t_dup_shift_upper = 1'b1;
 	       t_shift_amt = {1'b0,t_srcB[4:0]};
-	       t_result = {{32{w_shifter_out[31]}}, w_shifter_out[31:0]};	       
+	       t_result = {{32{w_shifter_out[31]}}, w_shifter_out[31:0]};
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
@@ -2848,7 +2848,15 @@ module exec(clk,
    wire [31:0]	       w_mideleg =	       r_mideleg[31:0];
    wire [15:0]	       w_medeleg = r_medeleg[15:0];
    
-   
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if(int_uop.op == ROLW & t_alu_valid)
+   // 	  begin
+   // 	     $display("ROLW IN  = %x", t_srcA[31:0]);
+   // 	     $display("ROLW AMT = %d", t_srcB);
+   // 	     $display("ROLW OUT = %x", t_result[31:0]);
+   // 	  end
+   //   end
    
    always_comb
      begin
