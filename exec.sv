@@ -2115,12 +2115,12 @@ module exec(clk,
    endgenerate
 
 
-   wire [63:0] w_clz0_in = t_is_clzw ? {32'hffffffff, t_srcA[31:0]} : t_srcA;
+   wire [63:0] w_clz0_in = t_is_clzw ? {32'd0, t_srcA[31:0]} : t_srcA;
    wire	       w_clz0_zero = t_is_clzw ? (|w_clz0_in[31:0]==1'b0) : 
 	       (|w_clz0_in == 1'b0);
    
    wire [6:0]  w_clz0_out;
-   
+   wire [6:0]  w_clz0_out32 = w_clz0_out - 7'd32;
    count_leading_zeros #(.LG_N(6)) clz0 
      ( 
        .in(w_clz0_in), 
@@ -2614,8 +2614,8 @@ module exec(clk,
 	    end
 	  CLZW:
 	    begin
-	       t_is_clzw = 1'b0;
-	       t_result = w_clz0_zero ? {64{1'b1}} : {57'd0,w_clz0_out};	       
+	       t_is_clzw = 1'b1;
+	       t_result = w_clz0_zero ? {64{1'b1}} : {57'd0,w_clz0_out32};	       
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
@@ -2879,11 +2879,10 @@ module exec(clk,
    
    // always_ff@(negedge clk)
    //   begin
-   // 	if(int_uop.op == ROLW & t_alu_valid)
+   // 	if(int_uop.op == CLZW & t_alu_valid)
    // 	  begin
-   // 	     $display("ROLW IN  = %x", t_srcA[31:0]);
-   // 	     $display("ROLW AMT = %d", t_srcB);
-   // 	     $display("ROLW OUT = %x", t_result[31:0]);
+   // 	     $display("CLZW IN  = %b", w_clz0_in);
+   // 	     $display("CLZW OUT = %d", w_clz0_out32);
    // 	  end
    //   end
    

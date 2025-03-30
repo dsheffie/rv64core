@@ -839,7 +839,8 @@ void execRiscv(state_t *s) {
 	      s->sext_xlen(c, m.r.rd);	      
 	    }
 	    else if(sel == 0x18) { /* clzw */
-	      uint32_t u = *reinterpret_cast<uint32_t*>(&s->gpr[m.i.rs1]);	      
+	      uint32_t u = *reinterpret_cast<uint32_t*>(&s->gpr[m.i.rs1]);
+	      //printf("clzw of %x\n", u);
 	      if(u == 0) {
 		s->gpr[m.i.rd] = ~0UL;
 	      }
