@@ -750,8 +750,12 @@ void execRiscv(state_t *s) {
 	    s->sext_xlen(s->gpr[m.i.rs1] + simm64, rd);
 	    break;
 	  }
-	  case 1: 
-	    if( (inst>>20) == 0x604) { /* sext.b */
+	  case 1:
+	    if((inst>>20) == 0x600) { /* clz */
+	      uint64_t u = *reinterpret_cast<uint64_t*>(&s->gpr[m.i.rs1]);
+	      s->gpr[m.i.rd] = u==0 ? ~0UL : __builtin_clzl(u);
+	    }
+	    else if( (inst>>20) == 0x604) { /* sext.b */
 	      int64_t z8 = s->gpr[m.i.rs1];
 	      int64_t z64 = (z8 << 56) >> 56;
 	      s->sext_xlen(z64, rd);
@@ -1233,7 +1237,7 @@ void execRiscv(state_t *s) {
 	  uint32_t x = *reinterpret_cast<uint32_t*>(&s->gpr[m.r.rs1]);
 	  int amt = (s->gpr[m.r.rs2]&31);
 	  uint32_t xx = rol32(x, amt);
-	  printf("rol32 : x = %x, amt = %d, xx = %x\n", x, amt, xx);
+	  //printf("rol32 : x = %x, amt = %d, xx = %x\n", x, amt, xx);
 	  s->gpr[m.i.rd] = sext(xx);
 	}	
 	else if((m.r.sel == 4) & (m.r.special == 1)) { /* divw */
@@ -1583,9 +1587,6 @@ void execRiscv(state_t *s) {
 		break;
 	      case 0x1: { /* remu */
 		*reinterpret_cast<uint64_t*>(&s->gpr[m.r.rd]) = u_rs2 ? u_rs1 % u_rs2 : ~(0UL);
-		//std::cout << std::hex << u_rs1 << std::dec << "\n";
-		//std::cout << std::hex << u_rs2 << std::dec << "\n";
-		//std::cout << std::hex << (u_rs1 % u_rs2) << std::dec << "\n";
 		break;
 	      }
 	      case 0x5: /* maxu */

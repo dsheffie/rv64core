@@ -383,7 +383,8 @@ module exec(clk,
    wire [63:0] w_shifter_out;
 
    logic	       t_start_mul,t_is_mulw,t_signed_mul;
-
+   logic	       t_is_clzw;
+   
    logic 	t_mul_complete;
    logic [63:0] t_mul_result, r_mul_result;
    
@@ -2113,9 +2114,23 @@ module exec(clk,
 	end
    endgenerate
 
+
+   wire [63:0] w_clz0_in = t_is_clzw ? {32'hffffffff, t_srcA[31:0]} : t_srcA;
+   wire	       w_clz0_zero = t_is_clzw ? (|w_clz0_in[31:0]==1'b0) : 
+	       (|w_clz0_in == 1'b0);
+   
+   wire [6:0]  w_clz0_out;
+   
+   count_leading_zeros #(.LG_N(6)) clz0 
+     ( 
+       .in(w_clz0_in), 
+       .y(w_clz0_out)
+       );
+   
    
    always_comb
      begin
+	t_is_clzw = 1'b0;
 	t_sub = 1'b0;
 	t_addi = 1'b0;
 	t_pc = int_uop.pc;
@@ -2591,6 +2606,20 @@ module exec(clk,
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
+	  CLZ:
+	    begin
+	       t_result = w_clz0_zero ? {64{1'b1}} : {57'd0,w_clz0_out};
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;
+	    end
+	  CLZW:
+	    begin
+	       t_is_clzw = 1'b0;
+	       t_result = w_clz0_zero ? {64{1'b1}} : {57'd0,w_clz0_out};	       
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;
+	    end
+	  
 	  ROR:
 	    begin
 	       t_circular_shift = 1'b1;

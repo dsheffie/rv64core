@@ -291,20 +291,26 @@ module decode_riscv(
 		   end
 		 3'd1:
 		   begin
-		      if(insn[31:20] == 12'h604)
+		      if(insn[31:20] == 12'h600)
+			begin
+			   uop.op = (rd == 'd0) ? NOP : CLZ;
+			end
+		      else if(insn[31:20] == 12'h604)
 			begin
 			   uop.op = (rd == 'd0) ? NOP : SEXTB;
+			   uop.is_cheap_int = 1'b1;
 			end
 		      else if(insn[31:20] == 12'h605)
 			begin
 			   uop.op = (rd == 'd0) ? NOP : SEXTH;
+			   uop.is_cheap_int = 1'b1;
 			end
 		      else
 			begin
 			   uop.op = (rd == 'd0) ? NOP : SLLI;
+			   uop.is_cheap_int = 1'b1;
 			end
-		      //end
-		      uop.is_cheap_int = 1'b1;
+		      
 		   end
 		 3'd2:
 		   begin
