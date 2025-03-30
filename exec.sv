@@ -383,7 +383,7 @@ module exec(clk,
    wire [63:0] w_shifter_out;
 
    logic	       t_start_mul,t_is_mulw,t_signed_mul;
-   logic	       t_is_clzw_ctzw;
+   logic	       t_is_clzw_ctzw_cpopw;
    
    logic 	t_mul_complete;
    logic [63:0] t_mul_result, r_mul_result;
@@ -2115,11 +2115,11 @@ module exec(clk,
    endgenerate
 
 
-   wire [63:0] w_clz0_in = t_is_clzw_ctzw ? {32'd0, t_srcA[31:0]} : t_srcA;
-   wire	       w_clz0_zero = t_is_clzw_ctzw ? (|w_clz0_in[31:0]==1'b0) : 
+   wire [63:0] w_clz0_in = t_is_clzw_ctzw_cpopw ? {32'd0, t_srcA[31:0]} : t_srcA;
+   wire	       w_clz0_zero = t_is_clzw_ctzw_cpopw ? (|w_clz0_in[31:0]==1'b0) : 
 	       (|w_clz0_in == 1'b0);
    
-   wire [6:0]  w_clz0_out, w_ctz0_out;
+   wire [6:0]  w_clz0_out, w_ctz0_out, w_cpop0_out;
    
    wire [6:0]  w_clz0_out32 = w_clz0_out - 7'd32;
    
@@ -2134,11 +2134,15 @@ module exec(clk,
        .Y(w_ctz0_out)
        );
 
-   
-   
+   popcount #(.LG_N(6)) pc0
+     (
+      .in(w_clz0_in),
+      .out(w_cpop0_out)
+      );
+      
    always_comb
      begin
-	t_is_clzw_ctzw = 1'b0;
+	t_is_clzw_ctzw_cpopw = 1'b0;
 	t_sub = 1'b0;
 	t_addi = 1'b0;
 	t_pc = int_uop.pc;
@@ -2626,21 +2630,33 @@ module exec(clk,
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
+	  CPOP:
+	    begin
+	       t_result = {57'd0,w_cpop0_out};
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;
+	    end	  
 	  CTZW:
 	    begin
-	       t_is_clzw_ctzw = 1'b1;	       
+	       t_is_clzw_ctzw_cpopw = 1'b1;	       
 	       t_result = w_clz0_zero ? {64{1'b1}} : {57'd0,w_ctz0_out};
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end	  
 	  CLZW:
 	    begin
-	       t_is_clzw_ctzw = 1'b1;
+	       t_is_clzw_ctzw_cpopw = 1'b1;
 	       t_result = w_clz0_zero ? {64{1'b1}} : {57'd0,w_clz0_out32};	       
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
-	  
+	  CPOPW:
+	    begin
+	       t_is_clzw_ctzw_cpopw = 1'b1;
+	       t_result = {57'd0,w_cpop0_out};
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;
+	    end
 	  ROR:
 	    begin
 	       t_circular_shift = 1'b1;
@@ -2900,11 +2916,10 @@ module exec(clk,
    
    // always_ff@(negedge clk)
    //   begin
-   // 	if(int_uop.op == CLZW & t_alu_valid)
+   // 	if(int_uop.op == CPOP & t_alu_valid)
    // 	  begin
-   // 	     $display("CLZW IN  = %b", w_clz0_in);
-   // 	     $display("CLZW OUT = %d", w_clz0_out32);
-   // 	     $display("CLZ  OUT = %d", w_clz0_out);
+   // 	     $display("CPOP IN  = %b", w_clz0_in);
+   // 	     $display("CPOP OUT = %d", w_cpop0_out);
    // 	  end
    //   end
    

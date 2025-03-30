@@ -54,7 +54,7 @@ typedef enum logic [5:0]
 } csr_t;
 
 
-typedef enum logic [6:0] 
+typedef enum logic [7:0] 
   {
    SRL, //0
    SRA, //1
@@ -177,7 +177,10 @@ typedef enum logic [6:0]
    CLZ,
    CLZW,
    CTZ,
-   CTZW,   
+   CTZW,
+   CPOP,
+   CPOPW,
+   ORCB,
    FENCEI,
    FETCH_PF,
    IRQ,

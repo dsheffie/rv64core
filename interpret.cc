@@ -758,7 +758,12 @@ void execRiscv(state_t *s) {
 	    else if((inst>>20) == 0x601) { /* ctz */
 	      uint64_t u = *reinterpret_cast<uint64_t*>(&s->gpr[m.i.rs1]);
 	      s->gpr[m.i.rd] = u==0 ? ~0UL : __builtin_ctzl(u);
+	    }
+	    else if((inst>>20) == 0x602) { /* cpop */
+	      uint64_t u = *reinterpret_cast<uint64_t*>(&s->gpr[m.i.rs1]);
+	      s->gpr[m.i.rd] =  __builtin_popcountl(u);
 	    }	    
+	    
 	    else if( (inst>>20) == 0x604) { /* sext.b */
 	      int64_t z8 = s->gpr[m.i.rs1];
 	      int64_t z64 = (z8 << 56) >> 56;
@@ -857,6 +862,9 @@ void execRiscv(state_t *s) {
 		  case 1: /* ctzw */
 		    s->gpr[m.i.rd] = __builtin_ctz(u);		    
 		    break;
+		  case 2: /* cpopw */
+		    s->gpr[m.i.rd] = __builtin_popcount(u);		    
+		    break;		    
 		  default:
 		    assert(0);
 		  }
@@ -1562,7 +1570,7 @@ void execRiscv(state_t *s) {
 		break;
 	      }
 	      case 0x5: /* minu */
-		*reinterpret_cast<uint64_t*>(&s->gpr[m.r.rd]) = std::min(u_rs1, u_rs1);
+		*reinterpret_cast<uint64_t*>(&s->gpr[m.r.rd]) = std::min(u_rs1, u_rs2);
 		break;
 	      case 0x7: {
 		s->gpr[m.r.rd] = s->gpr[m.r.rs2]==0 ? 0 : s->gpr[m.r.rs1];

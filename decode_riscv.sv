@@ -299,6 +299,10 @@ module decode_riscv(
 			begin
 			   uop.op = (rd == 'd0) ? NOP : CTZ;
 			end
+		      else if(insn[31:20] == 12'h602)
+			begin
+			   uop.op = (rd == 'd0) ? NOP : CPOP;
+			end
 		      else if(insn[31:20] == 12'h604)
 			begin
 			   uop.op = (rd == 'd0) ? NOP : SEXTB;
@@ -338,6 +342,10 @@ module decode_riscv(
 			  begin
 			     uop.op = (rd == 'd0) ? NOP : SRLI;
 			     uop.is_cheap_int = 1'b1;
+			  end
+			6'ha:
+			  begin
+			     uop.op = (rd == 'd0) ? NOP : ORCB;
 			  end
 			6'h10:
 			  begin
@@ -413,6 +421,7 @@ module decode_riscv(
 				uop.op = (rd == 'd0) ? NOP : 
 					 (insn[24:20] == 5'd0 ? CLZW :
 					  insn[24:20] == 5'd1 ? CTZW :
+					  insn[24:20] == 5'd2 ? CPOPW :
 					  II);
 			     end
 			end
