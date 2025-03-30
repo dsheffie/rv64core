@@ -394,11 +394,20 @@ module decode_riscv(
 			end
 		      3'd1: /* slliw */
 			begin
-			   uop.op = (rd == 'd0) ? NOP : 
-				    (insn[27:26] == 2'd0) ? SLLIW :
-				    (insn[27:26] == 2'd2) ? SLLI_UW :
-				    II;			   
-			   uop.is_cheap_int = 1'b1;
+			   if(insn[31:26] == 6'h0)
+			     begin
+				uop.op = (rd == 'd0) ? NOP : SLLIW;
+				uop.is_cheap_int = 1'b1;
+			     end
+			   else if(insn[31:26] == 6'h2)
+			     begin
+				uop.op = (rd == 'd0) ? NOP : SLLI_UW;
+				uop.is_cheap_int = 1'b1;	
+			     end
+			   else if(insn[31:26] == 6'h18)
+			     begin
+				uop.op = (rd == 'd0) ? NOP : CLZW;
+			     end
 			end
 		      3'd5: /* sraiw */
 			begin
