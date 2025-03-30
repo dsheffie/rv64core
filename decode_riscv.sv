@@ -295,6 +295,10 @@ module decode_riscv(
 			begin
 			   uop.op = (rd == 'd0) ? NOP : CLZ;
 			end
+		      else if(insn[31:20] == 12'h601)
+			begin
+			   uop.op = (rd == 'd0) ? NOP : CTZ;
+			end
 		      else if(insn[31:20] == 12'h604)
 			begin
 			   uop.op = (rd == 'd0) ? NOP : SEXTB;
@@ -406,7 +410,10 @@ module decode_riscv(
 			     end
 			   else if(insn[31:26] == 6'h18)
 			     begin
-				uop.op = (rd == 'd0) ? NOP : CLZW;
+				uop.op = (rd == 'd0) ? NOP : 
+					 (insn[24:20] == 5'd0 ? CLZW :
+					  insn[24:20] == 5'd1 ? CTZW :
+					  II);
 			     end
 			end
 		      3'd5: /* sraiw */

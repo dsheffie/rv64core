@@ -176,6 +176,8 @@ typedef enum logic [6:0]
    REV8,
    CLZ,
    CLZW,
+   CTZ,
+   CTZW,   
    FENCEI,
    FETCH_PF,
    IRQ,
