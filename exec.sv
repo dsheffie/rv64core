@@ -2626,6 +2626,13 @@ module exec(clk,
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
+	  CTZW:
+	    begin
+	       t_is_clzw_ctzw = 1'b1;	       
+	       t_result = w_clz0_zero ? {64{1'b1}} : {57'd0,w_ctz0_out};
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;
+	    end	  
 	  CLZW:
 	    begin
 	       t_is_clzw_ctzw = 1'b1;
@@ -2897,6 +2904,7 @@ module exec(clk,
    // 	  begin
    // 	     $display("CLZW IN  = %b", w_clz0_in);
    // 	     $display("CLZW OUT = %d", w_clz0_out32);
+   // 	     $display("CLZ  OUT = %d", w_clz0_out);
    // 	  end
    //   end
    

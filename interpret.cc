@@ -755,6 +755,10 @@ void execRiscv(state_t *s) {
 	      uint64_t u = *reinterpret_cast<uint64_t*>(&s->gpr[m.i.rs1]);
 	      s->gpr[m.i.rd] = u==0 ? ~0UL : __builtin_clzl(u);
 	    }
+	    else if((inst>>20) == 0x601) { /* ctz */
+	      uint64_t u = *reinterpret_cast<uint64_t*>(&s->gpr[m.i.rs1]);
+	      s->gpr[m.i.rd] = u==0 ? ~0UL : __builtin_ctzl(u);
+	    }	    
 	    else if( (inst>>20) == 0x604) { /* sext.b */
 	      int64_t z8 = s->gpr[m.i.rs1];
 	      int64_t z64 = (z8 << 56) >> 56;
@@ -845,7 +849,17 @@ void execRiscv(state_t *s) {
 		s->gpr[m.i.rd] = ~0UL;
 	      }
 	      else {
-		s->gpr[m.i.rd] = __builtin_clz(u);
+		switch( (inst>>20)&31 )
+		  {
+		  case 0: /* clzw */
+		    s->gpr[m.i.rd] = __builtin_clz(u);
+		    break;
+		  case 1: /* ctzw */
+		    s->gpr[m.i.rd] = __builtin_ctz(u);		    
+		    break;
+		  default:
+		    assert(0);
+		  }
 	      }
 	    }
 	    else {
