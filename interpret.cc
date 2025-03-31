@@ -795,6 +795,18 @@ void execRiscv(state_t *s) {
 	    if(sel == 0) { /* srli */
 	      s->gpr[rd] = (*reinterpret_cast<uint64_t*>(&s->gpr[m.i.rs1]) >> shamt);
 	    }
+	    else if(sel == 0xa) { /* orcb */
+	      uint64_t u = s->get_reg_u64(m.i.rs1), x = 0;
+	      x = (u & 255) == 0 ? 0 : 255UL;
+	      x |= ((u>>8) & 255) == 0 ? 0 : 255UL<<8;
+	      x |= ((u>>16) & 255) == 0 ? 0 : 255UL<<16;
+	      x |= ((u>>24) & 255) == 0 ? 0 : 255UL<<24;	      	      	      
+	      x |= ((u>>32) & 255) == 0 ? 0 : 255UL<<32;
+	      x |= ((u>>40) & 255) == 0 ? 0 : 255UL<<40;
+	      x |= ((u>>48) & 255) == 0 ? 0 : 255UL<<48;
+	      x |= ((u>>56) & 255) == 0 ? 0 : 255UL<<56;
+	      s->gpr[rd] = x;
+	    }
 	    else if(sel == 16) { /* srai */
 	      s->gpr[rd] = s->gpr[m.i.rs1] >> shamt;
 	    }

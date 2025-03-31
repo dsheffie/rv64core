@@ -2123,6 +2123,19 @@ module exec(clk,
    
    wire [6:0]  w_clz0_out32 = w_clz0_out - 7'd32;
    
+   wire [63:0] w_orcb0;
+   assign w_orcb0[7:0]   = |t_srcA[7:0] ? 8'hff : 8'd0;
+   assign w_orcb0[15:8]  = |t_srcA[15:8] ? 8'hff : 8'd0;
+   assign w_orcb0[23:16] = |t_srcA[23:16] ? 8'hff : 8'd0;
+   assign w_orcb0[31:24] = |t_srcA[31:24] ? 8'hff : 8'd0;
+   
+   assign w_orcb0[39:32] = |t_srcA[39:32] ? 8'hff : 8'd0;
+   assign w_orcb0[47:40] = |t_srcA[47:40] ? 8'hff : 8'd0;
+   assign w_orcb0[55:48] = |t_srcA[55:48] ? 8'hff : 8'd0;
+   assign w_orcb0[63:56] = |t_srcA[63:56] ? 8'hff : 8'd0;      
+   
+
+   
    clz64 clz0 
      ( 
        .A(w_clz0_in), 
@@ -2657,6 +2670,12 @@ module exec(clk,
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
+	  ORCB:
+	    begin
+	       t_result = w_orcb0;
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;
+	    end
 	  ROR:
 	    begin
 	       t_circular_shift = 1'b1;
@@ -2916,10 +2935,10 @@ module exec(clk,
    
    // always_ff@(negedge clk)
    //   begin
-   // 	if(int_uop.op == CPOP & t_alu_valid)
+   // 	if(int_uop.op == ORCB & t_alu_valid)
    // 	  begin
-   // 	     $display("CPOP IN  = %b", w_clz0_in);
-   // 	     $display("CPOP OUT = %d", w_cpop0_out);
+   // 	     $display("ORCB IN  = %b", t_srcA);
+   // 	     $display("ORCB OUT = %b", w_orcb0);
    // 	  end
    //   end
    
