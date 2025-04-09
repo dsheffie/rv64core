@@ -831,7 +831,7 @@ endfunction
 			      t_take_br = 1'b1;
 			      n_pc = r_spec_return_stack[t_next_spec_rs_tos];
 			      t_push_insn = 1'b1;
-			   end // if (t_pd == 4'd7)
+			   end
 			 else if(t_pd == 3'd4 || t_pd == 3'd6)
 			   begin
 			      t_is_cflow = 1'b1;			 
@@ -839,6 +839,16 @@ endfunction
 			      t_is_call = (t_pd == 3'd6);
 			      n_pc = r_btb_pc;
 			      t_push_insn = 1'b1;			      
+			   end
+			 else if(t_pd == 3'd7)
+			   begin
+			      //$stop();
+			      t_is_cflow = 1'b1;			 
+			      t_take_br = 1'b1;
+			      t_is_call = 1'b1;
+			      t_is_ret = 1'b1;
+			      n_pc = r_spec_return_stack[t_next_spec_rs_tos];
+			      t_push_insn = 1'b1;
 			   end
 			 //$display("branch = %x, n_pc = %x", r_cache_pc, n_pc);			 
 		      end // else: !if((t_taken_branch_idx == 'd1) & !fq_full2)
@@ -1377,10 +1387,12 @@ endfunction
 
    
    wire [2:0] w_pd0, w_pd1, w_pd2, w_pd3;
-   predecode pd0 (.insn(mem_rsp_load_data[31:0]),   .pd(w_pd0));
-   predecode pd1 (.insn(mem_rsp_load_data[63:32]),  .pd(w_pd1));
-   predecode pd2 (.insn(mem_rsp_load_data[95:64]),  .pd(w_pd2));
-   predecode pd3 (.insn(mem_rsp_load_data[127:96]), .pd(w_pd3));   
+   predecode pd0 (.pc(r_mem_req_addr), .insn(mem_rsp_load_data[31:0]),   .pd(w_pd0));
+   predecode pd1 (.pc(r_mem_req_addr+'d4), .insn(mem_rsp_load_data[63:32]),  .pd(w_pd1));
+   predecode pd2 (.pc(r_mem_req_addr+'d8), .insn(mem_rsp_load_data[95:64]),  .pd(w_pd2));
+   predecode pd3 (.pc(r_mem_req_addr+'d12), .insn(mem_rsp_load_data[127:96]), .pd(w_pd3));   
+
+
    
    
    ram1r1w #(.WIDTH(3*WORDS_PER_CL), .LG_DEPTH(`LG_L1I_NUM_SETS))
@@ -1415,11 +1427,11 @@ endfunction
 	  begin
 	     n_spec_rs_tos = r_arch_rs_tos;
 	  end
-	else if(t_is_call)
+	else if(t_is_call & (!t_is_ret))
 	  begin
 	     n_spec_rs_tos = r_spec_rs_tos - 'd1;
 	  end
-	else if(t_is_ret)
+	else if((!t_is_call) & t_is_ret)
 	  begin
 	     n_spec_rs_tos = r_spec_rs_tos + 'd1;
 	  end
@@ -1440,6 +1452,21 @@ endfunction
 	     r_spec_return_stack <= r_arch_return_stack;
 	  end
      end // always_ff@ (posedge clk)
+
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if(t_is_call)
+   // 	  begin
+   // 	     $display("push to rsb at cycle %d, call addr %x, ret addr %x", 
+   // 		      r_cycle, r_cache_pc, t_ret_pc);
+   // 	  end
+   // 	if(t_is_ret)
+   // 	  begin
+   // 	     $display("pop from rsb at cycle %d, %x addr src, target %x",
+   // 		      r_cycle, r_cache_pc,
+   // 		      r_spec_return_stack[t_next_spec_rs_tos]);
+   // 	  end
+   //   end
    
    always_ff@(posedge clk)
      begin

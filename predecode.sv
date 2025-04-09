@@ -15,13 +15,15 @@ typedef enum logic [3:0] {
 
 
 
-module predecode(insn, pd);
+module predecode(pc, insn, pd);
+   input logic [63:0] pc;
    input logic [31:0] insn;
    output logic [2:0] pd;
    logic [6:0] 	      opcode;
    
    logic [4:0] 	      rd, rs1;
    logic 	      rd_is_link, rs1_is_link;
+
    
    always_comb
      begin
@@ -46,8 +48,29 @@ module predecode(insn, pd);
 		 end
 	       else
 		 begin
+		    //00000000004a106c : rs1_is_link = 0, rd_is_link = 1
+		    if(rs1_is_link & rd_is_link)
+		      begin
+			 pd = 'd7;
+		      end
+		    else if(rs1_is_link & (rd_is_link == 1'b0))
+		      begin
+			 pd = 'd4;
+		      end
+		    else if((rs1_is_link == 1'b0) & (rd_is_link))
+		      begin
+			 /* indirect function call */
+			 pd = 'd6;
+		      end
+		    else
+		      begin
+			 pd = 'd4;
+		      end
+
+		    //pd = rs1_is_link ? 'd6 /* jalr */ : 'd4 /* jr */;
 		    /* jalr */
-		    pd = rs1_is_link ? 'd6 /* jalr */ : 'd4 /* jr */;
+		    //
+		    //$display("%x : rs1_is_link = %b, rd_is_link = %b\n", pc, rs1_is_link, rd_is_link);
 		 end
 
 	    end
@@ -68,4 +91,6 @@ module predecode(insn, pd);
 	    end
 	endcase // case (opcode)
      end // always_comb
+
+   
 endmodule // predecode
