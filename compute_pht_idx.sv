@@ -5,6 +5,6 @@ module compute_pht_idx(pc, hist, idx);
    input logic [`GBL_HIST_LEN-1:0] hist;
    output logic [`LG_PHT_SZ-1:0]   idx;
 
-   assign idx = hist ^ pc[17:2] /*^ pc[33:18]) ^ pc[49:34]*/;
+   assign idx = hist ^ pc[19:4] /*^ pc[33:18]) ^ pc[49:34]*/;
    
 endmodule
