@@ -445,7 +445,9 @@ module decode_riscv(
 			       end
 			     default:
 			       begin
+`ifdef VERILATOR
 				  $stop();
+`endif
 			       end
 			   endcase // case (insn[31:26])
 			end

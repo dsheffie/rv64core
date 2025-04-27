@@ -1120,35 +1120,34 @@ module core(clk,
 		      end
 		    else if(t_dq_empty ? 1'b0 : (t_uop.serializing_op==1'b0))
 		      begin
-			 if(t_uop.serializing_op) $stop();
 			 t_possible_to_alloc = !t_rob_full
 					       && !t_uq_full
 					       && !t_dq_empty;
 			 
 			 t_alloc = !t_rob_full
-				   && !r_pending_fault
-				   && !t_uq_full
-				   && !t_dq_empty					
-				   && t_enough_iprfs;
+				   & !r_pending_fault
+				   & !t_uq_full
+				   & !t_dq_empty					
+				   & t_enough_iprfs;
 			 
 			 t_alloc_two = t_alloc
-				       && !t_uop2.serializing_op
-				       && !t_dq_next_empty 
-				       && !t_rob_next_full
-				       && !t_uq_next_full
-				       && t_enough_next_iprfs;
+				       & !t_uop2.serializing_op
+				       & !t_dq_next_empty 
+				       & !t_rob_next_full
+				       & !t_uq_next_full
+				       & t_enough_next_iprfs;
 		      end // if (!t_dq_empty)
 		    t_retire = t_rob_head_complete & !t_arch_fault;
-		    t_retire_two = !t_rob_next_empty
-		    		   && t_retire
-				   && !t_rob_head.faulted
-				   && !t_rob_head.mark_page_dirty
-		    		   && !t_rob_next_head.faulted 				    
-		    		   && t_rob_head_complete
-		    		   && t_rob_next_head_complete
-				   && (t_rob_head.is_br ? !t_rob_next_head.is_br : 1'b1)
-				   && !t_rob_next_head.is_ret
-				   && !t_rob_next_head.is_call;
+		    t_retire_two = !t_rob_next_empty &
+		    		   & t_retire
+				   & !t_rob_head.faulted
+				   & !t_rob_head.mark_page_dirty
+		    		   & !t_rob_next_head.faulted 				    
+		    		   & t_rob_head_complete
+		    		   & t_rob_next_head_complete
+				   & (t_rob_head.is_br ? !t_rob_next_head.is_br : 1'b1)
+				   & !t_rob_next_head.is_ret
+				   & !t_rob_next_head.is_call;
 
 		 end // if (t_can_retire_rob_head)
 	       else if(!t_dq_empty)
@@ -1179,11 +1178,11 @@ module core(clk,
 			 
 			 
 			 t_alloc_two = t_alloc
-				       && !t_uop2.serializing_op
-				       && !t_dq_next_empty 
-				       && !t_rob_next_full
-				       && !t_uq_next_full
-				       && t_enough_next_iprfs;
+				       & !t_uop2.serializing_op
+				       & !t_dq_next_empty 
+				       & !t_rob_next_full
+				       & !t_uq_next_full
+				       & t_enough_next_iprfs;
 		      end // if (!t_uop.serializing_op)
 		 end // if (!t_dq_empty)
 	    end // case: ACTIVE
@@ -1408,7 +1407,6 @@ module core(clk,
 		 begin
 		    n_restart_pc = w_exc_pc;
 		    n_restart_valid = 1'b1;
-		    if(n_got_restart_ack) $stop();
 		    t_took_irq = r_irq;
 		    n_irq = 1'b0;
 		    n_state = DRAIN;

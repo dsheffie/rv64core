@@ -126,13 +126,11 @@ module rf6r3w(clk, reset,
 				    	     
 	     if(wen0)
 	       begin
-		  if(wrptr0[LG_DEPTH-1] == 1'b1) $stop();		  
 		  r_ram_alu[wrptr0[LG_DEPTH-2:0]] <= wr0;
 	       end
 	     	     
 	     if(wen2_)
 	       begin
-		  if(wrptr2[LG_DEPTH-1] == 1'b1) $stop();		  		  
 		  r_ram_alu[wrptr2[LG_DEPTH-2:0]] <= wr2;
 	       end
 `ifdef VERILATOR
@@ -162,7 +160,6 @@ module rf6r3w(clk, reset,
 	     	     
 	     if(wen1)
 	       begin
-		  if(wrptr1[LG_DEPTH-1] == 1'b0) $stop();
 		  r_ram_mem[wrptr1[LG_DEPTH-2:0]] <= wr1;
 	       end
 	     

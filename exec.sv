@@ -1827,66 +1827,10 @@ module exec(clk,
       .prf_ptr_val_out(),
       .prf_ptr_out(w_mul_prf_ptr)
       );
-
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if(t_start_mul&r_start_int)
-   // 	  begin
-   // 	     $display("schedule multiply at cycle %d", r_cycle);
-   // 	  end
-   // 	if(t_mul_complete)
-   // 	  begin
-   // 	     $display("multiply complete at cycle %d, rob slot %d prf ptr %d, r_start_int %b", 
-   // 		      r_cycle, t_rob_ptr_out, w_mul_prf_ptr, r_start_int);
-   // 	  end
-   //   end
    
-   
+`ifdef VERILATOR   
    always_ff@(negedge clk)
      begin
-	//if(t_wr_csr_en && int_uop.imm[5:0] == SSTATUS)
-	//begin
-	//$display(">> %x writes %x to sstatus old %x at cycle %d",
-	//int_uop.pc, t_wr_csr, r_mstatus, r_cycle);
-	//end
-	//if(t_wr_csr_en && int_uop.imm[5:0] == MSTATUS)
-	//begin
-	// $display(">> %x writes %x to mstatus old %x at cycle %d",
-	//int_uop.pc, t_wr_csr, r_mstatus, r_cycle);
-	//end	
-
-	// if((int_uop.op == SLLI) & r_start_int)
-	//   begin
-	//      $display("1 portA pc %x src A = %x, imm = %x, result %x", 
-	// 	      int_uop.pc, t_srcA, t_shift_amt, t_result);
-	//   end
-
-	// if((int_uop2.op == SLLI) & r_start_int2)
-	//   begin
-	//      $display("2 portA pc %x src A = %x, imm = %x, result %x, cycle %d", 
-	// 	      int_uop2.pc, t_srcA_2, t_shift_amt2, t_result2, r_cycle);
-	//   end
-
-
-	// if(t_start_mul&r_start_int)
-	//   begin
-	//      $display("multiplier dest ptr entry %d", int_uop.dst);
-	//   end
-	// if(t_mul_complete)
-	//   begin
-	//      $display("r_start_int %b, t_wr_int_prf %b,ptr %d, result %x",
-	// 	      r_start_int, t_wr_int_prf,w_mul_prf_ptr, t_mul_result);
-	//      if(r_start_int & t_wr_int_prf)
-	//        $stop();
-	//   end
-
-	// if(t_div_complete)
-	//   begin
-	//      $display("divider writes back to rob %d, prf %d, value %x at cycle %d",
-	// 	      t_div_rob_ptr, w_div_prf_ptr, t_div_result[31:0], r_cycle);
-	//   end
-	
-	
 	if(t_mul_complete & t_div_complete)
 	  begin
 	     $stop();
@@ -1902,6 +1846,7 @@ module exec(clk,
 	     $stop();
 	  end
      end
+`endif
    
 	       
    //t_zero_shift_upper
@@ -1973,7 +1918,6 @@ module exec(clk,
 	if(r_mem_ready)
 	  begin
 	     r_mem_q[r_mq_tail_ptr[`LG_MQ_ENTRIES-1:0]] <= t_mem_tail;
-	     if(mem_q_full) $stop();
 	  end
      end
 
@@ -3143,11 +3087,13 @@ module exec(clk,
 	  	  
 	  default:
 	    begin
+`ifdef VERILATOR
 	       if(t_rd_csr_en)
 		 begin
 		    $display("read csr %d unimplemented for pc %x", int_uop.imm[5:0], int_uop.pc);
 		    $stop();
 		 end
+`endif
 	    end
 	endcase
      end // always_comb
@@ -3445,9 +3391,11 @@ module exec(clk,
 `endif	       	       
 	       default:
 		 begin
+`ifdef VERILATOR		 		    
 		    $display("write csr implement %d for pc %x opcode %d", 
 			     int_uop.imm[5:0], int_uop.pc, int_uop.op);
 		    $stop();
+`endif		    
 		 end
 
 	     endcase // case (int_uop.imm[4:0])
