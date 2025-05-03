@@ -710,6 +710,15 @@ module exec(clk,
    wire	w_uop1_on_sched1 = w_alu_sched_avail & (t_uq_empty==1'b0);
    wire	w_uop1_on_sched2 = w_alu_sched_avail2 & (t_uq_empty==1'b0) & t_uq.is_cheap_int;
 
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if(w_pop_uq & (w_sched_two_uops == 1'b0))
+   // 	  begin
+   // 	     $display("cycle %d : uop1 on sched1 = %b, uop1 on sched 2 = %b, cheap %b, pc %x", 
+   // 		      r_cycle, w_uop1_on_sched1, w_uop1_on_sched2, t_uq.is_cheap_int, t_uq.pc);
+   // 	  end
+   //   end
+   
    wire w_sched_two_uops = w_alu_sched_avail & 
 	w_alu_sched_avail2 & 
 	(t_uq_empty==1'b0) & (t_uq_next_empty == 1'b0) &
@@ -1411,7 +1420,19 @@ module exec(clk,
 	       t_alu_valid2 = 1'b1;
 	       t_wr_int_prf2 = 1'b1;
 	    end
-`ifdef TWO_SRC_CHEAP	  
+`ifdef TWO_SRC_CHEAP
+	  CZEQZ:
+	    begin
+	       t_result2 = w_srcB_is_zero_2 ? 64'd0 : t_srcA_2;
+	       t_wr_int_prf2 = 1'b1;
+	       t_alu_valid2 = 1'b1;	       
+	    end
+	  CZNEZ:
+	    begin
+	       t_result2 = !w_srcB_is_zero_2 ? 64'd0 : t_srcA_2;
+	       t_wr_int_prf2 = 1'b1;
+	       t_alu_valid2 = 1'b1;
+	    end
 	  ADDU:
 	    begin
 	       t_result2 = w_as64_2;
@@ -2047,6 +2068,7 @@ module exec(clk,
    mwidth_add add3 (.A(int_uop.pc), .B(64'd4), .Y(w_pc4));
 
    wire		       w_srcB_is_zero = (t_srcB == 64'd0);
+   wire		       w_srcB_is_zero_2 = (t_srcB_2 == 64'd0);   
    
    wire		       w_signed_A_lt_B = $signed(t_srcA) < $signed(t_srcB);
    wire		       w_A_lt_B = t_srcA < t_srcB;

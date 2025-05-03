@@ -712,6 +712,9 @@ module decode_riscv(
 			7'h7:
 			  begin
 			     uop.op = (rd != 'd0) ? CZEQZ : NOP;
+`ifdef TWO_SRC_CHEAP
+			     uop.is_cheap_int = 1'b1;
+`endif			     			     
 			  end
 			7'h20:			  
 			  begin
@@ -793,6 +796,9 @@ module decode_riscv(
 			7'h7:
 			  begin
 			     uop.op = (rd != 'd0) ? CZNEZ : NOP;
+`ifdef TWO_SRC_CHEAP			     
+			     uop.is_cheap_int = 1'b1;
+`endif			     
 			  end
 			7'h20:
 			  begin
