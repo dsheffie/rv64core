@@ -1084,8 +1084,8 @@ module core(clk,
 			      n_state = ARCH_FAULT;
 			      n_cause = t_rob_head.cause;
 			      n_epc = t_rob_head.pc;
-			      //$display("n_epc = %x, t_rob_head.pc = %x, t_arch_fault = %b, w_any_irq = %b, cycle %d", 
-			      //n_epc, t_rob_head.pc, t_arch_fault, w_any_irq, r_cycle);
+			      //$display("n_epc = %x, t_rob_head.pc = %x, t_arch_fault = %b, w_any_irq = %b, n_cause = %d, cycle %d", 
+			      //n_epc, t_rob_head.pc, t_arch_fault, w_any_irq, n_cause, r_cycle);
  
 			      n_tval = 'd0;
 			      n_irq = t_rob_head.is_irq;
@@ -1363,6 +1363,14 @@ module core(clk,
 		   begin
 		      n_tval = w_rob_head_addr;		      
 		   end
+		 MISALIGNED_STORE:
+		   begin
+		      n_tval = w_rob_head_addr;		      
+		   end
+		 MISALIGNED_LOAD:
+		   begin
+		      n_tval = w_rob_head_addr;		      
+		   end		   
 		 default:
 		   begin
 		     // $display("t_rob_head.cause = %d, ", t_rob_head.cause);
@@ -1371,8 +1379,8 @@ module core(clk,
 
 	       //if(r_irq)
 	       //begin
-	       //$display("took fault for %x with cause %d at cycle %d, priv %d, tval %x, irq %b, epc %x, cycle %d", 
-	       //	t_rob_head.pc, t_rob_head.cause, r_cycle, priv, n_tval, r_irq, r_epc, r_cycle);
+	       //$display("took fault for %x with cause %d and tval %x at cycle %d, priv %d, tval %x, irq %b, epc %x, cycle %d", 
+	       //t_rob_head.pc, t_rob_head.cause, n_tval, r_cycle, priv, n_tval, r_irq, r_epc, r_cycle);
 	       //end
 	       
 	       t_bump_rob_head = 1'b1;

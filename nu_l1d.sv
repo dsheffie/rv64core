@@ -1845,7 +1845,8 @@ module nu_l1d(clk,
 	       begin
 		  if(r_req2.spans_cacheline)
 		    begin
-		       t_core_mem_rsp.cause = MISALIGNED_FETCH;
+		       t_core_mem_rsp.cause = r_req2.is_load ? MISALIGNED_LOAD :
+					      MISALIGNED_STORE;
 		    end
 		  else
 		    begin

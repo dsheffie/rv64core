@@ -3296,7 +3296,7 @@ module exec(clk,
 	  end // if (reset)
 	else if(update_csr_exc)
 	  begin
-	     //$display("trapping, delegate = %b, epc = %x", t_delegate, epc);
+	     //$display("trapping, delegate = %b, epc = %x, tval %x, cause %d, r_priv %d", t_delegate, epc, tval, cause, r_priv);
 	     if(t_delegate)
 	       begin
 		  //$display("delegate cause %x, tval %x, epc %x, mstatus %x",
