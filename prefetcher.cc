@@ -2,13 +2,13 @@
 #include "interpret.hh"
 #include <cassert>
 
-template<typename T>
-static T min(const T&a, const T&b) {
+template<typename Ta, typename Tb>
+static Ta min(const Ta&a, const Tb&b) {
   return (a<b) ? a : b;
 }
 
-template<typename T>
-static T max(const T&a, const T&b) {
+template<typename Ta, typename Tb>
+static Ta max(const Ta&a, const Tb&b) {
   return (a>b) ? a : b;
 }
 
