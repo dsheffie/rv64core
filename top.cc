@@ -1,5 +1,6 @@
 
 #include "top.hh"
+#include "prefetcher.hh"
 #include <queue>
 #include <signal.h>
 #include <setjmp.h>
@@ -887,15 +888,17 @@ struct mem_req_t {
   bool is_store;
   uint32_t addr;
   uint32_t tag;
+  uint64_t pc;  
   uint64_t reply_cycle;
   uint32_t data[4] = {0};
   mem_req_t(bool is_store, uint32_t addr,
-	    uint32_t tag, uint64_t reply_cycle) :
-    is_store(is_store), addr(addr), tag(tag),
+	    uint32_t tag, uint64_t pc, uint64_t reply_cycle) :
+    is_store(is_store), addr(addr), tag(tag), pc(pc),
     reply_cycle(reply_cycle) {}
 };
 
-std::queue<mem_req_t> mem_queue;
+std::queue<mem_req_t*> mem_queue;
+std::vector<mem_req_t*> mem_wheel;
 
 int main(int argc, char **argv) {
   static_assert(sizeof(itype) == 4, "itype must be 4 bytes");
@@ -916,6 +919,7 @@ int main(int argc, char **argv) {
   std::map<int64_t, double> &tip_map = rt.tip;
   std::map<int64_t, uint64_t> insn_cnts;
   uint64_t priv[4] = {0};
+  uint64_t prefetchable = 0, prefetchable_stride_hits = 0;
   
   try {
     po::options_description desc("Options");
@@ -963,6 +967,7 @@ int main(int argc, char **argv) {
   
   uint32_t max_inflight = 0;
 
+  mem_wheel.resize(mem_lat*2);
 
   const std::unique_ptr<VerilatedContext> contextp{new VerilatedContext};
   contextp->commandArgs(argc, argv);  
@@ -998,6 +1003,8 @@ int main(int argc, char **argv) {
   globals::syscall_emu = not(use_checkpoint);
   tb->syscall_emu = globals::syscall_emu;
 
+  global_history_buffer *stride_ghb = new global_history_buffer(4, 10);
+  linked_list_prefetcher *ll_prefetcher = new linked_list_prefetcher(4);
   
   if(use_checkpoint) {
     loadState(*s, rv32_binary.c_str());
@@ -1513,28 +1520,70 @@ int main(int argc, char **argv) {
 
     dram_queue_occupancy += mem_queue.size();
     
-    if(tb->mem_req_valid and (mem_queue.size() < mlp)) {
+    if(tb->mem_req_valid /*and (mem_queue.size() < mlp)*/) {
       ++mem_reqs;
       int lat = mem_lat + 1;
       mem_reply_cycle = cycle + lat;
       tb->mem_req_gnt = 1;
-      mem_req_t req(tb->mem_req_opcode==7,
-		    tb->mem_req_addr,
-		    tb->mem_req_tag,
-		    cycle+lat);
-      memcpy(req.data, tb->mem_req_store_data, sizeof(int)*4);
+      bool stride_hit = false;
 
-      //printf("got memory request for address %x of type %d, tag %d, will reply at cycle %lu, now %lu\n",
-      //tb->mem_req_addr, tb->mem_req_opcode, tb->mem_req_tag,
-      //cycle+lat,
-      //cycle);
+      uint64_t reply_cycle = cycle+lat;
+      if(tb->mem_req_pc) {
+	prefetchable++;
+	stride_hit = stride_ghb->lookup_stride(tb->mem_req_pc, tb->mem_req_addr);
+	if(stride_hit) {
+	  ++prefetchable_stride_hits;
+	  //for(uint64_t rr = cycle+1; rr < reply_cycle; rr++) {
+	  //if(mem_wheel.at(rr % mem_wheel.size()) == nullptr ) {
+	  //}
+	  //}
+	}
+	
+      }
+
       
+      mem_req_t *req = new mem_req_t(tb->mem_req_opcode==7,
+				     tb->mem_req_addr,
+				     tb->mem_req_tag,
+				     tb->mem_req_pc,
+				     cycle+lat);
+      
+      memcpy(req->data, tb->mem_req_store_data, sizeof(int)*4);
+
+      mem_wheel.at(reply_cycle % mem_wheel.size()) = req;
+      
+      if(tb->mem_req_pc) {
+	stride_ghb->add(tb->mem_req_pc, tb->mem_req_addr);
+      }
+	    
+      
+#if 0
+      printf("got memory request for address %x of type %d, tag %d, pc %lx will reply at cycle %lu, now %lu\n",
+	     tb->mem_req_addr,
+	     tb->mem_req_opcode,
+	     tb->mem_req_tag,
+	     tb->mem_req_pc,
+	     cycle+lat,
+	     cycle);
+#endif 
       mem_queue.push(req);
     }
-    
-    if(not(mem_queue.empty()) and mem_queue.front().reply_cycle ==cycle) {
+
+    size_t mem_wheel_idx = cycle % mem_wheel.size();
+    if(/*not(mem_queue.empty()) and mem_queue.front()->reply_cycle ==cycle*/ mem_wheel.at(mem_wheel_idx)) {
       last_retire = 0;
-      mem_req_t &req = mem_queue.front();
+      mem_req_t *req_ = mem_wheel.at(mem_wheel_idx);
+      mem_req_t &req = *req_;
+      assert(req.reply_cycle == cycle);
+      //printf("cycle %lu, wrap cycle %lu req_ ptr %p, cycle ptr %p\n",
+      //cycle,
+      //cycle % mem_wheel.size(),
+      //mem_wheel.at(cycle % mem_wheel.size()),
+      //req_);
+      
+      if(mem_wheel.at(cycle % mem_wheel.size()) != req_) {
+	exit(-1);
+      }
       //printf("reply memory request for address %x tag %d\n",
       //req.addr, req.tag);
 
@@ -1543,6 +1592,14 @@ int main(int argc, char **argv) {
 	  uint64_t ea = (req.addr + 4*i) & ((1UL<<32)-1);
 	  tb->mem_rsp_load_data[i] = mem_r32(s,ea);
 	}
+	if(req.pc) {
+	  ll_prefetcher->add(req.pc, req.addr,
+			     reinterpret_cast<uint64_t*>(tb->mem_rsp_load_data),
+			     tb->paging_active ? tb->page_table_root : 0UL,
+			     s
+			     );
+	}
+	
 	last_load_addr = req.addr;
 	assert((req.addr & 0xf) == 0);
 	++n_loads;
@@ -1558,7 +1615,9 @@ int main(int argc, char **argv) {
       last_addr = req.addr;
       tb->mem_rsp_valid = 1;
       tb->mem_rsp_tag = req.tag;
-      mem_queue.pop();
+      //mem_queue.pop();
+      mem_wheel.at(cycle % mem_wheel.size()) = nullptr;
+      delete req_;
     }
 
     
@@ -1929,6 +1988,9 @@ int main(int argc, char **argv) {
   else {
     std::cout << "instructions retired = " << insns_retired << "\n";
   }
+  std::cout << "prefetchable             = " << prefetchable << "\n";
+  std::cout << "prefetchable_stride_hits = " << prefetchable_stride_hits << "\n";
+  std::cout << "n_loads                  = " << n_loads << "\n";
   
   std::cout << "simulation took " << t0 << " seconds, " << (insns_retired/t0)
 	    << " insns per second\n";
@@ -1948,6 +2010,8 @@ int main(int argc, char **argv) {
   munmap(ss->mem, 1UL<<32);
   delete s;
   delete ss;
+  delete stride_ghb;
+  delete ll_prefetcher;
   delete [] insns_delivered;
   if(pl) {
     delete pl;

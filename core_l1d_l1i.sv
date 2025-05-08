@@ -44,6 +44,7 @@ module
 		   mem_req_tag,
 		   mem_req_store_data,
 		   mem_req_opcode,
+		   mem_req_pc,
 		   mem_rsp_valid,
 		   mem_req_gnt,
 		   mem_rsp_tag,
@@ -143,6 +144,7 @@ module
    output logic [`LG_L2_REQ_TAGS-1:0]	mem_req_tag;
    output logic [(1 << (`LG_L2_CL_LEN+3)) - 1:0] mem_req_store_data;
    output logic [3:0] 				 mem_req_opcode;
+   output logic [63:0]				 mem_req_pc;
    
    input logic 					 mem_rsp_valid;
    input logic					 mem_req_gnt;
@@ -443,6 +445,7 @@ module
       logic [`LG_L2_REQ_TAGS-1:0] tag;
       logic [(1 << (`LG_L2_CL_LEN+3)) - 1:0] data;
       logic [3:0]			     opcode;
+      logic [63:0]			     pc;
    } mem_fifo_t;
    
    
@@ -452,7 +455,8 @@ module
    wire [`LG_L2_REQ_TAGS-1:0]	w_mem_req_tag;
    wire [(1 << (`LG_L2_CL_LEN+3)) - 1:0] w_mem_req_store_data;
    wire [3:0]				  w_mem_req_opcode;
-
+   wire [63:0]				  w_mem_req_pc;
+   
 
 
    localparam				  LG_REQ_Q_SZ = `LG_L2_REQ_TAGS;
@@ -495,7 +499,7 @@ module
 	t_mem_fifo.tag = w_mem_req_tag;
 	t_mem_fifo.data = w_mem_req_store_data;
 	t_mem_fifo.opcode = w_mem_req_opcode;
-	
+	t_mem_fifo.pc = w_mem_req_pc;
 	n_mem_tail_ptr = r_mem_tail_ptr;
 	n_mem_head_ptr = r_mem_head_ptr;
 
@@ -530,7 +534,8 @@ module
    assign mem_req_tag = mem_fifo[w_mem_head_ptr].tag;
    assign mem_req_store_data = mem_fifo[w_mem_head_ptr].data;
    assign mem_req_opcode = mem_fifo[w_mem_head_ptr].opcode;
-   
+   assign mem_req_pc = mem_fifo[w_mem_head_ptr].pc;
+ 
    wire w_l2_empty;
    
       
@@ -569,7 +574,8 @@ module
 	       .mem_req_tag(w_mem_req_tag),
 	       .mem_req_store_data(w_mem_req_store_data),
 	       .mem_req_opcode(w_mem_req_opcode),
-
+	       .mem_req_pc(w_mem_req_pc),
+		    
 	       .mem_rsp_valid(mem_rsp_valid),
 	       .mem_rsp_tag(mem_rsp_tag),
 	       .mem_rsp_load_data(mem_rsp_load_data),

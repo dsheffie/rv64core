@@ -522,7 +522,8 @@ module nu_l1d(clk,
    logic [L1D_CL_LEN_BITS-1:0] r_mem_req_store_data, n_mem_req_store_data;
    logic [3:0] 		       r_mem_req_opcode, n_mem_req_opcode;
    logic [`LG_MRQ_ENTRIES:0]   r_mem_req_tag, n_mem_req_tag;
-
+   logic [63:0]		       r_mem_req_pc, n_mem_req_pc;
+   
 
    logic 		       n_port1_req_valid;
    logic 		       n_port1_req_uc;
@@ -572,6 +573,7 @@ module nu_l1d(clk,
 	mem_req.opcode = r_mem_req_opcode;
 	mem_req.tag = r_mem_req_tag;
 	mem_req.uncachable = r_mem_req_uc;
+	mem_req.pc = r_mem_req_pc;
      end
 
    
@@ -1029,6 +1031,7 @@ module nu_l1d(clk,
 	     r_mem_req_store_data <= 'd0;
 	     r_mem_req_opcode <= 'd0;
 	     r_mem_req_tag <= 'd0;
+	     r_mem_req_pc <= 'd0;
 	     r_core_mem_rsp_valid <= 1'b0;
 	     r_store_stalls <= 'd0;
 	     r_inhibit_write <= 1'b0;
@@ -1084,6 +1087,7 @@ module nu_l1d(clk,
 	     r_mem_req_store_data <= n_mem_req_store_data;
 	     r_mem_req_opcode <= n_mem_req_opcode;
 	     r_mem_req_tag <= n_mem_req_tag;
+	     r_mem_req_pc <= n_mem_req_pc;
 	     
 	     r_core_mem_rsp_valid <= n_core_mem_rsp_valid;
 	     r_store_stalls <= n_store_stalls;
@@ -2581,6 +2585,8 @@ module nu_l1d(clk,
 	n_mem_req_store_data = n_port1_req_store_data;
 	n_mem_req_opcode = n_port1_req_opcode;
 	n_mem_req_tag = n_port1_req_tag;
+	n_mem_req_pc = r_req.pc;
+	
 	t_pop_eb = 1'b0;
 	if(n_port2_req_valid)
 	  begin
@@ -2589,6 +2595,7 @@ module nu_l1d(clk,
 	     n_mem_req_addr = n_port2_req_addr;
 	     n_mem_req_store_data = n_port2_req_store_data;
 	     n_mem_req_opcode = n_port2_req_opcode;
+	     n_mem_req_pc = r_req2.pc;
 	     if(n_mem_req_opcode == 4'd7)
 	       begin
 		  $stop();
@@ -2604,6 +2611,7 @@ module nu_l1d(clk,
 	     n_mem_req_store_data = r_sb[r_eb_head_ptr[`LG_EB_ENTRIES-1:0]].data;
 	     n_mem_req_opcode = MEM_SW;
 	     n_mem_req_tag = {1'b1, {`LG_MRQ_ENTRIES{1'b1}}};
+	     n_mem_req_pc = 64'd0;
 	     //$display("--> write buffer using memory buffer at cycle %d with tag %x", 
 	     //r_cycle, n_mem_req_tag);	     
 	  end
