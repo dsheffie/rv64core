@@ -827,6 +827,7 @@ module exec(clk,
 	r_branch_faults <= reset ? 'd0 : branch_fault ? (r_branch_faults + 'd1) : r_branch_faults;
      end
 
+
    
    always_ff@(posedge clk)
      begin
