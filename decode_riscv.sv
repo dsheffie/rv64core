@@ -1165,7 +1165,7 @@ module decode_riscv(
 					  uop.dst = rd;
 					  uop.dst_valid = (rd != 'd0);
 					  uop.serializing_op = 1'b1;
-				       end
+                                       end
 				     else if(csr_id == RDFAULTEDIBRANCH_CSR)
 				       begin
 					  uop.op = (rd == 'd0) ? NOP : RDFAULTEDIBRANCH;
@@ -1173,7 +1173,6 @@ module decode_riscv(
 					  uop.dst_valid = (rd != 'd0);
 					  uop.serializing_op = 1'b1;
 				       end
-
 				     else
 				       begin
 					  uop.op = CSRRS;
