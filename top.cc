@@ -916,10 +916,11 @@ int main(int argc, char **argv) {
   int misses_inflight = 0;
   int64_t mem_reply_cycle = -1L;
   retire_trace rt;
+  bool prefetch_speedup = false;
   std::map<int64_t, double> &tip_map = rt.tip;
   std::map<int64_t, uint64_t> insn_cnts;
   uint64_t priv[4] = {0};
-  uint64_t prefetchable = 0, prefetchable_stride_hits = 0;
+  uint64_t prefetchable = 0, prefetchable_stride_hits = 0, prefetchable_ll_hits = 0;
   
   try {
     po::options_description desc("Options");
@@ -945,6 +946,7 @@ int main(int argc, char **argv) {
       ("verbose,v", po::value<bool>(&verbose)->default_value(false), "verbose")
       ("irq", po::value<bool>(&globals::checker_enable_irqs)->default_value(true), "enable irqs")
       ("mlp", po::value<size_t>(&mlp)->default_value(~0UL), "dram mlp")
+      ("pf", po::value<bool>(&prefetch_speedup)->default_value(false), "prefetching speedup")
       ; 
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);
@@ -1004,6 +1006,7 @@ int main(int argc, char **argv) {
   tb->syscall_emu = globals::syscall_emu;
 
   global_history_buffer *stride_ghb = new global_history_buffer(4, 10);
+  global_history_buffer *cmc_ghb = new global_history_buffer(4, 10);  
   linked_list_prefetcher *ll_prefetcher = new linked_list_prefetcher(4);
   
   if(use_checkpoint) {
@@ -1528,25 +1531,38 @@ int main(int argc, char **argv) {
       bool stride_hit = false;
 
       uint64_t reply_cycle = cycle+lat;
+      bool pf_hit = false;
+      
       if(tb->mem_req_pc) {
 	prefetchable++;
-	stride_hit = stride_ghb->lookup_stride(tb->mem_req_pc, tb->mem_req_addr);
-	if(stride_hit) {
+
+	if(stride_ghb->lookup_stride(tb->mem_req_pc, tb->mem_req_addr)) {
+	  pf_hit = true;
 	  ++prefetchable_stride_hits;
-	  //for(uint64_t rr = cycle+1; rr < reply_cycle; rr++) {
-	  //if(mem_wheel.at(rr % mem_wheel.size()) == nullptr ) {
-	  //}
-	  //}
 	}
-	
+	else if(ll_prefetcher->lookup(tb->mem_req_pc, tb->mem_req_addr)) {
+	  pf_hit = true;
+	  ++prefetchable_ll_hits;
+	}
       }
 
+      if(pf_hit and prefetch_speedup) {
+	for(uint64_t rr = cycle+1; true and (rr < reply_cycle); rr++) {
+	  if(mem_wheel.at(rr % mem_wheel.size()) == nullptr ) {
+	    uint64_t saved_cycles = (reply_cycle - rr);
+	      //printf("moving from %lu to %lu, now %lu, saved_cycles %lu\n",
+	      //reply_cycle, rr, cycle, saved_cycles);
+	    reply_cycle = rr;
+	    break;
+	  }
+	}
+      }      
       
       mem_req_t *req = new mem_req_t(tb->mem_req_opcode==7,
 				     tb->mem_req_addr,
 				     tb->mem_req_tag,
 				     tb->mem_req_pc,
-				     cycle+lat);
+				     reply_cycle);
       
       memcpy(req->data, tb->mem_req_store_data, sizeof(int)*4);
 
@@ -1555,7 +1571,10 @@ int main(int argc, char **argv) {
       if(tb->mem_req_pc) {
 	stride_ghb->add(tb->mem_req_pc, tb->mem_req_addr);
       }
-	    
+
+      if(tb->mem_req_opcode==4) {
+	cmc_ghb->add(tb->mem_req_addr, tb->mem_req_addr);
+      }
       
 #if 0
       printf("got memory request for address %x of type %d, tag %d, pc %lx will reply at cycle %lu, now %lu\n",
@@ -1894,12 +1913,7 @@ int main(int argc, char **argv) {
     std::cout << "l1d_acks = " << l1d_acks << "\n";
     std::cout << "l1d_new_reqs = " << l1d_new_reqs << "\n";
     std::cout << "l1d_accept   = " << l1d_accept << "\n";
-    
-    
-    std::cout << "total_retire = " << total_retire << "\n";
-    std::cout << "total_cycle  = " << total_cycle << "\n";
-    std::cout << "total ipc    = " << static_cast<double>(total_retire) / total_cycle << "\n";
-
+        
     std::cout << "mmu walks    = " << count_histo(mmu_walk_lat) << "\n";
     std::cout << "avg mmu lat  = " << avg_histo(mmu_walk_lat) << "\n";
 
@@ -1953,29 +1967,33 @@ int main(int argc, char **argv) {
       total_ticks += p.second;
     }
     std::cout << "total_ticks = " << total_ticks << "\n";
-    const char* l2_state_names[] = {
-      "INITIALIZE",
-      "IDLE",
-      "CHECK_VALID_AND_TAG",
-      "CLEAN_RELOAD",
-      "DIRTY_STORE",
-      "STORE_TURNAROUND",
-      "WAIT_CLEAN_RELOAD",
-      "WAIT_STORE_IDLE",
-      "FLUSH_STORE",
-      "FLUSH_STORE_WAY2",
-      "FLUSH_WAIT",
-      "FLUSH_TRIAGE",
-      "UPDATE_PTE"
-    };
+    // const char* l2_state_names[] = {
+    //   "INITIALIZE",
+    //   "IDLE",
+    //   "CHECK_VALID_AND_TAG",
+    //   "CLEAN_RELOAD",
+    //   "DIRTY_STORE",
+    //   "STORE_TURNAROUND",
+    //   "WAIT_CLEAN_RELOAD",
+    //   "WAIT_STORE_IDLE",
+    //   "FLUSH_STORE",
+    //   "FLUSH_STORE_WAY2",
+    //   "FLUSH_WAIT",
+    //   "FLUSH_TRIAGE",
+    //   "UPDATE_PTE"
+    // };
     
-    for(auto &p : l2_state) {
-      std::cout << l2_state_names[p.first] << "," << p.second << "\n";
-    }
+    // for(auto &p : l2_state) {
+    //   std::cout << l2_state_names[p.first] << "," << p.second << "\n";
+    // }
     std::cout << "port0 sched       " << schedules[0] << "\n";
     std::cout << "port1 sched       " << schedules[1] << "\n";
     std::cout << "port0 sched alloc " << schedules_alloc[0] << "\n";
     std::cout << "port1 sched alloc " << schedules_alloc[1] << "\n";
+
+    std::cout << "total_retire = " << total_retire << "\n";
+    std::cout << "total_cycle  = " << total_cycle << "\n";
+    std::cout << "total ipc    = " << static_cast<double>(total_retire) / total_cycle << "\n";
     
     if(not(rt.empty())) {
       std::ofstream ofs(retire_name);
@@ -1990,6 +2008,7 @@ int main(int argc, char **argv) {
   }
   std::cout << "prefetchable             = " << prefetchable << "\n";
   std::cout << "prefetchable_stride_hits = " << prefetchable_stride_hits << "\n";
+  std::cout << "prefetchable_ll_hits     = " << prefetchable_ll_hits << "\n";
   std::cout << "n_loads                  = " << n_loads << "\n";
   
   std::cout << "simulation took " << t0 << " seconds, " << (insns_retired/t0)
@@ -2011,6 +2030,7 @@ int main(int argc, char **argv) {
   delete s;
   delete ss;
   delete stride_ghb;
+  delete cmc_ghb;
   delete ll_prefetcher;
   delete [] insns_delivered;
   if(pl) {

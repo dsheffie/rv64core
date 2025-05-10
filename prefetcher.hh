@@ -25,6 +25,7 @@ struct linked_list_prefetcher {
     delete [] idx_tbl;
   }
   void add(uint64_t pc, uint64_t addr, uint64_t data[2], uint64_t page_table_root, state_t *s);
+  bool lookup(uint64_t pc, uint64_t addr) const;
 };
 
 struct global_history_buffer {
@@ -59,6 +60,7 @@ struct global_history_buffer {
 
   void add(uint64_t pc, uint64_t addr);
   bool lookup_stride(uint64_t pc, uint64_t addr) const;
+  bool lookup_cmc(uint64_t addr) const;
 
   
 };

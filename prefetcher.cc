@@ -112,9 +112,41 @@ bool global_history_buffer::lookup_stride(uint64_t pc, uint64_t addr) const {
   return ((last[0] + s0) == addr);
 }
 
+bool global_history_buffer::lookup_cmc(uint64_t addr) const {
+  uint64_t e_idx = (addr>>2) & (itbl_sz-1);
+  idx_entry &i = idx_tbl[e_idx];
+  ghb_entry *e = i.ptr;
+  if(i.pc != addr or e == nullptr) {
+    return false;
+  }
+  ghb_entry *ee = e->next;
+  if(ee == nullptr) {
+    return false;
+  }
+  int c = 0;
+  while(e != ee and (c < 4)) {
+    printf("prefetch %lx\n", e->addr);
+    e++;
+    c++;
+  }
+  
+  return false;
+}
+
+
+bool linked_list_prefetcher::lookup(uint64_t pc, uint64_t addr) const {
+  uint64_t e_idx = (pc>>2) & (itbl_sz-1);
+  idx_entry &i = idx_tbl[e_idx];
+  for(int j = 0; (i.pc == pc) and (j < 2); j++) {
+    if(addr == i.last_data[j] ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 void linked_list_prefetcher::add(uint64_t pc, uint64_t addr, uint64_t data[2],
 				 uint64_t page_table_root, state_t *s) {
-  static const uint64_t m = (1UL<<16) - 1;  
   uint64_t e_idx = (pc>>2) & (itbl_sz-1);
   idx_entry &i = idx_tbl[e_idx];
   uint64_t tc[2] = {0};
