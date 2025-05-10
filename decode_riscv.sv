@@ -112,7 +112,7 @@ module decode_riscv(
 		    irq,
 		    pc, 
 		    insn_pred, 
-		    pht_idx, 
+		    bpu_idx,
 		    insn_pred_target,
 `ifdef ENABLE_CYCLE_ACCOUNTING   		     
 		    fetch_cycle,
@@ -127,7 +127,8 @@ module decode_riscv(
    input logic 	      irq;
    input logic [`M_WIDTH-1:0] pc;
    input logic 	      insn_pred;
-   input logic [`LG_PHT_SZ-1:0] pht_idx;
+   input logic [`LG_BPU_TBL_SZ-1:0] bpu_idx;
+   
    input logic [`M_WIDTH-1:0] 	insn_pred_target;
 `ifdef ENABLE_CYCLE_ACCOUNTING   
    input logic [63:0] 		fetch_cycle;
@@ -207,7 +208,7 @@ module decode_riscv(
 	uop.rob_ptr = 'd0;
 	uop.br_pred = 1'b0;
 	uop.is_br = 1'b0;
-	uop.pht_idx = pht_idx;
+	uop.bpu_idx = bpu_idx;
 	uop.is_mem = 1'b0;
 	uop.is_int = 1'b0;
 	uop.is_cheap_int = 1'b0;

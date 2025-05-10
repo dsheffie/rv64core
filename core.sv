@@ -103,7 +103,7 @@ module core(clk,
 	    branch_pc_is_indirect,	    
 	    branch_fault,
 	    took_branch,
-	    branch_pht_idx,
+	    bpu_idx,
 	    restart_pc,
 	    restart_src_pc,
 	    restart_src_is_indirect,
@@ -217,7 +217,7 @@ module core(clk,
    
    output logic 		 branch_fault;
    output logic 		 took_branch;
-   output logic [`LG_PHT_SZ-1:0] branch_pht_idx;
+   output logic [`LG_BPU_TBL_SZ-1:0] bpu_idx;
    
    /* mem port */
    input logic 	 core_mem_req_ack;
@@ -386,7 +386,7 @@ module core(clk,
    logic		     n_branch_pc_is_indirect, r_branch_pc_is_indirect;
    
    logic 		     n_branch_fault,r_branch_fault;
-   logic [`LG_PHT_SZ-1:0]    n_branch_pht_idx, r_branch_pht_idx;
+   logic [`LG_BPU_TBL_SZ-1:0] n_bpu_idx, r_bpu_idx;   
          
    logic 		     n_restart_valid,r_restart_valid;
    logic 		     n_take_br, r_take_br;
@@ -587,7 +587,7 @@ module core(clk,
    assign branch_pc_is_indirect = r_branch_pc_is_indirect;
    
    assign branch_fault = r_branch_fault;
-   assign branch_pht_idx = r_branch_pht_idx;
+   assign bpu_idx = r_bpu_idx;
    
 
    assign took_branch = r_took_branch;
@@ -647,7 +647,8 @@ module core(clk,
 	     r_branch_valid <= 1'b0;
 	     r_branch_pc_is_indirect <= 1'b0;
 	     r_branch_fault <= 1'b0;
-	     r_branch_pht_idx <= 'd0;
+	     r_bpu_idx <= 'd0;
+	     
 	     r_restart_valid <= 1'b0;
 	     r_take_br <= 1'b0;
 	     r_got_break <= 1'b0;
@@ -684,7 +685,8 @@ module core(clk,
 	     r_branch_valid <= n_branch_valid;
 	     r_branch_pc_is_indirect <= n_branch_pc_is_indirect;
 	     r_branch_fault <= n_branch_fault;
-	     r_branch_pht_idx <= n_branch_pht_idx;
+	     r_bpu_idx <= n_bpu_idx;
+	     
 	     r_restart_valid <= n_restart_valid;
 	     r_take_br <= n_take_br;
 	     r_got_break <= n_got_break;
@@ -1569,8 +1571,8 @@ module core(clk,
 	n_branch_valid = 1'b0;
 	n_branch_pc_is_indirect = 1'b0;
 	n_branch_fault = 1'b0;
-	n_branch_pht_idx = 'd0;
-
+	n_bpu_idx = 'd0;
+	
 	t_next_head_br = t_rob_next_head.is_br & t_retire_two;
 	
 	if(t_retire)
@@ -1596,7 +1598,8 @@ module core(clk,
 	     n_took_branch = t_next_head_br ? t_rob_next_head.take_br : t_rob_head.take_br;
 	     n_branch_valid = t_next_head_br ? t_rob_next_head.is_br :  t_rob_head.is_br;
 	     n_branch_fault = t_rob_head.faulted & (t_rob_head.has_cause==1'b0);
-	     n_branch_pht_idx = t_next_head_br ? t_rob_next_head.pht_idx : t_rob_head.pht_idx;
+	     n_bpu_idx = t_next_head_br ? t_rob_next_head.bpu_idx : t_rob_head.bpu_idx;
+	     
 	     n_branch_pc_is_indirect = t_next_head_br ? 
 				       t_rob_next_head.is_indirect : 
 				       t_rob_head.is_indirect ;
@@ -1658,8 +1661,8 @@ module core(clk,
 	t_rob_tail.take_br = 1'b0;
 	t_rob_tail.is_br = t_alloc_uop.is_br;	
 	t_rob_tail.data= 'd0;
-	t_rob_tail.pht_idx = t_alloc_uop.pht_idx;
-
+	t_rob_tail.bpu_idx = t_alloc_uop.bpu_idx;
+	
 	t_rob_next_tail.faulted  = 1'b0;
 	t_rob_next_tail.mark_page_dirty = 1'b0;
 	t_rob_next_tail.valid_dst  = 1'b0;
@@ -1679,9 +1682,8 @@ module core(clk,
 	t_rob_next_tail.take_br = 1'b0;
 	t_rob_next_tail.is_br = t_alloc_uop2.is_br;
 	t_rob_next_tail.data = 'd0;
-	t_rob_next_tail.pht_idx = t_alloc_uop2.pht_idx;
-	
-	
+	t_rob_next_tail.bpu_idx = t_alloc_uop2.bpu_idx;	
+
 	if(t_alloc)
 	  begin	     
 `ifdef ENABLE_CYCLE_ACCOUNTING
@@ -2219,7 +2221,7 @@ module core(clk,
       .irq(w_any_irq),
       .pc(insn.pc), 
       .insn_pred(insn.pred), 
-      .pht_idx(insn.pht_idx),
+      .bpu_idx(insn.bpu_idx),
       .insn_pred_target(insn.pred_target),
 `ifdef ENABLE_CYCLE_ACCOUNTING
       .fetch_cycle(insn.fetch_cycle),
@@ -2237,7 +2239,7 @@ module core(clk,
 	.irq(w_any_irq),	
 	.pc(insn_two.pc), 
 	.insn_pred(insn_two.pred), 
-	.pht_idx(insn_two.pht_idx),
+	.bpu_idx(insn_two.bpu_idx),
 	.insn_pred_target(insn_two.pred_target),
 `ifdef ENABLE_CYCLE_ACCOUNTING
 	.fetch_cycle(insn_two.fetch_cycle),

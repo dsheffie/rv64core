@@ -186,7 +186,7 @@ module
    logic 			restart_src_is_indirect;
    logic 			restart_valid;
 
-   logic [`LG_PHT_SZ-1:0] 	branch_pht_idx;
+   logic [`LG_BPU_TBL_SZ-1:0]	bpu_idx;
    logic 			took_branch;
 
    logic [(`M_WIDTH-1):0] 	t_branch_pc, t_target_pc;
@@ -763,7 +763,7 @@ module
               .target_pc(t_target_pc),
 	      .took_branch(took_branch),
 	      .branch_fault(t_branch_fault),
-	      .branch_pht_idx(branch_pht_idx),
+	      .bpu_idx(bpu_idx),
 	      .retire_valid(retire_valid),
 	      .retired_call(retired_call),
 	      .retired_ret(retired_ret),
@@ -829,7 +829,7 @@ module
              .branch_pc_is_indirect(t_branch_pc_is_indirect),	     
 	     .branch_fault(t_branch_fault),
 	     .took_branch(took_branch),
-	     .branch_pht_idx(branch_pht_idx),
+	     .bpu_idx(bpu_idx),	     
 	     .restart_pc(restart_pc),
 	     .restart_src_pc(restart_src_pc),
 	     .restart_src_is_indirect(restart_src_is_indirect),

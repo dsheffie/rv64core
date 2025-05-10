@@ -257,7 +257,7 @@ typedef struct packed {
    logic 		       is_br;
    logic 		       is_mem;
    logic 		       is_store;
-   logic [`LG_PHT_SZ-1:0]      pht_idx;
+   logic [`LG_BPU_TBL_SZ-1:0]  bpu_idx;   
    logic 		       is_cheap_int;
 `ifdef ENABLE_CYCLE_ACCOUNTING
    logic [63:0] 	    fetch_cycle;
