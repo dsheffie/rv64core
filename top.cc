@@ -78,9 +78,6 @@ void record_exception_type(int fault_type) {
   fault_counts[fault_type & 31]++;
 }
 
-void record_branches(int n_branches) {
-  branch_distribution[n_branches]++;
-}
 
 void record_faults(int n_faults) {
   fault_distribution[n_faults]++;

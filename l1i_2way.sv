@@ -286,7 +286,7 @@ endfunction
    logic [(`M_WIDTH-1):0] r_pc, n_pc, r_miss_pc, n_miss_pc;
    logic [(`M_WIDTH-1):0] r_cache_pc, n_cache_pc;
    logic [(`M_WIDTH-1):0] r_btb_pc;
-   logic [`LG_BPU_TBL_SZ-1:0] r_bpu_idx, rr_bpu_idx;
+   logic [`LG_BPU_TBL_SZ-1:0] r_bpu_idx;
 
    wire [(`M_WIDTH-1):0]  w_cache_pc4 = r_cache_pc + 'd4;
    wire [(`M_WIDTH-1):0]  w_cache_pc8 = r_cache_pc + 'd8;
@@ -1132,55 +1132,6 @@ endfunction
 	  end
      end // always_ff@ (posedge clk)
 
-   always_ff@(posedge clk)
-     begin
-	rr_bpu_idx <= reset ? 'd0 : r_bpu_idx;
-     end
-   
-     
-
-   logic r_print_pht;
-   always_ff@(posedge clk)
-     begin
-	r_print_pht <= reset ? 1'b0 : (n_cache_pc[63:4] == 60'h1099);
-     end
-   
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if(n_cache_pc[63:4] == 60'h1099)
-   // 	  begin
-   // 	     $display("cycle %d, n_cache_pc = %x, n_pht_idx = %x, hist = %b, br idx %d, take %b", 
-   // 		      r_cycle, 
-   // 		      n_cache_pc, 
-   // 		      n_pht_idx, 
-   // 		      r_spec_gbl_hist,
-   // 		      t_branch_idx,
-   // 		      t_take_br);
-   // 	  end
-   // 	if(r_print_pht)
-   // 	  begin
-   // 	     $display("cycle %d, pht read %b", r_cycle, r_pht_out_vec);
-   // 	  end
-	
-   // 	if(r_pht_update && r_branch_pc[63:4] == 60'h1099)
-   // 	  begin
-   // 	     $display("cycle %d, t_pht_val = %b, r_take_br = %b, %b", 
-   // 		      r_cycle, t_pht_val, r_take_br,
-   // 		      r_arch_gbl_hist);
-   // 	  end
-	
-   // 	if(branch_pc[63:4] == 60'h1099 && branch_pc_valid)
-   // 	  begin
-   // 	     $display("cycle %d,branch pht idx= %d", r_cycle, branch_pht_idx);
-   // 	  end//branch_pht_idx
-	
-   // 	if(branch_pc_valid & branch_pht_idx == 'd48539)
-   // 	  begin
-   // 	     $display("cycle %d, branch at pc %x maps to pht entry",
-   // 		      r_cycle, branch_pc);
-   // 	  end
-	
-   //   end   
 
    
    always_comb

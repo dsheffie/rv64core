@@ -28,22 +28,13 @@ typedef struct packed {
    logic       faulted;
    logic       has_cause;
    logic [4:0] cause;
-   logic       mark_page_dirty;   
-   logic       is_ret;
-   logic       is_call;
-   logic       is_irq;
-   logic       valid_dst;
-   logic [4:0] ldst;
-
-   logic [(`LG_PRF_ENTRIES-1):0] pdst;
-   logic [(`LG_PRF_ENTRIES-1):0] old_pdst;
-   logic [(`M_WIDTH-1):0] 	 pc;
-   logic [(`M_WIDTH-1):0] 	 target_pc;
-   logic 			 is_br;
-   logic 			 is_indirect;
-   logic 			 take_br;
+   logic       mark_page_dirty;
+   logic [(`M_WIDTH-1):0] target_pc;
+   logic		  take_br;
+`ifdef VERILATOR
    logic [`M_WIDTH-1:0] 	 data;
-   logic [`LG_BPU_TBL_SZ-1:0]	 bpu_idx;
+`endif
+
 `ifdef ENABLE_CYCLE_ACCOUNTING
    logic [63:0] 	    fetch_cycle;
    logic [63:0] 	    alloc_cycle;
@@ -53,6 +44,24 @@ typedef struct packed {
 `endif
    
 } rob_entry_t;
+
+/* banked and not touched except at alloc and retire */
+typedef struct packed {
+   logic [63:0]	pc;
+   logic	is_br;   
+   logic	is_ret;
+   logic	is_call;
+   logic	is_irq;
+   logic	valid_dst;
+   logic	is_indirect;
+   logic [`LG_BPU_TBL_SZ-1:0] bpu_idx;
+   
+   logic [4:0] ldst;
+   logic [(`LG_PRF_ENTRIES-1):0] pdst;
+   logic [(`LG_PRF_ENTRIES-1):0] old_pdst;
+
+} mrob_entry_t;
+
 
 typedef struct packed {
    logic [`LG_ROB_ENTRIES-1:0] rob_ptr;

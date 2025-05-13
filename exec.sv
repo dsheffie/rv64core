@@ -1320,7 +1320,7 @@ module exec(clk,
 	t_addi_2 = 1'b0;
 	t_take_br2 = 1'b0;
 	t_mispred_br2= 1'b0;
-	t_pc_2 = int_uop2.pc;
+	t_pc_2 = w_pc2_4;
 	t_left_shift2 = 1'b0;
 	t_signed_shift2 = 1'b0;
 	t_circular_shift2 = 1'b0;
@@ -2125,7 +2125,7 @@ module exec(clk,
 	t_is_clzw_ctzw_cpopw = 1'b0;
 	t_sub = 1'b0;
 	t_addi = 1'b0;
-	t_pc = int_uop.pc;
+	t_pc = w_pc4;
 	t_result ='d0;
 	t_has_cause = 1'b0;
 	t_cause = MISALIGNED_FETCH;
