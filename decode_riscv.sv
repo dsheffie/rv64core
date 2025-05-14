@@ -89,6 +89,10 @@ function csr_t decode_csr(logic [11:0] csr, logic [1:0] priv);
        x = RDL2HIT_CSR;
      12'hc0e:
        x = RDL2ACCESS_CSR;
+     12'hc0f:
+       x = NU_RDBRANCH_CSR;
+     12'hc10:
+       x = RDFAULTEDIBRANCH_CSR;
      12'hf11:
        x = (priv != 2'd3) ? BADCSR : MVENDORID;
      12'hf12:
@@ -1147,13 +1151,13 @@ module decode_riscv(
 					  uop.dst_valid = (rd != 'd0);
 					  uop.serializing_op = 1'b1;
 				       end
-				     // else if(csr_id == RDBRANCH_CSR)
-				     //   begin
-				     // 	  uop.op = (rd == 'd0) ? NOP : RDBRANCH;
-				     // 	  uop.dst = rd;
-				     // 	  uop.dst_valid = (rd != 'd0);
-				     // 	  uop.serializing_op = 1'b1;
-				     //   end
+				     else if(csr_id == NU_RDBRANCH_CSR)
+				       begin
+                                          uop.op = (rd == 'd0) ? NOP : RDBRANCH;
+                                          uop.dst = rd;
+                                          uop.dst_valid = (rd != 'd0);
+                                          uop.serializing_op = 1'b1;
+                                       end
 				     else if(csr_id == RDFAULTEDBRANCH_CSR)
 				       begin
 					  uop.op = (rd == 'd0) ? NOP : RDFAULTEDBRANCH;
@@ -1161,6 +1165,14 @@ module decode_riscv(
 					  uop.dst_valid = (rd != 'd0);
 					  uop.serializing_op = 1'b1;
 				       end
+				     else if(csr_id == RDFAULTEDIBRANCH_CSR)
+				       begin
+					  uop.op = (rd == 'd0) ? NOP : RDFAULTEDIBRANCH;
+					  uop.dst = rd;
+					  uop.dst_valid = (rd != 'd0);
+					  uop.serializing_op = 1'b1;
+				       end
+
 				     else
 				       begin
 					  uop.op = CSRRS;

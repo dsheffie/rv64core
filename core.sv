@@ -313,6 +313,14 @@ module core(clk,
 
    wire [63:0]				  w_exc_pc;
    wire					  w_exec_clear_tlb;
+
+   mrob_entry_t r_rob_even[(N_ROB_ENTRIES/2)-1:0];
+   mrob_entry_t r_rob_odd[(N_ROB_ENTRIES/2)-1:0];
+   mrob_entry_t t_mrob_tail, t_mrob_next_tail;
+   mrob_entry_t t_mrob_head, t_mrob_next_head;
+   
+   mrob_entry_t t_mrob_even_head, t_mrob_odd_head;
+   
    
    rob_entry_t r_rob[N_ROB_ENTRIES-1:0];   
    logic [63:0] r_rob_addr[N_ROB_ENTRIES-1:0];
@@ -803,8 +811,8 @@ module core(clk,
 	     alloc_two_valid <= t_alloc_two;
 	     iq_one_valid <= !t_dq_empty && t_dq_next_empty;
 	     iq_none_valid <= t_dq_empty;
-   	     retire_pc <= t_rob_head.pc;
-	     retire_two_pc <= t_rob_next_head.pc;
+   	     retire_pc <= t_mrob_head.pc;
+	     retire_two_pc <= t_mrob_next_head.pc;
 	     retired_ret <= t_rob_head.is_ret && t_retire;
 	     retired_call <= t_rob_head.is_call && t_retire;
 	     
@@ -852,7 +860,7 @@ module core(clk,
 		       page_table_root);
 	     
 	     record_retirement(
-			       { {(64-`M_WIDTH){1'b0}},t_rob_head.pc},
+			       { {(64-`M_WIDTH){1'b0}},t_mrob_head.pc},
    			       t_rob_head.fetch_cycle,
    			       t_rob_head.alloc_cycle,
    			       t_rob_head.complete_cycle,
@@ -874,7 +882,7 @@ module core(clk,
 		       page_table_root);
 	     
 	     record_retirement(
-			       { {(64-`M_WIDTH){1'b0}},t_rob_next_head.pc},
+			       { {(64-`M_WIDTH){1'b0}},t_mrob_next_head.pc},
    			       t_rob_next_head.fetch_cycle,
    			       t_rob_next_head.alloc_cycle,
    			       t_rob_next_head.complete_cycle,
@@ -951,7 +959,7 @@ module core(clk,
 		      r_rob_head_ptr,
 		      t_rob_head_complete && !t_rob_empty, 
 		      t_can_retire_rob_head,
-		      t_rob_head.pc,
+		      t_mrob_head.pc,
 		      t_rob_empty, 
 		      t_rob_full);
 	     
@@ -1085,7 +1093,7 @@ module core(clk,
 			      n_arch_fault = 1'b1;
 			      n_state = ARCH_FAULT;
 			      n_cause = t_rob_head.cause;
-			      n_epc = t_rob_head.pc;
+			      n_epc = t_mrob_head.pc;
 			      //$display("n_epc = %x, t_rob_head.pc = %x, t_arch_fault = %b, w_any_irq = %b, n_cause = %d, cycle %d", 
 			      //n_epc, t_rob_head.pc, t_arch_fault, w_any_irq, n_cause, r_cycle);
  
@@ -1107,14 +1115,14 @@ module core(clk,
 			 n_ds_done = 1'b1;
 			 n_machine_clr = 1'b1;
 			 n_restart_pc = t_rob_head.target_pc;
-			 n_restart_src_pc = t_rob_head.pc;
+			 n_restart_src_pc = t_mrob_head.pc;
 			 n_restart_src_is_indirect = t_rob_head.is_indirect;
 			 n_take_br = t_rob_head.take_br;
 		      end // if (t_rob_head.faulted)
 		    else if(t_rob_head.mark_page_dirty)
 		      begin
 			 $display("retiring dirty page mark insn, pc %x, target %x, addr %x, entry %d", 
-				  t_rob_head.pc, t_rob_head.target_pc, w_rob_head_addr, r_rob_head_ptr[`LG_ROB_ENTRIES-1:0]);
+				  t_mrob_head.pc, t_rob_head.target_pc, w_rob_head_addr, r_rob_head_ptr[`LG_ROB_ENTRIES-1:0]);
 			 n_state = WAIT_FOR_MMU;
 			 n_ds_done = 1'b1;
 			 n_restart_pc = t_rob_head.target_pc;
@@ -1230,7 +1238,7 @@ module core(clk,
 		 begin
 		    //$display("target pc %x, src pc %x at cycle %d", t_rob_head.target_pc, t_rob_head.pc, r_cycle);
 		    n_restart_pc = t_rob_head.target_pc;
-		    n_restart_src_pc = t_rob_head.pc;
+		    n_restart_src_pc = t_mrob_head.pc;
 		    n_restart_src_is_indirect = 1'b0;
 		    n_restart_valid = 1'b1;
 		    n_pending_fault = 1'b0;
@@ -1286,8 +1294,8 @@ module core(clk,
 	    begin
 	       if(t_rob_head_complete)
 		 begin
-		    n_restart_pc = t_rob_head.pc + 'd4;
-		    n_restart_src_pc = t_rob_head.pc;
+		    n_restart_pc = t_mrob_head.pc + 'd4;
+		    n_restart_src_pc = t_mrob_head.pc;
 		    n_restart_src_is_indirect = 1'b0;
 		    n_restart_valid = 1'b1;
 		    n_pending_fault = 1'b0;
@@ -1319,7 +1327,7 @@ module core(clk,
 	       if(resume)
 		 begin
 		    n_restart_pc = resume_pc;
-		    n_restart_src_pc = t_rob_head.pc;
+		    n_restart_src_pc = t_mrob_head.pc;
 		    n_restart_src_is_indirect = 1'b0;
 		    n_restart_valid = 1'b1;
 		    n_state = HALT_WAIT_FOR_RESTART;
@@ -1355,7 +1363,7 @@ module core(clk,
 		   end
 		 FETCH_PAGE_FAULT:
 		   begin
-		      n_tval = t_rob_head.pc;
+		      n_tval = t_mrob_head.pc;
 		   end
 		 LOAD_PAGE_FAULT:
 		   begin
@@ -1379,11 +1387,7 @@ module core(clk,
 		   end
 	       endcase // case (t_rob_head.cause)
 
-	       //if(r_irq)
-	       //begin
-	       //$display("took fault for %x with cause %d and tval %x at cycle %d, priv %d, tval %x, irq %b, epc %x, cycle %d", 
-	       //t_rob_head.pc, t_rob_head.cause, n_tval, r_cycle, priv, n_tval, r_irq, r_epc, r_cycle);
-	       //end
+
 	       
 	       t_bump_rob_head = 1'b1;
 	       if(syscall_emu)
@@ -1593,7 +1597,7 @@ module core(clk,
 		  n_retire_prf_free[{1'b0, t_rob_next_head.old_pdst[`LG_PRF_ENTRIES-2:0]}] = 1'b1;
 	       end
 	     
-	     n_branch_pc = t_next_head_br ? t_rob_next_head.pc : t_rob_head.pc;
+	     n_branch_pc = t_next_head_br ? t_mrob_next_head.pc : t_mrob_head.pc;
 	     n_target_pc = t_next_head_br ? t_rob_next_head.target_pc : t_rob_head.target_pc;
 	     n_took_branch = t_next_head_br ? t_rob_next_head.take_br : t_rob_head.take_br;
 	     n_branch_valid = t_next_head_br ? t_rob_next_head.is_br :  t_rob_head.is_br;
@@ -1648,7 +1652,6 @@ module core(clk,
 	t_rob_tail.ldst  = 'd0;
 	t_rob_tail.pdst  = 'd0;
 	t_rob_tail.old_pdst  = 'd0;
-	t_rob_tail.pc = t_alloc_uop.pc;
 	t_rob_tail.target_pc = t_alloc_uop.pc + 'd4;
 	
 	t_rob_tail.is_call = t_alloc_uop.op == JAL || t_alloc_uop.op == JALR;
@@ -1669,7 +1672,6 @@ module core(clk,
 	t_rob_next_tail.ldst  = 'd0;
 	t_rob_next_tail.pdst  = 'd0;
 	t_rob_next_tail.old_pdst  = 'd0;
-	t_rob_next_tail.pc = t_alloc_uop2.pc;
 	t_rob_next_tail.target_pc = t_alloc_uop2.pc + 'd4;
 
 	t_rob_next_tail.is_call = t_alloc_uop2.op == JAL || t_alloc_uop2.op == JALR;
@@ -1873,6 +1875,77 @@ module core(clk,
 	     r_rob_addr[core_mem_rsp.rob_ptr] <= core_mem_rsp.addr;
 	  end
      end
+
+    wire w_alloc_rob_tail_odd = t_alloc & (r_rob_tail_ptr[0]==1'b1);
+   wire w_alloc_rob_tail_even = t_alloc & (r_rob_tail_ptr[0]==1'b0);
+   wire	w_alloc_rob_next_tail_odd  = t_alloc_two & (r_rob_next_tail_ptr[0]==1'b1);   
+   wire	w_alloc_rob_next_tail_even = t_alloc_two & (r_rob_next_tail_ptr[0]==1'b0);      
+
+   wire	w_retire_rob_head_odd = (r_rob_head_ptr[0]==1'b1);
+   wire	w_retire_rob_head_even = (r_rob_head_ptr[0]==1'b0);
+   wire	w_retire_rob_next_head_odd = (r_rob_next_head_ptr[0]==1'b1);
+   wire	w_retire_rob_next_head_even =  (r_rob_next_head_ptr[0]==1'b0);   
+   
+   always_comb
+     begin
+	t_mrob_odd_head = r_rob_odd[w_retire_rob_head_odd ? r_rob_head_ptr[`LG_ROB_ENTRIES-1:1] : r_rob_next_head_ptr[`LG_ROB_ENTRIES-1:1]];
+	t_mrob_even_head = r_rob_even[w_retire_rob_head_even ? r_rob_head_ptr[`LG_ROB_ENTRIES-1:1] : r_rob_next_head_ptr[`LG_ROB_ENTRIES-1:1]];
+	t_mrob_head = w_retire_rob_head_odd ? t_mrob_odd_head : t_mrob_even_head;
+	t_mrob_next_head = w_retire_rob_next_head_odd ? t_mrob_odd_head : t_mrob_even_head;
+     end
+
+    always_comb
+     begin
+	t_mrob_tail.pc = t_alloc_uop.pc;
+	t_mrob_tail.is_br = t_alloc_uop.is_br;	
+	t_mrob_tail.is_ret = (t_alloc_uop.op == RET);
+	t_mrob_tail.is_call = (t_alloc_uop.op == JAL) | (t_alloc_uop.op == JALR);
+	t_mrob_tail.is_irq = t_alloc_uop.op == IRQ;
+	t_mrob_tail.is_indirect = (t_alloc_uop.op == JALR) | (t_alloc_uop.op == JR);
+	t_mrob_tail.bpu_idx = t_alloc_uop.bpu_idx;	
+	t_mrob_tail.valid_dst = t_uop.dst_valid;
+	t_mrob_tail.ldst = t_uop.dst[4:0];
+	t_mrob_tail.pdst = n_prf_entry;
+	t_mrob_tail.old_pdst = r_alloc_rat[t_uop.dst[4:0]];
+       
+	t_mrob_next_tail.pc = t_alloc_uop2.pc;
+	t_mrob_next_tail.is_br = t_alloc_uop2.is_br;	
+	t_mrob_next_tail.is_ret = (t_alloc_uop2.op == RET);
+	t_mrob_next_tail.is_call = (t_alloc_uop2.op == JAL) | (t_alloc_uop2.op == JALR);
+	t_mrob_next_tail.is_irq = t_alloc_uop2.op == IRQ;
+	t_mrob_next_tail.is_indirect = (t_alloc_uop2.op == JALR) | (t_alloc_uop2.op == JR);
+	t_mrob_next_tail.bpu_idx = t_alloc_uop2.bpu_idx;	
+	t_mrob_next_tail.valid_dst = t_uop2.dst_valid;
+	t_mrob_next_tail.ldst = t_uop2.dst[4:0];
+	t_mrob_next_tail.pdst = n_prf_entry2;
+	t_mrob_next_tail.old_pdst = (t_uop.dst_valid & (t_uop.dst == t_uop2.dst)) ? t_mrob_tail.pdst : r_alloc_rat[t_uop2.dst[4:0]];
+     end
+
+   
+   always_ff@(posedge clk)
+     begin
+	if(w_alloc_rob_tail_odd)
+	  begin
+	     r_rob_odd[r_rob_tail_ptr[`LG_ROB_ENTRIES-1:1]] <= t_mrob_tail;	     
+	  end
+	else if(w_alloc_rob_next_tail_odd)
+	  begin
+	     r_rob_odd[r_rob_next_tail_ptr[`LG_ROB_ENTRIES-1:1]] <= t_mrob_next_tail;	     	     
+	  end
+     end // always_ff@ (posedge clk)
+   
+   always_ff@(posedge clk)
+     begin
+	if(w_alloc_rob_tail_even)
+	  begin
+	     r_rob_even[r_rob_tail_ptr[`LG_ROB_ENTRIES-1:1]] <= t_mrob_tail;
+	  end
+	else if(w_alloc_rob_next_tail_even)
+	  begin
+	     r_rob_even[r_rob_next_tail_ptr[`LG_ROB_ENTRIES-1:1]] <= t_mrob_next_tail;
+	  end
+     end // always_ff@ (posedge clk)
+
    
    always_ff@(posedge clk)
      begin
@@ -2320,6 +2393,7 @@ module core(clk,
 	   .mtimecmp_val(mtimecmp_val),	     	   
 	   .branch_valid(r_branch_valid),
 	   .branch_fault(r_branch_fault),
+	   .branch_indirect(r_branch_pc_is_indirect),
 	   .counters(counters)
 	   );
 
