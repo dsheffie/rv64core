@@ -25,7 +25,7 @@
 
 //gshare branch predictor
 `define LG_PHT_SZ 16
-`define LG_BPU_TBL_SZ 6
+`define LG_BPU_TBL_SZ 16
 
 `define GBL_HIST_LEN 16
 

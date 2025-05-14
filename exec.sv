@@ -116,6 +116,7 @@ module exec(clk,
 	    mtimecmp_val,	    
 	    branch_valid,
 	    branch_fault,
+	    branch_indirect,
 	    counters
 	    );
    input logic clk;
@@ -196,7 +197,8 @@ module exec(clk,
    
    input logic 			     branch_valid;
    input logic 			     branch_fault;
-
+   input logic			     branch_indirect;
+   
 
    input	      counters_t counters;
    
@@ -801,7 +803,7 @@ module exec(clk,
 	
      end // always_ff@ (posedge clk)
    
-   logic [63:0]        r_cycle, r_retired_insns, r_branches, r_branch_faults;
+   logic [63:0]        r_cycle, r_retired_insns, r_branches, r_branch_faults, r_indirect_branch_faults;
 
    logic [63:0]	       r_mtime;
    logic [63:0]	       r_mtimecmp;
@@ -825,9 +827,8 @@ module exec(clk,
 	r_cycle <= reset ? 'd0 : r_cycle + 'd1;
 	r_branches <= reset ? 'd0 : branch_valid ? (r_branches + 'd1) : r_branches;
 	r_branch_faults <= reset ? 'd0 : branch_fault ? (r_branch_faults + 'd1) : r_branch_faults;
+	r_indirect_branch_faults <= reset ? 'd0 : (branch_fault & branch_indirect) ? (r_indirect_branch_faults + 'd1) : r_indirect_branch_faults;
      end
-
-
    
    always_ff@(posedge clk)
      begin
@@ -2324,6 +2325,13 @@ module exec(clk,
 	       t_wr_int_prf = 1'b1;
 	       t_pc = w_pc4;
 	    end
+	  RDFAULTEDIBRANCH:
+	    begin
+	       t_result = r_indirect_branch_faults;
+	       t_alu_valid = 1'b1;
+	       t_wr_int_prf = 1'b1;
+	       t_pc = w_pc4;
+	    end	  
 	  AND:
 	    begin
 	       t_result = t_srcA & t_srcB;
