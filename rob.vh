@@ -25,24 +25,17 @@ typedef enum logic [4:0] {
 
 
 typedef struct packed {
+   logic       is_call;
+   logic       is_br;
+   logic       is_indirect;
+   
    logic       faulted;
    logic       has_cause;
    logic [4:0] cause;
-   logic       mark_page_dirty;   
-   logic       is_ret;
-   logic       is_call;
-   logic       is_irq;
-   logic       valid_dst;
-   logic [4:0] ldst;
-
-   logic [(`LG_PRF_ENTRIES-1):0] pdst;
-   logic [(`LG_PRF_ENTRIES-1):0] old_pdst;
-   logic [(`M_WIDTH-1):0] 	 target_pc;
-   logic 			 is_br;
-   logic 			 is_indirect;
-   logic 			 take_br;
-   logic [`M_WIDTH-1:0] 	 data;
-   logic [`LG_BPU_TBL_SZ-1:0]	 bpu_idx;
+   logic       mark_page_dirty;      
+   logic [(`M_WIDTH-1):0] target_pc;
+   logic		  take_br;
+   logic [`M_WIDTH-1:0]	  data;
 `ifdef ENABLE_CYCLE_ACCOUNTING
    logic [63:0] 	    fetch_cycle;
    logic [63:0] 	    alloc_cycle;
