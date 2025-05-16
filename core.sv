@@ -797,12 +797,12 @@ module core(clk,
    	  end
    	else
    	  begin
-   	     retire_reg_ptr <= t_rob_head.ldst;
+   	     retire_reg_ptr <= t_mrob_head.ldst;
    	     retire_reg_data <= t_rob_head.data;
-   	     retire_reg_valid <= t_rob_head.valid_dst & t_retire;
-   	     retire_reg_two_ptr <= t_rob_next_head.ldst;
+   	     retire_reg_valid <= t_mrob_head.valid_dst & t_retire;
+   	     retire_reg_two_ptr <= t_mrob_next_head.ldst;
    	     retire_reg_two_data <= t_rob_next_head.data;
-   	     retire_reg_two_valid <= t_rob_next_head.valid_dst & t_retire_two;
+   	     retire_reg_two_valid <= t_mrob_next_head.valid_dst & t_retire_two;
 	     
    	     retire_valid <= t_retire;
 	     retire_two_valid <= t_retire_two;
@@ -813,8 +813,8 @@ module core(clk,
 	     iq_none_valid <= t_dq_empty;
    	     retire_pc <= t_mrob_head.pc;
 	     retire_two_pc <= t_mrob_next_head.pc;
-	     retired_ret <= t_rob_head.is_ret && t_retire;
-	     retired_call <= t_rob_head.is_call && t_retire;
+	     retired_ret <= t_mrob_head.is_ret & t_retire;
+	     retired_call <= t_rob_head.is_call & t_retire;
 	     
 	     retired_rob_ptr_valid <= t_retire;
 	     
@@ -865,8 +865,8 @@ module core(clk,
    			       t_rob_head.alloc_cycle,
    			       t_rob_head.complete_cycle,
    			       r_cycle,
-			       t_rob_head.valid_dst ? 32'd1 : 32'd0,
-			       {27'd0, t_rob_head.ldst},
+			       t_mrob_head.valid_dst ? 32'd1 : 32'd0,
+			       {27'd0, t_mrob_head.ldst},
 			       {{(64-`M_WIDTH){1'b0}},t_rob_head.data},
 			       t_rob_head.faulted ? 32'd1 : 32'd0,
 			       t_rob_head.faulted ? 32'd1 : 32'd0,
@@ -887,8 +887,8 @@ module core(clk,
    			       t_rob_next_head.alloc_cycle,
    			       t_rob_next_head.complete_cycle,
    			       r_cycle,
-			       t_rob_next_head.valid_dst ? 32'd1 : 32'd0,
-			       {27'd0, t_rob_next_head.ldst},
+			       t_mrob_next_head.valid_dst ? 32'd1 : 32'd0,
+			       {27'd0, t_mrob_next_head.ldst},
 			       {{(64-`M_WIDTH){1'b0}},t_rob_next_head.data},		   
 			       t_rob_next_head.faulted ? 32'd1 : 32'd0,			       
 			       32'd0,
@@ -1098,7 +1098,7 @@ module core(clk,
 			      //n_epc, t_rob_head.pc, t_arch_fault, w_any_irq, n_cause, r_cycle);
  
 			      n_tval = 'd0;
-			      n_irq = t_rob_head.is_irq;
+			      n_irq = t_mrob_head.is_irq;
 //`ifdef VERILATOR
 //			      start_log(w_any_irq ? 32'd1 : 32'd0);
 //`endif
@@ -1156,7 +1156,7 @@ module core(clk,
 		    		   & t_rob_head_complete
 		    		   & t_rob_next_head_complete
 				   & (t_rob_head.is_br ? !t_rob_next_head.is_br : 1'b1)
-				   & !t_rob_next_head.is_ret
+				   & !t_mrob_next_head.is_ret
 				   & !t_rob_next_head.is_call;
 
 		 end // if (t_can_retire_rob_head)
@@ -1516,11 +1516,11 @@ module core(clk,
 	  begin
 	     if(t_free_reg)
 	       begin
-		  r_retire_rat[t_rob_head.ldst] <= t_rob_head.pdst;
+		  r_retire_rat[t_mrob_head.ldst] <= t_mrob_head.pdst;
 	       end
 	     if(t_free_reg_two)
 	       begin
-		  r_retire_rat[t_rob_next_head.ldst] <= t_rob_next_head.pdst;		  
+		  r_retire_rat[t_mrob_next_head.ldst] <= t_mrob_next_head.pdst;		  
 	       end
 	  end // always_ff@ (posedge clk)
      end // always_ff@ (posedge clk)
@@ -1581,20 +1581,20 @@ module core(clk,
 	
 	if(t_retire)
 	  begin
-	     if(t_rob_head.valid_dst)
+	     if(t_mrob_head.valid_dst)
 	       begin
 		  t_free_reg = 1'b1;
-		  t_free_reg_ptr = t_rob_head.old_pdst;
-		  n_retire_prf_free[{1'b0, t_rob_head.pdst[`LG_PRF_ENTRIES-2:0]}] = 1'b0;
-		  n_retire_prf_free[{1'b0, t_rob_head.old_pdst[`LG_PRF_ENTRIES-2:0]}] = 1'b1;
+		  t_free_reg_ptr = t_mrob_head.old_pdst;
+		  n_retire_prf_free[{1'b0, t_mrob_head.pdst[`LG_PRF_ENTRIES-2:0]}] = 1'b0;
+		  n_retire_prf_free[{1'b0, t_mrob_head.old_pdst[`LG_PRF_ENTRIES-2:0]}] = 1'b1;
 	       end
 
-	     if(t_retire_two && t_rob_next_head.valid_dst)
+	     if(t_retire_two && t_mrob_next_head.valid_dst)
 	       begin
 		  t_free_reg_two = 1'b1;
-		  t_free_reg_two_ptr = t_rob_next_head.old_pdst;
-		  n_retire_prf_free[{1'b0, t_rob_next_head.pdst[`LG_PRF_ENTRIES-2:0]}] = 1'b0;
-		  n_retire_prf_free[{1'b0, t_rob_next_head.old_pdst[`LG_PRF_ENTRIES-2:0]}] = 1'b1;
+		  t_free_reg_two_ptr = t_mrob_next_head.old_pdst;
+		  n_retire_prf_free[{1'b0, t_mrob_next_head.pdst[`LG_PRF_ENTRIES-2:0]}] = 1'b0;
+		  n_retire_prf_free[{1'b0, t_mrob_next_head.old_pdst[`LG_PRF_ENTRIES-2:0]}] = 1'b1;
 	       end
 	     
 	     n_branch_pc = t_next_head_br ? t_mrob_next_head.pc : t_mrob_head.pc;
@@ -1602,7 +1602,7 @@ module core(clk,
 	     n_took_branch = t_next_head_br ? t_rob_next_head.take_br : t_rob_head.take_br;
 	     n_branch_valid = t_next_head_br ? t_rob_next_head.is_br :  t_rob_head.is_br;
 	     n_branch_fault = t_rob_head.faulted & (t_rob_head.has_cause==1'b0);
-	     n_bpu_idx = t_next_head_br ? t_rob_next_head.bpu_idx : t_rob_head.bpu_idx;
+	     n_bpu_idx = t_next_head_br ? t_mrob_next_head.bpu_idx : t_mrob_head.bpu_idx;
 	     
 	     n_branch_pc_is_indirect = t_next_head_br ? 
 				       t_rob_next_head.is_indirect : 
@@ -1648,43 +1648,31 @@ module core(clk,
      begin
 	t_rob_tail.faulted  = 1'b0;
 	t_rob_tail.mark_page_dirty = 1'b0;
-	t_rob_tail.valid_dst  = 1'b0;
-	t_rob_tail.ldst  = 'd0;
-	t_rob_tail.pdst  = 'd0;
-	t_rob_tail.old_pdst  = 'd0;
 	t_rob_tail.target_pc = t_alloc_uop.pc + 'd4;
 	
 	t_rob_tail.is_call = t_alloc_uop.op == JAL || t_alloc_uop.op == JALR;
-	t_rob_tail.is_ret = (t_alloc_uop.op == RET);
 	t_rob_tail.is_indirect = t_alloc_uop.op == JALR || t_alloc_uop.op == JR;
-	t_rob_tail.is_irq = t_alloc_uop.op == IRQ;
 	
 	t_rob_tail.has_cause = 1'b0;
 	t_rob_tail.cause = MISALIGNED_FETCH;
 	t_rob_tail.take_br = 1'b0;
 	t_rob_tail.is_br = t_alloc_uop.is_br;	
 	t_rob_tail.data= 'd0;
-	t_rob_tail.bpu_idx = t_alloc_uop.bpu_idx;
 	
 	t_rob_next_tail.faulted  = 1'b0;
 	t_rob_next_tail.mark_page_dirty = 1'b0;
-	t_rob_next_tail.valid_dst  = 1'b0;
-	t_rob_next_tail.ldst  = 'd0;
-	t_rob_next_tail.pdst  = 'd0;
-	t_rob_next_tail.old_pdst  = 'd0;
+
 	t_rob_next_tail.target_pc = t_alloc_uop2.pc + 'd4;
 
 	t_rob_next_tail.is_call = t_alloc_uop2.op == JAL || t_alloc_uop2.op == JALR;
-	t_rob_next_tail.is_ret = (t_alloc_uop2.op == RET);
+
 	t_rob_next_tail.is_indirect = t_alloc_uop2.op == JALR || t_alloc_uop2.op == JR;
-	t_rob_next_tail.is_irq = t_alloc_uop2.op == IRQ;
 	
 	t_rob_next_tail.cause = MISALIGNED_FETCH;
 	t_rob_next_tail.has_cause = 1'b0;
 	t_rob_next_tail.take_br = 1'b0;
 	t_rob_next_tail.is_br = t_alloc_uop2.is_br;
 	t_rob_next_tail.data = 'd0;
-	t_rob_next_tail.bpu_idx = t_alloc_uop2.bpu_idx;	
 
 	if(t_alloc)
 	  begin	     
@@ -1695,14 +1683,6 @@ module core(clk,
 	     t_rob_tail.complete_cycle = 'd0;
 	     t_rob_tail.uuid = r_uuid;
 `endif	     
-	     if(t_uop.dst_valid)
-	       begin
-		  t_rob_tail.valid_dst = 1'b1;
-		  /* this is correct, we do not want the renamed version */
-		  t_rob_tail.ldst = t_uop.dst[4:0];
-		  t_rob_tail.pdst = n_prf_entry;
-		  t_rob_tail.old_pdst = r_alloc_rat[t_uop.dst[4:0]];
-	       end
 	     
 	     if(t_fold_uop)
 	       begin
@@ -1747,17 +1727,6 @@ module core(clk,
 	     t_rob_next_tail.complete_cycle = 'd0;
 	     t_rob_next_tail.uuid = r_uuid + 'd1;
 `endif
-
-	     if(t_uop2.dst_valid)
-	       begin
-		  t_rob_next_tail.valid_dst = 1'b1;
-		  /* this is correct, we do not want the renamed version */
-		  t_rob_next_tail.ldst = t_uop2.dst[4:0];
-		  t_rob_next_tail.pdst = n_prf_entry2;
-		  t_rob_next_tail.old_pdst = (t_uop.dst_valid && (t_uop.dst == t_uop2.dst)) ? t_rob_tail.pdst : r_alloc_rat[t_uop2.dst[4:0]];
-	       end
-
-
 
 
 	     if(t_fold_uop2)
@@ -1902,12 +1871,18 @@ module core(clk,
 	t_mrob_tail.is_call = (t_alloc_uop.op == JAL) | (t_alloc_uop.op == JALR);
 	t_mrob_tail.is_irq = t_alloc_uop.op == IRQ;
 	t_mrob_tail.is_indirect = (t_alloc_uop.op == JALR) | (t_alloc_uop.op == JR);
-	t_mrob_tail.bpu_idx = t_alloc_uop.bpu_idx;	
-	t_mrob_tail.valid_dst = t_uop.dst_valid;
-	t_mrob_tail.ldst = t_uop.dst[4:0];
-	t_mrob_tail.pdst = n_prf_entry;
-	t_mrob_tail.old_pdst = r_alloc_rat[t_uop.dst[4:0]];
-       
+	t_mrob_tail.bpu_idx = t_alloc_uop.bpu_idx;
+	
+	t_mrob_tail.valid_dst = t_uop.dst_valid & t_alloc;
+	t_mrob_tail.ldst = t_uop.dst_valid ? t_uop.dst[4:0] : 'd0;
+	t_mrob_tail.pdst = t_uop.dst_valid ? n_prf_entry : 'd0;
+	t_mrob_tail.old_pdst = t_uop.dst_valid ? r_alloc_rat[t_uop.dst[4:0]] : 'd0;
+
+	t_mrob_next_tail.valid_dst = t_uop2.dst_valid & t_alloc_two;
+	t_mrob_next_tail.ldst = t_uop2.dst_valid ? 'd0 : t_uop2.dst[4:0];
+	t_mrob_next_tail.pdst = t_uop2.dst_valid ? n_prf_entry2 : 'd0;
+	t_mrob_next_tail.old_pdst = t_uop2.dst_valid ? ((t_uop.dst_valid & (t_uop.dst == t_uop2.dst)) ? t_mrob_tail.pdst : r_alloc_rat[t_uop2.dst[4:0]]) : 'd0;
+	
 	t_mrob_next_tail.pc = t_alloc_uop2.pc;
 	t_mrob_next_tail.is_br = t_alloc_uop2.is_br;	
 	t_mrob_next_tail.is_ret = (t_alloc_uop2.op == RET);
