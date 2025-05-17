@@ -194,6 +194,7 @@ module decode_riscv(
 	rd_is_link = (rd == 'd1) || (rd == 'd5);
 	rs1_is_link = (rs1 == 'd1) || (rs1 == 'd5);
 	uop.op = page_fault ? FETCH_PF : (irq ? IRQ : II);
+	uop.rsb_ptr = 'd0;
 	uop.srcA = 'd0;
 	uop.srcB = 'd0;
 	uop.dst = 'd0;

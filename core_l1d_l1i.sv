@@ -200,7 +200,8 @@ module
 
    logic 				  retired_call;
    logic 				  retired_ret;
-
+   logic [(`M_WIDTH-1):0]		  retired_call_ret_addr;
+   
    logic 				  retired_rob_ptr_valid;
    logic 				  retired_rob_ptr_two_valid;
    logic [`LG_ROB_ENTRIES-1:0] 		  retired_rob_ptr;
@@ -754,7 +755,6 @@ module
 	      .restart_src_is_indirect(restart_src_is_indirect),
 	      .restart_valid(restart_valid),
 	      .restart_ack(restart_ack),
-	      .retire_reg_ptr(retire_reg_ptr),
 	      .retire_reg_data(retire_reg_data),
 	      .retire_reg_valid(retire_reg_valid),	      
 	      .branch_pc_valid(t_branch_pc_valid),
@@ -766,6 +766,7 @@ module
 	      .bpu_idx(bpu_idx),
 	      .retire_valid(retire_valid),
 	      .retired_call(retired_call),
+	      .retired_call_ret_addr(retired_call_ret_addr),
 	      .retired_ret(retired_ret),
 	      .insn(insn),
 	      .insn_valid(insn_valid),
@@ -863,6 +864,7 @@ module
 	     .retire_two_pc(retire_two_pc),
 	     .rob_empty(rob_empty),
 	     .retired_call(retired_call),
+	     .retired_call_ret_addr(retired_call_ret_addr),
 	     .retired_ret(retired_ret),
 	     .retired_rob_ptr_valid(retired_rob_ptr_valid),
 	     .retired_rob_ptr_two_valid(retired_rob_ptr_two_valid),

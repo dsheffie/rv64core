@@ -246,6 +246,7 @@ typedef struct packed {
    logic [`LG_PRF_ENTRIES-1:0] dst;
    logic 		       dst_valid;
 
+   logic [`LG_RET_STACK_ENTRIES-1:0] rsb_ptr;
 
    logic [`M_WIDTH-1:0]        rvimm;
    logic [15:0]		       imm;
