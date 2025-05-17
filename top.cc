@@ -62,8 +62,6 @@ static uint64_t l1d_stores = 0;
 static std::map<int,uint64_t> block_distribution;
 static std::map<int,uint64_t> restart_distribution;
 static std::map<int,uint64_t> restart_ds_distribution;
-static std::map<int,uint64_t> fault_distribution;
-static std::map<int,uint64_t> branch_distribution;
 static std::map<int,uint64_t> fault_to_restart_distribution;
 static std::map<int,uint64_t> mmu_walk_lat;
 
@@ -72,23 +70,6 @@ static bool enable_checker = true, use_checkpoint = false;
 static bool pending_fault = false;
 static uint64_t fault_start_cycle = 0;
 
-static uint64_t fault_counts[32] = {0};
-
-void record_exception_type(int fault_type) {
-  fault_counts[fault_type & 31]++;
-}
-
-void record_branches(int n_branches) {
-  branch_distribution[n_branches]++;
-}
-
-void record_faults(int n_faults) {
-  fault_distribution[n_faults]++;
-  if(n_faults && not(pending_fault)) {
-    pending_fault = true;
-    fault_start_cycle = cycle;
-  }
-}
 
 static long long mispred_cycle = -1L;
 void record_exec_mispred(long long curr_cycle) {
@@ -1703,14 +1684,7 @@ int main(int argc, char **argv) {
 	<< static_cast<double>(total_load_lat)/n_logged_loads
 	<< " cycles\n";
 
-    
-    for(int i = 0; i < 32; i++) {
-      if(fault_counts[i] != 0) {
-	out << "fault_counts[" << i << "] = "
-	    << fault_counts[i] << "\n";
-      }
-    }
-    
+        
     double total_fetch_cap = 0.0;
 
   

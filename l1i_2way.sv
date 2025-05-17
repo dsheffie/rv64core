@@ -30,8 +30,8 @@ module l1i_2way(clk,
 	   restart_ack,
 	   retire_valid,
 	   retired_call,
+	   retired_call_ret_addr,
 	   retired_ret,
-	   retire_reg_ptr,
 	   retire_reg_data,
 	   retire_reg_valid,
 	   branch_pc_valid,
@@ -90,9 +90,10 @@ module l1i_2way(clk,
    //return stack signals
    input logic 			retire_valid;
    input logic 			retired_call;
+   input logic [(`M_WIDTH-1):0]	retired_call_ret_addr;
+	
    input logic 			retired_ret;
 
-   input logic [4:0] 		retire_reg_ptr;
    input logic [`M_WIDTH-1:0] 	retire_reg_data;
    input logic 			retire_reg_valid;
 
@@ -1420,9 +1421,16 @@ endfunction
 	  end
 	else if(retire_reg_valid && retire_valid && retired_call)
 	  begin
-	     r_arch_return_stack[r_arch_rs_tos] <= retire_reg_data;
+
+	     if(retired_call_ret_addr != retire_reg_data)
+	       begin
+		  $display("retired_call_ret_addr = %x, retire_reg_data = %x", retired_call_ret_addr, retire_reg_data);	     	     
+		  $stop();
+	       end
+	     r_arch_return_stack[r_arch_rs_tos] <= retired_call_ret_addr;
 	  end
-     end
+     end // always_ff@ (posedge clk)
+   
    always_comb
      begin
 	n_arch_rs_tos = r_arch_rs_tos;

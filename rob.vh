@@ -25,10 +25,6 @@ typedef enum logic [4:0] {
 
 
 typedef struct packed {
-   logic       is_call;
-   logic       is_br;
-   logic       is_indirect;
-   
    logic       faulted;
    logic       has_cause;
    logic [4:0] cause;
@@ -74,6 +70,8 @@ typedef struct packed {
    cause_t		       cause;
    logic		       has_cause;
    logic [`M_WIDTH-1:0]        data;
+   logic		       rsb_ptr_valid;
+   logic [`LG_RET_STACK_ENTRIES-1:0] rsb_ptr;   
 } complete_t;
 
 typedef struct packed {

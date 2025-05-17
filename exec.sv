@@ -226,6 +226,8 @@ module exec(clk,
    assign clear_tlb = r_clear_tlb;
    
    logic 	t_take_br, t_take_br2;
+   logic	t_call, t_call2;
+   
    logic 	t_mispred_br, t_mispred_br2;
    logic 	t_alu_valid, t_alu_valid2;
    logic 	t_got_break;
@@ -1317,6 +1319,7 @@ module exec(clk,
    
    always_comb
      begin
+	t_call2 = 1'b0;
 	t_sub2 = 1'b0;
 	t_addi_2 = 1'b0;
 	t_take_br2 = 1'b0;
@@ -1384,6 +1387,7 @@ module exec(clk,
 	       t_result2 = w_pc2_4;
 	       t_alu_valid2 = 1'b1;
 	       t_wr_int_prf2 = 1'b1;
+	       t_call2 = 1'b1;
 	    end
 	  JALR:
 	    begin
@@ -1393,6 +1397,7 @@ module exec(clk,
 	       t_alu_valid2 = 1'b1;
 	       t_result2 = w_pc2_4;
 	       t_wr_int_prf2 = 1'b1;
+	       t_call2 = 1'b1;	       
 	    end
 	  JR:
 	    begin
@@ -2123,6 +2128,7 @@ module exec(clk,
       
    always_comb
      begin
+	t_call = 1'b0;
 	t_is_clzw_ctzw_cpopw = 1'b0;
 	t_sub = 1'b0;
 	t_addi = 1'b0;
@@ -2468,6 +2474,7 @@ module exec(clk,
 	       t_result = w_pc4;
 	       t_alu_valid = 1'b1;
 	       t_wr_int_prf = 1'b1;
+	       t_call = 1'b1;
 	    end
 	  JALR:
 	    begin
@@ -2477,6 +2484,7 @@ module exec(clk,
 	       t_alu_valid = 1'b1;
 	       t_result = w_pc4;
 	       t_wr_int_prf = 1'b1;
+	       t_call = 1'b1;
 	    end
 	  JR:
 	     begin
@@ -4019,10 +4027,13 @@ always_ff@(negedge clk)
 	complete_bundle_2.has_cause <= 1'b0;
 	complete_bundle_2.take_br <= t_take_br2;
 	complete_bundle_2.data <= t_result2;
+	complete_bundle_2.rsb_ptr <= int_uop2.rsb_ptr;
+	complete_bundle_2.rsb_ptr_valid <= t_call2;
      end
    
    always_ff@(posedge clk)
      begin
+	complete_bundle_1.rsb_ptr <= int_uop.rsb_ptr;	
 	if(t_mul_complete | t_div_complete)
 	  begin
 	     complete_bundle_1.rob_ptr <= t_mul_complete ? t_rob_ptr_out :  t_div_rob_ptr;
@@ -4033,6 +4044,7 @@ always_ff@(negedge clk)
 	     complete_bundle_1.has_cause <= 1'b0;	     
 	     complete_bundle_1.take_br <= 1'b0;
 	     complete_bundle_1.data <= t_mul_complete ? t_mul_result : t_div_result;
+	     complete_bundle_1.rsb_ptr_valid <= 1'b0;
 	  end
 	else
 	  begin
@@ -4044,6 +4056,7 @@ always_ff@(negedge clk)
 	     complete_bundle_1.has_cause <= t_has_cause;
 	     complete_bundle_1.take_br <= t_take_br;
 	     complete_bundle_1.data <= t_result;
+	     complete_bundle_1.rsb_ptr_valid <= t_call;	     
 	  end
      end // always_ff@ (posedge clk)
 `else
@@ -4063,10 +4076,13 @@ always_ff@(negedge clk)
 	complete_bundle_2.has_cause = 1'b0;
 	complete_bundle_2.take_br = t_take_br2;
 	complete_bundle_2.data = t_result2;
+	complete_bundle_2.rsb_ptr = int_uop2.rsb_ptr;
+	complete_bundle_2.rsb_ptr_valid = t_call2;	
      end
    
    always_comb
      begin
+	complete_bundle_1.rsb_ptr = int_uop.rsb_ptr;		
 	if(t_mul_complete | t_div_complete)
 	  begin
 	     complete_bundle_1.rob_ptr = t_mul_complete ? t_rob_ptr_out :  t_div_rob_ptr;
@@ -4077,6 +4093,7 @@ always_ff@(negedge clk)
 	     complete_bundle_1.has_cause = 1'b0;	     
 	     complete_bundle_1.take_br = 1'b0;
 	     complete_bundle_1.data = t_mul_complete ? t_mul_result : t_div_result;
+	     complete_bundle_1.rsb_ptr_valid = 1'b0;	     	     	     
 	  end
 	else
 	  begin
@@ -4088,9 +4105,11 @@ always_ff@(negedge clk)
 	     complete_bundle_1.has_cause = t_has_cause;
 	     complete_bundle_1.take_br = t_take_br;
 	     complete_bundle_1.data = t_result;
+	     complete_bundle_1.rsb_ptr_valid = t_call;	     	     
 	  end
      end // always_ff@ (posedge clk)
-`endif
+`endif // !`ifdef FLOP_EXEC_COMPLETE
+
 
 `ifdef VERILATOR
    always_ff@(negedge clk)
