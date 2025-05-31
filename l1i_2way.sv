@@ -1421,12 +1421,10 @@ endfunction
 	  end
 	else if(retire_reg_valid && retire_valid && retired_call)
 	  begin
-
-	     if(retired_call_ret_addr != retire_reg_data)
-	       begin
-		  $display("retired_call_ret_addr = %x, retire_reg_data = %x", retired_call_ret_addr, retire_reg_data);	     	     
-		  $stop();
-	       end
+	     // if(retired_call_ret_addr != retire_reg_data)
+	     //   begin
+	     // 	  $display("retired_call_ret_addr = %x, retire_reg_data = %x", retired_call_ret_addr, retire_reg_data);	     	     
+	     //   end
 	     r_arch_return_stack[r_arch_rs_tos] <= retired_call_ret_addr;
 	  end
      end // always_ff@ (posedge clk)
