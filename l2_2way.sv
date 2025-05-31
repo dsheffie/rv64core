@@ -404,7 +404,7 @@ module l2_2way(clk,
    generate
       for(genvar i = 0; i < N_ROB_ENTRIES; i=i+1)
 	begin
-	   assign w_hit_rob[i] = r_rob_valid[i] ? (r_rob_addr[i][31:4] == n_addr[31:4]) : 1'b0;
+	   assign w_hit_rob[i] = r_rob_valid[i] ? (r_rob_addr[i][(`PA_WIDTH-1):`LG_L2_CL_LEN] == n_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN]) : 1'b0;
 
 	   assign w_mmu[i] = r_rob_valid[i] ? r_rob_was_mmu[i] : 1'b0;
 	   assign w_pte[i] = r_rob_valid[i] ? r_rob_was_mark_dirty[i] : 1'b0;
@@ -957,16 +957,16 @@ module l2_2way(clk,
    wire	w_l1i_r = r_l1i_req | l1i_req;
    wire w_l1d_r = !w_l1d_empty;
 
-   wire [LG_L2_LINES-1:0] w_l1i_tag = l1i_addr[LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN];
-   wire [LG_L2_LINES-1:0] w_l1d_tag = t_l1dq.addr[LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN];
+   wire [`PA_WIDTH-(`LG_L2_CL_LEN+1):0] w_l1i_tag = l1i_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN];
+   wire [`PA_WIDTH-(`LG_L2_CL_LEN+1):0] w_l1d_tag = t_l1dq.addr[(`PA_WIDTH-1):`LG_L2_CL_LEN];
 
    /* interlock inflight cachelines */
    wire [N_ROB_ENTRIES-1:0] w_hit_l1d_cl, w_hit_l1i_cl;
    generate
       for(genvar i = 0; i < N_ROB_ENTRIES; i=i+1)
 	begin
-	   assign w_hit_l1d_cl[i] = r_rob_valid[i] ? (r_rob_addr[i][LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN] == w_l1d_tag) : 1'b0;
-	   assign w_hit_l1i_cl[i] = r_rob_valid[i] ? (r_rob_addr[i][LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN] == w_l1i_tag) : 1'b0;	   	   	   
+	   assign w_hit_l1d_cl[i] = r_rob_valid[i] ? (r_rob_addr[i][(`PA_WIDTH-1):`LG_L2_CL_LEN] == w_l1d_tag) : 1'b0;
+	   assign w_hit_l1i_cl[i] = r_rob_valid[i] ? (r_rob_addr[i][(`PA_WIDTH-1):`LG_L2_CL_LEN] == w_l1i_tag) : 1'b0;	   	   	   
 	end
    endgenerate
 
