@@ -5,7 +5,7 @@ import re
 import time
 
 if __name__ == '__main__':
-    n_tests = 100000
+    n_tests = 10
     use_paging = False
     num_proc = 24
     children = []

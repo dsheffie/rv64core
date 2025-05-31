@@ -975,7 +975,7 @@ int main(int argc, char **argv) {
   bool got_putchar = false;
   bool was_in_flush_mode = false;
   bool pending_irq = false;
-
+  bool is_elf = false;
   globals::syscall_emu = not(use_checkpoint);
   tb->syscall_emu = globals::syscall_emu;
 
@@ -985,6 +985,7 @@ int main(int argc, char **argv) {
     loadState(*ss, rv32_binary.c_str());
   }
   else {
+    is_elf = true;
     load_elf(rv32_binary.c_str(), s);
     load_elf(rv32_binary.c_str(), ss);
   }
@@ -1503,8 +1504,13 @@ int main(int argc, char **argv) {
 		    tb->mem_req_addr,
 		    tb->mem_req_tag,
 		    cycle+lat);
+      
       memcpy(req.data, tb->mem_req_store_data, sizeof(int)*4);
-
+      
+      //if(tb->mem_req_addr >= (512*1024*1024)) {
+      //printf("warning bad %s for addr %x\n", tb->mem_req_opcode==7 ? "store" : "load", tb->mem_req_addr);
+      //}
+      
       //printf("got memory request for address %x of type %d, tag %d, will reply at cycle %lu, now %lu\n",
       //tb->mem_req_addr, tb->mem_req_opcode, tb->mem_req_tag,
       //cycle+lat,
@@ -1518,23 +1524,25 @@ int main(int argc, char **argv) {
       mem_req_t &req = mem_queue.front();
       //printf("reply memory request for address %x tag %d\n",
       //req.addr, req.tag);
-
+      bool bad_addr = not(is_elf) and (req.addr >= (512*1024*1024));
       if(not(req.is_store)) {/*load word */
 	for(int i = 0; i < 4; i++) {
 	  uint64_t ea = (req.addr + 4*i) & ((1UL<<32)-1);
-	  tb->mem_rsp_load_data[i] = mem_r32(s,ea);
+	  tb->mem_rsp_load_data[i] = bad_addr ? 0 : mem_r32(s,ea);
 	}
 	last_load_addr = req.addr;
 	assert((req.addr & 0xf) == 0);
 	++n_loads;
       }
       else { /* store word */
-	for(int i = 0; i < 4; i++) {
-	  uint64_t ea = (req.addr + 4*i) & ((1UL<<32)-1);	  
-	  mem_w32(s, ea, req.data[i]);
+	if(not(bad_addr)) {
+	  for(int i = 0; i < 4; i++) {
+	    uint64_t ea = (req.addr + 4*i) & ((1UL<<32)-1);	  
+	    mem_w32(s, ea, req.data[i]);
+	  }
+	  last_store_addr = req.addr;
+	  ++n_stores;
 	}
-	last_store_addr = req.addr;
-	++n_stores;
       }
       last_addr = req.addr;
       tb->mem_rsp_valid = 1;
