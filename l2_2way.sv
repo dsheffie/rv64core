@@ -163,7 +163,12 @@ module l2_2way(clk,
    
    logic [LG_L2_LINES-1:0] t_idx, r_idx;
    logic [TAG_BITS-1:0]    n_tag, r_tag;
-
+   
+   function logic[LG_L2_LINES-1:0] hash_addr(logic [`PA_WIDTH-1:0] addr);
+      return addr[(`LG_L2_CL_LEN+LG_L2_LINES-1):`LG_L2_CL_LEN] ^ 
+	addr[(`LG_L2_CL_LEN+LG_L2_LINES+LG_L2_LINES-1):(`LG_L2_CL_LEN+LG_L2_LINES)];
+   endfunction // hash_addr
+		       
    logic [`PA_WIDTH-(`LG_L2_CL_LEN+1):0]	n_last_l1i_addr, r_last_l1i_addr;
    logic [`PA_WIDTH-(`LG_L2_CL_LEN+1):0]	n_last_l1d_addr, r_last_l1d_addr;
    logic 		   t_gnt_l1i, t_gnt_l1d;
@@ -1248,7 +1253,7 @@ module l2_2way(clk,
 		    n_addr = r_rob_addr[w_rob_head_ptr];
 		    n_saveaddr = r_rob_addr[w_rob_head_ptr];
 		    n_tag = r_rob_addr[w_rob_head_ptr][(`PA_WIDTH-1):`LG_L2_CL_LEN];
-		    t_idx = n_tag[27:14] ^ n_tag[13:0]; //r_rob_addr[w_rob_head_ptr][LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN];
+		    t_idx = hash_addr(n_addr);
 		    n_l1d_rsp_tag = r_rob_l1tag[w_rob_head_ptr];
 		    n_mmu_addr3 = r_rob_mmu_addr3[w_rob_head_ptr];
 		    n_was_rob = 1'b1;
@@ -1358,8 +1363,7 @@ module l2_2way(clk,
 			 n_mmu_addr3 = mem_mark_addr[3];
 			 n_addr = {mem_mark_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};			 
 			 n_tag = mem_mark_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN];
-			 //t_idx = mem_mark_addr[LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN];			 			 
-			 t_idx = n_tag[27:14] ^ n_tag[13:0];
+			 t_idx = hash_addr(n_addr);
 			 n_saveaddr = {mem_mark_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
 			 n_opcode = MEM_LW;
 			 n_mark_pte = 1'b1;
@@ -1371,11 +1375,10 @@ module l2_2way(clk,
 		      end
 		    else if(w_mmu_req & w_rob_empty & !r_need_wb)
 		      begin
-			 n_mmu_addr3 = mmu_req_addr[3];		    
+			 n_mmu_addr3 = mmu_req_addr[3];
+			 n_addr = {mmu_req_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};			 
 			 n_tag = mmu_req_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN];
-			 //t_idx = mmu_req_addr[LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN];			 			 
-			 t_idx = n_tag[27:14] ^ n_tag[13:0];			 
-			 n_addr = {mmu_req_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
+			 t_idx = hash_addr(n_addr);			 
 			 n_saveaddr = {mmu_req_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
 			 n_opcode = MEM_LW;
 			 n_state = CHECK_VALID_AND_TAG;
@@ -1391,12 +1394,11 @@ module l2_2way(clk,
 			 if(w_pick_l1i)
 			   begin
 			      t_picked_icache = 1'b1;
-			      n_last_gnt = 1'b0;			 
+			      n_last_gnt = 1'b0;
+			      n_addr = {l1i_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};			      
 			      n_tag = l1i_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN];
-			      //t_idx = l1i_addr[LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN];			      			      
-			      t_idx = n_tag[27:14] ^ n_tag[13:0];			 			      
+			      t_idx = hash_addr(n_addr);			 			      
 			      n_last_l1i_addr = l1i_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN];
-			      n_addr = {l1i_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
 			      n_saveaddr = {l1i_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
 			      n_opcode = MEM_LW;
 			      n_l1i_req = 1'b0;
@@ -1408,9 +1410,8 @@ module l2_2way(clk,
 			   begin
 			      n_last_gnt = 1'b1;
 			      n_tag = t_l1dq.addr[(`PA_WIDTH-1):`LG_L2_CL_LEN];
-			      //t_idx = t_l1dq.addr[LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN];			 			      
-			      t_idx = n_tag[27:14] ^ n_tag[13:0];			 			      
 			      n_addr = {t_l1dq.addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
+			      t_idx = hash_addr(n_addr);
 			      n_last_l1d_addr = t_l1dq.addr[(`PA_WIDTH-1):`LG_L2_CL_LEN];			 
 			      n_saveaddr = {t_l1dq.addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
 			      n_store_data = t_l1dq.data;
@@ -1474,10 +1475,8 @@ module l2_2way(clk,
 				   n_last_idle = 1'b1;
 				   n_last_gnt = 1'b1;
 				   n_tag = t_l1dq.addr[(`PA_WIDTH-1):`LG_L2_CL_LEN];
-				   t_idx = n_tag[27:14] ^ n_tag[13:0]; 				   
-				   //t_idx = t_l1dq.addr[LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN];			 
-
-				   n_addr = {t_l1dq.addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
+				   n_addr = {t_l1dq.addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};				   
+				   t_idx = hash_addr(n_addr);
 				   n_last_l1d_addr = t_l1dq.addr[(`PA_WIDTH-1):`LG_L2_CL_LEN];			 
 				   n_saveaddr = {t_l1dq.addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
 				   n_opcode = MEM_LW;
@@ -1502,9 +1501,8 @@ module l2_2way(clk,
 				   n_last_idle = 1'b1;
 				   n_last_gnt = 1'b1;				   
 				   n_tag = t_l1dq.addr[(`PA_WIDTH-1):`LG_L2_CL_LEN];
-				   //t_idx = t_l1dq.addr[LG_L2_LINES+(`LG_L2_CL_LEN-1):`LG_L2_CL_LEN];				   
-				   t_idx = n_tag[27:14] ^ n_tag[13:0]; 				   				   
-				   n_addr = {t_l1dq.addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
+				   n_addr = {t_l1dq.addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};				   
+				   t_idx = hash_addr(n_addr);
 				   n_last_l1d_addr = t_l1dq.addr[(`PA_WIDTH-1):`LG_L2_CL_LEN];			 
 				   n_saveaddr = {t_l1dq.addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
 				   n_opcode = MEM_LW;
