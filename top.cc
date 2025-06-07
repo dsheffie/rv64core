@@ -847,7 +847,7 @@ void l1d_port_util(int port1, int port2) {
 }
 
 static uint64_t last_retired_pc = 0;
-static uint64_t last_insns_retired = 0, last_cycle = 0;
+static uint64_t last_insns_retired = 0, last_cycle = 0, last_mem_reqs = 0;
 static Vcore_l1d_l1i *tb = nullptr;
 void catchUnixSignal(int n) {
   std::cout << std::hex << "last_retired_pc = " << last_retired_pc
@@ -969,7 +969,6 @@ int main(int argc, char **argv) {
   uint64_t last_retire = 0, last_check = 0, last_restart = 0;
   uint64_t mismatches = 0, n_stores = 0, n_loads = 0;
   uint64_t dram_queue_occupancy = 0;
-  uint64_t last_n_logged_loads = 0, last_total_load_lat = 0;
   uint64_t n_branches = 0, n_mispredicts = 0, n_checks = 0, n_flush_cycles = 0;
   bool got_mem_rsp = false, got_monitor = false, incorrect = false;
   bool got_putchar = false;
@@ -1169,12 +1168,12 @@ int main(int argc, char **argv) {
 
       if(((insns_retired % heartbeat) == 0) or trace_retirement ) {
 	double w_ipc = static_cast<double>(insns_retired - last_insns_retired) / (cycle - last_cycle);
-	double w_lat = static_cast<double>(total_load_lat-last_total_load_lat)/(n_logged_loads-last_n_logged_loads);	
+	double w_mem = (static_cast<double>(mem_reqs-last_mem_reqs)/(insns_retired-last_insns_retired))*1000.0;
+	
 	if(window) {
 	  last_insns_retired = insns_retired;
 	  last_cycle = cycle;
-	  last_n_logged_loads = n_logged_loads;
-	  last_total_load_lat = total_load_lat;
+	  last_mem_reqs = mem_reqs;
 	}
 	std::cout << "port a "
 		  << " cycle " << cycle
@@ -1186,11 +1185,10 @@ int main(int argc, char **argv) {
 		  << getAsmString(tb->retire_pc, tb->page_table_root, tb->paging_active)	  
 		  << std::fixed
 		  << ", " << w_ipc << " IPC "
-		  << ", " << w_lat << " cyc "
 		  << ", insns_retired "
 		  << insns_retired
 		  << ", mem pki "
-		  << ((static_cast<double>(mem_reqs)/insns_retired)*100.0)
+		  << w_mem
 		  << ", mispredict pki "
 		  << (static_cast<double>(n_mispredicts) / insns_retired) * 1000.0
 		  << std::defaultfloat
@@ -1205,12 +1203,11 @@ int main(int argc, char **argv) {
 	last_retired_pc = tb->retire_pc;	
 	if(((insns_retired % heartbeat) == 0) or trace_retirement ) {
 	  double w_ipc = static_cast<double>(insns_retired - last_insns_retired) / (cycle - last_cycle);
-	double w_lat = static_cast<double>(total_load_lat-last_total_load_lat)/(n_logged_loads-last_n_logged_loads);		  
+	  double w_mem = (static_cast<double>(mem_reqs-last_mem_reqs)/(insns_retired-last_insns_retired))*1000.0;	  
 	  if(window) {
 	    last_insns_retired = insns_retired;
 	    last_cycle = cycle;
-	    last_n_logged_loads = n_logged_loads;
-	    last_total_load_lat = total_load_lat;
+	    last_mem_reqs = mem_reqs;	    
 	  }
 	  std::cout << "port b "
 		    << " cycle " << cycle
@@ -1222,11 +1219,10 @@ int main(int argc, char **argv) {
 		    << getAsmString(tb->retire_two_pc, tb->page_table_root, tb->paging_active)	  	    
 		    << std::fixed
 		    << ", " << w_ipc << " IPC "
-		    << ", " << w_lat << " cyc "	    
 		    << ", insns_retired "
 		    << insns_retired
 		    << ", mem pki "
-		    << ((static_cast<double>(mem_reqs)/insns_retired)*100.0)
+		    << w_mem
 		    << ", mispredict pki "
 		    << (static_cast<double>(n_mispredicts) / insns_retired) * 1000.0
 		    << std::defaultfloat
