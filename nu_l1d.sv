@@ -540,8 +540,10 @@ module nu_l1d(clk,
 
 
    logic [63:0] r_cache_accesses, r_cache_hits,
-		n_cache_accesses, n_cache_hits;
-   
+		n_cache_accesses, n_cache_hits,
+		n_cache_misses, r_cache_misses;
+ 
+  
    
    wire 		       w_tlb_hit, w_tlb_dirty, w_tlb_writable, w_tlb_readable, 
 			       w_tlb_user, w_zero_page;
@@ -978,6 +980,7 @@ module nu_l1d(clk,
      begin
 	r_cache_accesses <= reset ? 64'd0 : n_cache_accesses;
 	r_cache_hits <= reset ? 64'd0 : n_cache_hits;
+	r_cache_misses <= reset ? 64'd0 : n_cache_misses;
      end
 
    wire w_drained = (|r_rob_inflight) == 1'b0;
@@ -1355,10 +1358,8 @@ module nu_l1d(clk,
       .rd_data1(r_valid_out2)
       );
 
-
-
-
-   tlb #(.N(33)) dtlb(
+   
+   tlb #(.N(32)) dtlb(
     	    .clk(clk), 
     	    .reset(reset),
 	    .priv(priv),
@@ -1788,15 +1789,18 @@ module nu_l1d(clk,
    always_comb
      begin
 	n_cache_hits = r_cache_hits;
+	n_cache_misses = r_cache_misses;
 	n_cache_accesses = r_cache_accesses;
 	if(r_got_req2)
 	  begin
 	     n_cache_accesses = r_cache_accesses + 64'd1;
 	  end
-	if(t_hit_cache2 & !r_pending_tlb_miss)
+	if(r_state == HANDLE_RELOAD)
 	  begin
-	     n_cache_hits = r_cache_hits + 64'd1;
+	     n_cache_misses = r_cache_misses + 64'd1;
 	  end
+	
+	n_cache_hits = r_cache_accesses - r_cache_misses;
      end // always_comb
    
 
