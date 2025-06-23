@@ -3,12 +3,13 @@
 #include <fstream>
 #include <boost/program_options.hpp>
 #include "pipeline_record.hh"
+#include <libgen.h>
 
 using namespace std;
 
-static void read_template(list<string> &pre, list<string> &post) {
+static void read_template(list<string> &pre, list<string> &post, const string &path) {
   string line;
-  fstream in("traceTemplate.html");
+  fstream in(path + "/traceTemplate.html");
   bool use_pre = true;
   //var tableData = {}
   while(getline(in, line)) {
@@ -101,6 +102,10 @@ int main(int argc, char *argv[]) {
   namespace po = boost::program_options;
   string fname, oname;
   size_t len = 0, start = 0;
+
+  char buf[PATH_MAX];
+  char *res = realpath(argv[0], buf);
+  
   try {
     po::options_description desc("options");
     desc.add_options()
@@ -119,7 +124,7 @@ int main(int argc, char *argv[]) {
   }
   list<string> pre, post, ops;
   pipeline_reader r;
-  read_template(pre, post);
+  read_template(pre, post, std::string(dirname(res)));
   try {
     r.read(fname);
   }
