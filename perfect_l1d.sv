@@ -23,6 +23,7 @@ import "DPI-C" function void wr_log(input longint pc,
 
 module perfect_l1d(clk, 
 	   reset,
+           l2_empty,
 	   priv,
 	   page_table_root,
 	   l2_probe_addr,
@@ -84,6 +85,8 @@ module perfect_l1d(clk,
    localparam L1D_CL_LEN_BITS = 1 << (`LG_L1D_CL_LEN + 3);   
    input logic clk;
    input logic reset;
+   input logic l2_empty;
+   
    input logic [1:0] priv;
    input logic [63:0] page_table_root;
    input logic l2_probe_val;

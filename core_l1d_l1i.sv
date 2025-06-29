@@ -598,8 +598,11 @@ module
 
 
    
-
+`ifdef PERFECT_L1_CACHES
+   perfect_l1d dcache (
+`else
    nu_l1d dcache (
+ `endif
 	       .clk(clk),
 	       .reset(reset),
 	       .priv(w_priv),
@@ -731,8 +734,11 @@ module
 	    );
    
    
-   
+ `ifdef PERFECT_L1_CACHES
+   perfect_l1i icache (		       
+ `else
    l1i_2way icache(
+ `endif
 	      .clk(clk),
 	      .reset(reset),
 	      .l1i_state(l1i_state),

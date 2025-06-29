@@ -3,7 +3,7 @@
 
 `ifdef VERILATOR
  `define ENABLE_CYCLE_ACCOUNTING 1
- //`define PERFECT_L1D
+ //`define PERFECT_L1_CACHES
 `endif
 
 `define FPGA 1
