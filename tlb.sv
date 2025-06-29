@@ -13,6 +13,7 @@ module tlb(clk,
 	   dirty,
 	   readable,
 	   writable,
+	   executable,
 	   user,
 	   zero_page,
 	   tlb_hits,
@@ -36,6 +37,7 @@ module tlb(clk,
    output logic	       dirty;
    output logic	       readable;
    output logic	       writable;
+   output logic	       executable;
    output logic        user;
 
    output logic	       zero_page;
@@ -132,6 +134,7 @@ module tlb(clk,
 	hit <= reset ? 1'b0 : (active ? (req & |w_hits) : 1'b1);
 	writable <= r_writable[w_idx[LG_N-1:0]];
 	readable <= r_readable[w_idx[LG_N-1:0]];
+	executable <= r_executable[w_idx[LG_N-1:0]];
 	dirty <= r_dirty[w_idx[LG_N-1:0]];
 	pa <= active ? w_pa_sel[`PA_WIDTH-1:0] : va[`PA_WIDTH-1:0];
 	zero_page <= reset ? 1'b0 : ((|va[39:12]) == 1'b0);

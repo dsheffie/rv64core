@@ -1014,8 +1014,8 @@ module core(clk,
 	t_enough_next_iprfs = !((t_uop2.dst_valid) && t_gpr_ffs2_full);
 
 	
-	t_fold_uop = (t_uop.op == NOP || t_uop.op == II || t_uop.op == FETCH_PF || t_uop.op == IRQ || t_uop.op == J );
-	t_fold_uop2 = (t_uop2.op == NOP || t_uop2.op == II || t_uop2.op == FETCH_PF || t_uop2.op == IRQ || t_uop2.op == J);
+	t_fold_uop = (t_uop.op == NOP | t_uop.op == II | t_uop.op == FETCH_PF | t_uop.op == IRQ | t_uop.op == J | t_uop.op == FETCH_NOT_EXEC );
+	t_fold_uop2 = (t_uop2.op == NOP | t_uop2.op == II | t_uop2.op == FETCH_PF | t_uop2.op == IRQ | t_uop2.op == J | t_uop2.op == FETCH_NOT_EXEC);
 
 	n_ds_done = r_ds_done;
 	n_flush_req_l1d = 1'b0;
@@ -1682,6 +1682,12 @@ module core(clk,
                       t_rob_tail.has_cause = 1'b1;
                       t_rob_tail.cause = FETCH_PAGE_FAULT;
 		    end
+		  else if(t_uop.op == FETCH_NOT_EXEC)
+		    begin
+                      t_rob_tail.faulted = 1'b1;
+                      t_rob_tail.has_cause = 1'b1;
+                      t_rob_tail.cause = FAULT_FETCH;
+		    end
 		  else if(t_uop.op == IRQ)
 		    begin
                       t_rob_tail.faulted = 1'b1;
@@ -1726,6 +1732,12 @@ module core(clk,
                       t_rob_next_tail.faulted = 1'b1;
                       t_rob_next_tail.has_cause = 1'b1;
                       t_rob_next_tail.cause = FETCH_PAGE_FAULT;
+		    end
+		  else if(t_uop2.op == FETCH_NOT_EXEC)
+		    begin
+                       t_rob_next_tail.faulted = 1'b1;
+                       t_rob_next_tail.has_cause = 1'b1;
+                       t_rob_next_tail.cause = FAULT_FETCH;
 		    end
 		  else if(t_uop2.op == IRQ)
 		    begin
@@ -2306,6 +2318,7 @@ module core(clk,
       .priv(w_priv),
       .insn(insn.insn_bytes),
       .page_fault(insn.page_fault),
+      .not_exec(insn.not_exec),
       .irq(w_any_irq),
       .pc(insn.pc), 
       .insn_pred(insn.pred), 
@@ -2324,6 +2337,7 @@ module core(clk,
 	.priv(w_priv),
 	.insn(insn_two.insn_bytes),
 	.page_fault(insn_two.page_fault),
+	.not_exec(insn_two.not_exec),	
 	.irq(w_any_irq),	
 	.pc(insn_two.pc), 
 	.insn_pred(insn_two.pred), 
@@ -2443,17 +2457,6 @@ module core(clk,
 
    always_ff@(negedge clk)
      begin
-	// if(t_push_dq_one && (t_dec_uop.op==FETCH_PF)) 
-	//   begin
-	//      $display("decoded %x to uop %d, is FETCH_PF=%b", 
-	// 	      t_dec_uop.pc, t_dec_uop.op, t_dec_uop.op==FETCH_PF);
-	//   end
-	//if(t_push_dq_two && (t_dec_uop2.op==FETCH_PF)) $stop();
-	//if(t_push_dq_one)
-	// $display("decoded %x to uop %d, is II=%b", t_dec_uop.pc, t_dec_uop.op, t_dec_uop.op==FETCH_PF);
-	//if(t_push_dq_two)
-	// $display("decoded %x to uop %d, is II=%b", t_dec_uop2.pc, t_dec_uop2.op, t_dec_uop2.op==FETCH_PF);	
-
     	if(insn_ack && insn_ack_two && 1'b0)
     	  begin
     	     $display("ack two insns in cycle %d, valid %b, %b, pc %x %x", 

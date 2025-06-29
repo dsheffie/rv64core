@@ -307,12 +307,11 @@ endfunction
    logic 		  t_push_insn, t_push_insn2,
 			  t_push_insn3, t_push_insn4;
    
-   logic		  t_unaligned_fetch;
    logic		  n_page_fault, r_page_fault;
    logic		  n_tlb_miss, r_tlb_miss;
    
    wire [`PA_WIDTH-1:0]	  w_tlb_pc;
-   wire			  w_tlb_hit;  
+   wire			  w_tlb_hit, w_tlb_exec;  
    logic		  t_reload_tlb;
    
    logic 		  t_clear_fq;
@@ -550,8 +549,6 @@ endfunction
 	t_insn_idx = r_cache_pc[WORD_STOP-1:WORD_START];
 	
 	t_pd = select_pd(w_jump, t_insn_idx);
-	
-	
 	t_pd0 = select_pd(w_jump, 'd0);
 	t_pd1 = select_pd(w_jump, 'd1);
 	t_pd2 = select_pd(w_jump, 'd2);
@@ -650,7 +647,6 @@ endfunction
 	t_push_insn2 = 1'b0;
 	t_push_insn3 = 1'b0;
 	t_push_insn4 = 1'b0;
-	t_unaligned_fetch = 1'b0;
 	
 	t_take_br = 1'b0;
 	t_take_br0 = 1'b0;
@@ -988,22 +984,7 @@ endfunction
 	             n_page_fault = page_walk_rsp.fault;
 	             t_reload_tlb = page_walk_rsp.fault==1'b0;
 		     n_state = TLB_MISS_TURNAROUND;
-		     //$display("mmu returns for %x, page fault %b at cycle %d", 
-		     //r_miss_pc, n_page_fault, r_cycle);
-		     //if(t_page_walk_pa != page_walk_rsp_pa)
-		     //begin
-		     //$display("va %x : local %x vs mmu %x", r_miss_pc, t_page_walk_pa, page_walk_rsp_pa);
-		     //$stop();
-		     //end
 	          end
-	       
-	       //n_state = ACTIVE;
-	       //n_req = 1'b1;
-	       //n_cache_pc = r_miss_pc;
-	       //t_cache_idx = r_miss_pc[IDX_STOP-1:IDX_START];
-	       //t_cache_tag = r_miss_pc[(`M_WIDTH-1):IDX_STOP];	       
-	       //n_page_fault = &t_page_walk_pa;
-	       //t_reload_tlb = (&t_page_walk_pa)==1'b0;
 	    end // case: TLB_MISS
 	  TLB_MISS_TURNAROUND:
 	    begin
@@ -1037,6 +1018,7 @@ endfunction
      begin
 	t_insn.insn_bytes = t_insn_data;
 	t_insn.page_fault = r_page_fault;
+	t_insn.not_exec = paging_active ? (w_tlb_exec==1'b0) : 1'b0;
 	t_insn.pc = r_cache_pc;
 	t_insn.pred_target = n_pc;
 	t_insn.pred = t_taken_branch_idx=='d0;
@@ -1046,6 +1028,7 @@ endfunction
 `endif
 	t_insn2.insn_bytes = t_insn_data2;
 	t_insn2.page_fault = 1'b0;
+	t_insn2.not_exec = 1'b0;
 	t_insn2.pc = w_cache_pc4;
 	t_insn2.pred_target = n_pc;
 	t_insn2.pred = t_taken_branch_idx=='d1;
@@ -1054,7 +1037,8 @@ endfunction
 	t_insn2.fetch_cycle = r_cycle;
 `endif
 	t_insn3.insn_bytes = t_insn_data3;
-	t_insn3.page_fault = 1'b0;	
+	t_insn3.page_fault = 1'b0;
+	t_insn3.not_exec = 1'b0;	
 	t_insn3.pc = w_cache_pc8;
 	t_insn3.pred_target = n_pc;
 	t_insn3.pred = t_taken_branch_idx=='d2;
@@ -1063,7 +1047,8 @@ endfunction
 	t_insn3.fetch_cycle = r_cycle;
 `endif
 	t_insn4.insn_bytes = t_insn_data4;
-	t_insn4.page_fault = 1'b0;	
+	t_insn4.page_fault = 1'b0;
+	t_insn4.not_exec = 1'b0;	
 	t_insn4.pc = w_cache_pc12;
 	t_insn4.pred_target = n_pc;
 	t_insn4.pred = t_taken_branch_idx=='d3;
@@ -1204,6 +1189,7 @@ endfunction
 	.dirty(),
 	.readable(),
 	.writable(),
+	.executable(w_tlb_exec),	
 	.user(),
 	.zero_page(),
 	.tlb_hits(tlb_hits),

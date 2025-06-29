@@ -186,6 +186,7 @@ typedef enum logic [7:0]
    ORCB,
    FENCEI,
    FETCH_PF,
+   FETCH_NOT_EXEC,
    IRQ,
    II //illegal instruction
    } opcode_t;

@@ -77,6 +77,7 @@ typedef struct packed {
 typedef struct packed {
    logic [31:0] insn_bytes;
    logic	page_fault;
+   logic	not_exec;
    logic [(`M_WIDTH-1):0] pc;
    logic [(`M_WIDTH-1):0] pred_target;
    logic 		  pred;
