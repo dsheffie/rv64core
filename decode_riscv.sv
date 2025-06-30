@@ -113,7 +113,7 @@ module decode_riscv(
 		    priv,
 		    insn,
 		    page_fault,
-		    not_exec,
+		    bad_page_permissions,
 		    irq,
 		    pc, 
 		    insn_pred, 
@@ -129,7 +129,7 @@ module decode_riscv(
    input logic [1:0] priv;
    input logic [31:0] insn;
    input logic	      page_fault;
-   input logic	      not_exec;
+   input logic	      bad_page_permissions;
    input logic 	      irq;
    input logic [`M_WIDTH-1:0] pc;
    input logic 	      insn_pred;
@@ -142,7 +142,7 @@ module decode_riscv(
    input logic			syscall_emu;
    output 	uop_t uop;
 
-   wire [6:0] 	opcode = (page_fault|irq|not_exec) ? 'd0 : insn[6:0];
+   wire [6:0] 	opcode = (page_fault|irq|bad_page_permissions) ? 'd0 : insn[6:0];
 
    //wire		w_priv_user = (priv == 2'd0);
    //wire		w_priv_supervisor = (priv == 2'd1);   
@@ -196,7 +196,7 @@ module decode_riscv(
 	rd_is_link = (rd == 'd1) || (rd == 'd5);
 	rs1_is_link = (rs1 == 'd1) || (rs1 == 'd5);
 	uop.op = page_fault ? FETCH_PF : 
-		 not_exec ? FETCH_NOT_EXEC : 
+		 bad_page_permissions ? FETCH_NOT_EXEC : 
 		 (irq ? IRQ : II);
 	uop.rsb_ptr = 'd0;
 	uop.srcA = 'd0;

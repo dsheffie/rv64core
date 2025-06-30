@@ -311,7 +311,7 @@ endfunction
    logic		  n_tlb_miss, r_tlb_miss;
    
    wire [`PA_WIDTH-1:0]	  w_tlb_pc;
-   wire			  w_tlb_hit, w_tlb_exec;  
+   wire			  w_tlb_hit, w_tlb_exec, w_tlb_user;  
    logic		  t_reload_tlb;
    
    logic 		  t_clear_fq;
@@ -1014,11 +1014,24 @@ endfunction
 	  end
      end // always_comb
 
+
+   wire		w_priv_user = (priv == 2'd0);
+   wire		w_bad_user_page = w_priv_user != w_tlb_user;
+   wire		w_bad_page_permissions = ((w_tlb_exec==1'b0) | w_bad_user_page) & paging_active;
+   
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if(w_bad_user_page & paging_active)
+   // 	  begin
+   // 	     $display("bad page permissions, priv = %d, w_tlb_user = %b", priv, w_tlb_user);
+   // 	  end
+   //   end
+   
    always_comb
      begin
 	t_insn.insn_bytes = t_insn_data;
 	t_insn.page_fault = r_page_fault;
-	t_insn.not_exec = paging_active ? (w_tlb_exec==1'b0) : 1'b0;
+	t_insn.bad_page_permissions = w_bad_page_permissions;
 	t_insn.pc = r_cache_pc;
 	t_insn.pred_target = n_pc;
 	t_insn.pred = t_taken_branch_idx=='d0;
@@ -1028,7 +1041,7 @@ endfunction
 `endif
 	t_insn2.insn_bytes = t_insn_data2;
 	t_insn2.page_fault = 1'b0;
-	t_insn2.not_exec = 1'b0;
+	t_insn2.bad_page_permissions = 1'b0;
 	t_insn2.pc = w_cache_pc4;
 	t_insn2.pred_target = n_pc;
 	t_insn2.pred = t_taken_branch_idx=='d1;
@@ -1038,7 +1051,7 @@ endfunction
 `endif
 	t_insn3.insn_bytes = t_insn_data3;
 	t_insn3.page_fault = 1'b0;
-	t_insn3.not_exec = 1'b0;	
+	t_insn3.bad_page_permissions = 1'b0;	
 	t_insn3.pc = w_cache_pc8;
 	t_insn3.pred_target = n_pc;
 	t_insn3.pred = t_taken_branch_idx=='d2;
@@ -1048,7 +1061,7 @@ endfunction
 `endif
 	t_insn4.insn_bytes = t_insn_data4;
 	t_insn4.page_fault = 1'b0;
-	t_insn4.not_exec = 1'b0;	
+	t_insn4.bad_page_permissions = 1'b0;	
 	t_insn4.pc = w_cache_pc12;
 	t_insn4.pred_target = n_pc;
 	t_insn4.pred = t_taken_branch_idx=='d3;
@@ -1190,7 +1203,7 @@ endfunction
 	.readable(),
 	.writable(),
 	.executable(w_tlb_exec),	
-	.user(),
+	.user(w_tlb_user),
 	.zero_page(),
 	.tlb_hits(tlb_hits),
 	.tlb_accesses(tlb_accesses),	

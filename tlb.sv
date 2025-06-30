@@ -136,6 +136,7 @@ module tlb(clk,
 	readable <= r_readable[w_idx[LG_N-1:0]];
 	executable <= r_executable[w_idx[LG_N-1:0]];
 	dirty <= r_dirty[w_idx[LG_N-1:0]];
+	user <= r_user[w_idx[LG_N-1:0]];
 	pa <= active ? w_pa_sel[`PA_WIDTH-1:0] : va[`PA_WIDTH-1:0];
 	zero_page <= reset ? 1'b0 : ((|va[39:12]) == 1'b0);
      end
