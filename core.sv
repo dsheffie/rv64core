@@ -943,14 +943,13 @@ module core(clk,
 	     
 	     for(logic [`LG_ROB_ENTRIES:0] i = r_rob_head_ptr; i != (r_rob_tail_ptr); i=i+1)
 	       begin
-		  $display("\trob entry %d, pc %x, insn %x addr %x complete %b, sd complete %b, is br %b, faulted %b, cause %d, fetched at %d, done at %d",
+		  $display("\trob entry %d, pc %x, insn %x addr %x complete %b, sd complete %b, faulted %b, cause %d, fetched at %d, done at %d",
 			   i[`LG_ROB_ENTRIES-1:0], 
-			   r_rob[i[`LG_ROB_ENTRIES-1:0]].pc,
+			   (((i & 'd1) == 'd0) ? r_rob_even[i[`LG_ROB_ENTRIES-1:0]/2].pc : r_rob_odd[i[`LG_ROB_ENTRIES-1:0]/2].pc),
 			   r_rob[i[`LG_ROB_ENTRIES-1:0]].raw_insn,
 			   r_rob_addr[i[`LG_ROB_ENTRIES-1:0]],
 			   r_rob_complete[i[`LG_ROB_ENTRIES-1:0]],
 			   r_rob_sd_complete[i[`LG_ROB_ENTRIES-1:0]],
-			   r_rob[i[`LG_ROB_ENTRIES-1:0]].is_br,
 			   r_rob[i[`LG_ROB_ENTRIES-1:0]].faulted,
 			   r_rob[i[`LG_ROB_ENTRIES-1:0]].cause,
 			   r_rob[i[`LG_ROB_ENTRIES-1:0]].fetch_cycle,

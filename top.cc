@@ -774,7 +774,7 @@ void record_retirement(long long pc,
   uint64_t delta = retire_cycle - last_retire_cycle;
   
   if(retire_reg_val) {
-    pl_regs[retire_reg_ptr & 31] = retire_reg_data;
+    pl_regs[retire_reg_ptr & 63] = retire_reg_data;
   }
   
   if(retire_cycle < lrc) {
