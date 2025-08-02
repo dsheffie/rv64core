@@ -68,27 +68,29 @@ static std::map<int,uint64_t> mmu_walk_lat;
 static uint64_t l1d_stall_reasons[8] = {0};
 static bool enable_checker = true, use_checkpoint = false;
 static bool pending_fault = false;
-static uint64_t fault_start_cycle = 0;
-
 
 static long long mispred_cycle = -1L;
 void record_exec_mispred(long long curr_cycle) {
-  if(mispred_cycle == -1) {
+  if(mispred_cycle == -1L) {
     mispred_cycle = curr_cycle;
   }
 }
 
 void record_restart(int cycles, long long curr_cycle) {
+  if(mispred_cycle == -1L) {
+    return;
+  }
   restart_distribution[cycles]++;
   pending_fault = false;
 
-  fault_to_restart_distribution[(cycle - fault_start_cycle)]++;
-  fault_start_cycle = 0;
-  mispred_to_restart_cycles += static_cast<uint64_t>( curr_cycle -  mispred_cycle );
+  int64_t restart_lat = curr_cycle -  mispred_cycle;
+  fault_to_restart_distribution[restart_lat]++;
+  if(restart_lat > 1000) {
+    printf("huh %ld cycles : %ld %ld\n", restart_lat, curr_cycle, mispred_cycle);
+  }
+  mispred_to_restart_cycles += static_cast<uint64_t>( restart_lat );
   mispred_cycle = -1UL;
-  //std::cout << "clearing fault took "
-  //<< (cycle - fault_start_cycle)
-  //<< " cycles\n";
+  //std::cout << "clearing fault took " << restart_lat << "\n";
 }
 
 void record_ds_restart(int cycles) {
@@ -1761,6 +1763,9 @@ int main(int argc, char **argv) {
     //out << p.first << " cycles before restart, " << p.second << " times\n";
     //}
     dump_histo(branch_name, mispredicts, s);
+
+  
+    
     
     uint64_t total_retire = 0, total_cycle = 0;
     for(auto &p : retire_map) {
@@ -1827,8 +1832,12 @@ int main(int argc, char **argv) {
     double jpki = static_cast<double>(n_mispredicts) / (total_retire/1000);
     std::cout << "l1i misses (rtl) = " << l1i_misses << "\n";
     std::cout << "l1i reqs for l2  = " << l1i_reqs_at_l2 << "\n";
-    
+
+    int median_fault_restart;
+    double avg_fault_restart = histo_mean_median(fault_to_restart_distribution, median_fault_restart);    
     std::cout << "jpki         = " << jpki << "\n";
+    std::cout << "avg detected fault to restart cycles = " << avg_fault_restart << "\n";
+    std::cout << "med detected fault to restart cycles = " << median_fault_restart << "\n";
     std::cout << "l1i mpki     = " << l1i_mpki << "\n";
     std::cout << "l1d mpki     = " << l1d_mpki << "\n";
     std::cout << "l2  mpki     = " << l2_mpki << "\n";        
