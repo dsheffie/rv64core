@@ -933,7 +933,7 @@ int main(int argc, char **argv) {
   retiretrace = retire_name.size() != -0;
 
   std::map<uint32_t, uint64_t> mispredicts;
-  uint64_t inflight[32] = {0};
+  std::map<uint16_t, uint64_t> inflight;
   uint64_t *insns_delivered = new uint64_t[max_insns_per_cycle_hist_sz];
   memset(insns_delivered, 0, sizeof(uint64_t)*max_insns_per_cycle_hist_sz);
   
@@ -1476,7 +1476,7 @@ int main(int argc, char **argv) {
 		<< "\n";
       break;
     }
-    inflight[tb->inflight & 31]++;
+    inflight[tb->inflight]++;
     max_inflight = std::max(max_inflight, static_cast<uint32_t>(tb->inflight));
 
     //negedge
@@ -1584,14 +1584,9 @@ int main(int argc, char **argv) {
 	<< ", n_checks = " << n_checks
 	<< "\n";
     out << static_cast<double>(insns_retired) / cycle << " insn per cycle\n";
-    double avg_inflight = 0, sum = 0;
-    for(int i = 0; i < 32; i++) {
-      if(inflight[i] == 0) continue;
-      avg_inflight += i * inflight[i];
-      sum += inflight[i];
-      //printf("inflight[%d] = %lu\n", i, inflight[i]);
-    }
-    avg_inflight /= sum;
+    uint16_t inflight_med;
+    double avg_inflight = histo_mean_median(inflight, inflight_med);
+    
     out << insns_retired << " insns retired\n";
     out << insns_allocated << " insns allocated\n";
     out << cycles_in_faulted*2 << " slots in faulted\n";
@@ -1611,8 +1606,9 @@ int main(int argc, char **argv) {
 		              
     //(SlotsIssued – SlotsRetired + RecoveryBubbles) / TotalSlots
     
-    out << "avg insns in ROB = " << avg_inflight
-	      << ", max inflight = " << max_inflight << "\n";
+    out << "avg insns in ROB = " << avg_inflight << "\n";
+    out << "median insns in ROB = " << inflight_med << "\n";
+    out << "max inflight = " << max_inflight << "\n";
   
 
     out << "l1d cache hits = " << tb->l1d_cache_hits << "\n";
