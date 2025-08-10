@@ -122,6 +122,15 @@ int main(int argc, char *argv[]) {
     std::cerr <<"command-line error : " << e.what() << "\n";
     return -1;
   }
+  if(fname.empty()) {
+    std::cout << "no input file\n";
+    return -1;
+  }
+  if(oname.empty()) {
+    std::cout << "no output file\n";
+    return -1;
+  }
+  
   list<string> pre, post, ops;
   pipeline_reader r;
   read_template(pre, post, std::string(dirname(res)));
