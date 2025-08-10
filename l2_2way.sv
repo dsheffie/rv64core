@@ -36,6 +36,11 @@ module l2_2way(clk,
 	       
 	       //l2 -> l1
 	       l1_mem_load_data,
+
+	       //external probe req
+	       ext_probe_addr,
+	       ext_probe_val,
+	       ext_probe_ack,
 	       
 	       //l2 probe l1
 	       l2_probe_addr,
@@ -100,6 +105,10 @@ module l2_2way(clk,
 
    output logic l1_mem_req_ack;
 
+   input logic [(`PA_WIDTH-1):0] ext_probe_addr;
+   input logic			 ext_probe_val;
+   output logic			 ext_probe_ack;
+   
    output logic 				  l2_probe_val;
    output logic [(`PA_WIDTH-1):0]		  l2_probe_addr;
    input logic 					  l2_probe_ack;
@@ -769,11 +778,14 @@ module l2_2way(clk,
    logic t_probe_mmu_req_valid;
    logic [(`PA_WIDTH-1):0] r_l2_probe_addr, n_l2_probe_addr;
    logic 		  n_l2_probe_val, r_l2_probe_val;
+   logic		  r_ext_probe_ack, n_ext_probe_ack;
+   
    typedef enum logic  {PROBE_IDLE, PROBE_WAIT } probe_state_t;
 
    assign l2_probe_val = r_l2_probe_val;
    assign l2_probe_addr = r_l2_probe_addr;
-
+   assign ext_probe_ack = r_ext_probe_ack;
+   
    logic [63:0] r_cycle;
    always_ff@(posedge clk)
      begin
@@ -783,6 +795,22 @@ module l2_2way(clk,
    
    probe_state_t n_pstate, r_pstate;
    logic n_l2_probe_mmu, r_l2_probe_mmu;
+   logic n_l2_probe_ext, r_l2_probe_ext;   
+
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if((r_pstate == PROBE_IDLE) & mmu_req_valid)
+   // 	  begin
+   // 	     $display("got probe req at cycle %d for addr %x", 
+   // 		      r_cycle, mmu_req_addr);
+   // 	  end
+	
+   // 	if((r_pstate == PROBE_WAIT) & l2_probe_ack)
+   // 	  begin
+   // 	      $display("got probe ack at cycle %d, for mmu %b, ext %b",
+   // 		       r_cycle, r_l2_probe_mmu, r_l2_probe_ext);
+   // 	   end
+   //   end
    
    always_comb
      begin
@@ -791,6 +819,9 @@ module l2_2way(clk,
 	n_l2_probe_val = 1'b0;
 	n_l2_probe_addr = r_l2_probe_addr;
 	n_l2_probe_mmu = r_l2_probe_mmu;
+	n_l2_probe_ext = r_l2_probe_ext;
+	n_ext_probe_ack = 1'b0;
+	
 	case(r_pstate)
 	  PROBE_IDLE:
 	    begin
@@ -802,6 +833,14 @@ module l2_2way(clk,
 		    n_l2_probe_addr = mmu_req_addr;
 		    n_l2_probe_mmu = 1'b1;
 		 end
+	       else if(ext_probe_val)
+		 begin
+		    n_pstate = PROBE_WAIT;
+		    n_l2_probe_val = 1'b1;
+		    n_l2_probe_addr = ext_probe_addr;
+		    n_l2_probe_ext = 1'b1;
+		    
+		 end
 	    end
 	  PROBE_WAIT:
 	    begin
@@ -811,6 +850,7 @@ module l2_2way(clk,
 		    n_pstate = PROBE_IDLE;
 		    t_probe_mmu_req_valid = r_l2_probe_mmu;
 		    n_l2_probe_mmu = 1'b0;
+		    n_l2_probe_ext = 1'b0;
 		 end
 	    end
 	  default:
@@ -837,6 +877,8 @@ module l2_2way(clk,
 	     r_l2_probe_val <= 1'b0;
 	     r_l2_probe_addr <= 'd0;
 	     r_l2_probe_mmu <= 1'b0;
+	     r_l2_probe_ext <= 1'b0;	     
+	     r_ext_probe_ack <= 1'b0;
 	  end
 	else
 	  begin
@@ -844,6 +886,8 @@ module l2_2way(clk,
 	     r_l2_probe_val <= n_l2_probe_val;
 	     r_l2_probe_addr <= n_l2_probe_addr;
 	     r_l2_probe_mmu <= n_l2_probe_mmu;
+	     r_l2_probe_ext <= n_l2_probe_ext;	     
+	     r_ext_probe_ack <= n_ext_probe_ack;
 	  end
      end
 

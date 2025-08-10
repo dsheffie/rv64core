@@ -2324,6 +2324,7 @@ module nu_l1d(clk,
 		  n_flush_cl_req = 1'b0;
 		  n_flush_was_active = 1'b1;
 		  n_state = FLUSH_CL;
+		  //$display("got probe for addr %x", l2_probe_addr);
 	       end
 	    end // case: ACTIVE
 	  WAIT_INJECT_RELOAD:
@@ -2369,7 +2370,6 @@ module nu_l1d(clk,
 		 begin
 		    $stop();
 		 end
-	       
 	       if(r_dirty_out & w_flush_hit)
 		 begin
 		    n_port1_req_addr = {r_tag_out,r_cache_idx[LG_MAX_SET-1:0],4'd0};
