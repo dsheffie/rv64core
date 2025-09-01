@@ -142,29 +142,43 @@ module tlb(clk,
      end
 
 
+   logic [NN-1:0] r_accessed;
+   logic [LG_N-1:0] r_replace_idx, n_replace_idx;
+   always@(posedge clk)
+     begin
+	r_replace_idx <= reset ? 'd0 : n_replace_idx;
+     end
+
+   always_comb
+     begin
+	n_replace_idx = replace ? (r_replace_idx + 'd1) : r_replace_idx;
+     end
+   
+   wire [NN-1:0] w_rot_accessed = r_accessed << (r_replace_idx) | (r_accessed >> (NN-r_replace_idx));
+   
+   always@(posedge clk)
+     begin
+	if(reset | (&r_accessed == 1'b1))
+	  begin
+	     r_accessed <= 'd0;
+	  end
+	else if(active & req & |w_hits)
+	  begin
+	     r_accessed[w_idx[LG_N-1:0]] <= 1'b1;
+	  end
+     end // always@ (posedge clk)
+
+   wire [LG_N:0]   w_rep_idx;
+   find_first_set #(.LG_N(LG_N)) f0(.in(~w_rot_accessed), .y(w_rep_idx));
+   wire [LG_N-1:0] w_replace = w_rep_idx[LG_N-1:0];
+   
    logic [63:0] r_cycle;
    always@(posedge clk)
      begin
 	r_cycle <= reset ? 'd0 : (r_cycle + 'd1);
      end
 
-   logic [LG_N-1:0] r_replace, n_replace;
-   
-   always@(posedge clk)
-     begin
-	r_replace <= reset ? 'd0 : n_replace;
-     end
-
-   always_comb
-     begin
-	n_replace = r_replace+'d1;
-	if({1'b0, r_replace} == (N-1))
-	  begin
-	     n_replace = 'd0;
-	  end
-     end
-   wire [LG_N-1:0] w_replace = r_replace;
-
+     
    always_ff@(posedge clk)
      begin   
 	if(reset || clear)
@@ -174,8 +188,13 @@ module tlb(clk,
 	else if(replace)
 	  begin
 	     r_valid[w_replace] <= 1'b1;
+	     //$display("cycle %d, ISIDE %d : replacing entry %d, accessed %b, w_rot_accessed %b, r_replace_idx %d, w_rep_idx = %d", 
+	     //r_cycle, ISIDE, w_replace, r_accessed, w_rot_accessed, r_replace_idx, w_rep_idx);
 	  end
      end // always_ff@ (posedge clk)
+
+
+   
    
    always_ff@(posedge clk)
      begin
