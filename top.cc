@@ -32,7 +32,6 @@ static pipeline_logger *pl = nullptr;
 static uint64_t l1d_misses = 0, l1d_insns = 0;
 static uint64_t last_retire_cycle = 0, last_retire_pc  = 0;
 
-static std::map<uint64_t, uint64_t> retire_map;
 
 static uint64_t n_fetch[5] = {0};
 static uint64_t n_resteer_bubble = 0;
@@ -59,12 +58,6 @@ static uint64_t l1d_accept = 0;
 
 static uint64_t l1d_stores = 0;
 
-static std::map<int,uint64_t> block_distribution;
-static std::map<int,uint64_t> restart_distribution;
-static std::map<int,uint64_t> restart_ds_distribution;
-static std::map<int,uint64_t> fault_to_restart_distribution;
-static std::map<int,uint64_t> mmu_walk_lat;
-
 static uint64_t l1d_stall_reasons[8] = {0};
 static bool enable_checker = true, use_checkpoint = false;
 
@@ -80,16 +73,9 @@ void record_restart(int cycles, long long curr_cycle) {
   if(mispred_cycle == -1L) {    
     return;
   }
-  restart_distribution[cycles]++;
-  fault_to_restart_distribution[restart_lat]++;
   mispred_to_restart_cycles += static_cast<uint64_t>( restart_lat );
   mispred_cycle = -1UL;
 }
-
-void record_ds_restart(int cycles) {
-  restart_ds_distribution[cycles]++;
-}
-
 
 uint64_t l1d_block_reason[7] = {0};
   
@@ -122,34 +108,6 @@ void log_mem_begin(int r, int l, long long c, long long pc, long long vaddr) {
   mem_addr_table[r] = vaddr;
   if(l==0) {
     last_store[vaddr & (~15UL)] = pc;
-  }
-}
-
-static std::map<uint64_t, uint64_t> store_latency_map;
-static std::map<int, uint64_t> mem_lat_map, fp_lat_map, non_mem_lat_map, mispred_lat_map;
-
-void log_store_release(int r, long long c) {
-  //assert(is_load[r] == false);
-  if(not(is_load[r])) {
-    uint64_t cc = c - mem_table[r];
-    //printf("store released after %lu cycles\n", cc);
-    store_latency_map[cc]++;
-  }
-}
-
-void log_mem_end(int r, long long c) {
-  uint64_t cc = c - mem_table[r];
-  mem_lat_map[cc]++;
-  if(is_load[r]) {
-    ++n_logged_loads;
-    total_load_lat += cc;
-    // if(cc > 5) {
-    //   std::cout << "load at " << std::hex << mem_pc_table[r] << std::dec
-    // 		<< " pushes out " << cc << " cycles , last store from "
-    // 		<< std::hex << last_store[mem_addr_table[r] & (~15UL)]
-    // 		<< std::dec
-    // 		<<"\n";
-    // }
   }
 }
 
@@ -252,31 +210,7 @@ void record_l2_state(int s) {
   l2_state[s]++;
 }
 
-static std::list<long long> inflight_uuids;
 
-void alloc_uuid(long long uuid) {
-  inflight_uuids.push_back(uuid);
-}
-
-void retire_uuid(long long uuid) {
-  assert(not(inflight_uuids.empty()));
-
-  do {
-    uint64_t head = inflight_uuids.front();
-    inflight_uuids.pop_front();
-    if(head == uuid) {
-      break;
-    }
-  } while(true);
-}
-
-void log_mmu_walk_lat(long long walk_lat, char hit_lvl) {
-  mmu_walk_lat[walk_lat]++;
-  //  std::cout << "mmu walk took " << walk_lat
-  //<< " cycles with hit at "
-  //<< static_cast<int>(hit_lvl)
-  //<< " in the page table\n";
-}
 
 static uint64_t log_l1d_accesses = 0;
 static uint64_t log_l1d_push_miss = 0;
@@ -780,17 +714,7 @@ void record_retirement(long long pc,
   }
   lrc = retire_cycle;
 
-  if(br_mispredict) {
-    //long long t = retire_cycle - alloc_cycle;
-    //long long tt = retire_cycle - fetch_cycle;
-    //std::cout << "mispredict at " << std::hex << pc << std::dec << " took " << t
-    //<< " cycles from alloc to retire and "
-    //<< tt << " cycles from fetch to retire\n";
-    mispred_lat_map[complete_cycle-alloc_cycle]++;
-  }
-  
-  retire_map[delta]++;
-  
+
   last_retire_cycle = retire_cycle;
   last_retire_pc = pc;
   
@@ -932,8 +856,6 @@ int main(int argc, char **argv) {
   use_checkpoint = not(is_rv64_elf(rv32_binary.c_str()));
   retiretrace = retire_name.size() != -0;
 
-  std::map<uint32_t, uint64_t> mispredicts;
-  std::map<uint16_t, uint64_t> inflight;
   uint64_t *insns_delivered = new uint64_t[max_insns_per_cycle_hist_sz];
   memset(insns_delivered, 0, sizeof(uint64_t)*max_insns_per_cycle_hist_sz);
   
@@ -1046,16 +968,6 @@ int main(int argc, char **argv) {
     if(tb->branch_pc_valid) {
       ++n_branches;
     }
-    if(tb->branch_fault) {
-      uint64_t pa = tb->branch_pc;
-      if(tb->paging_active) {
-	pa = translate(tb->branch_pc, tb->page_table_root, true, false);
-      }
-      //auto disasm = getAsmString(tb->branch_pc, tb->page_table_root, tb->paging_active); 
-      //printf("mispredict at %lx, translated to %lx, %s\n",
-      //tb->branch_pc, pa, disasm.c_str());
-      mispredicts[pa]++; 
-    }
     
     if(tb->branch_fault) {
       ++n_mispredicts;
@@ -1108,41 +1020,41 @@ int main(int argc, char **argv) {
     }
 
     
-    if(tb->rob_empty) {
-      uint64_t pa = last_retired_pc;
-      if(tb->paging_active) {
-	pa = translate(last_retired_pc, tb->page_table_root, true, false);
-      }
-      tip_map[pa]+= 1.0;
-    }
-    else if(!(tb->retire_valid or tb->retire_two_valid)) {
-      uint64_t pa = tb->retire_pc;
-      if(tb->paging_active) {
-	pa = translate(tb->retire_pc, tb->page_table_root, true, false);
-      }	
-      tip_map[pa]+= 1.0;
-    }
-    else {
-      assert(tb->retire_valid or tb->retire_two_valid);
+    // if(tb->rob_empty) {
+    //   uint64_t pa = last_retired_pc;
+    //   if(tb->paging_active) {
+    // 	pa = translate(last_retired_pc, tb->page_table_root, true, false);
+    //   }
+    //   tip_map[pa]+= 1.0;
+    // }
+    // else if(!(tb->retire_valid or tb->retire_two_valid)) {
+    //   uint64_t pa = tb->retire_pc;
+    //   if(tb->paging_active) {
+    // 	pa = translate(tb->retire_pc, tb->page_table_root, true, false);
+    //   }	
+    //   tip_map[pa]+= 1.0;
+    // }
+    // else {
+    //   assert(tb->retire_valid or tb->retire_two_valid);
       
-      double total = static_cast<double>(tb->retire_valid) +
-	static_cast<double>(tb->retire_two_valid);
+    //   double total = static_cast<double>(tb->retire_valid) +
+    // 	static_cast<double>(tb->retire_two_valid);
       
-      uint64_t pa = tb->retire_pc;
-      if(tb->paging_active) {
-	pa = translate(tb->retire_pc, tb->page_table_root, true, false);
-      }
-      tip_map[pa]+= 1.0 / total;
-      insn_cnts[pa]++;
-      if(tb->retire_two_valid) {
-	pa = tb->retire_two_pc;
-	if(tb->paging_active) {
-	  pa = translate(tb->retire_two_pc, tb->page_table_root, true, false);
-	}	
-	tip_map[pa]+= 1.0 / total;
-	insn_cnts[pa]++;
-      }
-    }
+    //   uint64_t pa = tb->retire_pc;
+    //   if(tb->paging_active) {
+    // 	pa = translate(tb->retire_pc, tb->page_table_root, true, false);
+    //   }
+    //   tip_map[pa]+= 1.0 / total;
+    //   insn_cnts[pa]++;
+    //   if(tb->retire_two_valid) {
+    // 	pa = tb->retire_two_pc;
+    // 	if(tb->paging_active) {
+    // 	  pa = translate(tb->retire_two_pc, tb->page_table_root, true, false);
+    // 	}	
+    // 	tip_map[pa]+= 1.0 / total;
+    // 	insn_cnts[pa]++;
+    //   }
+    // }
     //printf("rt.get_records().size() = %zu\n", rt.get_records().size());
     
     if(tb->took_irq) {
@@ -1476,7 +1388,6 @@ int main(int argc, char **argv) {
 		<< "\n";
       break;
     }
-    inflight[tb->inflight]++;
     max_inflight = std::max(max_inflight, static_cast<uint32_t>(tb->inflight));
 
     //negedge
@@ -1584,8 +1495,6 @@ int main(int argc, char **argv) {
 	<< ", n_checks = " << n_checks
 	<< "\n";
     out << static_cast<double>(insns_retired) / cycle << " insn per cycle\n";
-    uint16_t inflight_med;
-    double avg_inflight = histo_mean_median(inflight, inflight_med);
     
     out << insns_retired << " insns retired\n";
     out << insns_allocated << " insns allocated\n";
@@ -1606,8 +1515,6 @@ int main(int argc, char **argv) {
 		              
     //(SlotsIssued – SlotsRetired + RecoveryBubbles) / TotalSlots
     
-    out << "avg insns in ROB = " << avg_inflight << "\n";
-    out << "median insns in ROB = " << inflight_med << "\n";
     out << "max inflight = " << max_inflight << "\n";
   
 
@@ -1701,92 +1608,16 @@ int main(int argc, char **argv) {
     out << rob_full << " cycles where the rob is full\n";
   
     double avg_restart = 0.0;
-    uint64_t total_restart = 0, accum_restart = 0;
-    for(auto &p : restart_distribution) {
-      avg_restart += (p.first * p.second);
-      total_restart += p.second;
-    }
-    for(auto &p : restart_distribution) {
-      accum_restart += p.second;
-      if(accum_restart >= (total_restart/2)) {
-	out << p.first << " median flush cycles\n";
-	break;
-      }
-    }
-    if(total_restart != 0) {
-      out << avg_restart << " cycles spent in pipeline flush\n";
-      avg_restart /= total_restart;
-      out << total_restart << " times pipeline was flushed\n";
-      out << avg_restart << " cycles to flush on avg\n";
-      out << restart_distribution.begin()->first << " min cycles to flush\n";
-      out << restart_distribution.rbegin()->first << " max cycles to flush\n";
-    }
     
-    double avg_ds_restart = 0.0;
-    uint64_t total_ds_restart = 0, accum_ds_restart = 0;
-    for(auto &p : restart_ds_distribution) {
-      avg_ds_restart += (p.first * p.second);
-      total_ds_restart += p.second;
-    }
-    for(auto &p : restart_ds_distribution) {
-      accum_ds_restart += p.second;
-      if(accum_ds_restart >= (total_ds_restart/2)) {
-	out << p.first << " median delay slot flush cycles\n";
-	break;
-      }
-    }
-    if(total_ds_restart != 0) {
-      out << avg_ds_restart << " cycles spent waiting for delay slot in flush\n";
-      avg_ds_restart /= total_ds_restart;
-      out << avg_ds_restart << " cycles waiting on delay slot on avg\n";
-      out << restart_ds_distribution.begin()->first << " min cycles for delay slot\n";
-      out << restart_ds_distribution.rbegin()->first << " max cycles for delay slot\n";
-    }
-    //for(auto &p : fault_distribution) {
-    //out << p.first << " faults inflight, " << p.second << " times\n";
-    //}
-    //for(auto &p : branch_distribution) {
-    //out << p.first << " branches inflight, " << p.second << " times\n";
-    //}
-    //for(auto &p : fault_to_restart_distribution) {
-    //out << p.first << " cycles before restart, " << p.second << " times\n";
-    //}
-    dump_histo(branch_name, mispredicts, s);
-
-  
-    
-    
-    uint64_t total_retire = 0, total_cycle = 0;
-    for(auto &p : retire_map) {
-      total_retire += p.second;
-    }
-    for(auto &p : retire_map) {
-      total_cycle += (p.first * p.second);
-    }
-
-    int median_int_rdy;
-    double avg_int_rdy = histo_mean_median(int_sched_rdy_map, median_int_rdy);
-    out << "avg int rdy insn = " << avg_int_rdy << "\n";
-    out << "median int rdy insn = " << median_int_rdy << "\n";
-    
-    int median_mem_lat = 0;
-    double avg_mem_lat = histo_mean_median(mem_lat_map, median_mem_lat);
-    out << "avg mem alloc to complete = " << avg_mem_lat << "\n";
-    out << "median mem alloc to complete = " << median_mem_lat << "\n";
-
-    avg_mem_lat = histo_mean_median(non_mem_lat_map, median_mem_lat);
-    out << "avg non-mem alloc to complete = " << avg_mem_lat << "\n";
-    out << "median non-mem alloc to complete = " << median_mem_lat << "\n";
-
-    avg_mem_lat = histo_mean_median(mispred_lat_map, median_mem_lat);
-    out << "avg mispred branch alloc to complete = " << avg_mem_lat << "\n";
-    out << "median mispred branch alloc to complete = " << median_mem_lat << "\n";
+    uint64_t total_retire = insns_retired, total_cycle = cycle;
     
     out << "l1d_reqs = " << l1d_reqs << "\n";
     out << "l1d_acks = " << l1d_acks << "\n";
     out << "l1d_new_reqs = " << l1d_new_reqs << "\n";
     out << "l1d_accept   = " << l1d_accept << "\n";
-    out << "avg dram queue length " << (static_cast<double>(dram_queue_occupancy) / cycle) << "\n";
+    out << "avg dram queue length "
+	<< (static_cast<double>(dram_queue_occupancy) / cycle)
+	<< "\n";
     
     for(size_t i = 0; i < (sizeof(l1d_block_reason)/sizeof(l1d_block_reason[0])); i++) {
       std::cout << l1d_stall_str[i] << " = " << l1d_block_reason[i] << "\n";
@@ -1805,8 +1636,6 @@ int main(int argc, char **argv) {
     std::cout << "total_cycle  = " << total_cycle << "\n";
     std::cout << "total ipc    = " << static_cast<double>(total_retire) / total_cycle << "\n";
 
-    std::cout << "mmu walks    = " << count_histo(mmu_walk_lat) << "\n";
-    std::cout << "avg mmu lat  = " << avg_histo(mmu_walk_lat) << "\n";
 
     uint64_t l1i_misses = tb->l1i_cache_accesses -
       tb->l1i_cache_hits;
@@ -1822,11 +1651,7 @@ int main(int argc, char **argv) {
     std::cout << "l1i misses (rtl) = " << l1i_misses << "\n";
     std::cout << "l1i reqs for l2  = " << l1i_reqs_at_l2 << "\n";
 
-    int median_fault_restart;
-    double avg_fault_restart = histo_mean_median(fault_to_restart_distribution, median_fault_restart);    
-    std::cout << "jpki         = " << jpki << "\n";
-    std::cout << "avg detected fault to restart cycles = " << avg_fault_restart << "\n";
-    std::cout << "med detected fault to restart cycles = " << median_fault_restart << "\n";
+
     std::cout << "l1i mpki     = " << l1i_mpki << "\n";
     std::cout << "l1d mpki     = " << l1d_mpki << "\n";
     std::cout << "l2  mpki     = " << l2_mpki << "\n";        
@@ -1848,13 +1673,13 @@ int main(int argc, char **argv) {
     std::cout << "log_l1d_is_st_hit              = " << log_l1d_is_st_hit << "\n";
     std::cout << "log_l1d_is_hit_under_miss      = " << log_l1d_is_hit_under_miss << "\n";
 
-    double tip_cycles = 0.0;
-    for(auto &p : tip_map) {
-      tip_cycles += p.second;
-    }
-    std::cout << "tip cycles  = " << tip_cycles << "\n";
-    dump_tip(tip_name, tip_map, insn_cnts, s);    
-    out.close();
+    // double tip_cycles = 0.0;
+    // for(auto &p : tip_map) {
+    //   tip_cycles += p.second;
+    // }
+    // std::cout << "tip cycles  = " << tip_cycles << "\n";
+    // dump_tip(tip_name, tip_map, insn_cnts, s);    
+    // out.close();
 
     uint64_t total_ticks = 0;
     for(auto &p : l1_to_l2_dist) {
@@ -1901,17 +1726,6 @@ int main(int argc, char **argv) {
   std::cout << "simulation took " << t0 << " seconds, " << (insns_retired/t0)
 	    << " insns per second\n";
 
-  uint64_t store_median, total_stores = 0;
-  double avg_store_latency = 0.0;
-  histo_mean_median(store_latency_map, store_median);
-  std::cout << "median store latency = " << store_median << "\n";
-  for(auto &p : store_latency_map) {
-    total_stores += p.second;
-    avg_store_latency += p.first * p.second;
-  }
-  avg_store_latency /= total_stores;
-  std::cout << "avg store latency = " << (avg_store_latency) << "\n";
-  
   munmap(s->mem, 1UL<<32);
   munmap(ss->mem, 1UL<<32);
   delete s;

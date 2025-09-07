@@ -3,7 +3,7 @@
 
 `ifdef VERILATOR
 import "DPI-C" function void mark_accessed_checker(input longint addr);
-import "DPI-C" function void log_mmu_walk_lat(input longint cycle, input byte hit_lvl);
+
 `endif
 
 module mmu(clk, reset, clear_tlb, page_table_root, 
@@ -178,10 +178,6 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 	     r_walk_cycles <= r_walk_cycles + 'd1;
 	  end
 	
-	if((r_state != IDLE) && (n_state == IDLE))
-	  begin
-	     log_mmu_walk_lat(r_walk_cycles, {6'd0, r_hit_lvl});
-	  end
      end
 `endif
    

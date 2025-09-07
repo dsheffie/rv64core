@@ -20,8 +20,6 @@ import "DPI-C" function int checker_irq_enabled();
 
 import "DPI-C" function void start_log(input int startlog);
 
-import "DPI-C" function void alloc_uuid(input longint uuid);
-import "DPI-C" function void retire_uuid(input longint uuid);
 
 
 import "DPI-C" function void record_alloc(input int rob_full,
@@ -907,11 +905,6 @@ module core(clk,
 	  begin
 	     record_restart(r_restart_cycles,r_cycle);
 	  end
-	if(r_state == DRAIN && n_state == RAT)
-	  begin
-	     record_ds_restart(r_restart_cycles);
-	  end
-	    
      end // always_ff@ (negedge clk)
 `endif
    
@@ -2534,31 +2527,6 @@ module core(clk,
 	  end
      end // always_comb
 
-`ifdef ENABLE_CYCLE_ACCOUNTING
-   always_ff@(negedge clk)
-     begin
-	if(t_retire_two)
-	  begin
-	     retire_uuid(t_rob_head.uuid);	     
-	     retire_uuid(t_rob_next_head.uuid);
-	  end
-	else if(t_retire)
-	  begin
-	     retire_uuid(t_rob_head.uuid);
-	  end
-
-	if(t_alloc_two & t_alloc)
-	  begin
-	     alloc_uuid(r_uuid);
-	     alloc_uuid(r_uuid+1);	     
-	  end
-	else if(t_alloc)
-	  begin
-	     alloc_uuid(r_uuid);
-	  end
-	   
-     end
-`endif
    
    
 endmodule

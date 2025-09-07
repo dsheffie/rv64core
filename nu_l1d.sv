@@ -30,8 +30,6 @@ import "DPI-C" function void record_l1d(input int req,
 					input int block);
 
 
-import "DPI-C" function void log_store_release(input int r,
-					       input longint c);
 
 import "DPI-C" function void log_l1d(input int gen_early_req,
 				     input int push_miss,
@@ -2156,12 +2154,7 @@ module nu_l1d(clk,
 		    if(w_got_hit)
 		      begin /* valid cacheline - hit in cache */
 			 t_reset_graduated = r_req.is_store;
-`ifdef VERILATOR
-			 if(r_req.is_store)
-			   begin
-			      log_store_release( { {(32-`LG_ROB_ENTRIES){1'b0}}, r_req.rob_ptr}, r_cycle);
-			   end
-`endif
+
 `ifdef DEBUG
 			 $display("p1 store %b hit cache for pc %x, addr %x, got data %x, cycle %d, data %x", 
 				  r_req.is_store,
