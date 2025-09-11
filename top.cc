@@ -92,24 +92,8 @@ void record_l1d(int req, int ack, int new_req, int accept, int block) {
   }
 }
 
-uint64_t mem_table[32] = {0};
-uint64_t mem_pc_table[32] = {0};
-uint64_t mem_addr_table[32] = {0};
-bool is_load[ROB_ENTRIES] = {false};
 uint64_t n_logged_loads = 0;
 uint64_t total_load_lat = 0;
-
-std::map<uint64_t, uint64_t> last_store;
-
-void log_mem_begin(int r, int l, long long c, long long pc, long long vaddr) {
-  mem_table[r] = c;
-  is_load[r] = l;
-  mem_pc_table[r] = pc;
-  mem_addr_table[r] = vaddr;
-  if(l==0) {
-    last_store[vaddr & (~15UL)] = pc;
-  }
-}
 
 
 long long loadgpr(int gprid) {
