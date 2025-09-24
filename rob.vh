@@ -99,7 +99,7 @@ typedef struct packed {
    logic 	unaligned;
    logic	has_cause;
    cause_t 	cause;
-   logic	uncachable;
+   logic	uc;
    logic [`LG_ROB_ENTRIES-1:0] rob_ptr;
    logic [`LG_PRF_ENTRIES-1:0] dst_ptr;
    logic 		       dst_valid;
@@ -165,6 +165,7 @@ typedef struct packed {
    logic       writable;
    logic       executable;
    logic       user;
+   logic       uc;
    logic [63:0] paddr;
    logic [1:0]	pgsize;
 } page_walk_rsp_t;

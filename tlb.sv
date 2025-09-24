@@ -15,6 +15,7 @@ module tlb(clk,
 	   writable,
 	   executable,
 	   user,
+	   uc,
 	   zero_page,
 	   tlb_hits,
 	   tlb_accesses,
@@ -39,7 +40,8 @@ module tlb(clk,
    output logic	       writable;
    output logic	       executable;
    output logic        user;
-
+   output logic	       uc;
+   
    output logic	       zero_page;
       
    output logic [63:0] tlb_hits;
@@ -57,7 +59,7 @@ module tlb(clk,
    localparam	       LG_N = $clog2(N);
    localparam	       NN = 1 << LG_N;
    
-   logic [NN-1:0]       r_valid, r_dirty, r_readable, r_writable, r_executable, r_user;
+   logic [NN-1:0]       r_valid, r_dirty, r_readable, r_writable, r_executable, r_user, r_uc;
    
    logic [1:0]	       r_pgsize[NN-1:0];
    logic [27:0]	       r_va_tags[NN-1:0];
@@ -137,6 +139,7 @@ module tlb(clk,
 	executable <= r_executable[w_idx[LG_N-1:0]];
 	dirty <= r_dirty[w_idx[LG_N-1:0]];
 	user <= r_user[w_idx[LG_N-1:0]];
+	uc <= active ? r_uc[w_idx[LG_N-1:0]] : 1'b1;
 	pa <= active ? w_pa_sel[`PA_WIDTH-1:0] : va[`PA_WIDTH-1:0];
 	zero_page <= reset ? 1'b0 : ((|va[39:12]) == 1'b0);
      end
@@ -189,6 +192,7 @@ module tlb(clk,
 	     r_va_tags[w_replace] <= replace_va[39:12];
 	     r_pgsize[w_replace] <= page_walk_rsp.pgsize;
 	     r_pa_data[w_replace] <= page_walk_rsp.paddr[63:12];
+	     r_uc[w_replace] <= page_walk_rsp.uc;
 	  end
      end // always_ff@ (posedge clk)
    

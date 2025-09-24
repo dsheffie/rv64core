@@ -82,6 +82,7 @@ module mmu(clk, reset, clear_tlb, page_table_root,
    logic 	       r_page_read, n_page_read;
    logic 	       r_page_write, n_page_write;
    logic 	       r_page_user, n_page_user;
+   logic	       r_page_uc, n_page_uc;
    
    logic	       n_page_executable, r_page_executable;
 
@@ -126,6 +127,7 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 	page_walk_rsp.writable = r_page_write;
 	page_walk_rsp.executable = r_page_executable;
 	page_walk_rsp.user = r_page_user;
+	page_walk_rsp.uc = r_page_uc;
 	page_walk_rsp.pgsize = w_make_64k ? 2'd3 : r_hit_lvl;
      end
 
@@ -245,6 +247,7 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 	n_page_write = 1'b0;
 	n_page_read = 1'b0;
 	n_page_user = 1'b0;
+	n_page_uc = 1'b0;
 	
 	n_do_l1i = r_do_l1i;
 	n_do_l1d = r_do_l1d;
@@ -444,7 +447,7 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 	       n_page_write = r_addr[2];
 	       n_page_executable = r_addr[3];	       
 	       n_page_user = r_addr[4];
-
+	       
 	       //$display("va %x translated to pa %x, n bit %b, hit lvl %d, pte %x", 
 	       //r_va, n_pa, r_addr[63], r_hit_lvl, r_addr);
 	       //if(r_addr[63]) $stop();
@@ -519,6 +522,7 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 	     r_page_read <= 1'b0;
 	     r_page_write <= 1'b0;
 	     r_page_user <= 1'b0;
+	     r_page_uc <= 1'b0;
 	     r_do_l1i <= 1'b0;
 	     r_do_l1d <= 1'b0;
 	     r_do_dirty <= 1'b0;
@@ -549,6 +553,8 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 	     r_page_read <= n_page_read;
 	     r_page_write <= n_page_write;
 	     r_page_user <= n_page_user;
+	     r_page_uc <= n_page_uc;
+	     
 	     r_do_l1i <= n_do_l1i;
 	     r_do_l1d <= n_do_l1d;
 	     r_do_dirty <= n_do_dirty;

@@ -305,6 +305,15 @@ module l2_2way(clk,
    // 		    l1d_rsp_addr, l1d_rsp_tag, r_cycle, l1_mem_load_data);
    // 	end
    //   end
+
+   //always_ff@(negedge clk)
+   //begin
+   //if(l1d_req_valid)
+   //begin
+   //$display(">>>> request to address %x at cycle %d, type %d, uc %b", l1d_req.addr, r_cycle, l1d_req.opcode, l1d_req.uncachable);
+   //end
+   //end // always_ff@ (negedge clk)
+   
    
 `ifdef VERBOSE_L2
    always_ff@(negedge clk)

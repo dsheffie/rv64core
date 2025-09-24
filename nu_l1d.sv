@@ -532,7 +532,6 @@ module nu_l1d(clk,
    logic [`LG_MRQ_ENTRIES:0]   n_port1_req_tag;
 
    logic 		       n_port2_req_valid;
-   logic 		       n_port2_req_uc;
    logic [(`PA_WIDTH-1):0]     n_port2_req_addr;
    logic [L1D_CL_LEN_BITS-1:0] n_port2_req_store_data;
    logic [3:0] 		       n_port2_req_opcode;
@@ -546,7 +545,7 @@ module nu_l1d(clk,
   
    
    wire 		       w_tlb_hit, w_tlb_dirty, w_tlb_writable, w_tlb_readable, 
-			       w_tlb_user, w_zero_page;
+			       w_tlb_user, w_zero_page, w_tlb_uc;
 
 
    
@@ -769,7 +768,7 @@ module nu_l1d(clk,
    wire [`PA_WIDTH-1:0] w_req2_pa = {w_tlb_pa[`PA_WIDTH-1:`LG_PG_SZ], r_req2.addr[`LG_PG_SZ-1:0]};
 
    
-   wire	w_could_early_req_any = t_push_miss & w_three_free_credits & w_port2_missed_no_alias &
+   wire	w_could_early_req_any = t_push_miss & w_three_free_credits & w_port2_missed_no_alias & (w_tlb_uc == 1'b0) &
 	(r_last_early_valid ? (r_last_early != w_req2_pa[31:4]) : 1'b1) &
 	!(r_hit_busy_line2 | r_fwd_busy_addr2 | w_hit_pop ) &
 	(r_req2.is_load | r_req.is_store) &
@@ -864,7 +863,6 @@ module nu_l1d(clk,
    always_comb
      begin
 	n_port2_req_valid = w_gen_early_req;
-	n_port2_req_uc = 1'b0;
 	n_port2_req_addr = w_tlb_pa[`PA_WIDTH-1:0];
 	n_port2_req_store_data = r_mem_req_store_data;
 	n_port2_req_opcode = 4'd4;
@@ -1372,7 +1370,8 @@ module nu_l1d(clk,
 	    .dirty(w_tlb_dirty),
 	    .readable(w_tlb_readable),
 	    .writable(w_tlb_writable),
-            .executable(),		      
+            .executable(),
+            .uc(w_tlb_uc),		      
 	    .user(w_tlb_user),
             .zero_page(w_zero_page),			
             .tlb_hits(tlb_hits),
@@ -1831,7 +1830,7 @@ module nu_l1d(clk,
 	     t_core_mem_rsp.rob_ptr = r_req2.rob_ptr;
 	     t_core_mem_rsp.dst_ptr = r_req2.dst_ptr;
 	     t_req2_pa.addr = {32'd0, w_tlb_pa};
-	     
+	     t_req2_pa.uc = w_tlb_uc;
 	     if(r_pending_tlb_miss)
 	       begin
 		  n_pending_tlb_miss = 1'b0;
@@ -1902,7 +1901,7 @@ module nu_l1d(clk,
 		  t_core_mem_rsp.mark_page_dirty = w_tlb_st_not_dirty;
 		  t_core_mem_rsp.addr = r_req2.addr;
 	       end // if (r_req2.is_store)
-	     else if(w_port2_rd_hit & !r_got_rd_retry)
+	     else if(w_port2_rd_hit & !r_got_rd_retry & !w_tlb_uc)
 	       begin
 `ifdef DEBUG
 		  $display("cycle %d load on port2 hit cache for pc %x, addr %x, got data %x, t_data2 = %x, t_shift_2 = %x, shift = %d", 
@@ -2237,6 +2236,7 @@ module nu_l1d(clk,
 				 n_port1_req_addr = {r_req.addr[`PA_WIDTH-1:`LG_L1D_CL_LEN], 4'd0};
 				 n_port1_req_opcode = MEM_LW;
 				 n_port1_req_tag = (1 << `LG_MRQ_ENTRIES);
+				 n_port1_req_uc = r_req.uc;				 
 				 n_state = INJECT_RELOAD;
 				 n_port1_req_valid = 1'b1;				 
 			      end // if (w_free_credit)
@@ -2590,7 +2590,7 @@ module nu_l1d(clk,
 	if(n_port2_req_valid)
 	  begin
 	     n_mem_req_valid = n_port2_req_valid;
-	     n_mem_req_uc = n_port2_req_uc;
+	     n_mem_req_uc = 1'b0;
 	     n_mem_req_addr = n_port2_req_addr;
 	     n_mem_req_store_data = n_port2_req_store_data;
 	     n_mem_req_opcode = n_port2_req_opcode;
