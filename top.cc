@@ -1900,17 +1900,6 @@ int main(int argc, char **argv) {
   
   std::cout << "simulation took " << t0 << " seconds, " << (insns_retired/t0)
 	    << " insns per second\n";
-
-  uint64_t store_median, total_stores = 0;
-  double avg_store_latency = 0.0;
-  histo_mean_median(store_latency_map, store_median);
-  std::cout << "median store latency = " << store_median << "\n";
-  for(auto &p : store_latency_map) {
-    total_stores += p.second;
-    avg_store_latency += p.first * p.second;
-  }
-  avg_store_latency /= total_stores;
-  std::cout << "avg store latency = " << (avg_store_latency) << "\n";
   
   munmap(s->mem, 1UL<<32);
   munmap(ss->mem, 1UL<<32);
