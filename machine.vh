@@ -96,23 +96,24 @@
 
 `define MTIMECMP_ADDR (64'h40004000)
 
-typedef enum logic [3:0] {
-   MEM_LB  = 4'd0,
-   MEM_LBU = 4'd1,
-   MEM_LH  = 4'd2,
-   MEM_LHU = 4'd3,
-   MEM_LW  = 4'd4,
-   MEM_SB  = 4'd5,
-   MEM_SH  = 4'd6,
-   MEM_SW  = 4'd7,
-   MEM_SCW  = 4'd8,
-   MEM_SCD  = 4'd9,
-   MEM_NOP = 4'd10,
-   MEM_LWU = 4'd11,
-   MEM_LD  = 4'd12,
-   MEM_SD  = 4'd13,
-   MEM_AMOW = 4'd14,
-   MEM_AMOD = 4'd15			  			  
+typedef enum logic [4:0] {
+   MEM_LB  = 'd0,
+   MEM_LBU = 'd1,
+   MEM_LH  = 'd2,
+   MEM_LHU = 'd3,
+   MEM_LW  = 'd4,
+   MEM_SB  = 'd5,
+   MEM_SH  = 'd6,
+   MEM_SW  = 'd7,
+   MEM_SCW  = 'd8,
+   MEM_SCD  = 'd9,
+   MEM_NOP = 'd10,
+   MEM_LWU = 'd11,
+   MEM_LD  = 'd12,
+   MEM_SD  = 'd13,
+   MEM_AMOW = 'd14,
+   MEM_AMOD = 'd15,
+   MEM_PREFETCH = 'd16			  			  
 } mem_op_t;
 
 `endif

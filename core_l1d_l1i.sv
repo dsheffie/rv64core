@@ -142,7 +142,7 @@ module
    output logic [`PA_WIDTH-1:0]		mem_req_addr;
    output logic [`LG_L2_REQ_TAGS-1:0]	mem_req_tag;
    output logic [(1 << (`LG_L2_CL_LEN+3)) - 1:0] mem_req_store_data;
-   output logic [3:0] 				 mem_req_opcode;
+   output logic [4:0] 				 mem_req_opcode;
    
    input logic 					 mem_rsp_valid;
    input logic					 mem_req_gnt;
@@ -358,7 +358,7 @@ module
    
    logic 				  l1i_mem_req_valid;
    logic [(`PA_WIDTH-1):0] 		  l1i_mem_req_addr;
-   logic [3:0] 				  l1i_mem_req_opcode;
+   logic [4:0] 				  l1i_mem_req_opcode;
 
 
    logic 				  insn_valid,insn_valid2;
@@ -443,7 +443,7 @@ module
       logic [`PA_WIDTH-1:0] addr;
       logic [`LG_L2_REQ_TAGS-1:0] tag;
       logic [(1 << (`LG_L2_CL_LEN+3)) - 1:0] data;
-      logic [3:0]			     opcode;
+      logic [4:0]			     opcode;
    } mem_fifo_t;
    
    
@@ -452,7 +452,7 @@ module
    wire [`PA_WIDTH-1:0]		w_mem_req_addr;
    wire [`LG_L2_REQ_TAGS-1:0]	w_mem_req_tag;
    wire [(1 << (`LG_L2_CL_LEN+3)) - 1:0] w_mem_req_store_data;
-   wire [3:0]				  w_mem_req_opcode;
+   wire [4:0]				  w_mem_req_opcode;
 
 
 

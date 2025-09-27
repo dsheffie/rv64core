@@ -520,7 +520,7 @@ module nu_l1d(clk,
    logic r_mem_req_uc, n_mem_req_uc;
    logic [(`PA_WIDTH-1):0] r_mem_req_addr, n_mem_req_addr;
    logic [L1D_CL_LEN_BITS-1:0] r_mem_req_store_data, n_mem_req_store_data;
-   logic [3:0] 		       r_mem_req_opcode, n_mem_req_opcode;
+   logic [4:0] 		       r_mem_req_opcode, n_mem_req_opcode;
    logic [`LG_MRQ_ENTRIES:0]   r_mem_req_tag, n_mem_req_tag;
 
 
@@ -528,14 +528,14 @@ module nu_l1d(clk,
    logic 		       n_port1_req_uc;
    logic [(`PA_WIDTH-1):0]     n_port1_req_addr;
    logic [L1D_CL_LEN_BITS-1:0] n_port1_req_store_data;
-   logic [3:0] 		       n_port1_req_opcode;
+   logic [4:0] 		       n_port1_req_opcode;
    logic [`LG_MRQ_ENTRIES:0]   n_port1_req_tag;
 
    logic 		       n_port2_req_valid;
    logic 		       n_port2_req_uc;
    logic [(`PA_WIDTH-1):0]     n_port2_req_addr;
    logic [L1D_CL_LEN_BITS-1:0] n_port2_req_store_data;
-   logic [3:0] 		       n_port2_req_opcode;
+   logic [4:0] 		       n_port2_req_opcode;
    logic [`LG_MRQ_ENTRIES:0]   n_port2_req_tag;
 
 
@@ -867,7 +867,7 @@ module nu_l1d(clk,
 	n_port2_req_uc = 1'b0;
 	n_port2_req_addr = w_tlb_pa[`PA_WIDTH-1:0];
 	n_port2_req_store_data = r_mem_req_store_data;
-	n_port2_req_opcode = 4'd4;
+	n_port2_req_opcode = MEM_LW;
 	n_port2_req_tag = {1'b0, r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]};
      end
    
@@ -1262,14 +1262,14 @@ module nu_l1d(clk,
 	  end
 
 	 
-	if(mem_req_valid & (mem_req.opcode == 4'd4))
+	if(mem_req_valid & (mem_req.opcode == MEM_LW))
 	  begin
 	     $display("mem req opcode %d addr %x, tag %d, cycle %d", 
 		      mem_req.opcode, mem_req.addr, mem_req.tag, r_cycle);
 	  end
 
 
-	if(mem_req_valid & (mem_req.opcode == 4'd7))
+	if(mem_req_valid & (mem_req.opcode == MEM_SW)
 	  begin
 	     $display("mem req opcode %d addr %x data %x, tag %d, cycle %d", 
 		      mem_req.opcode, mem_req.addr, mem_req.data, mem_req.tag, r_cycle);
@@ -1846,7 +1846,14 @@ module nu_l1d(clk,
 		  t_core_mem_rsp.addr = r_req2.addr;
 		  t_core_mem_rsp_valid = 1'b1;
 	       end
-	     else if(r_req2.op == MEM_NOP)
+             else if(r_req2.op == MEM_PREFETCH)
+	      begin
+		  t_core_mem_rsp.dst_valid = r_req2.dst_valid;
+		  t_core_mem_rsp.has_cause = 1'b0;
+		  t_core_mem_rsp.addr = r_req2.addr;
+		  t_core_mem_rsp_valid = 1'b1;		  
+	      end
+	    else if(r_req2.op == MEM_NOP)
 	       begin
 		  if(r_req2.spans_cacheline)
 		    begin
@@ -2594,10 +2601,6 @@ module nu_l1d(clk,
 	     n_mem_req_addr = n_port2_req_addr;
 	     n_mem_req_store_data = n_port2_req_store_data;
 	     n_mem_req_opcode = n_port2_req_opcode;
-	     if(n_mem_req_opcode == 4'd7)
-	       begin
-		  $stop();
-	       end
 	     n_mem_req_tag = n_port2_req_tag;
 	  end
 	else if(!(n_port1_req_valid|n_port2_req_valid) & !w_eb_empty & w_one_free_credit)

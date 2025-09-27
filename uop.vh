@@ -187,6 +187,7 @@ typedef enum logic [7:0]
    FENCEI,
    FETCH_PF,
    FETCH_NOT_EXEC,
+   PREFETCH_R,
    IRQ,
    II //illegal instruction
    } opcode_t;

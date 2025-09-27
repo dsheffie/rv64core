@@ -119,7 +119,7 @@ module l2_2way(clk,
    output logic [`PA_WIDTH-1:0] mem_req_addr;
    output logic [`LG_L2_REQ_TAGS-1:0] mem_req_tag;
    output logic [(1 << (`LG_L2_CL_LEN+3)) - 1 :0] mem_req_store_data;
-   output logic [3:0] 	mem_req_opcode;
+   output logic [4:0] 	mem_req_opcode;
    
    input logic 		mem_rsp_valid;
    input logic [`LG_L2_REQ_TAGS-1:0] mem_rsp_tag;
@@ -193,10 +193,10 @@ module l2_2way(clk,
    
    logic [`PA_WIDTH-1:0]    n_saveaddr, r_saveaddr;
    
-   logic [3:0] 		   n_opcode, r_opcode;
-
+   logic [4:0] 		   n_opcode, r_opcode;
+   logic [4:0]		   r_mem_opcode, n_mem_opcode;
+   
    logic 		   r_mem_req, n_mem_req;
-   logic [3:0] 		   r_mem_opcode, n_mem_opcode;
    logic 		   r_req_ack, n_req_ack;
    
    logic 		   r_l1d_rsp_valid, n_l1d_rsp_valid;
@@ -630,14 +630,14 @@ module l2_2way(clk,
 	     r_flush_complete <= 1'b0;
 	     r_idx <= 'd0;
 	     r_tag <= 'd0;
-	     r_opcode <= 4'd0;
+	     r_opcode <= 'd0;
 	     r_addr <= 'd0;
 	     r_rob_tag <= 'd0;
 	     r_wb_addr <= 'd0;
 	     r_need_wb <= 1'b0;
 	     r_saveaddr <= 'd0;
 	     r_mem_req <= 1'b0;
-	     r_mem_opcode <= 4'd0;
+	     r_mem_opcode <= 5'd0;
 	     r_rsp_data <= 'd0;
 	     r_l1d_rsp_valid <= 1'b0;
 	     r_l1i_rsp_valid <= 1'b0;
@@ -1603,7 +1603,7 @@ module l2_2way(clk,
 			   end
 		      end // else: !if(n_replace)
 		    n_state = IDLE;
-		    n_mem_opcode = 4'd4; //load
+		    n_mem_opcode = MEM_LW;
 		    n_mem_req = 1'b1;
 		 end // else: !if(w_hit)
 	    end // case: CHECK_VALID_AND_TAG
@@ -1671,7 +1671,7 @@ module l2_2way(clk,
 		 begin
 		    n_mem_req_store_data = w_need_wb0 ? w_d0 : w_d1;
 		    n_addr = {(w_need_wb0 ? w_tag0 : w_tag1), t_idx, 4'd0};
-		    n_mem_opcode = 4'd7; 
+		    n_mem_opcode = MEM_SW; 
 		    n_mem_req = 1'b1;
 		    n_state = FLUSH_STORE;
 		 end
@@ -1721,7 +1721,7 @@ module l2_2way(clk,
 	       n_wb1 = 1'b0;
 	       n_mem_req_store_data = r_data_wb1;
 	       n_addr = {r_tag_wb1, t_idx, 4'd0};
-	       n_mem_opcode = 4'd7; 
+	       n_mem_opcode = MEM_SW; 
 	       n_mem_req = 1'b1;
 	       n_state = FLUSH_STORE;
 	    end

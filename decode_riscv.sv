@@ -379,8 +379,17 @@ module decode_riscv(
 		   end
 		 3'd6:
 		   begin
-		      uop.op = (rd == 'd0) ? NOP : ORI;	
-		      uop.is_cheap_int = 1'b1;		      	      		      
+		      if(rd == 'd0)
+			begin /* could be a prefetch */
+			   uop.is_int = 1'b0;
+			   uop.is_mem = 1'b1;
+			   uop.op = PREFETCH_R;
+			end
+		      else
+			begin
+			   uop.op = ORI;	
+			   uop.is_cheap_int = 1'b1;
+			end
 		   end
 		 3'd7:
 		   begin

@@ -121,7 +121,7 @@ typedef struct packed {
    logic [`PA_WIDTH-1:0] addr;
    logic [`LG_MRQ_ENTRIES:0] tag;
    logic [(1 << (`LG_L1D_CL_LEN + 3))-1:0] data;
-   logic [3:0]				   opcode;
+   logic [4:0]				   opcode;
 } l1d_req_t;
 
 

@@ -3610,9 +3610,10 @@ module exec(clk,
    logic t_is_load;
    always_comb
      begin
-	t_is_load = (t_mem_uq.op == LW) | (t_mem_uq.op == LWU) | (t_mem_uq.op == LD) |
-		    (t_mem_uq.op == LB) | (t_mem_uq.op == LBU) | (t_mem_uq.op == LHU) |
-		    (t_mem_uq.op == LH); 
+	t_is_load = (t_mem_uq.op == LW) | (t_mem_uq.op == LWU) | 
+		    (t_mem_uq.op == LD) | (t_mem_uq.op == LB) | 
+		    (t_mem_uq.op == LBU) | (t_mem_uq.op == LHU) |
+		    (t_mem_uq.op == LH) | (t_mem_uq.op == PREFETCH_R); 
 	
      end
    
@@ -3905,7 +3906,14 @@ module exec(clk,
 	       t_mem_tail.spans_cacheline = w_bad_16b_addr;
 	       t_mem_tail.unaligned = w_agu_addr[0];
 	    end // case: LH
-	  
+	  PREFETCH_R:
+	    begin
+	       t_mem_tail.is_load = 1'b1;
+	       t_mem_tail.op = MEM_PREFETCH;
+	       t_mem_tail.dst_valid = 1'b0;
+	       t_mem_tail.spans_cacheline = 1'b0;
+	       t_mem_tail.unaligned = 1'b0;
+	    end
 	  default:
 	    begin
 	       
