@@ -384,6 +384,7 @@ module decode_riscv(
 			   uop.is_int = 1'b0;
 			   uop.is_mem = 1'b1;
 			   uop.op = PREFETCH_R;
+			   uop.rvimm = {{(20+PP){insn[31]}}, insn[31:25], 5'd0};
 			end
 		      else
 			begin

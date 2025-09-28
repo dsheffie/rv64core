@@ -1851,7 +1851,8 @@ module nu_l1d(clk,
 		  t_core_mem_rsp.dst_valid = r_req2.dst_valid;
 		  t_core_mem_rsp.has_cause = 1'b0;
 		  t_core_mem_rsp.addr = r_req2.addr;
-		  t_core_mem_rsp_valid = 1'b1;		  
+		  t_core_mem_rsp_valid = 1'b1;
+        	  t_push_miss = w_tlb_hit;
 	      end
 	    else if(r_req2.op == MEM_NOP)
 	       begin
@@ -1927,7 +1928,7 @@ module nu_l1d(clk,
 `endif
 	       end
 	     else
-	       begin
+	   begin
 		  t_push_miss = 1'b1;
 	       end
 	  end // if (r_got_req2)
@@ -1936,6 +1937,17 @@ module nu_l1d(clk,
 `ifdef VERILATOR
    always_ff@(negedge clk)
      begin
+	   // if(t_push_miss)
+	   // begin
+	   // if(r_req2.op == MEM_PREFETCH)
+	   // begin
+	   // $display("generate prefetch for va address %x, pa address %x at cycle %d, early = %b", r_req2.addr, w_req2_pa, r_cycle, w_gen_early_req);
+	   // end
+	   // else
+	   // begin
+	   // $display("generate miss for va address %x, pa address %x at cycle %d", r_req2.addr, w_req2_pa, r_cycle);	   
+	   // end
+	   //end
 	if(core_store_data_valid)
 	  begin
 	     pt_l1d_store_data_ready(r_cycle,
@@ -1970,8 +1982,8 @@ module nu_l1d(clk,
 	if(r_got_req2)
 	  begin
  `ifdef DEBUG
-	     
-	     $display("triage new op for r_hit_busy_addr = %b, pc %x, addr %x at cycle %d dirty %b valid %b w_port2_rd_hit %b drain_ds %b, nop %b, has cause %b push miss %b, store %b load %b ll %b atomic %b, tlb store exec %b, pending tlb miss %b flush %b, tlb hit %b, spans cacheline %b, early push %b, could push %b, early dirty %b",
+	   
+	   $display("triage new op for r_hit_busy_addr = %b, pc %x, addr %x at cycle %d dirty %b valid %b w_port2_rd_hit %b drain_ds %b, nop %b, has cause %b push miss %b, store %b load %b ll %b atomic %b, tlb store exec %b, pending tlb miss %b flush %b, tlb hit %b, spans cacheline %b, early push %b, could push %b, early dirty %b",
 		      r_hit_busy_line2,
 		      r_req2.pc,
 		      r_req2.addr, 
@@ -2301,9 +2313,17 @@ module nu_l1d(clk,
 			      t_cache_idx = t_mem_head.addr[IDX_STOP-1:IDX_START];
 			      t_cache_tag = t_mem_head.addr[`PA_WIDTH-1:`LG_PG_SZ];
 			      t_addr = t_mem_head.addr;
-			      t_got_req = 1'b1;
-			      n_is_retry = 1'b1;
-			      t_got_rd_retry = 1'b1;
+	                      if(t_mem_head.op != MEM_PREFETCH)
+	                       begin
+			         t_got_req = 1'b1;
+			         n_is_retry = 1'b1;
+			         t_got_rd_retry = 1'b1;
+	                       end
+	                      else
+	   begin
+	   //$display("replaying MEM_PREFETCH for pc %x, addr %x", t_mem_head.pc, t_mem_head.addr);
+				   t_force_clear_busy = 1'b1;	   
+	                       end
 			   end // else: !if(t_mem_head.is_store || t_mem_head.is_atomic)
 		      end
 		 end // if (!mem_q_empty && !t_got_miss && !r_lock_cache && !n_pending_tlb_miss)

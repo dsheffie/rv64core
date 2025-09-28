@@ -690,10 +690,10 @@ void pt_retire(long long cycle,
     if((pipeip != 0)) {
       if(r.pc ==  pipeip) {
 	--pipeipcnt;
-	//printf("hit token ip, count %lu\n", pipeipcnt);      
+	printf("hit token ip, count %lu\n", pipeipcnt);      
 	if(pipeipcnt == 0) {
 	  pipestart = record_insns_retired;
-	  pipeend = record_insns_retired + 4096;
+	  pipeend = record_insns_retired + (1UL<<16);
 	  std::cout << "trace " << std::hex << pipeip << " hit enough times : starts at " 
 		    << std::dec << pipestart << ", will end at "
 		    << pipeend << "\n";
@@ -926,6 +926,7 @@ int main(int argc, char **argv) {
     std::cerr <<"command-line error : " << e.what() << "\n";
     return -1;
   }
+  
   uint32_t max_insns_per_cycle = 4;
   uint32_t max_insns_per_cycle_hist_sz = 2*max_insns_per_cycle;
   globals::log = trace_retirement;
@@ -1431,10 +1432,8 @@ int main(int argc, char **argv) {
       std::cout << "in flush mode = " << static_cast<int>(tb->in_flush_mode) << "\n";
       std::cout << "no retire in " << last_retire << " cycles, last retired "
     		<< std::hex
-    		<< last_retired_pc + 0
+    		<< last_retired_pc
     		<< std::dec
-    		<< " "
-    		<< getAsmString(get_insn(last_retired_pc+0, s), last_retired_pc+0)
     		<< "\n";
       std::cout << "l1d  state = " << static_cast<int>(tb->l1d_state) << "\n";
       std::cout << "l1i  state = " << static_cast<int>(tb->l1i_state) << "\n";
