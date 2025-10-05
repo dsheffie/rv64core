@@ -14,6 +14,7 @@
 //`define FOUR_CYCLE_L1D 1
 
 `define LG_M_WIDTH 6
+`define N_PD_BITS 3
 
 `define MAX_VA 39
 

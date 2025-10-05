@@ -165,7 +165,7 @@ module l1i_2way(clk,
    logic [(`M_WIDTH-1):0] 		  r_btb[BTB_ENTRIES-1:0];
    
    
-   logic [(4*WORDS_PER_CL)-1:0] 	  w_jump_out0, w_jump_out1;
+   logic [(`N_PD_BITS*WORDS_PER_CL)-1:0]  w_jump_out0, w_jump_out1;
    
    logic [`LG_L1I_NUM_SETS-1:0] 	    t_cache_idx, r_cache_idx;   
    logic 				    r_mem_req_valid, n_mem_req_valid;
@@ -254,17 +254,17 @@ function logic [63:0] select_br_simm(logic [L1I_CL_LEN_BITS-1:0] cl, logic[LG_WO
 endfunction   
 
    
-function logic [3:0] select_pd(logic [15:0] cl, logic[LG_WORDS_PER_CL-1:0] pos);
-   logic [3:0] j;
+function logic [`N_PD_BITS-1:0] select_pd(logic [(`N_PD_BITS*4)-1:0] cl, logic[LG_WORDS_PER_CL-1:0] pos);
+   logic [`N_PD_BITS-1:0] j;
    case(pos)
      2'd0:
-       j = cl[3:0];
+       j = cl[(`N_PD_BITS-1):0];
      2'd1:
-       j = cl[7:4];
+       j = cl[(2*(`N_PD_BITS))-1:`N_PD_BITS];
      2'd2:
-       j = cl[11:8];
+       j = cl[(3*(`N_PD_BITS))-1:(2*(`N_PD_BITS))];       
      2'd3:
-       j = cl[15:12];
+       j = cl[(4*(`N_PD_BITS))-1:(3*(`N_PD_BITS))];       
    endcase // case (pos)
    return j;
 endfunction
@@ -341,8 +341,7 @@ endfunction
    localparam PP = (`M_WIDTH-32);
    localparam SEXT = `M_WIDTH-16;
    insn_fetch_t t_insn, t_insn2, t_insn3, t_insn4;
-   logic [3:0] t_pd, t_first_pd;
-   logic [3:0] t_pd0, t_pd1, t_pd2, t_pd3;
+   logic [`N_PD_BITS-1:0] t_pd0, t_pd1, t_pd2, t_pd3, t_pd, t_first_pd;
    logic       t_tcb0, t_tcb1, t_tcb2, t_tcb3;
    logic       t_br0,t_br1,t_br2,t_br3;
    
@@ -497,7 +496,7 @@ endfunction
    wire	w_hit1 = w_valid_out1 ? w_tag_out1 == w_tlb_pc[`PA_WIDTH-1:IDX_STOP] : 1'b0;   
    wire	w_hit = w_hit0 | w_hit1;
    wire [127:0]	w_array = w_hit0 ? w_array_out0 : w_array_out1;
-   wire [(4*WORDS_PER_CL)-1:0] w_jump = w_hit0 ? w_jump_out0 : w_jump_out1;
+   wire [(`N_PD_BITS*WORDS_PER_CL)-1:0] w_jump = w_hit0 ? w_jump_out0 : w_jump_out1;
 
    always_ff@(negedge clk)
      begin
@@ -1330,7 +1329,7 @@ endfunction
 		);
 
    
-   wire [3:0] w_pd0, w_pd1, w_pd2, w_pd3;
+   wire [(`N_PD_BITS-1):0] w_pd0, w_pd1, w_pd2, w_pd3;
    predecode pd0 (.pc(r_mem_req_addr), .insn(mem_rsp_load_data[31:0]),   .pd(w_pd0));
    predecode pd1 (.pc(r_mem_req_addr+'d4), .insn(mem_rsp_load_data[63:32]),  .pd(w_pd1));
    predecode pd2 (.pc(r_mem_req_addr+'d8), .insn(mem_rsp_load_data[95:64]),  .pd(w_pd2));
@@ -1339,7 +1338,7 @@ endfunction
 
    
    
-   ram1r1w #(.WIDTH(4*WORDS_PER_CL), .LG_DEPTH(`LG_L1I_NUM_SETS))
+   ram1r1w #(.WIDTH((`N_PD_BITS)*WORDS_PER_CL), .LG_DEPTH(`LG_L1I_NUM_SETS))
    pd_data0 (
 	    .clk(clk),
 	    .rd_addr(t_cache_idx),
@@ -1349,7 +1348,7 @@ endfunction
 	    .rd_data(w_jump_out0)
 	    );
 
-   ram1r1w #(.WIDTH(4*WORDS_PER_CL), .LG_DEPTH(`LG_L1I_NUM_SETS))
+   ram1r1w #(.WIDTH((`N_PD_BITS)*WORDS_PER_CL), .LG_DEPTH(`LG_L1I_NUM_SETS))
    pd_data1 (
 	    .clk(clk),
 	    .rd_addr(t_cache_idx),
@@ -1397,20 +1396,21 @@ endfunction
 	  end
      end // always_ff@ (posedge clk)
 
-   always_ff@(negedge clk)
-     begin
-	if(t_is_call /*& (r_cache_pc == 64'hffffffff804c9608)*/)
-	  begin
-	     $display("push to rsb at cycle %d, call addr %x, ret addr %x, tos %d", 
-		      r_cycle, r_cache_pc, t_ret_pc, t_next_spec_rs_tos);
-	  end
-	if(t_is_ret /*& (r_cache_pc == 64'hffffffff8008cb68)*/)
-	  begin
-	     $display("pop from rsb at cycle %d, %x addr src, target %x, tos %d",
-		      r_cycle, r_cache_pc,
-		      r_spec_return_stack[t_next_spec_rs_tos], t_next_spec_rs_tos);
-	  end
-     end
+   
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if(t_is_call)
+   // 	  begin
+   // 	     $display("push to rsb at cycle %d, call addr %x, ret addr %x, tos %d", 
+   // 		      r_cycle, r_cache_pc, t_ret_pc, t_next_spec_rs_tos);
+   // 	  end
+   // 	if(t_is_ret)
+   // 	  begin
+   // 	     $display("pop from rsb at cycle %d, %x addr src, target %x, tos %d",
+   // 		      r_cycle, r_cache_pc,
+   // 		      r_spec_return_stack[t_next_spec_rs_tos], t_next_spec_rs_tos);
+   // 	  end
+   //   end
    
    always_ff@(posedge clk)
      begin
