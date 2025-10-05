@@ -87,7 +87,8 @@ bool state_t::memory_map_check(uint64_t pa, bool store, int64_t x) {
   if(pa >= UART_BASE_ADDR and (pa < (UART_BASE_ADDR + UART_SIZE))) {
   }
   if(pa >= PLIC_BASE_ADDR and (pa < (PLIC_BASE_ADDR + PLIC_SIZE))) {
-    printf(">> %s plic range at pc %lx, offset %ld bytes\n", store ? "write" : "read", pc, pa-PLIC_BASE_ADDR);
+    std::cout << (store ? "write" : "read") << " plic range at pc " << std::hex << pc << std::dec
+	      << ", offset " << (pa-PLIC_BASE_ADDR) << " bytes\n";
     //exit(-1);
     return true;
   }
@@ -101,10 +102,10 @@ bool state_t::memory_map_check(uint64_t pa, bool store, int64_t x) {
       case 0x4000:	
 	if(store) {
 	  mtimecmp = x;
-	  printf(">> mtimecmp = %ld at icnt %ld\n", mtimecmp, icnt);
+	  std::cout << "mtimecmp = " << mtimecmp << " at icnt " << icnt << "\n";
 	  csr_t cc(mip);
 	  cc.mie.mtie = 0;
-	  printf("mip %lx -> %lx\n", mip, cc.raw);
+	  std::cout << std::hex << "mip " << mip << " -> " << cc.raw << std::dec << "\n";
 	  mip = cc.raw;
 	}
 	break;
@@ -295,12 +296,12 @@ uint64_t state_t::translate(uint64_t ea, int &fault, int sz, bool store, bool fe
   
   if(r.sv39.a == 0) {
     r.sv39.a = 1;
-    printf("simulator marking page at %lx accessed for pc %lx\n", ea, pc);
+    std::cout << "simulator marking page at " << std::hex << ea << " accessed for pc " << pc << std::dec << "\n";
     *reinterpret_cast<uint64_t*>(mem + a) = r.r;
   }
   if((r.sv39.d == 0) && store) {
     r.sv39.d = 1;
-    printf("simulator marking page at %lx dirty for pc %lx\n", ea, pc);
+    std::cout << "simulator marking page at " << std::hex << ea << " dirty for pc " << pc << std::dec << "\n";    
     *reinterpret_cast<uint64_t*>(mem + a) = r.r;    
   }
   int64_t m = ((1L << mask_bits) - 1);
@@ -904,7 +905,7 @@ void execRiscv(state_t *s) {
 	      s->gpr[m.i.rd] = sext(xx);
 	    }
 	    else {
-	      printf("pc %lx failure\n", s->pc);
+	      std::cout << "pc " << std::hex << s->pc << std::dec << " failure\n";
 	      assert(0);
 	    }
 	    break;	    
@@ -934,9 +935,9 @@ void execRiscv(state_t *s) {
 	    assert(not(atomic_queue.empty()));
 	    auto &t = atomic_queue.front();
 	    if(not(t.pc == s->pc and t.addr == pa and t.data == (s->gpr[m.a.rs2]+x))) {
-	      printf("you have an atomic error\n");
-	      printf("rtl %lx, %lx, %lx\n", t.pc, t.addr, t.data);
-	      printf("sim %lx, %lx, %lx\n", s->pc, pa, s->gpr[m.a.rs2]+x);
+	      std::cout << "amoadd.w error:\n";
+	      std::cout << "rtl " << std::hex << t.pc << "," << t.addr << "," << t.data << std::dec << "\n";
+	      std::cout << "sim " << std::hex << s->pc << "," << pa << "," << (s->gpr[m.a.rs2]+x) << std::dec << "\n";	      
 	      exit(-1);
 	    }
 	    atomic_queue.pop_front();
@@ -955,9 +956,9 @@ void execRiscv(state_t *s) {
 	    assert(not(atomic_queue.empty()));
 	    auto &t = atomic_queue.front();
 	    if(not(t.pc == s->pc and t.addr == pa and t.data == (s->gpr[m.a.rs2]))) {
-	      printf("you have an atomic error\n");
-	      printf("rtl %lx, %lx, %lx\n", t.pc, t.addr, t.data);
-	      printf("sim %lx, %lx, %lx\n", s->pc, pa, s->gpr[m.a.rs2]);
+	      std::cout << "amoswap.w error:\n";
+	      std::cout << "rtl " << std::hex << t.pc << "," << t.addr << "," << t.data << std::dec << "\n";
+	      std::cout << "sim " << std::hex << s->pc << "," << pa << "," << (s->gpr[m.a.rs2]) << std::dec << "\n";	      
 	      exit(-1);
 	    }
 	    atomic_queue.pop_front();
@@ -988,9 +989,9 @@ void execRiscv(state_t *s) {
 	    assert(not(atomic_queue.empty()));
 	    auto &t = atomic_queue.front();
 	    if(not(t.pc == s->pc and t.addr == pa and t.data == s->gpr[m.a.rs2])) {
-	      printf("you have an atomic error\n");
-	      printf("rtl %lx, %lx, %lx\n", t.pc, t.addr, t.data);
-	      printf("sim %lx, %lx, %lx\n", s->pc, pa, s->gpr[m.a.rs2]);
+	      std::cout << "sc.w error:\n";
+	      std::cout << "rtl " << std::hex << t.pc << "," << t.addr << "," << t.data << std::dec << "\n";
+	      std::cout << "sim " << std::hex << s->pc << "," << pa << "," << (s->gpr[m.a.rs2]) << std::dec << "\n";	      
 	      exit(-1);
 	    }
 	    atomic_queue.pop_front();
@@ -1009,9 +1010,9 @@ void execRiscv(state_t *s) {
 	    assert(not(atomic_queue.empty()));
 	    auto &t = atomic_queue.front();
 	    if(not(t.pc == s->pc and t.addr == pa and t.data == (s->gpr[m.a.rs2]^x))) {
-	      printf("you have an atomic error\n");
-	      printf("rtl %lx, %lx, %lx\n", t.pc, t.addr, t.data);
-	      printf("sim %lx, %lx, %lx\n", s->pc, pa, s->gpr[m.a.rs2]^x);
+	      std::cout << "amoxor.w error:\n";
+	      std::cout << "rtl " << std::hex << t.pc << "," << t.addr << "," << t.data << std::dec << "\n";
+	      std::cout << "sim " << std::hex << s->pc << "," << pa << "," << (s->gpr[m.a.rs2]^x) << std::dec << "\n";	      
 	      exit(-1);
 	    }
 	    atomic_queue.pop_front();
@@ -1029,9 +1030,9 @@ void execRiscv(state_t *s) {
 	    assert(not(atomic_queue.empty()));
 	    auto &t = atomic_queue.front();
 	    if(not(t.pc == s->pc and t.addr == pa and t.data == (s->gpr[m.a.rs2]+x))) {
-	      printf("you have an atomic error\n");
-	      printf("rtl %lx, %lx, %lx\n", t.pc, t.addr, t.data);
-	      printf("sim %lx, %lx, %lx\n", s->pc, pa, s->gpr[m.a.rs2]+x);
+	      std::cout << "amoor.w error:\n";
+	      std::cout << "rtl " << std::hex << t.pc << "," << t.addr << "," << t.data << std::dec << "\n";
+	      std::cout << "sim " << std::hex << s->pc << "," << pa << "," << (s->gpr[m.a.rs2]|x) << std::dec << "\n";	      
 	      exit(-1);
 	    }
 	    atomic_queue.pop_front();
@@ -1050,9 +1051,9 @@ void execRiscv(state_t *s) {
 	    assert(not(atomic_queue.empty()));
 	    auto &t = atomic_queue.front();
 	    if(not(t.pc == s->pc and t.addr == pa and t.data == std::max(mm,x))) {
-	      printf("you have an atomic error\n");
-	      printf("rtl %lx, %lx, %lx\n", t.pc, t.addr, t.data);
-	      printf("sim %lx, %lx, %x\n", s->pc, pa, std::max(mm,x));
+	      std::cout << "amomax.w error:\n";
+	      std::cout << "rtl " << std::hex << t.pc << "," << t.addr << "," << t.data << std::dec << "\n";
+	      std::cout << "sim " << std::hex << s->pc << "," << pa << "," << std::max(mm,x) << std::dec << "\n";	      
 	      exit(-1);
 	    }
 	    atomic_queue.pop_front();
@@ -1081,9 +1082,9 @@ void execRiscv(state_t *s) {
 	    assert(not(atomic_queue.empty()));
 	    auto &t = atomic_queue.front();
 	    if(not(t.pc == s->pc and t.addr == pa and t.data == (s->gpr[m.a.rs2]+x))) {
-	      printf("you have an atomic error\n");
-	      printf("rtl %lx, %lx, %lx\n", t.pc, t.addr, t.data);
-	      printf("sim %lx, %lx, %lx\n", s->pc, pa, s->gpr[m.a.rs2]+x);
+	      std::cout << "amoadd.d error:\n";
+	      std::cout << "rtl " << std::hex << t.pc << "," << t.addr << "," << t.data << std::dec << "\n";
+	      std::cout << "sim " << std::hex << s->pc << "," << pa << "," << (s->gpr[m.a.rs2]+x) << std::dec << "\n";
 	      exit(-1);
 	    }
 	    atomic_queue.pop_front();
@@ -1102,9 +1103,9 @@ void execRiscv(state_t *s) {
 	    assert(not(atomic_queue.empty()));
 	    auto &t = atomic_queue.front();
 	    if(not(t.pc == s->pc and t.addr == pa and t.data == (s->gpr[m.a.rs2]))) {
-	      printf("you have an atomic error\n");
-	      printf("rtl %lx, %lx, %lx\n", t.pc, t.addr, t.data);
-	      printf("sim %lx, %lx, %lx\n", s->pc, pa, s->gpr[m.a.rs2]);
+	      std::cout << "amoswap.d error:\n";
+	      std::cout << "rtl " << std::hex << t.pc << "," << t.addr << "," << t.data << std::dec << "\n";
+	      std::cout << "sim " << std::hex << s->pc << "," << pa << "," << s->gpr[m.a.rs2] << std::dec << "\n";
 	      exit(-1);
 	    }
 	    atomic_queue.pop_front();
@@ -1139,9 +1140,9 @@ void execRiscv(state_t *s) {
 	      assert(not(atomic_queue.empty()));
 	      auto &t = atomic_queue.front();
 	      if(not(t.pc == s->pc and t.addr == pa and t.data == s->gpr[m.a.rs2])) {
-		printf("you have an atomic error\n");
-		printf("rtl %lx, %lx, %lx\n", t.pc, t.addr, t.data);
-		printf("sim %lx, %lx, %lx\n", s->pc, pa, s->gpr[m.a.rs2]);
+		std::cout << "sc.d error:\n";
+		std::cout << "rtl " << std::hex << t.pc << "," << t.addr << "," << t.data << std::dec << "\n";
+		std::cout << "sim " << std::hex << s->pc << "," << pa << "," << s->gpr[m.a.rs2] << std::dec << "\n";
 		exit(-1);
 	      }
 	      atomic_queue.pop_front();
@@ -1162,9 +1163,9 @@ void execRiscv(state_t *s) {
 	    assert(not(atomic_queue.empty()));
 	    auto &t = atomic_queue.front();
 	    if(not(t.pc == s->pc and t.addr == pa and t.data == (s->gpr[m.a.rs2] ^ x))) {
-	      printf("you have an atomic error for amoxor.d\n");
-	      printf("rtl %lx, %lx, %lx\n", t.pc, t.addr, t.data);
-	      printf("sim %lx, %lx, %lx\n", s->pc, pa, s->gpr[m.a.rs2]^x);
+	      std::cout << "amoor.d error:\n";
+	      std::cout << "rtl " << std::hex << t.pc << "," << t.addr << "," << t.data << std::dec << "\n";
+	      std::cout << "sim " << std::hex << s->pc << "," << pa << "," << (s->gpr[m.a.rs2]^x) << std::dec << "\n";
 	      exit(-1);
 	    }
 	    atomic_queue.pop_front();
@@ -1182,9 +1183,9 @@ void execRiscv(state_t *s) {
 	    assert(not(atomic_queue.empty()));
 	    auto &t = atomic_queue.front();
 	    if(not(t.pc == s->pc and t.addr == pa and t.data == (s->gpr[m.a.rs2]|x))) {
-	      printf("you have an atomic error\n");
-	      printf("rtl %lx, %lx, %lx\n", t.pc, t.addr, t.data);
-	      printf("sim %lx, %lx, %lx\n", s->pc, pa, s->gpr[m.a.rs2]|x);
+	      std::cout << "amoor.d error:\n";
+	      std::cout << "rtl " << std::hex << t.pc << "," << t.addr << "," << t.data << std::dec << "\n";
+	      std::cout << "sim " << std::hex << s->pc << "," << pa << "," << (s->gpr[m.a.rs2]|x) << std::dec << "\n";
 	      exit(-1);
 	    }
 	    atomic_queue.pop_front();
@@ -1204,9 +1205,9 @@ void execRiscv(state_t *s) {
 	    assert(not(atomic_queue.empty()));
 	    auto &t = atomic_queue.front();
 	    if(not(t.pc == s->pc and t.addr == pa and t.data == (s->gpr[m.a.rs2]&x))) {
-	      printf("you have an atomic error\n");
-	      printf("rtl %lx, %lx, %lx\n", t.pc, t.addr, t.data);
-	      printf("sim %lx, %lx, %lx\n", s->pc, pa, s->gpr[m.a.rs2]&x);
+	      std::cout << "amoand.d error:\n";
+	      std::cout << "rtl " << std::hex << t.pc << "," << t.addr << "," << t.data << std::dec << "\n";
+	      std::cout << "sim " << std::hex << s->pc << "," << pa << "," << (s->gpr[m.a.rs2]&x) << std::dec << "\n";
 	      exit(-1);
 	    }
 	    atomic_queue.pop_front();
@@ -1226,9 +1227,9 @@ void execRiscv(state_t *s) {
 	    assert(not(atomic_queue.empty()));
 	    auto &t = atomic_queue.front();
 	    if(not(t.pc == s->pc and t.addr == pa and t.data == std::max(mm,x))) {
-	      printf("you have an atomic error\n");
-	      printf("rtl %lx, %lx, %lx\n", t.pc, t.addr, t.data);
-	      printf("sim %lx, %lx, %lx\n", s->pc, pa, std::max(mm,x));
+	      std::cout << "amomaxu.d error:\n";
+	      std::cout << "rtl " << std::hex << t.pc << "," << t.addr << "," << t.data << std::dec << "\n";
+	      std::cout << "sim " << std::hex << s->pc << "," << pa << "," << std::max(mm,x) << std::dec << "\n";
 	      exit(-1);
 	    }
 	    atomic_queue.pop_front();
@@ -1361,7 +1362,9 @@ void execRiscv(state_t *s) {
       int64_t pa = s->translate(ea, fault, sz, true);
 
       if(splits_cacheline(ea,sz)) {
-	printf("unaligned store fault for ea %lx, sz = %d\n", ea, sz);
+	std::cout << "unaligned store fault for ea "
+		  << std::hex << ea << std::dec
+		  << ", sz = " << sz << "\n";
 	except_cause = CAUSE_MISALIGNED_STORE;
 	tval = ea;
 	goto handle_exception;
@@ -1890,7 +1893,7 @@ void execRiscv(state_t *s) {
   return;
 
  report_unimplemented:
-  printf("taking csr exception at pc %lx\n", s->pc);
+  std::cout << "taking csr exception at pc " << std::hex << s->pc << std::dec << "\n";
   except_cause = CAUSE_ILLEGAL_INSTRUCTION;
   tval = s->pc;
   
