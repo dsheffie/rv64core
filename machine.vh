@@ -17,6 +17,8 @@
 
 `define MAX_VA 39
 
+`define NUM_DTLB_ENTRIES 32
+`define NUM_ITLB_ENTRIES 16
 
 `define LG_INT_SCHED0_ENTRIES 3
 `define LG_INT_SCHED1_ENTRIES 2

@@ -1359,7 +1359,7 @@ module nu_l1d(clk,
       );
 
    
-   tlb #(.N(32)) dtlb(
+   tlb #(.N(`NUM_DTLB_ENTRIES)) dtlb(
     	    .clk(clk), 
     	    .reset(reset),
 	    .priv(priv),

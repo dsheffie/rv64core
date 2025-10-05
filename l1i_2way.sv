@@ -1188,7 +1188,7 @@ endfunction
 
 
    
-   tlb #(.N(16), .ISIDE(1)) 
+   tlb #(.N(`NUM_ITLB_ENTRIES), .ISIDE(1)) 
    itlb(
 	.clk(clk), 
 	.reset(reset),
