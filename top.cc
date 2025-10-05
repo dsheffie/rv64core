@@ -690,7 +690,7 @@ void pt_retire(long long cycle,
     if((pipeip != 0)) {
       if(r.pc ==  pipeip) {
 	--pipeipcnt;
-	printf("hit token ip, count %lu\n", pipeipcnt);      
+	std::cout << "hit token ip, count " << pipeipcnt << "\n";
 	if(pipeipcnt == 0) {
 	  pipestart = record_insns_retired;
 	  pipeend = record_insns_retired + (1UL<<16);
@@ -872,6 +872,23 @@ struct mem_req_t {
 };
 
 std::queue<mem_req_t> mem_queue;
+
+static const char* l2_state_names[] = {
+  "INITIALIZE",
+  "IDLE",
+  "CHECK_VALID_AND_TAG",
+  "CLEAN_RELOAD",
+  "DIRTY_STORE",
+  "STORE_TURNAROUND",
+  "WAIT_CLEAN_RELOAD",
+  "WAIT_STORE_IDLE",
+  "FLUSH_STORE_WAY1",
+  "FLUSH_STORE_WAY2",
+  "FLUSH_WAIT",
+  "FLUSH_TRIAGE",
+  "UPDATE_PTE"
+};
+
 
 int main(int argc, char **argv) {
   static_assert(sizeof(itype) == 4, "itype must be 4 bytes");
@@ -1852,30 +1869,14 @@ int main(int argc, char **argv) {
     dump_tip(tip_name, tip_map, insn_cnts, s);    
     out.close();
 
-    uint64_t total_ticks = 0;
-    for(auto &p : l1_to_l2_dist) {
-      std::cout << p.first << "," << p.second << "\n";
-      total_ticks += p.second;
-    }
-    std::cout << "total_ticks = " << total_ticks << "\n";
-    const char* l2_state_names[] = {
-      "INITIALIZE",
-      "IDLE",
-      "CHECK_VALID_AND_TAG",
-      "CLEAN_RELOAD",
-      "DIRTY_STORE",
-      "STORE_TURNAROUND",
-      "WAIT_CLEAN_RELOAD",
-      "WAIT_STORE_IDLE",
-      "FLUSH_STORE",
-      "FLUSH_STORE_WAY2",
-      "FLUSH_WAIT",
-      "FLUSH_TRIAGE",
-      "UPDATE_PTE"
-    };
     
+    //for(auto &p : l1_to_l2_dist) {
+    //std::cout << p.first << "," << p.second << "\n";
+    //}
+    
+    std::cout << "l2 states:\n";
     for(auto &p : l2_state) {
-      std::cout << l2_state_names[p.first] << "," << p.second << "\n";
+      std::cout << "  " << l2_state_names[p.first] << ":" << p.second << "\n";
     }
     std::cout << "port0 sched       " << schedules[0] << "\n";
     std::cout << "port1 sched       " << schedules[1] << "\n";
