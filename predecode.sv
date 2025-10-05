@@ -18,12 +18,14 @@ typedef enum logic [3:0] {
 module predecode(pc, insn, pd);
    input logic [63:0] pc;
    input logic [31:0] insn;
-   output logic [2:0] pd;
+   output logic [3:0] pd;
    logic [6:0] 	      opcode;
    
    logic [4:0] 	      rd, rs1;
    logic 	      rd_is_link, rs1_is_link;
-
+   logic	      rd_eq_rs1;
+   
+   
    
    always_comb
      begin
@@ -33,6 +35,7 @@ module predecode(pc, insn, pd);
 	rs1 = insn[19:15];
 	rd_is_link = (rd == 'd1) || (rd == 'd5);
 	rs1_is_link = (rs1 == 'd1) || (rs1 == 'd5);
+	rd_eq_rs1 = (rd == rs1);
 	
 	case(opcode)
 	  7'h63: /* cond branches */
@@ -51,7 +54,7 @@ module predecode(pc, insn, pd);
 		    //00000000004a106c : rs1_is_link = 0, rd_is_link = 1
 		    if(rs1_is_link & rd_is_link)
 		      begin
-			 pd = 'd7;
+			 pd = /*rd_eq_rs1 ? 'd5 :*/ 'd7;
 		      end
 		    else if(rs1_is_link & (rd_is_link == 1'b0))
 		      begin

@@ -165,7 +165,7 @@ module l1i_2way(clk,
    logic [(`M_WIDTH-1):0] 		  r_btb[BTB_ENTRIES-1:0];
    
    
-   logic [(3*WORDS_PER_CL)-1:0] 	  w_jump_out0, w_jump_out1;
+   logic [(4*WORDS_PER_CL)-1:0] 	  w_jump_out0, w_jump_out1;
    
    logic [`LG_L1I_NUM_SETS-1:0] 	    t_cache_idx, r_cache_idx;   
    logic 				    r_mem_req_valid, n_mem_req_valid;
@@ -254,17 +254,17 @@ function logic [63:0] select_br_simm(logic [L1I_CL_LEN_BITS-1:0] cl, logic[LG_WO
 endfunction   
 
    
-function logic [2:0] select_pd(logic [11:0] cl, logic[LG_WORDS_PER_CL-1:0] pos);
-   logic [2:0] j;
+function logic [3:0] select_pd(logic [15:0] cl, logic[LG_WORDS_PER_CL-1:0] pos);
+   logic [3:0] j;
    case(pos)
      2'd0:
-       j = cl[2:0];
+       j = cl[3:0];
      2'd1:
-       j = cl[5:3];
+       j = cl[7:4];
      2'd2:
-       j = cl[8:6];
+       j = cl[11:8];
      2'd3:
-       j = cl[11:9];
+       j = cl[15:12];
    endcase // case (pos)
    return j;
 endfunction
@@ -341,8 +341,8 @@ endfunction
    localparam PP = (`M_WIDTH-32);
    localparam SEXT = `M_WIDTH-16;
    insn_fetch_t t_insn, t_insn2, t_insn3, t_insn4;
-   logic [2:0] t_pd, t_first_pd;
-   logic [2:0] t_pd0, t_pd1, t_pd2, t_pd3;
+   logic [3:0] t_pd, t_first_pd;
+   logic [3:0] t_pd0, t_pd1, t_pd2, t_pd3;
    logic       t_tcb0, t_tcb1, t_tcb2, t_tcb3;
    logic       t_br0,t_br1,t_br2,t_br3;
    
@@ -497,7 +497,7 @@ endfunction
    wire	w_hit1 = w_valid_out1 ? w_tag_out1 == w_tlb_pc[`PA_WIDTH-1:IDX_STOP] : 1'b0;   
    wire	w_hit = w_hit0 | w_hit1;
    wire [127:0]	w_array = w_hit0 ? w_array_out0 : w_array_out1;
-   wire [(3*WORDS_PER_CL)-1:0] w_jump = w_hit0 ? w_jump_out0 : w_jump_out1;
+   wire [(4*WORDS_PER_CL)-1:0] w_jump = w_hit0 ? w_jump_out0 : w_jump_out1;
 
    always_ff@(negedge clk)
      begin
@@ -554,10 +554,10 @@ endfunction
 	t_pd2 = select_pd(w_jump, 'd2);
 	t_pd3 = select_pd(w_jump, 'd3);	
 	
-	t_br0 = (t_pd0 != 3'd0);
-	t_br1 = (t_pd1 != 3'd0);
-	t_br2 = (t_pd2 != 3'd0);
-	t_br3 = (t_pd3 != 3'd0);	
+	t_br0 = (t_pd0 != 'd0);
+	t_br1 = (t_pd1 != 'd0);
+	t_br2 = (t_pd2 != 'd0);
+	t_br3 = (t_pd3 != 'd0);	
 	
 	
 	t_insn_data  = select_cl32(w_array, t_insn_idx);
@@ -570,10 +570,10 @@ endfunction
 		    t_insn_idx == 2'd2 ? r_pht_out_vec[5:4] :
 		    r_pht_out_vec[7:6];
 	
-	t_tcb0 = (((t_pd0 == 3'd1) & (r_pht_out_vec[1]==1'b0)) | (t_pd0 == 3'd0))==1'b0;
-	t_tcb1 = (((t_pd1 == 3'd1) & (r_pht_out_vec[3]==1'b0)) | (t_pd1 == 3'd0))==1'b0;
-	t_tcb2 = (((t_pd2 == 3'd1) & (r_pht_out_vec[5]==1'b0)) | (t_pd2 == 3'd0))==1'b0;
-	t_tcb3 = (((t_pd3 == 3'd1) & (r_pht_out_vec[7]==1'b0)) | (t_pd3 == 3'd0))==1'b0;	
+	t_tcb0 = (((t_pd0 == 'd1) & (r_pht_out_vec[1]==1'b0)) | (t_pd0 == 'd0))==1'b0;
+	t_tcb1 = (((t_pd1 == 'd1) & (r_pht_out_vec[3]==1'b0)) | (t_pd1 == 'd0))==1'b0;
+	t_tcb2 = (((t_pd2 == 'd1) & (r_pht_out_vec[5]==1'b0)) | (t_pd2 == 'd0))==1'b0;
+	t_tcb3 = (((t_pd3 == 'd1) & (r_pht_out_vec[7]==1'b0)) | (t_pd3 == 'd0))==1'b0;	
 	
 	t_spec_branch_marker = ({1'b1,
 				 t_tcb3,
@@ -762,16 +762,16 @@ endfunction
 	       else if(t_hit && !fq_full)
 		 begin
 		    t_qual_hit = 1'b1;
-		    if((t_taken_branch_idx == 'd3) & !fq_full4 & (t_first_pd == 3'd1 | t_first_pd == 3'd3))
+		    if((t_taken_branch_idx == 'd3) & !fq_full4 & (t_first_pd == 'd1 | t_first_pd == 'd3))
 		      begin
 			 t_update_spec_hist = 1'b1;
 			 t_push_insn4 = 1'b1;
 			 t_is_cflow = 1'b1;
 			 t_take_br = 1;
-			 n_pc = w_cache_pc12 + ((t_first_pd==3'd3)? t_j_disp :	t_br_disp);
+			 n_pc = w_cache_pc12 + ((t_first_pd=='d3)? t_j_disp :	t_br_disp);
 			 //$display("branch = %x, n_pc = %x", w_cache_pc12, n_pc);
 		      end // if ((t_taken_branch_idx == 'd3) & !fq_full4)
-		    else if((t_taken_branch_idx == 'd2) & !fq_full3 & (t_first_pd == 3'd1 | t_first_pd == 3'd3))
+		    else if((t_taken_branch_idx == 'd2) & !fq_full3 & (t_first_pd == 'd1 | t_first_pd == 'd3))
 		      begin
 			 t_update_spec_hist = 1'b1;
 			 t_push_insn3 = 1'b1;
@@ -780,7 +780,7 @@ endfunction
 			 n_pc = w_cache_pc8 + ((t_first_pd=='d3) ? t_j_disp :t_br_disp);
 			 //$display("branch = %x, n_pc = %x", w_cache_pc8, n_pc);			 
 		      end
-		    else if((t_taken_branch_idx == 'd1) & !fq_full2 & (t_first_pd == 3'd1 | t_first_pd == 3'd3))
+		    else if((t_taken_branch_idx == 'd1) & !fq_full2 & (t_first_pd == 'd1 | t_first_pd == 'd3))
 		      begin
 			 t_update_spec_hist = 1'b1;
 			 t_push_insn2 = 1'b1;
@@ -791,24 +791,24 @@ endfunction
 		      end // if ((t_taken_branch_idx == 'd1) & !fq_full2)
 		    else
 		      begin
-			 t_update_spec_hist = (t_pd != 3'd0);
+			 t_update_spec_hist = (t_pd != 'd0);
 			 
-			 if(t_pd == 3'd5 || t_pd == 3'd3) /* jal and j */
+			 if(t_pd == 'd5 || t_pd == 'd3) /* jal and j */
 			   begin
 			      t_is_cflow = 1'b1;
 			      t_take_br = 1;
-			      t_is_call = (t_pd == 3'd5);
+			      t_is_call = (t_pd == 'd5);
 			      n_pc = r_cache_pc + t_jal_simm;
 			      t_push_insn = 1'b1;
 			   end
-			 else if(t_pd == 3'd1 && r_pht_out[1])
+			 else if(t_pd == 'd1 && r_pht_out[1])
 			   begin
 			      t_is_cflow = 1'b1;
 			      t_take_br = 1;			 
 			      n_pc = (r_cache_pc + t_br_simm);
 			      t_push_insn = 1'b1;
 			   end
-			 else if(t_pd == 3'd2) /* return */
+			 else if(t_pd == 'd2) /* return */
 			   begin
 			      t_is_cflow = 1'b1;
 			      t_is_ret = 1'b1;
@@ -816,15 +816,15 @@ endfunction
 			      n_pc = r_spec_return_stack[t_next_spec_rs_tos];
 			      t_push_insn = 1'b1;
 			   end
-			 else if(t_pd == 3'd4 || t_pd == 3'd6)
+			 else if(t_pd == 'd4 || t_pd == 'd6)
 			   begin
 			      t_is_cflow = 1'b1;			 
 			      t_take_br = 1'b1;
-			      t_is_call = (t_pd == 3'd6);
+			      t_is_call = (t_pd == 'd6);
 			      n_pc = r_btb_pc;
 			      t_push_insn = 1'b1;			      
 			   end
-			 else if(t_pd == 3'd7)
+			 else if(t_pd == 'd7)
 			   begin
 			      //$stop();
 			      t_is_cflow = 1'b1;			 
@@ -1330,7 +1330,7 @@ endfunction
 		);
 
    
-   wire [2:0] w_pd0, w_pd1, w_pd2, w_pd3;
+   wire [3:0] w_pd0, w_pd1, w_pd2, w_pd3;
    predecode pd0 (.pc(r_mem_req_addr), .insn(mem_rsp_load_data[31:0]),   .pd(w_pd0));
    predecode pd1 (.pc(r_mem_req_addr+'d4), .insn(mem_rsp_load_data[63:32]),  .pd(w_pd1));
    predecode pd2 (.pc(r_mem_req_addr+'d8), .insn(mem_rsp_load_data[95:64]),  .pd(w_pd2));
@@ -1339,7 +1339,7 @@ endfunction
 
    
    
-   ram1r1w #(.WIDTH(3*WORDS_PER_CL), .LG_DEPTH(`LG_L1I_NUM_SETS))
+   ram1r1w #(.WIDTH(4*WORDS_PER_CL), .LG_DEPTH(`LG_L1I_NUM_SETS))
    pd_data0 (
 	    .clk(clk),
 	    .rd_addr(t_cache_idx),
@@ -1349,7 +1349,7 @@ endfunction
 	    .rd_data(w_jump_out0)
 	    );
 
-   ram1r1w #(.WIDTH(3*WORDS_PER_CL), .LG_DEPTH(`LG_L1I_NUM_SETS))
+   ram1r1w #(.WIDTH(4*WORDS_PER_CL), .LG_DEPTH(`LG_L1I_NUM_SETS))
    pd_data1 (
 	    .clk(clk),
 	    .rd_addr(t_cache_idx),
@@ -1397,20 +1397,20 @@ endfunction
 	  end
      end // always_ff@ (posedge clk)
 
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if(t_is_call)
-   // 	  begin
-   // 	     $display("push to rsb at cycle %d, call addr %x, ret addr %x", 
-   // 		      r_cycle, r_cache_pc, t_ret_pc);
-   // 	  end
-   // 	if(t_is_ret)
-   // 	  begin
-   // 	     $display("pop from rsb at cycle %d, %x addr src, target %x",
-   // 		      r_cycle, r_cache_pc,
-   // 		      r_spec_return_stack[t_next_spec_rs_tos]);
-   // 	  end
-   //   end
+   always_ff@(negedge clk)
+     begin
+	if(t_is_call /*& (r_cache_pc == 64'hffffffff804c9608)*/)
+	  begin
+	     $display("push to rsb at cycle %d, call addr %x, ret addr %x, tos %d", 
+		      r_cycle, r_cache_pc, t_ret_pc, t_next_spec_rs_tos);
+	  end
+	if(t_is_ret /*& (r_cache_pc == 64'hffffffff8008cb68)*/)
+	  begin
+	     $display("pop from rsb at cycle %d, %x addr src, target %x, tos %d",
+		      r_cycle, r_cache_pc,
+		      r_spec_return_stack[t_next_spec_rs_tos], t_next_spec_rs_tos);
+	  end
+     end
    
    always_ff@(posedge clk)
      begin
