@@ -1,4 +1,4 @@
-
+`include "machine.vh"
 
 /*
 typedef enum logic [3:0] {
