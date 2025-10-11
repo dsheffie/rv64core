@@ -254,6 +254,8 @@ module l2_2way(clk,
    
    logic 		n_flush_complete, r_flush_complete;
    logic 		r_flush_req, n_flush_req;
+   logic		r_wb_caches,n_wb_caches;
+   
    logic [(1 << (`LG_L2_CL_LEN+3)) - 1:0] r_mem_req_store_data, n_mem_req_store_data;
    logic [63:0] 	r_cache_hits, n_cache_hits, r_cache_accesses, n_cache_accesses;
    logic		r_replace, n_replace;
@@ -647,6 +649,7 @@ module l2_2way(clk,
 	     r_req_ack <= 1'b0;
 	     r_store_data <= 'd0;
 	     r_flush_req <= 1'b0;
+	     r_wb_caches <= 1'b0;	     
 	     r_need_l1d <= 1'b0;
 	     r_need_l1i <= 1'b0;
 	     r_cache_hits <= 'd0;
@@ -699,6 +702,7 @@ module l2_2way(clk,
 	     r_req_ack <= n_req_ack;
 	     r_store_data <= n_store_data;
 	     r_flush_req <= n_flush_req;
+	     r_wb_caches <= n_flush_complete ? 1'b0 : n_wb_caches;
 	     r_need_l1i <= n_need_l1i;
 	     r_need_l1d <= n_need_l1d;
 	     r_cache_hits <= n_cache_hits;
@@ -1217,6 +1221,8 @@ module l2_2way(clk,
 	
 	n_store_data = r_store_data;
 	n_flush_req = r_flush_req | t_l2_flush_req;
+	n_wb_caches = r_wb_caches | wb_caches;
+	
 
 	n_mem_req_store_data = r_mem_req_store_data;
 
@@ -1655,12 +1661,13 @@ module l2_2way(clk,
 	    end
 	  FLUSH_WAIT:
 	    begin
+	       /* $display("r_wb_caches = %b", r_wb_caches); */
 	       n_state = FLUSH_TRIAGE;
 	       t_valid = 1'b0;
 	       t_dirty = 1'b0;
-	       t_wr_valid0 = 1'b1;
+	       t_wr_valid0 = r_wb_caches ? 1'b0 : 1'b1;
 	       t_wr_dirty0 = 1'b1;
-	       t_wr_valid1 = 1'b1;
+	       t_wr_valid1 = r_wb_caches ? 1'b0 :  1'b1;
 	       t_wr_dirty1 = 1'b1;	       
 	    end
 	  FLUSH_TRIAGE:
