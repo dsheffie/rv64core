@@ -904,7 +904,8 @@ int main(int argc, char **argv) {
   size_t mlp = 0;
   uint64_t last_store_addr = 0, last_load_addr = 0, last_addr = 0;
   int misses_inflight = 0;
-  int64_t mem_reply_cycle = -1L;
+  int64_t mem_reply_cycle = -1L, num_mem_ops = 0;
+  std::ofstream mem_txn_log("mem.csv");
   retire_trace rt;
   std::map<int64_t, double> &tip_map = rt.tip;
   std::map<int64_t, uint64_t> insn_cnts;
@@ -1523,6 +1524,7 @@ int main(int argc, char **argv) {
     if(not(mem_queue.empty()) and mem_queue.front().reply_cycle ==cycle) {
       last_retire = 0;
       mem_req_t &req = mem_queue.front();
+      num_mem_ops++;
       //printf("reply memory request for address %x tag %d\n",
       //req.addr, req.tag);
 
@@ -1567,6 +1569,11 @@ int main(int argc, char **argv) {
       got_putchar = false;
     }
     ++cycle;
+    if((cycle & (((1UL<<16) -1))) == 0) {
+      //printf("%lu mem ops\n", num_mem_ops);
+      mem_txn_log << cycle << "," << num_mem_ops << "\n";
+      num_mem_ops = 0;
+    }
   }
 
 
