@@ -80,6 +80,7 @@ module nu_l1d(clk,
 	   drain_ds_complete,
 	   dead_rob_mask,
 	   flush_req,
+	   wb_caches,
 	   flush_complete,
 	   flush_cl_req,
 	   flush_cl_addr,
@@ -148,6 +149,7 @@ module nu_l1d(clk,
    input logic flush_cl_req;
    input logic [`M_WIDTH-1:0] flush_cl_addr;
    input logic 		      flush_req;
+   input logic		      wb_caches;   
    output logic 	      flush_complete;
 
    input logic		      core_mem_va_req_valid;

@@ -22,6 +22,7 @@ module l1i_2way(clk,
 	   page_walk_rsp_valid,
 	   page_walk_rsp,
 	   flush_req,
+           wb_caches,
 	   flush_complete,
 	   restart_pc,
 	   restart_src_pc,
@@ -80,6 +81,8 @@ module l1i_2way(clk,
 
    
    input logic 	      flush_req;
+   input logic	      wb_caches;
+   
    output logic       flush_complete;
    //restart signals
    input logic [`M_WIDTH-1:0] restart_pc;
@@ -316,6 +319,8 @@ endfunction
    
    logic 		  t_clear_fq;
    logic 		  r_flush_req, n_flush_req;
+   logic		  r_wb_caches, n_wb_caches;
+   
    logic 		  r_flush_complete, n_flush_complete;
    logic 		  t_take_br, t_is_cflow;
    logic		  t_take_br0, t_take_br1, t_take_br2, t_take_br3;
@@ -499,6 +504,7 @@ endfunction
    wire [127:0]	w_array = w_hit0 ? w_array_out0 : w_array_out1;
    wire [(3*WORDS_PER_CL)-1:0] w_jump = w_hit0 ? w_jump_out0 : w_jump_out1;
 
+`ifdef VERILATOR
    always_ff@(negedge clk)
      begin
     	if(w_tlb_hit & r_req && paging_active)
@@ -509,6 +515,7 @@ endfunction
 	       end
 	  end
      end
+`endif
    
    logic			r_reload, n_reload;
    logic [63:0]			t_br_disp, t_j_disp;
@@ -530,6 +537,8 @@ endfunction
 	
 	n_restart_ack = 1'b0;
 	n_flush_req = r_flush_req | flush_req;
+	n_wb_caches = r_wb_caches | wb_caches;
+	
 	n_flush_complete = 1'b0;
 	t_cache_idx = 'd0;
 	t_cache_tag = 'd0;
@@ -708,7 +717,16 @@ endfunction
 		 begin
 		    n_flush_req = 1'b0;
 		    t_clear_fq = 1'b1;
-		    n_state = FLUSH_CACHE;
+		    if(n_wb_caches)
+		      begin
+			 $display("got flush with wb_caches set in the l1i -> no flush");
+			 n_flush_complete = 1'b1;
+			 n_state = IDLE;
+		      end
+		    else
+		      begin
+			 n_state = FLUSH_CACHE;
+		      end
 		    t_cache_idx = 0;
 		 end
 	       else if(n_restart_req)
@@ -915,7 +933,15 @@ endfunction
 		 begin
 		    n_flush_req = 1'b0;
 		    t_clear_fq = 1'b1;
-		    n_state = FLUSH_CACHE;
+		    if(n_wb_caches)
+		      begin
+			 n_flush_complete = 1'b1;
+			 n_state = IDLE;
+		      end
+		    else
+		      begin
+			 n_state = FLUSH_CACHE;
+		      end
 		    t_cache_idx = 0;
 		 end
 	       else if(n_restart_req)
@@ -957,7 +983,15 @@ endfunction
 		    n_flush_req = 1'b0;
 		    //n_flush_complete = 1'b1;
 		    t_clear_fq = 1'b1;
-		    n_state = FLUSH_CACHE;
+		    if(n_wb_caches)
+		      begin
+			 n_flush_complete = 1'b1;
+			 n_state = IDLE;
+		      end
+		    else
+		      begin
+			 n_state = FLUSH_CACHE;
+		      end
 		    t_cache_idx = 0;		    
 		 end	       
 	       else if(!fq_full)
@@ -1503,6 +1537,7 @@ endfunction
 	     r_fq_tail_ptr <= 'd0;
 	     r_restart_req <= 1'b0;
 	     r_flush_req <= 1'b0;
+	     r_wb_caches <= 1'b0;
 	     r_flush_complete <= 1'b0;
 	     r_spec_rs_tos <= RETURN_STACK_ENTRIES-1;
 	     r_arch_rs_tos <= RETURN_STACK_ENTRIES-1;
@@ -1536,6 +1571,7 @@ endfunction
 	     r_fq_tail_ptr <= t_clear_fq ? 'd0 : n_fq_tail_ptr;
 	     r_restart_req <= n_restart_req;
 	     r_flush_req <= n_flush_req;
+	     r_wb_caches <= n_flush_complete ? 1'b0 : n_wb_caches;	     
 	     r_flush_complete <= n_flush_complete;
 	     r_spec_rs_tos <= n_spec_rs_tos;
 	     r_arch_rs_tos <= n_arch_rs_tos;

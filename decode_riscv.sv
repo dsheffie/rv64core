@@ -144,7 +144,7 @@ module decode_riscv(
 
    wire [6:0] 	opcode = (page_fault|irq|bad_page_permissions) ? 'd0 : insn[6:0];
 
-   //wire		w_priv_user = (priv == 2'd0);
+   wire		w_priv_user = (priv == 2'd0);
    //wire		w_priv_supervisor = (priv == 2'd1);   
    //wire		w_priv_machine = (priv == 2'd3);
 
@@ -275,7 +275,7 @@ module decode_riscv(
 		 3'd1:
 		   begin
 		      uop.is_int = 1'b1;		      
-		      uop.op = FENCEI;
+		      uop.op = w_priv_user ? WB_CACHES : FENCEI;
 		      uop.serializing_op = 1'b1;
 		      uop.must_restart = 1'b1;		    		      
 		   end

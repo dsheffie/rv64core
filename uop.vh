@@ -185,6 +185,7 @@ typedef enum logic [7:0]
    CPOPW,
    ORCB,
    FENCEI,
+   WB_CACHES,
    FETCH_PF,
    FETCH_NOT_EXEC,
    PREFETCH_R,

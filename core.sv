@@ -81,6 +81,7 @@ module core(clk,
 	    ready_for_resume,
 	    flush_req_l1d,
 	    flush_req_l1i,
+	    wb_caches,
 	    flush_cl_req,
 	    flush_cl_addr,
 	    l1d_flush_complete,
@@ -185,6 +186,7 @@ module core(clk,
    output logic 		ready_for_resume;
    output logic 		flush_req_l1d;
    output logic 		flush_req_l1i;
+   output logic			wb_caches;
    
    output logic flush_cl_req;
    output logic [(`M_WIDTH-1):0] flush_cl_addr;
@@ -455,6 +457,8 @@ module core(clk,
    logic 		     n_machine_clr, r_machine_clr;
    logic 		     n_flush_req_l1d, r_flush_req_l1d;
    logic 		     n_flush_req_l1i, r_flush_req_l1i;
+   logic		     n_wb_caches, r_wb_caches;
+   
    
    logic 		     n_flush_cl_req, r_flush_cl_req;
    logic [(`M_WIDTH-1):0]    n_flush_cl_addr, r_flush_cl_addr;
@@ -565,6 +569,7 @@ module core(clk,
    
    assign flush_req_l1d = r_flush_req_l1d;
    assign flush_req_l1i = r_flush_req_l1i;
+   assign wb_caches = r_wb_caches;
    assign flush_cl_req = r_flush_cl_req;
    assign flush_cl_addr = r_flush_cl_addr;
 
@@ -650,6 +655,7 @@ module core(clk,
 	     r_update_csr_exc <= 1'b0;
 	     r_flush_req_l1i <= 1'b0;
 	     r_flush_req_l1d <= 1'b0;
+	     r_wb_caches <= 1'b0;
 	     r_flush_cl_req <= 1'b0;
 	     r_flush_cl_addr <= 'd0;
 	     r_restart_pc <= 'd0;
@@ -689,6 +695,7 @@ module core(clk,
 	     r_update_csr_exc <= n_update_csr_exc;
 	     r_flush_req_l1d <= n_flush_req_l1d;
 	     r_flush_req_l1i <= n_flush_req_l1i;
+	     r_wb_caches <= n_wb_caches;
 	     r_flush_cl_req <= n_flush_cl_req;
 	     r_flush_cl_addr <= n_flush_cl_addr;
 	     r_restart_pc <= n_restart_pc;
@@ -1019,6 +1026,7 @@ module core(clk,
 	n_ds_done = r_ds_done;
 	n_flush_req_l1d = 1'b0;
 	n_flush_req_l1i = 1'b0;
+	n_wb_caches = 1'b0;
 	n_flush_cl_req = 1'b0;
 	n_flush_cl_addr = r_flush_cl_addr;
 	n_got_break = r_got_break;
@@ -1141,10 +1149,11 @@ module core(clk,
 		 begin
 		    if(t_uop.serializing_op & t_rob_empty)
 		      begin
-			 if(t_uop.op == MONITOR | t_uop.op == FENCEI )
+			 if(t_uop.op == MONITOR | t_uop.op == FENCEI | t_uop.op == WB_CACHES )
 			   begin
 			      n_flush_req_l1i = 1'b1;
 			      n_flush_req_l1d = 1'b1;
+			      n_wb_caches = t_uop.op == WB_CACHES;
 			      n_state = FLUSH_CACHE;
 			   end // if (t_uop.op == MONITOR)
 			 else

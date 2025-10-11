@@ -23,6 +23,7 @@ module l2_2way(clk,
 	       l1d_rsp_tag,
 	       l1d_rsp_addr,
 	       l1d_rsp_writeback,
+	       wb_caches,
 	       l1i_flush_req,
 	       l1d_flush_req,
 	       
@@ -95,7 +96,8 @@ module l2_2way(clk,
    output logic [`LG_MRQ_ENTRIES:0] l1d_rsp_tag;
    output logic [`PA_WIDTH-1:0]     l1d_rsp_addr;
    output logic			    l1d_rsp_writeback;
-      
+
+   input logic			    wb_caches;
    input logic l1i_flush_req;
    input logic l1d_flush_req;
    input logic l1i_flush_complete;
