@@ -215,7 +215,7 @@ module
 
 
    wire 				  flush_req_l1i, flush_req_l1d;
-   wire					  wb_caches;
+   wire					  wb_no_inv;
    
    logic 				  flush_cl_req;
    logic [`M_WIDTH-1:0] 		  flush_cl_addr;
@@ -562,7 +562,7 @@ module
 
 	       .l1i_flush_req(flush_req_l1i),
 	       .l1d_flush_req(flush_req_l1d),
-	       .wb_caches(wb_caches),
+	       .wb_no_inv(wb_no_inv),
 	       .l1i_flush_complete(l1i_flush_complete),
 	       .l1d_flush_complete(l1d_flush_complete),
 	       
@@ -638,7 +638,7 @@ module
 	       .drain_ds_complete(drain_ds_complete),
 	       .dead_rob_mask(dead_rob_mask),
 	       .flush_req(flush_req_l1d),
-	       .wb_caches(wb_caches),		  
+	       .wb_no_inv(wb_no_inv),		  
 	       .flush_cl_req(flush_cl_req),
 	       .flush_cl_addr(flush_cl_addr),
 	       .flush_complete(l1d_flush_complete),
@@ -760,7 +760,7 @@ module
 	      .page_walk_rsp_valid(w_l1i_rsp_valid),
 	      .page_walk_rsp(page_walk_rsp),
 	      .flush_req(flush_req_l1i),
-	      .wb_caches(wb_caches),		   
+	      .wb_no_inv(wb_no_inv),		   
 	      .flush_complete(l1i_flush_complete),
 	      .restart_pc(restart_pc),
 	      .restart_src_pc(restart_src_pc),
@@ -825,7 +825,7 @@ module
 	     .ready_for_resume(ready_for_resume),  
 	     .flush_req_l1d(flush_req_l1d),
 	     .flush_req_l1i(flush_req_l1i),
-	     .wb_caches(wb_caches),
+	     .wb_no_inv(wb_no_inv),
 	     .flush_cl_req(flush_cl_req),
 	     .flush_cl_addr(flush_cl_addr),	     
 	     .l1d_flush_complete(l1d_flush_complete),

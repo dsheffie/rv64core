@@ -22,7 +22,7 @@ module l1i_2way(clk,
 	   page_walk_rsp_valid,
 	   page_walk_rsp,
 	   flush_req,
-           wb_caches,
+           wb_no_inv,
 	   flush_complete,
 	   restart_pc,
 	   restart_src_pc,
@@ -81,7 +81,7 @@ module l1i_2way(clk,
 
    
    input logic 	      flush_req;
-   input logic	      wb_caches;
+   input logic	      wb_no_inv;
    
    output logic       flush_complete;
    //restart signals
@@ -319,7 +319,7 @@ endfunction
    
    logic 		  t_clear_fq;
    logic 		  r_flush_req, n_flush_req;
-   logic		  r_wb_caches, n_wb_caches;
+   logic		  r_wb_no_inv, n_wb_no_inv;
    
    logic 		  r_flush_complete, n_flush_complete;
    logic 		  t_take_br, t_is_cflow;
@@ -536,7 +536,7 @@ endfunction
 	
 	n_restart_ack = 1'b0;
 	n_flush_req = r_flush_req | flush_req;
-	n_wb_caches = r_wb_caches | wb_caches;
+	n_wb_no_inv = r_wb_no_inv | wb_no_inv;
 	
 	n_flush_complete = 1'b0;
 	t_cache_idx = 'd0;
@@ -716,9 +716,8 @@ endfunction
 		 begin
 		    n_flush_req = 1'b0;
 		    t_clear_fq = 1'b1;
-		    if(n_wb_caches)
+		    if(n_wb_no_inv)
 		      begin
-			 $display("got flush with wb_caches set in the l1i -> no flush");
 			 n_flush_complete = 1'b1;
 			 n_state = IDLE;
 		      end
@@ -932,7 +931,7 @@ endfunction
 		 begin
 		    n_flush_req = 1'b0;
 		    t_clear_fq = 1'b1;
-		    if(n_wb_caches)
+		    if(n_wb_no_inv)
 		      begin
 			 n_flush_complete = 1'b1;
 			 n_state = IDLE;
@@ -982,7 +981,7 @@ endfunction
 		    n_flush_req = 1'b0;
 		    //n_flush_complete = 1'b1;
 		    t_clear_fq = 1'b1;
-		    if(n_wb_caches)
+		    if(n_wb_no_inv)
 		      begin
 			 n_flush_complete = 1'b1;
 			 n_state = IDLE;
@@ -1537,7 +1536,7 @@ endfunction
 	     r_fq_tail_ptr <= 'd0;
 	     r_restart_req <= 1'b0;
 	     r_flush_req <= 1'b0;
-	     r_wb_caches <= 1'b0;
+	     r_wb_no_inv <= 1'b0;
 	     r_flush_complete <= 1'b0;
 	     r_spec_rs_tos <= RETURN_STACK_ENTRIES-1;
 	     r_arch_rs_tos <= RETURN_STACK_ENTRIES-1;
@@ -1571,7 +1570,7 @@ endfunction
 	     r_fq_tail_ptr <= t_clear_fq ? 'd0 : n_fq_tail_ptr;
 	     r_restart_req <= n_restart_req;
 	     r_flush_req <= n_flush_req;
-	     r_wb_caches <= n_flush_complete ? 1'b0 : n_wb_caches;	     
+	     r_wb_no_inv <= n_flush_complete ? 1'b0 : n_wb_no_inv;	     
 	     r_flush_complete <= n_flush_complete;
 	     r_spec_rs_tos <= n_spec_rs_tos;
 	     r_arch_rs_tos <= n_arch_rs_tos;
