@@ -80,7 +80,7 @@ module nu_l1d(clk,
 	   drain_ds_complete,
 	   dead_rob_mask,
 	   flush_req,
-	   wb_caches,
+	   wb_no_inv,
 	   flush_complete,
 	   flush_cl_req,
 	   flush_cl_addr,
@@ -149,7 +149,7 @@ module nu_l1d(clk,
    input logic flush_cl_req;
    input logic [`M_WIDTH-1:0] flush_cl_addr;
    input logic 		      flush_req;
-   input logic		      wb_caches;   
+   input logic		      wb_no_inv;   
    output logic 	      flush_complete;
 
    input logic		      core_mem_va_req_valid;
@@ -241,6 +241,8 @@ module nu_l1d(clk,
    logic 				  t_array_wr_en;
 		  
    logic 				  r_flush_req, n_flush_req;
+   logic				  r_wb_no_inv, n_wb_no_inv;
+   
    logic 				  r_flush_cl_req, n_flush_cl_req;
    logic 				  r_flush_complete, n_flush_complete;
    
@@ -1003,6 +1005,7 @@ module nu_l1d(clk,
 	     r_is_retry <= 1'b0;
 	     r_flush_complete <= 1'b0;
 	     r_flush_req <= 1'b0;
+	     r_wb_no_inv <= 1'b0;
 	     r_flush_cl_req <= 1'b0;
 	     r_cache_idx <= 'd0;
 	     r_cache_tag <= 'd0;
@@ -1056,6 +1059,7 @@ module nu_l1d(clk,
 	     r_is_retry <= n_is_retry;
 	     r_flush_complete <= n_flush_complete;
 	     r_flush_req <= n_flush_req;
+	     r_wb_no_inv <= n_flush_complete ? 1'b0 : n_wb_no_inv;	     
 	     r_flush_cl_req <= n_flush_cl_req;
 	     r_cache_idx <= t_cache_idx;
 	     r_cache_tag <= t_cache_tag;
@@ -2106,6 +2110,7 @@ module nu_l1d(clk,
 	n_store_stalls = r_store_stalls;
 
 	n_flush_req = r_flush_req | flush_req;
+	n_wb_no_inv = r_wb_no_inv | wb_no_inv;
 	n_flush_cl_req = r_flush_cl_req |l2_probe_val;
 	n_flush_complete = 1'b0;
 	t_addr = 'd0;
@@ -2412,10 +2417,11 @@ module nu_l1d(clk,
 	       //$display("flush idx %x was %b",
 	       //{r_tag_out,r_cache_idx[LG_MAX_SET-1:0],4'd0},
 	       //r_dirty_out);
-	       
+    	       t_mark_invalid = 1'b1;
+	   
 	       if(!r_dirty_out)
 		 begin
-		    t_mark_invalid = 1'b1;
+
 		    t_cache_idx = r_cache_idx + 'd1;
 		    if(r_cache_idx == (L1D_NUM_SETS-1))
 		      begin
