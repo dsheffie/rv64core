@@ -545,6 +545,22 @@ void record_alloc(int rf,
 }
 
 
+void check_fp32_mul(int a, int b, int y) {
+  float a_ = *(float*)&a;
+  float b_ = *(float*)&b;  
+  float y_ = *(float*)&y;
+  float yy = a_*b_;
+  float e = y_ - yy;
+  e *= e;
+  if(std::sqrt(e) > 1e-3) {
+    printf("big error for a = %g (%x), b = %g (%x), correct = %g, rtl = %g\n",
+	   a_, a,
+	   b_, b,
+	   yy, y_);
+    //exit(-1);
+  }
+}
+
 void record_fetch(int p1, int p2, int p3, int p4, 
 		  long long pc1, long long pc2, long long pc3, long long pc4,
 		  int bubble, int fq_full) {

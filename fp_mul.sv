@@ -109,8 +109,8 @@ module detection(
    
    always_comb
      begin
-	t_az = (a == 'd0);
-	t_bz = (b == 'd0);
+	t_az = (a[W-2:0] == 'd0);
+	t_bz = (b[W-2:0] == 'd0);
      end
 
    assign zero = t_az|t_bz;
@@ -236,11 +236,11 @@ module fp_mul(
 
    detection #(.E(EW), .F(FW)) d0 
      (.a(a),.b(b),.zero(w_zero), .nan(w_nan), .infinity(w_infinity));
-
+   
    normalize #(.E(EW), .F(FW)) n0 
      (.exp_out(w_rnd_exp_in), .mant_out(w_rnd_mant_in),
       .exp_in(w_exp),.mant_in(w_prod[2*(FW+1)-1:(FW-3)]));
-           
+      
    round #(.E(EW), .F(FW)) r0 (
 	     .exp_out(w_rnd_exp_out),
 	     .mant_out(w_rnd_mant_out),

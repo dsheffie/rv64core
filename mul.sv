@@ -1,5 +1,11 @@
 `include "machine.vh"
 
+`ifdef VERILATOR
+import "DPI-C" function void check_fp32_mul(input int a,
+					    input int b,
+					    input int y);
+`endif
+
 
 module mul(clk,
 	   reset,
@@ -50,7 +56,6 @@ module mul(clk,
    logic [`MUL_LAT:0]		      r_is_fp_sub;
    logic [`MUL_LAT:0]		      r_is_fp_mul;   
    
-   
    logic [`MUL_LAT:0] 			   r_gpr_val;
    logic [`LG_PRF_ENTRIES-1:0] 		   r_gpr_ptr[`MUL_LAT:0];
    logic [`LG_ROB_ENTRIES-1:0] 		   r_rob_ptr[`MUL_LAT:0];
@@ -92,23 +97,39 @@ module mul(clk,
       .en(1'b1)
       );
 
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if(is_fp_add)
-   // 	  begin
-   // 	     $display("src_A = %b", src_A[31:0]);
-   // 	     $display("src_B = %b", src_B[31:0]);	     
-   // 	  end
-   // 	if(complete & r_is_fp_add[`MUL_LAT])
-   // 	  begin
-   // 	     $display("w_add = %x", y);
-   // 	  end
-   // if(complete & r_is_fp_mul[`MUL_LAT])
-   //   begin
-   //      $display("w_mul = %x", y);
-   //   end
-   //$display("w_fp_add = %b", w_fp_add);
-   //  end
+
+`ifdef VERILATOR
+   logic [31:0]			      r_srcA[`MUL_LAT:0];
+   logic [31:0]			      r_srcB[`MUL_LAT:0];      
+   always_ff@(posedge clk)
+     begin
+	for(integer i = 0; i <= `MUL_LAT; i=i+1)
+	  begin
+	     if(i == 0)
+	       begin
+		  r_srcA[0] <= src_A[31:0];
+		  r_srcB[0] <= src_B[31:0];
+	       end
+	     else
+	       begin
+		  r_srcA[i] <= r_srcA[i-1];
+		  r_srcB[i] <= r_srcB[i-1];
+	       end
+	  end
+     end // always_ff@ (posedge clk)
+		
+   always_ff@(negedge clk)
+     begin
+	if(complete & r_is_fp_mul[`MUL_LAT])
+	  begin
+	     //$display("src_A = %b", r_srcA[`MUL_LAT]);
+	     //$display("src_B = %b", r_srcB[`MUL_LAT]);	     
+             //$display("w_mul = %x", y[31:0]);
+	     check_fp32_mul(r_srcA[`MUL_LAT], r_srcB[`MUL_LAT], y[31:0]);
+	  end
+     end // always_ff@ (negedge clk)
+
+`endif
    
 			   
    always_comb
