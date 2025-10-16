@@ -185,6 +185,9 @@ typedef enum logic [7:0]
    CPOPW,
    ORCB,
    FENCEI,
+   SP_ADD,
+   SP_SUB,
+   SP_MUL,
    WB_CACHES,
    FETCH_PF,
    FETCH_NOT_EXEC,
@@ -204,6 +207,13 @@ function logic uses_mul(opcode_t op);
        x = 1'b1;
      MULW:
        x = 1'b1;
+     SP_MUL:
+       x = 1'b1;
+     SP_ADD:
+       x = 1'b1;
+     SP_SUB:
+       x = 1'b1;
+     
      default:
        x = 1'b0;
    endcase

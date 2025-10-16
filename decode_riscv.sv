@@ -590,7 +590,20 @@ module decode_riscv(
 			7'h1:
 			  begin
 			     uop.op = (rd != 'd0) ? MUL : NOP;
+			  end	
+			7'h2:
+			  begin
+			     uop.op = (rd != 'd0) ? SP_ADD : NOP;
 			  end
+			7'h3:
+			  begin
+			     uop.op = (rd != 'd0) ? SP_SUB : NOP;
+			  end
+			7'h4:
+			  begin
+			     uop.op = (rd != 'd0) ? SP_MUL : NOP;
+			  end
+		
 			7'h20:
 			  begin
 			     uop.op = (rd != 'd0) ? SUBU : NOP;

@@ -387,6 +387,8 @@ module exec(clk,
    wire [63:0] w_shifter_out;
 
    logic	       t_start_mul,t_is_mulw,t_signed_mul;
+   logic	       t_is_fp_add, t_is_fp_sub, t_is_fp_mul;
+   
    logic	       t_is_clzw_ctzw_cpopw;
    
    logic 	t_mul_complete;
@@ -1836,6 +1838,14 @@ module exec(clk,
 	r_div_complete <= reset ? 1'b0 : t_div_complete;
      end
 
+
+   always_ff@(negedge clk)
+     begin
+	if(t_mul_complete & (r_wb_bitvec[0] == 1'b0))
+	  begin
+	     $stop();
+	  end
+     end
    
    mul m
      (
@@ -1845,6 +1855,9 @@ module exec(clk,
       .is_high(int_uop.op == MULHU || int_uop.op == MULH),
       .go(t_start_mul&r_start_int),
       .is_mulw(t_is_mulw),
+      .is_fp_add(t_is_fp_add),
+      .is_fp_sub(t_is_fp_sub),
+      .is_fp_mul(t_is_fp_mul),
       .src_A(t_srcA),
       .src_B(t_srcB),
       .rob_ptr_in(int_uop.rob_ptr),
@@ -2155,6 +2168,12 @@ module exec(clk,
 	t_signed_mul = 1'b0;
 	t_is_mulw = 1'b0;
 	
+	t_is_fp_add = 1'b0;
+	t_is_fp_sub = 1'b0;
+	t_is_fp_mul = 1'b0;
+	
+	
+	
 	t_signed_div = 1'b0;
 	t_is_rem = 1'b0;
 	t_start_div32 = 1'b0;
@@ -2213,6 +2232,22 @@ module exec(clk,
 	       t_signed_mul = 1'b1;	       	       
 	       t_start_mul = r_start_int&!ds_done;
 	    end
+	  SP_ADD:
+	    begin
+	       t_is_fp_add = 1'b1;
+	       t_start_mul = r_start_int&!ds_done;
+	    end
+	  SP_SUB:
+	    begin
+	       t_is_fp_sub = 1'b1;
+	       t_start_mul = r_start_int&!ds_done;
+	    end
+	  SP_MUL:
+	    begin
+	       t_is_fp_mul = 1'b1;
+	       t_start_mul = r_start_int&!ds_done;
+	    end
+	  
 	  MULW:
 	    begin
 	       t_is_mulw = 1'b1;	       

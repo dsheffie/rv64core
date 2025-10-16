@@ -7,6 +7,9 @@ module mul(clk,
 	   is_high,
 	   go,
 	   is_mulw,
+	   is_fp_add,
+	   is_fp_sub,
+	   is_fp_mul,
 	   src_A,
 	   src_B,
 	   rob_ptr_in,
@@ -23,6 +26,9 @@ module mul(clk,
    input logic is_high;
    input logic go;
    input logic is_mulw;
+   input logic is_fp_add;
+   input logic is_fp_sub;
+   input logic is_fp_mul;   
    
    input logic [`M_WIDTH-1:0] src_A;
    input logic [`M_WIDTH-1:0] src_B;
@@ -40,6 +46,11 @@ module mul(clk,
    logic [`MUL_LAT:0] 		      r_is_high;
    logic [`MUL_LAT:0]		      r_is_mulw;
    logic [`MUL_LAT:0] 		      r_complete;
+   logic [`MUL_LAT:0]		      r_is_fp_add;
+   logic [`MUL_LAT:0]		      r_is_fp_sub;
+   logic [`MUL_LAT:0]		      r_is_fp_mul;   
+   
+   
    logic [`MUL_LAT:0] 			   r_gpr_val;
    logic [`LG_PRF_ENTRIES-1:0] 		   r_gpr_ptr[`MUL_LAT:0];
    logic [`LG_ROB_ENTRIES-1:0] 		   r_rob_ptr[`MUL_LAT:0];
@@ -59,7 +70,47 @@ module mul(clk,
    wire [(`M_WIDTH*2)-1:0] 			   w_sext_B = {{`M_WIDTH{src_B[`M_WIDTH-1]}}, src_B};
 
    wire [63:0]					   w_mulw = {{32{r_mul[`MUL_LAT][31]}}, r_mul[`MUL_LAT][31:0]};
-				   
+	
+   wire [31:0]					   w_fp_mul, w_fp_add;
+   
+   fp_mul #(.W(32), .MUL_LAT(`MUL_LAT+1)) sp_mul0
+     (
+      .y(w_fp_mul),
+      .clk(clk),
+      .a(src_A[31:0]),
+      .b(src_B[31:0]),
+      .en(1'b1)
+      );
+
+   fp_add #(.W(32), .ADD_LAT(`MUL_LAT+1)) sp_add0
+     (
+      .y(w_fp_add),
+      .clk(clk),
+      .a(src_A[31:0]),
+      .b(src_B[31:0]),
+      .sub(is_fp_sub),
+      .en(1'b1)
+      );
+
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if(is_fp_add)
+   // 	  begin
+   // 	     $display("src_A = %b", src_A[31:0]);
+   // 	     $display("src_B = %b", src_B[31:0]);	     
+   // 	  end
+   // 	if(complete & r_is_fp_add[`MUL_LAT])
+   // 	  begin
+   // 	     $display("w_add = %x", y);
+   // 	  end
+   // if(complete & r_is_fp_mul[`MUL_LAT])
+   //   begin
+   //      $display("w_mul = %x", y);
+   //   end
+   //$display("w_fp_add = %b", w_fp_add);
+   //  end
+   
+			   
    always_comb
      begin
 	t_mul = is_signed ? ($signed(w_sext_A) * $signed(w_sext_B)) 
@@ -69,6 +120,18 @@ module mul(clk,
 	  begin
 	     y = r_mul[`MUL_LAT][(`M_WIDTH*2)-1:`M_WIDTH];
 	  end
+	else if(r_is_fp_add[`MUL_LAT])
+	  begin
+	     y = {32'd0, w_fp_add};
+	  end
+	else if(r_is_fp_sub[`MUL_LAT])
+	  begin
+	     y = {32'd0, w_fp_add};
+	  end
+	else if(r_is_fp_mul[`MUL_LAT])
+	  begin
+	     y = {32'd0, w_fp_mul};
+	  end	
 	else
 	  begin
 	     y = r_is_mulw[`MUL_LAT] ? w_mulw : r_mul[`MUL_LAT][`M_WIDTH-1:0];	     
@@ -97,6 +160,9 @@ module mul(clk,
 	     r_gpr_val <= 'd0;
 	     r_is_high <= 'd0;
 	     r_is_mulw <= 'd0;
+	     r_is_fp_add <= 'd0;
+	     r_is_fp_sub <= 'd0;
+	     r_is_fp_mul <= 'd0;   	     
 	  end
 	else
 	  begin
@@ -110,6 +176,9 @@ module mul(clk,
 		       r_gpr_val[0] <= go;
 		       r_gpr_ptr[0] <= prf_ptr_in;
 		       r_is_mulw[0] <= is_mulw;
+		       r_is_fp_add[0] <= is_fp_add;
+		       r_is_fp_sub[0] <= is_fp_sub;
+		       r_is_fp_mul[0] <= is_fp_mul;
 		    end
 		  else
 		    begin
@@ -119,6 +188,9 @@ module mul(clk,
 		       r_gpr_val[i] <= r_gpr_val[i-1];
 		       r_gpr_ptr[i] <= r_gpr_ptr[i-1];
 		       r_is_mulw[i] <= r_is_mulw[i-1];
+		       r_is_fp_add[i] <= r_is_fp_add[i-1];
+		       r_is_fp_sub[i] <= r_is_fp_sub[i-1];
+		       r_is_fp_mul[i] <= r_is_fp_mul[i-1];		       
 		    end
 	       end
 	  end
