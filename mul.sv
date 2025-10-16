@@ -1,9 +1,8 @@
 `include "machine.vh"
 
 `ifdef VERILATOR
-import "DPI-C" function void check_fp32_mul(input int a,
-					    input int b,
-					    input int y);
+import "DPI-C" function void check_fp32_mul(input int a, input int b, input int y);
+import "DPI-C" function void check_fp32_add(input int a, input int b, input int y);
 `endif
 
 
@@ -126,6 +125,10 @@ module mul(clk,
 	     //$display("src_B = %b", r_srcB[`MUL_LAT]);	     
              //$display("w_mul = %x", y[31:0]);
 	     check_fp32_mul(r_srcA[`MUL_LAT], r_srcB[`MUL_LAT], y[31:0]);
+	  end
+	if(complete & r_is_fp_add[`MUL_LAT])
+	  begin
+	     check_fp32_add(r_srcA[`MUL_LAT], r_srcB[`MUL_LAT], y[31:0]);
 	  end
      end // always_ff@ (negedge clk)
 
