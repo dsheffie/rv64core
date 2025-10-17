@@ -1827,8 +1827,29 @@ module exec(clk,
       .distance(t_shift_amt), 
       .y(w_shifter_out));
 
+   wire [31:0] w_int_to_fp, w_fp_to_int;
    
+   fp_convert #(.W(32)) int32_to_fp32
+     (.in(t_srcA[31:0]),
+      .out(w_int_to_fp)
+     );
 
+   fp_trunc #(.W(32)) fp32_to_int32
+     (.in(t_srcA[31:0]),
+      .out(w_fp_to_int)
+      );
+
+   
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if(int_uop.op == INT_TO_SP & t_alu_valid)
+   // 	  begin
+   // 	     $display("input %x, w_int_to_fp = %x",
+   // 		      t_srcA[31:0],
+   // 		      w_int_to_fp);
+   // 	  end
+   //   end
+   
    
    always_ff@(posedge clk)
      begin
@@ -2282,6 +2303,18 @@ module exec(clk,
 	       t_result = w_as64;	       
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
+	    end
+	  INT_TO_SP:
+	    begin
+	       t_result = {32'd0, w_int_to_fp};	       
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;	       
+	    end
+	  SP_TO_INT:
+	    begin
+	       t_result = {{32{(w_fp_to_int[31])}}, w_fp_to_int};	       
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;	       
 	    end
 	  SH1ADD:
 	    begin
