@@ -188,6 +188,8 @@ typedef enum logic [7:0]
    SP_ADD,
    SP_SUB,
    SP_MUL,
+   INT_TO_SP,
+   SP_TO_INT,
    WB_CACHES,
    FETCH_PF,
    FETCH_NOT_EXEC,

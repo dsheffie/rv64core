@@ -323,6 +323,14 @@ module decode_riscv(
 			   uop.op = (rd == 'd0) ? NOP : SEXTH;
 			   uop.is_cheap_int = 1'b1;
 			end
+		      else if(insn[31:20] == 12'h606)
+			begin
+			   uop.op = (rd=='d0) ? NOP : INT_TO_SP;
+			end
+		      else if(insn[31:20] == 12'h607)
+			begin
+			   uop.op = (rd=='d0) ? NOP : SP_TO_INT;
+			end		      
 		      else
 			begin
 			   uop.op = (rd == 'd0) ? NOP : SLLI;

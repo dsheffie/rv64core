@@ -95,46 +95,8 @@ module mul(clk,
       .sub(is_fp_sub),
       .en(1'b1)
       );
-
-
-`ifdef VERILATOR
-   logic [31:0]			      r_srcA[`MUL_LAT:0];
-   logic [31:0]			      r_srcB[`MUL_LAT:0];      
-   always_ff@(posedge clk)
-     begin
-	for(integer i = 0; i <= `MUL_LAT; i=i+1)
-	  begin
-	     if(i == 0)
-	       begin
-		  r_srcA[0] <= src_A[31:0];
-		  r_srcB[0] <= src_B[31:0];
-	       end
-	     else
-	       begin
-		  r_srcA[i] <= r_srcA[i-1];
-		  r_srcB[i] <= r_srcB[i-1];
-	       end
-	  end
-     end // always_ff@ (posedge clk)
 		
-   always_ff@(negedge clk)
-     begin
-	if(complete & r_is_fp_mul[`MUL_LAT])
-	  begin
-	     //$display("src_A = %b", r_srcA[`MUL_LAT]);
-	     //$display("src_B = %b", r_srcB[`MUL_LAT]);	     
-             //$display("w_mul = %x", y[31:0]);
-	     check_fp32_mul(r_srcA[`MUL_LAT], r_srcB[`MUL_LAT], y[31:0]);
-	  end
-	if(complete & r_is_fp_add[`MUL_LAT])
-	  begin
-	     check_fp32_add(r_srcA[`MUL_LAT], r_srcB[`MUL_LAT], y[31:0]);
-	  end
-     end // always_ff@ (negedge clk)
-
-`endif
-   
-			   
+    			   
    always_comb
      begin
 	t_mul = is_signed ? ($signed(w_sext_A) * $signed(w_sext_B)) 
