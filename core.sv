@@ -828,8 +828,8 @@ module core(clk,
 	     iq_none_valid <= t_dq_empty;
    	     retire_pc <= t_mrob_head.pc;
 	     retire_two_pc <= t_mrob_next_head.pc;
-	     retired_ret <= t_mrob_head.is_ret & t_retire;
-	     retired_call <= t_mrob_head.is_call & t_retire;
+	     retired_ret <= (t_mrob_head.is_ret & t_retire) | (t_retire_two & t_mrob_next_head.is_ret);
+	     retired_call <= (t_mrob_head.is_call & t_retire) | (t_retire_two & t_mrob_next_head.is_call);
 	     
 	     retired_rob_ptr_valid <= t_retire;
 	     
@@ -839,7 +839,19 @@ module core(clk,
    	  end
      end // always_ff@ (posedge clk)
 
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if( t_retire_two & t_mrob_next_head.is_ret)
+   // 	  begin
+   // 	     $display("retire ret on 2nd slot at cycle %d", r_cycle);
+   // 	  end
+   // 	if (t_retire_two & t_mrob_next_head.is_call)
+   // 	  begin
+   // 	     $display("retire call on 2nd slot at cycle %d", r_cycle);	     
+   // 	  end
+   //   end
 
+   
 `ifdef ENABLE_CYCLE_ACCOUNTING
    always_ff@(negedge clk)
      begin
@@ -1140,9 +1152,9 @@ module core(clk,
 		    		   & !t_rob_next_head.faulted 				    
 		    		   & t_rob_head_complete
 		    		   & t_rob_next_head_complete
-				   & (t_mrob_head.is_br ? !t_mrob_next_head.is_br : 1'b1)
-				   & !t_mrob_next_head.is_ret
-				   & !t_mrob_next_head.is_call;
+				   & (t_mrob_head.is_br   ? !t_mrob_next_head.is_br : 1'b1)
+				   & (t_mrob_head.is_ret  ? !t_mrob_next_head.is_ret : 1'b1)
+				   & (t_mrob_head.is_call ? !t_mrob_next_head.is_call : 1'b1);
 
 		 end // if (t_can_retire_rob_head)
 	       else if(!t_dq_empty)
@@ -2120,7 +2132,7 @@ module core(clk,
 		  n_rsb_next_tail_ptr = r_rsb_next_tail_ptr + 'd2;
 	       end
 	     
-	     if( t_retire & t_mrob_head.is_call )
+	     if( (t_retire & t_mrob_head.is_call)  |  (t_retire_two & t_mrob_next_head.is_call))
 	       begin
 		  //$display("--> bump head rsb at cycle %d, pc %x", r_cycle, t_mrob_head.pc);	     		  
 		  n_rsb_head_ptr = r_rsb_head_ptr + 'd1;
