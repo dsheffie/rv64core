@@ -1153,8 +1153,11 @@ module core(clk,
 		    		   & t_rob_head_complete
 		    		   & t_rob_next_head_complete
 				   & (t_mrob_head.is_br   ? !t_mrob_next_head.is_br : 1'b1)
-				   & (t_mrob_head.is_ret  ? !t_mrob_next_head.is_ret : 1'b1)
-				   & (t_mrob_head.is_call ? !t_mrob_next_head.is_call : 1'b1);
+				   & (!t_mrob_next_head.is_ret )
+				   & (!t_mrob_next_head.is_call );
+		    /* todo - figure out where is is breaking the RSB */
+				     //& (t_mrob_head.is_ret  ? !t_mrob_next_head.is_ret : 1'b1)
+				     //& (t_mrob_head.is_call ? !t_mrob_next_head.is_call : 1'b1);
 
 		 end // if (t_can_retire_rob_head)
 	       else if(!t_dq_empty)
