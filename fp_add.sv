@@ -63,6 +63,7 @@ module fp_add(/*AUTOARG*/
 
    localparam FW = (W==32) ? 23 : 52;
    localparam EW = (W==32) ? 8 : 11;
+   localparam INFINITY = (1 << EW) - 1;
    
    wire 	 w_sign_toggle_b = sub ? ~b[W-1] : b[W-1];
    wire [W-1:0]  w_b = {w_sign_toggle_b, b[W-2:0]};

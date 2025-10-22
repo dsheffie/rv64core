@@ -736,6 +736,7 @@ void pt_retire(long long cycle,
       }
     }
     if((record_insns_retired >= pipestart) and (record_insns_retired < pipeend)) {
+      std::cout << "...pipelog active...\n";
       uint32_t insn = 0, opcode = 0;
       if(paging_active) {
 	insn = get_insn(translate(r.pc, page_table_root, true, false), s);
@@ -978,7 +979,10 @@ int main(int argc, char **argv) {
     std::cerr <<"command-line error : " << e.what() << "\n";
     return -1;
   }
-  
+
+  if(pipeip) {
+    pipestart = ~(0UL);
+  }
   uint32_t max_insns_per_cycle = 4;
   uint32_t max_insns_per_cycle_hist_sz = 2*max_insns_per_cycle;
   globals::log = trace_retirement;

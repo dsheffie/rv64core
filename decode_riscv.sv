@@ -330,7 +330,7 @@ module decode_riscv(
 		      else if(insn[31:20] == 12'h607)
 			begin
 			   uop.op = (rd=='d0) ? NOP : SP_TO_INT;
-			end		      
+			end
 		      else
 			begin
 			   uop.op = (rd == 'd0) ? NOP : SLLI;
@@ -611,7 +611,22 @@ module decode_riscv(
 			  begin
 			     uop.op = (rd != 'd0) ? SP_MUL : NOP;
 			  end
-		
+			7'd5:
+			  begin
+			     uop.op = (rd=='d0) ? NOP : SP_CMP_LT;
+			  end
+			7'd6:
+			  begin
+			     uop.op = (rd=='d0) ? NOP : SP_CMP_GT;
+			  end
+			7'd7:
+			  begin
+			     uop.op = (rd=='d0) ? NOP : SP_CMP_NE;
+			  end
+			7'd8:
+			  begin
+			     uop.op = (rd=='d0) ? NOP : SP_CMP_EQ;
+			  end		
 			7'h20:
 			  begin
 			     uop.op = (rd != 'd0) ? SUBU : NOP;

@@ -1839,6 +1839,16 @@ module exec(clk,
       .out(w_fp_to_int)
       );
 
+   wire	       w_fp32_eq, w_fp32_ne, w_fp32_gt, w_fp32_lt;
+   fp_compare #(.W(32)) fp32_compare
+     (
+      .a(t_srcA[31:0]),
+      .b(t_srcB[31:0]),
+      .eq(w_fp32_eq),
+      .ne(w_fp32_ne),
+      .gt(w_fp32_gt),
+      .lt(w_fp32_lt)
+      );
    
    // always_ff@(negedge clk)
    //   begin
@@ -2268,7 +2278,30 @@ module exec(clk,
 	       t_is_fp_mul = 1'b1;
 	       t_start_mul = r_start_int&!ds_done;
 	    end
-	  
+	  SP_CMP_LT:
+	    begin
+	       t_result = {63'd0, w_fp32_lt};	       
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;	       	       	       	       
+	    end
+	  SP_CMP_GT:
+	    begin
+	       t_result = {63'd0, w_fp32_gt};	       
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;	       	       	       
+	    end	  
+	  SP_CMP_EQ:
+	    begin
+	       t_result = {63'd0, w_fp32_eq};	       
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;	       	       	       
+	    end
+	  SP_CMP_NE:
+	    begin
+	       t_result = {63'd0, w_fp32_ne};	       
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;	       	       
+	    end	  
 	  MULW:
 	    begin
 	       t_is_mulw = 1'b1;	       
