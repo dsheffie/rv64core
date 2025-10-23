@@ -1,4 +1,4 @@
-module fp_convert(in, out);
+module fp_convert(in, is_signed, out);
    parameter W = 32;
    localparam FW = (W==32) ? 23 : 52;
    localparam EW = (W==32) ? 8 : 11;
@@ -7,6 +7,8 @@ module fp_convert(in, out);
    localparam PW = EW-(LG_W+1);
 
    input logic [W-1:0] in;
+   input logic	       is_signed;
+   
    output logic [W-1:0] out;
    
    wire [EW-1:0] 	w_bias = ((1<<(EW-1)) - 1);
@@ -21,8 +23,8 @@ module fp_convert(in, out);
      begin
 	t_in = in;
 	t_sign = 1'b0;
-	t_zero = (in[W-2:0]=='d0);
-	if(in[W-1])
+	t_zero = (in[W-1:0]=='d0);
+	if(in[W-1] & is_signed)
 	  begin
 	     t_in = ~in + 'd1;
 	     t_sign = 1'b1;

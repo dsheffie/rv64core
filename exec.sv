@@ -1828,9 +1828,11 @@ module exec(clk,
       .y(w_shifter_out));
 
    wire [31:0] w_int_to_fp, w_fp_to_int;
+   logic       t_fp_convert_signed;
    
    fp_convert #(.W(32)) int32_to_fp32
      (.in(t_srcA[31:0]),
+      .is_signed(t_fp_convert_signed),
       .out(w_int_to_fp)
      );
 
@@ -2172,6 +2174,7 @@ module exec(clk,
       
    always_comb
      begin
+	t_fp_convert_signed = 1'b0;	
 	t_call = 1'b0;
 	t_is_clzw_ctzw_cpopw = 1'b0;
 	t_sub = 1'b0;
@@ -2339,10 +2342,17 @@ module exec(clk,
 	    end
 	  INT_TO_SP:
 	    begin
-	       t_result = {32'd0, w_int_to_fp};	       
+	       t_result = {32'd0, w_int_to_fp};
+	       t_fp_convert_signed = 1'b1;
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;	       
 	    end
+	  UINT_TO_SP:
+	    begin
+	       t_result = {32'd0, w_int_to_fp};
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;	       
+	    end	  
 	  SP_TO_INT:
 	    begin
 	       t_result = {{32{(w_fp_to_int[31])}}, w_fp_to_int};	       

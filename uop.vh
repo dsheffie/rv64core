@@ -193,6 +193,7 @@ typedef enum logic [7:0]
    SP_CMP_NE,
    SP_CMP_EQ,
    INT_TO_SP,
+   UINT_TO_SP,
    SP_TO_INT,
    WB_CACHES,
    FETCH_PF,
