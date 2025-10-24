@@ -617,20 +617,36 @@ module decode_riscv(
 			  end
 			7'd5:
 			  begin
-			     uop.op = (rd=='d0) ? NOP : SP_CMP_LT;
+			     uop.op = (rd=='d0) ? NOP : SP_CMP_OLT;
 			  end
 			7'd6:
 			  begin
-			     uop.op = (rd=='d0) ? NOP : SP_CMP_GT;
+			     uop.op = (rd=='d0) ? NOP : SP_CMP_OGT;
 			  end
 			7'd7:
 			  begin
-			     uop.op = (rd=='d0) ? NOP : SP_CMP_NE;
+			     uop.op = (rd=='d0) ? NOP : SP_CMP_ONE;
 			  end
 			7'd8:
 			  begin
-			     uop.op = (rd=='d0) ? NOP : SP_CMP_EQ;
-			  end		
+			     uop.op = (rd=='d0) ? NOP : SP_CMP_OEQ;
+			  end
+			7'd9:
+			  begin
+			     uop.op = (rd=='d0) ? NOP : SP_CMP_ULT;
+			  end
+			7'd10:
+			  begin
+			     uop.op = (rd=='d0) ? NOP : SP_CMP_UGT;
+			  end
+			7'd11:
+			  begin
+			     uop.op = (rd=='d0) ? NOP : SP_CMP_UNE;
+			  end
+			7'd12:
+			  begin
+			     uop.op = (rd=='d0) ? NOP : SP_CMP_UEQ;
+			  end					
 			7'h20:
 			  begin
 			     uop.op = (rd != 'd0) ? SUBU : NOP;

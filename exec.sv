@@ -1841,15 +1841,20 @@ module exec(clk,
       .out(w_fp_to_int)
       );
 
-   wire	       w_fp32_eq, w_fp32_ne, w_fp32_gt, w_fp32_lt;
+   wire	       w_fp32_ueq, w_fp32_une, w_fp32_ugt, w_fp32_ult;
+   wire	       w_fp32_oeq, w_fp32_one, w_fp32_ogt, w_fp32_olt;   
    fp_compare #(.W(32)) fp32_compare
      (
       .a(t_srcA[31:0]),
       .b(t_srcB[31:0]),
-      .eq(w_fp32_eq),
-      .ne(w_fp32_ne),
-      .gt(w_fp32_gt),
-      .lt(w_fp32_lt)
+      .ueq(w_fp32_ueq),
+      .une(w_fp32_une),
+      .ugt(w_fp32_ugt),
+      .ult(w_fp32_ult),
+      .oeq(w_fp32_oeq),
+      .one(w_fp32_one),
+      .ogt(w_fp32_ogt),
+      .olt(w_fp32_olt)     
       );
    
    // always_ff@(negedge clk)
@@ -2281,27 +2286,51 @@ module exec(clk,
 	       t_is_fp_mul = 1'b1;
 	       t_start_mul = r_start_int&!ds_done;
 	    end
-	  SP_CMP_LT:
+	  SP_CMP_OLT:
 	    begin
-	       t_result = {63'd0, w_fp32_lt};	       
+	       t_result = {63'd0, w_fp32_olt};	       
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;	       	       	       	       
 	    end
-	  SP_CMP_GT:
+	  SP_CMP_OGT:
 	    begin
-	       t_result = {63'd0, w_fp32_gt};	       
+	       t_result = {63'd0, w_fp32_ogt};	       
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;	       	       	       
 	    end	  
-	  SP_CMP_EQ:
+	  SP_CMP_OEQ:
 	    begin
-	       t_result = {63'd0, w_fp32_eq};	       
+	       t_result = {63'd0, w_fp32_oeq};	       
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;	       	       	       
 	    end
-	  SP_CMP_NE:
+	  SP_CMP_ONE:
 	    begin
-	       t_result = {63'd0, w_fp32_ne};	       
+	       t_result = {63'd0, w_fp32_one};	       
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;	       	       
+	    end	  
+	  SP_CMP_ULT:
+	    begin
+	       t_result = {63'd0, w_fp32_ult};	       
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;	       	       	       	       
+	    end
+	  SP_CMP_UGT:
+	    begin
+	       t_result = {63'd0, w_fp32_ugt};	       
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;	       	       	       
+	    end	  
+	  SP_CMP_UEQ:
+	    begin
+	       t_result = {63'd0, w_fp32_ueq};	       
+	       t_wr_int_prf = 1'b1;
+	       t_alu_valid = 1'b1;	       	       	       
+	    end
+	  SP_CMP_UNE:
+	    begin
+	       t_result = {63'd0, w_fp32_une};	       
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;	       	       
 	    end	  
