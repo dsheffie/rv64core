@@ -736,7 +736,7 @@ void pt_retire(long long cycle,
       }
     }
     if((record_insns_retired >= pipestart) and (record_insns_retired < pipeend)) {
-      std::cout << "...pipelog active...\n";
+      //std::cout << "...pipelog active...\n";
       uint32_t insn = 0, opcode = 0;
       if(paging_active) {
 	insn = get_insn(translate(r.pc, page_table_root, true, false), s);
