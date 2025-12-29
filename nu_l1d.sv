@@ -2,6 +2,13 @@
 `include "rob.vh"
 `include "uop.vh"
 
+/* issues -
+ * dirty misses prevent non-blocking loads on port2
+ * if port 1 misses the cache, it prevents a non-blocking load from being generated on port2
+ * 
+ * 
+ * */
+
 `ifdef VERILATOR
 import "DPI-C" function void pt_l1d_pass1_hit(input longint cycle,
 					      input int	rob_id);
@@ -33,12 +40,19 @@ import "DPI-C" function void record_l1d(input int req,
 import "DPI-C" function void log_store_release(input int r,
 					       input longint c);
 
-import "DPI-C" function void log_l1d(input int gen_early_req,
-				     input int push_miss,
-				     input int push_miss_hit_inflight,
+import "DPI-C" function void log_l1d(input int push_miss,
+				     input int push_miss_cache_miss,
+				     input int gen_early_req,
+				     input int could_early_req,
+				     input int could_early_req_any,
+				     input int early_bits,
+				     input int load_push_miss,
+				     input int load_push_miss_hit_inflight,
 				     input int is_st_hit,
 				     input int is_ld_hit,
-				     input int is_hit_under_miss);
+				     input int is_hit_under_miss,
+				     input int is_vapa_mismatch,
+				     input longint cycle);
    
 import "DPI-C" function void log_l1d_miss(input int dirty);
 
@@ -439,14 +453,6 @@ module nu_l1d(clk,
    wire					  mem_rsp_reload = mem_rsp_valid & 
 					  (r_l2q[r_l2q_head_ptr[`LG_MRQ_ENTRIES-1:0]].writeback == 1'b0);
 
-   //always_ff@(negedge clk)
-   //begin
-   //if(mem_rsp_valid & !mem_rsp_reload)
-   //	  begin
-   //$stop();
-   //end
-   //end
-      
    function logic [15:0] make_mask(mem_req_t r);
       logic [15:0]		  t_m, m;
       logic			  b,s,w,d;
@@ -754,7 +760,6 @@ module nu_l1d(clk,
 
    
    assign w_port2_missed_no_alias = w_port2_hit_cache ? 1'b0 : (!w_port2_vapa_mismatch);
-   
 
    wire w_hit_pop = r_pop_busy_addr2 ? (r_cache_idx[`LG_L1D_NUM_SETS-LG_ALIAS_BITS-1:0] == r_req2.addr[`LG_PG_SZ-1:IDX_START]) : 1'b0;
 
@@ -772,21 +777,9 @@ module nu_l1d(clk,
 
    wire [`PA_WIDTH-1:0] w_req2_pa = {w_tlb_pa[`PA_WIDTH-1:`LG_PG_SZ], r_req2.addr[`LG_PG_SZ-1:0]};
 
+   wire [11:0] 		w_early_bits;
+   wire 		w_gen_early_req = &w_early_bits;
    
-   wire	w_could_early_req_any = t_push_miss & w_three_free_credits & w_port2_missed_no_alias &
-	(r_last_early_valid ? (r_last_early != w_req2_pa[31:4]) : 1'b1) &
-	!(r_hit_busy_line2 | r_fwd_busy_addr2 | w_hit_pop ) &
-	(r_req2.is_load | r_req.is_store) &
-	w_tlb_hit & 
-	(rr_last_wr ? (rr_cache_idx[`LG_L1D_NUM_SETS-LG_ALIAS_BITS-1:0] !=  r_req2.addr[`LG_PG_SZ-1:IDX_START]) : 1'b1) &
-	(r_last_wr ? (r_cache_idx[`LG_L1D_NUM_SETS-LG_ALIAS_BITS-1:0] != r_req2.addr[`LG_PG_SZ-1:IDX_START]) : 1'b1) &
-	(n_last_wr ? (t_cache_idx[`LG_L1D_NUM_SETS-LG_ALIAS_BITS-1:0] != r_req2.addr[`LG_PG_SZ-1:IDX_START]) : 1'b1);
-
-   
-   //dsheffie - disable early requests
-   wire	w_could_early_req = !w_port2_dirty_miss & w_could_early_req_any & 1'b1;
-   
-   wire w_gen_early_req = w_could_early_req & (r_got_req ? w_cache_port1_hit : 1'b1);
    
    wire	w_early_rsp = mem_rsp_valid ? (mem_rsp_tag != (1 << `LG_MRQ_ENTRIES)) : 1'b0;
 
@@ -1941,19 +1934,10 @@ module nu_l1d(clk,
      end // always_comb
 
 `ifdef VERILATOR
+   wire w_push_read_miss = t_push_miss ? (!w_port2_rd_hit) : 1'b0;	   
    always_ff@(negedge clk)
      begin
-	   // if(t_push_miss)
-	   // begin
-	   // if(r_req2.op == MEM_PREFETCH)
-	   // begin
-	   // $display("generate prefetch for va address %x, pa address %x at cycle %d, early = %b", r_req2.addr, w_req2_pa, r_cycle, w_gen_early_req);
-	   // end
-	   // else
-	   // begin
-	   // $display("generate miss for va address %x, pa address %x at cycle %d", r_req2.addr, w_req2_pa, r_cycle);	   
-	   // end
-	   //end
+
 	if(core_store_data_valid)
 	  begin
 	     pt_l1d_store_data_ready(r_cycle,
@@ -1986,38 +1970,21 @@ module nu_l1d(clk,
 	  end
 	
 	if(r_got_req2)
-	  begin
- `ifdef DEBUG
-	   
-	   $display("triage new op for r_hit_busy_addr = %b, pc %x, addr %x at cycle %d dirty %b valid %b w_port2_rd_hit %b drain_ds %b, nop %b, has cause %b push miss %b, store %b load %b ll %b atomic %b, tlb store exec %b, pending tlb miss %b flush %b, tlb hit %b, spans cacheline %b, early push %b, could push %b, early dirty %b",
-		      r_hit_busy_line2,
-		      r_req2.pc,
-		      r_req2.addr, 
-		      r_cycle,
-		      r_dirty_out2, 
-		      r_valid_out2,
-		      w_port2_rd_hit, drain_ds_complete , r_req2.op == MEM_NOP, 
-		      r_req2.has_cause,
-		      t_push_miss,
-		      r_req2.is_store,
-		      r_req2.is_load,
-		      r_req2.is_ll,
-		      r_req2.is_atomic,
-		      w_tlb_st_exc,
-		      r_pending_tlb_miss,
-		      drain_ds_complete || r_req2.op == MEM_NOP,
-		      w_tlb_hit,
-		      r_req2.spans_cacheline,
-		      w_gen_early_req,
-		      w_could_early_req_any,
-		      w_could_early_req);
- `endif
-	     log_l1d(w_gen_early_req ? 32'd1 : 32'd0,
-		     t_push_miss & r_req2.is_load ? 32'd1 : 32'0,
-		     t_push_miss & r_req2.is_load & (r_hit_busy_line2 | r_fwd_busy_addr2 | r_pop_busy_addr2) ? 32'd1 : 32'd0,
-		     r_req2.is_store & w_port2_rd_hit ? 32'd1 : 32'd0,
-		     ((r_req2.is_store==1'b0) & w_port2_rd_hit) ? 32'd1 : 32'd0,
-		     ((r_req2.is_store==1'b0) & w_port2_rd_hit & (r_state != ACTIVE)) ? 32'd1 : 32'd0);
+	   begin
+	   log_l1d(t_push_miss ? 32'd1 : 32'd0,
+		   w_push_read_miss ? 32'd1 : 32'd0,
+		   w_gen_early_req ? 32'd1 : 32'd0,
+		   w_gen_early_req ? 32'd1 : 32'd0,
+		   w_gen_early_req ? 32'd1 : 32'd0,
+		   {20'd0, w_early_bits},
+		   t_push_miss & r_req2.is_load ? 32'd1 : 32'0,
+		   t_push_miss & r_req2.is_load & (r_hit_busy_line2 | r_fwd_busy_addr2 | r_pop_busy_addr2) ? 32'd1 : 32'd0,
+		   r_req2.is_store & w_port2_rd_hit ? 32'd1 : 32'd0,
+		   ((r_req2.is_store==1'b0) & w_port2_rd_hit) ? 32'd1 : 32'd0,
+		   ((r_req2.is_store==1'b0) & w_port2_rd_hit & (r_state != ACTIVE)) ? 32'd1 : 32'd0,
+		   w_port2_vapa_mismatch ? 32'd1 : 32'd0,
+		   r_cycle
+		   );
 	  end
      end
 `endif
@@ -2739,6 +2706,20 @@ module nu_l1d(clk,
 	  end
      end
 `endif
-   
+
+   assign w_early_bits[0] = t_push_miss;
+   assign w_early_bits[1] = w_three_free_credits;
+   assign w_early_bits[2] = w_port2_missed_no_alias;
+   assign w_early_bits[3] = (r_last_early_valid ? (r_last_early != w_req2_pa[31:4]) : 1'b1);
+   assign w_early_bits[4] = !(r_hit_busy_line2 | r_fwd_busy_addr2 | w_hit_pop );
+   assign w_early_bits[5] = (r_req2.is_load | r_req.is_store);
+   assign w_early_bits[6] = w_tlb_hit;
+   assign w_early_bits[7] =  (rr_last_wr ? (rr_cache_idx[`LG_L1D_NUM_SETS-LG_ALIAS_BITS-1:0] !=  r_req2.addr[`LG_PG_SZ-1:IDX_START]) : 1'b1);
+   assign w_early_bits[8] =  (r_last_wr ? (r_cache_idx[`LG_L1D_NUM_SETS-LG_ALIAS_BITS-1:0] != r_req2.addr[`LG_PG_SZ-1:IDX_START]) : 1'b1);
+   assign w_early_bits[9] = (n_last_wr ? (t_cache_idx[`LG_L1D_NUM_SETS-LG_ALIAS_BITS-1:0] != r_req2.addr[`LG_PG_SZ-1:IDX_START]) : 1'b1);
+   assign w_early_bits[10] = !w_port2_dirty_miss;
+   assign w_early_bits[11] = (r_got_req ? w_cache_port1_hit : 1'b1);
+	   
+	   
 endmodule // l1d
 

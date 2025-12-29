@@ -56,19 +56,26 @@ static uint64_t l1d_reqs = 0;
 static uint64_t l1d_acks = 0;
 static uint64_t l1d_new_reqs = 0;
 static uint64_t l1d_accept = 0;
-
 static uint64_t l1d_stores = 0;
-
 static std::map<int,uint64_t> block_distribution;
 static std::map<int,uint64_t> restart_distribution;
 static std::map<int,uint64_t> restart_ds_distribution;
 static std::map<int,uint64_t> fault_to_restart_distribution;
 static std::map<int,uint64_t> mmu_walk_lat;
-
 static uint64_t l1d_stall_reasons[8] = {0};
 static bool enable_checker = true, use_checkpoint = false;
-
 static long long mispred_cycle = -1L;
+static std::map<int, uint64_t> l1_to_l2_dist;
+static std::map<int, uint64_t> l2_state;
+static uint64_t l1i_reqs_at_l2 = 0;
+
+
+uint64_t page_table_root = ~0UL;
+std::list<store_rec> store_queue;
+std::list<store_rec> atomic_queue;
+
+
+
 void record_exec_mispred(long long curr_cycle) {
   if(mispred_cycle == -1L) {
     mispred_cycle = curr_cycle;
@@ -224,10 +231,6 @@ long long ic_translate(long long va, long long root) {
   return translate(va,root,true, false);
 }
 
-uint64_t page_table_root = ~0UL;
-std::list<store_rec> store_queue;
-std::list<store_rec> atomic_queue;
-
 int checker_irq_enabled() {
   return globals::checker_enable_irqs;
 }
@@ -235,11 +238,6 @@ int checker_irq_enabled() {
 void start_log(int l) {
   trace_retirement |= (l!=0);
 }
-
-static std::map<int, uint64_t> l1_to_l2_dist;
-static std::map<int, uint64_t> l2_state;
-
-static uint64_t l1i_reqs_at_l2 = 0;
 
 void new_l1i_req_at_l2() {
   l1i_reqs_at_l2++;
@@ -280,8 +278,11 @@ void log_mmu_walk_lat(long long walk_lat, char hit_lvl) {
 
 static uint64_t log_l1d_accesses = 0;
 static uint64_t log_l1d_push_miss = 0;
-static uint64_t log_l1d_push_miss_hit_inflight = 0;
+static uint64_t log_l1d_load_push_miss = 0;
+static uint64_t log_l1d_load_push_miss_hit_inflight = 0;
 static uint64_t log_l1d_early_reqs = 0;
+static uint64_t log_l1d_could_early_reqs = 0;
+static uint64_t log_l1d_could_early_reqs_any = 0;
 static uint64_t log_l1d_is_ld_hit = 0;
 static uint64_t log_l1d_is_st_hit = 0;
 static uint64_t log_l1d_is_hit_under_miss = 0;
@@ -296,23 +297,63 @@ void log_l1d_miss(int is_dirty) {
   }
 }
 
+static uint64_t log_l1d_early_bits[12] = {0};
+static uint64_t log_l1d_vapa_mismatches = 0;
+static uint64_t log_l1d_push_miss_cache_miss = 0;
+static uint64_t log_l1d_no_early_miss = 0;
 
-void log_l1d(int is_early_req,
-	     int is_push_miss,
-	     int is_push_miss_hit_inflight,
+void log_l1d(int push_miss,
+	     int push_miss_cache_miss,
+	     int is_early_req,
+	     int could_early_req,
+	     int could_early_req_any,
+	     int early_bits,
+	     int is_load_push_miss,
+	     int is_load_push_miss_hit_inflight,
 	     int is_st_hit,
 	     int is_ld_hit,
-	     int is_hit_under_miss) {
+	     int is_hit_under_miss,
+	     int is_vapa_mismatch,
+	     long long cycle) {
   log_l1d_accesses++;
-  if(is_push_miss) {
+  if(push_miss) {
     log_l1d_push_miss++;
   }
-  if(is_push_miss_hit_inflight) {
-    log_l1d_push_miss_hit_inflight++;
+  if(push_miss_cache_miss) {
+    log_l1d_push_miss_cache_miss++;
+  }
+  if(is_vapa_mismatch) {
+    log_l1d_vapa_mismatches++;
+  }
+
+  
+  if(is_load_push_miss) {
+    log_l1d_load_push_miss++;
+  }
+  
+  bool ok_early = true;
+  for(int i = 0; i < 12; i++) {
+    ok_early &= (((early_bits >> i) & 1));
+  }
+
+  if(push_miss_cache_miss and not(ok_early)) {
+    log_l1d_no_early_miss++;
+    for(int i = 0; i < 12; i++) {
+      if( ((early_bits >> i) & 1) == 0 ) {
+	log_l1d_early_bits[i]++;
+	break;
+      }
+    }
+    
+  }
+  
+  if(is_load_push_miss_hit_inflight) {
+    log_l1d_load_push_miss_hit_inflight++;
   }
   if(is_early_req) {
     log_l1d_early_reqs++;
   }
+
   if(is_st_hit) {
     log_l1d_is_st_hit++;
   }
@@ -788,6 +829,10 @@ void record_retirement(long long pc,
     //<< tt << " cycles from fetch to retire\n";
     mispred_lat_map[complete_cycle-alloc_cycle]++;
   }
+  uint32_t opcode = insn & 127;
+  if(opcode == 0x3) { /* loads */
+    printf("load took %lu cycles\n", complete_cycle-alloc_cycle);
+  }
   
   retire_map[delta]++;
   
@@ -844,6 +889,9 @@ void l1d_port_util(int port1, int port2) {
 static uint64_t last_retired_pc = 0;
 static uint64_t last_insns_retired = 0, last_cycle = 0, last_mem_reqs = 0;
 static Vcore_l1d_l1i *tb = nullptr;
+
+uint32_t l1d_state[32] = {0};
+
 void catchUnixSignal(int n) {
   std::cout << std::hex << "last_retired_pc = " << last_retired_pc
 	    << std::dec << ", last_insns_retired = " << last_insns_retired
@@ -1569,6 +1617,7 @@ int main(int argc, char **argv) {
       got_putchar = false;
     }
     ++cycle;
+    l1d_state[(int)tb->l1d_state]++;
     if((cycle & (((1UL<<16) -1))) == 0) {
       //printf("%lu mem ops\n", num_mem_ops);
       mem_txn_log << cycle << "," << num_mem_ops << "\n";
@@ -1625,7 +1674,13 @@ int main(int argc, char **argv) {
     out << "top-down rr = " << rr << "\n";
     out << "top-down bs = " << bs << "\n";
     out << "top-down fe = " << fe << "\n";
-										
+
+    for(int i = 0; i < 16; i++) {
+      if(l1d_state[i]) {
+	out << "l1d_state[" << i << "] = " << l1d_state[i] << "\n";
+      }
+    }
+    
 		              
     //(SlotsIssued – SlotsRetired + RecoveryBubbles) / TotalSlots
     
@@ -1858,15 +1913,24 @@ int main(int argc, char **argv) {
     std::cout << "l1d port1 util = " << port1_util << "\n";
     std::cout << "l1d port2 util = " << port2_util << "\n";
 
-    std::cout << "log_l1d_misses                 = " << log_l1d_misses << "\n";
-    std::cout << "log_l1d_dirty_misses           = " << log_l1d_dirty_misses <<"\n";
-    std::cout << "log_l1d_accesses               = " << log_l1d_accesses << "\n";
-    std::cout << "log_l1d_push_miss              = " <<log_l1d_push_miss << "\n";
-    std::cout << "log_l1d_push_miss_hit_inflight = " << log_l1d_push_miss_hit_inflight << "\n";
-    std::cout << "log_l1d_early_reqs             = " << log_l1d_early_reqs << "\n";
-    std::cout << "log_l1d_is_ld_hit              = " << log_l1d_is_ld_hit << "\n";
-    std::cout << "log_l1d_is_st_hit              = " << log_l1d_is_st_hit << "\n";
-    std::cout << "log_l1d_is_hit_under_miss      = " << log_l1d_is_hit_under_miss << "\n";
+    std::cout << "log_l1d_misses                      = " << log_l1d_misses << "\n";
+    std::cout << "log_l1d_dirty_misses                = " << log_l1d_dirty_misses <<"\n";
+    std::cout << "log_l1d_accesses                    = " << log_l1d_accesses << "\n";
+    std::cout << "log_l1d_push_miss                   = " << log_l1d_push_miss << "\n";
+    std::cout << "log_l1d_push_miss_cache_miss        = " << log_l1d_push_miss_cache_miss << "\n";
+    std::cout << "log_l1d_early_reqs                  = " << log_l1d_early_reqs << "\n";
+    std::cout << "log_l1d_no_early_miss               = " << log_l1d_no_early_miss << "\n";
+    
+    std::cout << "log_l1d_load_push_miss              = " <<log_l1d_load_push_miss << "\n";    
+    std::cout << "log_l1d_load_push_miss_hit_inflight = " << log_l1d_load_push_miss_hit_inflight << "\n";
+    std::cout << "log_l1d_is_ld_hit                   = " << log_l1d_is_ld_hit << "\n";
+    std::cout << "log_l1d_is_st_hit                   = " << log_l1d_is_st_hit << "\n";
+    std::cout << "log_l1d_is_hit_under_miss           = " << log_l1d_is_hit_under_miss << "\n";
+    std::cout << "log_l1d_vapa_mismatches             = " << log_l1d_vapa_mismatches << "\n";
+    
+    for(int i = 0; i < (sizeof(log_l1d_early_bits)/sizeof(log_l1d_early_bits[0])); i++) {
+      std::cout << "log_l1d_early_bits[" << i << "] = " << log_l1d_early_bits[i] << "\n";
+    }
 
     double tip_cycles = 0.0;
     for(auto &p : tip_map) {

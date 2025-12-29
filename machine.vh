@@ -64,7 +64,7 @@
 `define LG_EB_ENTRIES 1
 
 /* mem retry queue */
-`define LG_MRQ_ENTRIES 3
+`define LG_MRQ_ENTRIES 5
 
 `define MUL_LAT 3
 
