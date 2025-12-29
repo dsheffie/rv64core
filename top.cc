@@ -650,73 +650,49 @@ static std::ostream &operator<<(std::ostream &out, const pt_ &r) {
 }
 
 void pt_alloc(long long pc, long long fetch_cycle, long long alloc_cycle, int rob_id) {
-  if(pl != nullptr) {
-    auto &r = records[rob_id & (ROB_ENTRIES-1)];
-    r.clear();
-    r.pc = pc;
-    r.fetch = fetch_cycle;
-    r.alloc = r.sched = r.complete = alloc_cycle;
-  }
+  auto &r = records[rob_id & (ROB_ENTRIES-1)];
+  r.clear();
+  r.pc = pc;
+  r.fetch = fetch_cycle;
+  r.alloc = r.sched = r.complete = alloc_cycle;
 }
 
 void pt_sched(long long cycle, int rob_id) {
-  if(pl != nullptr) {
-    auto &r = records[rob_id & (ROB_ENTRIES-1)];
-    r.sched = cycle;
-  }
+  auto &r = records[rob_id & (ROB_ENTRIES-1)];
+  r.sched = cycle;
 }
 
 void pt_l1d_pass1_hit(long long cycle, int rob_id) {
-  if(pl != nullptr) {
-    auto &r = records[rob_id & (ROB_ENTRIES-1)];
-    r.l1d_p1_hit = cycle;
-  }
+  auto &r = records[rob_id & (ROB_ENTRIES-1)];
+  r.l1d_p1_hit = cycle;
 }
 
 void pt_l1d_pass1_miss(long long cycle, int rob_id, int maybe_alias,
 		       unsigned long long va,
 		       unsigned long long pa) {
-  if(pl != nullptr) {
-    auto &r = records[rob_id & (ROB_ENTRIES-1)];
-    r.l1d_p1_miss = cycle;
-    r.maybe_alias = maybe_alias;
-    // if(maybe_alias) {
-    //   std::cout << "op at " << std::hex << r.pc
-    // 		<< std::dec
-    // 		<<" could alias\n";
-    //   uint64_t m = (1UL<<14)-1;
-    //   std::cout << "va = " << std::hex << (va & m) << " , pa "
-    // 		<<  (pa & m) << std::dec << "\n";
-    // }
-  }
+  auto &r = records[rob_id & (ROB_ENTRIES-1)];
+  r.l1d_p1_miss = cycle;
+  r.maybe_alias = maybe_alias;
 }
 
 void pt_l1d_blocked(long long cycle, int rob_id) {
-  if(pl != nullptr) {
-    auto &r = records[rob_id & (ROB_ENTRIES-1)];
-    r.l1d_blocks.push_back(cycle);
-  }
+  auto &r = records[rob_id & (ROB_ENTRIES-1)];
+  r.l1d_blocks.push_back(cycle);
 }
 
 void pt_l1d_replay(long long cycle, int rob_id) {
-  if(pl != nullptr) {
-    auto &r = records[rob_id & (ROB_ENTRIES-1)];
-    r.l1d_replay = cycle;
-  }
+  auto &r = records[rob_id & (ROB_ENTRIES-1)];
+  r.l1d_replay = cycle;
 }
 
 void pt_l1d_store_data_ready(long long cycle, int rob_id) {
-  if(pl != nullptr) {
-    auto &r = records[rob_id & (ROB_ENTRIES-1)];
-    r.l1d_sd.push_back(cycle);
-  }
+  auto &r = records[rob_id & (ROB_ENTRIES-1)];
+  r.l1d_sd.push_back(cycle);
 }
 
 void pt_complete(long long cycle, int rob_id) {
-  if(pl != nullptr) {
-    auto &r = records[rob_id & (ROB_ENTRIES-1)];
-    r.complete = cycle;
-  }
+  auto &r = records[rob_id & (ROB_ENTRIES-1)];
+  r.complete = cycle;
 }
 
 
