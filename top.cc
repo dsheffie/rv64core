@@ -695,15 +695,33 @@ void pt_complete(long long cycle, int rob_id) {
   r.complete = cycle;
 }
 
+static uint64_t retired_load_cycles = 0UL, retired_loads = 0UL;
 
 void pt_retire(long long cycle,
 	       int rob_id,
 	       int paging_active,
 	       long long page_table_root	       
 	       ) {
+
+  uint32_t insn = 0, opcode = 0;
+  auto &r = records[rob_id & (ROB_ENTRIES-1)];  
+  if(paging_active) {
+    insn = get_insn(translate(r.pc, page_table_root, true, false), s);
+  }
+  else {
+    insn = get_insn(r.pc, s);
+  }
+  opcode = insn & 127;  
+  r.retire = cycle;
+  
+  if(opcode == 0x3) { /* loads */
+    retired_load_cycles += (r.complete-r.sched);
+    retired_loads++;
+  }
+
+  
   if(pl != nullptr) {
-    auto &r = records[rob_id & (ROB_ENTRIES-1)];
-    r.retire = cycle;
+
     if((pipeip != 0)) {
       if(r.pc ==  pipeip) {
 	--pipeipcnt;
@@ -719,14 +737,7 @@ void pt_retire(long long cycle,
       }
     }
     if((record_insns_retired >= pipestart) and (record_insns_retired < pipeend)) {
-      uint32_t insn = 0, opcode = 0;
-      if(paging_active) {
-	insn = get_insn(translate(r.pc, page_table_root, true, false), s);
-      }
-      else {
-	insn = get_insn(r.pc, s);
-      }
-      opcode = insn & 127;
+
       auto disasm = getAsmString(r.pc, page_table_root, paging_active);
       riscv_t m(insn);
       if(opcode == 0x3 ) {
@@ -766,7 +777,7 @@ void pt_retire(long long cycle,
   ++record_insns_retired;  
 }
 		       
-static uint64_t retired_load_cycles = 0UL, retired_loads = 0UL;
+
 
 void record_retirement(long long pc,
 		       long long fetch_cycle,
@@ -781,13 +792,6 @@ void record_retirement(long long pc,
 		       int paging_active,
 		       long long page_table_root
 		       ) {
-  uint32_t insn = 0;  
-  if(paging_active) {
-    insn = get_insn(translate(pc, page_table_root, true, false), s);
-  }
-  else {
-    insn = get_insn(pc, s);
-  }
   uint64_t delta = retire_cycle - last_retire_cycle;
   
   if(retire_reg_val) {
@@ -809,11 +813,6 @@ void record_retirement(long long pc,
     //<< " cycles from alloc to retire and "
     //<< tt << " cycles from fetch to retire\n";
     mispred_lat_map[complete_cycle-alloc_cycle]++;
-  }
-  uint32_t opcode = insn & 127;
-  if(opcode == 0x3) { /* loads */
-    retired_load_cycles += (complete_cycle-alloc_cycle);
-    retired_loads++;
   }
   
   retire_map[delta]++;
