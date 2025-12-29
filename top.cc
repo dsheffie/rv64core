@@ -805,8 +805,13 @@ void record_retirement(long long pc,
 		       int paging_active,
 		       long long page_table_root
 		       ) {
-
-  uint32_t insn = get_insn(pc, s);
+  uint32_t insn = 0;  
+  if(paging_active) {
+    insn = get_insn(translate(pc, page_table_root, true, false), s);
+  }
+  else {
+    insn = get_insn(pc, s);
+  }
   uint64_t delta = retire_cycle - last_retire_cycle;
   
   if(retire_reg_val) {
