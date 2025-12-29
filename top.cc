@@ -790,7 +790,7 @@ void pt_retire(long long cycle,
   ++record_insns_retired;  
 }
 		       
-
+static uint64_t retired_load_cycles = 0UL, retired_loads = 0UL;
 
 void record_retirement(long long pc,
 		       long long fetch_cycle,
@@ -836,7 +836,8 @@ void record_retirement(long long pc,
   }
   uint32_t opcode = insn & 127;
   if(opcode == 0x3) { /* loads */
-    printf("load took %lu cycles\n", complete_cycle-alloc_cycle);
+    retired_load_cycles += (complete_cycle-alloc_cycle);
+    retired_loads++;
   }
   
   retire_map[delta]++;
@@ -1754,6 +1755,10 @@ int main(int argc, char **argv) {
 	<< static_cast<double>(total_load_lat)/n_logged_loads
 	<< " cycles\n";
 
+    std::cout << "avg load lat = "
+	<< static_cast<double>(total_load_lat)/n_logged_loads
+	<< " cycles\n";
+    
         
     double total_fetch_cap = 0.0;
 
@@ -1937,6 +1942,9 @@ int main(int argc, char **argv) {
       std::cout << "log_l1d_early_bits[" << i << "] = " << log_l1d_early_bits[i] << "\n";
     }
 
+    std::cout << "avg load cycles                    ="
+	      << static_cast<double>(retired_load_cycles) / retired_loads << "\n";
+    
     double tip_cycles = 0.0;
     for(auto &p : tip_map) {
       tip_cycles += p.second;
