@@ -696,6 +696,7 @@ void pt_complete(long long cycle, int rob_id) {
 }
 
 static uint64_t retired_load_cycles = 0UL, retired_loads = 0UL;
+static std::map<uint32_t, uint64_t> load_lat_map;
 
 void pt_retire(long long cycle,
 	       int rob_id,
@@ -716,6 +717,7 @@ void pt_retire(long long cycle,
   
   if(opcode == 0x3) { /* loads */
     retired_load_cycles += (r.complete-r.sched);
+    load_lat_map[(r.complete-r.sched)]++;
     retired_loads++;
   }
 
@@ -869,6 +871,8 @@ void l1d_port_util(int port1, int port2) {
 
 static uint64_t last_retired_pc = 0;
 static uint64_t last_insns_retired = 0, last_cycle = 0, last_mem_reqs = 0;
+static uint64_t last_retired_loads = 0, last_retired_load_cycles = 0;
+
 static Vcore_l1d_l1i *tb = nullptr;
 
 uint32_t l1d_state[32] = {0};
@@ -1212,11 +1216,14 @@ int main(int argc, char **argv) {
       if(((insns_retired % heartbeat) == 0) or trace_retirement ) {
 	double w_ipc = static_cast<double>(insns_retired - last_insns_retired) / (cycle - last_cycle);
 	double w_mem = (static_cast<double>(mem_reqs-last_mem_reqs)/(insns_retired-last_insns_retired))*1000.0;
+	double w_amat = static_cast<double>(retired_load_cycles-last_retired_load_cycles) / (retired_loads - last_retired_loads);	
 	
 	if(window) {
 	  last_insns_retired = insns_retired;
 	  last_cycle = cycle;
 	  last_mem_reqs = mem_reqs;
+	  last_retired_load_cycles = retired_load_cycles;
+	  last_retired_loads = retired_loads;
 	}
 	std::cout << "port a "
 		  << " cycle " << cycle
@@ -1230,8 +1237,8 @@ int main(int argc, char **argv) {
 		  << ", " << w_ipc << " IPC "
 		  << ", insns_retired "
 		  << insns_retired
-		  << ", mem pki "
-		  << w_mem
+		  << ", load amat "
+		  << w_amat
 		  << ", mispredict pki "
 		  << (static_cast<double>(n_mispredicts) / insns_retired) * 1000.0
 		  << std::defaultfloat
@@ -1246,11 +1253,15 @@ int main(int argc, char **argv) {
 	last_retired_pc = tb->retire_pc;	
 	if(((insns_retired % heartbeat) == 0) or trace_retirement ) {
 	  double w_ipc = static_cast<double>(insns_retired - last_insns_retired) / (cycle - last_cycle);
-	  double w_mem = (static_cast<double>(mem_reqs-last_mem_reqs)/(insns_retired-last_insns_retired))*1000.0;	  
+	  double w_mem = (static_cast<double>(mem_reqs-last_mem_reqs)/(insns_retired-last_insns_retired))*1000.0;
+	  double w_amat = static_cast<double>(retired_load_cycles-last_retired_load_cycles) / (retired_loads - last_retired_loads);
+	    
 	  if(window) {
 	    last_insns_retired = insns_retired;
 	    last_cycle = cycle;
-	    last_mem_reqs = mem_reqs;	    
+	    last_mem_reqs = mem_reqs;
+	    last_retired_load_cycles = retired_load_cycles;
+	    last_retired_loads = retired_loads;	    
 	  }
 	  std::cout << "port b "
 		    << " cycle " << cycle
@@ -1264,8 +1275,8 @@ int main(int argc, char **argv) {
 		    << ", " << w_ipc << " IPC "
 		    << ", insns_retired "
 		    << insns_retired
-		    << ", mem pki "
-		    << w_mem
+		    << ", load amat "
+		    << w_amat	    
 		    << ", mispredict pki "
 		    << (static_cast<double>(n_mispredicts) / insns_retired) * 1000.0
 		    << std::defaultfloat
@@ -1919,6 +1930,12 @@ int main(int argc, char **argv) {
 
     std::cout << "avg load cycles                    ="
 	      << static_cast<double>(retired_load_cycles) / retired_loads << "\n";
+
+    for(auto &p : load_lat_map) {
+      out << p.first << "," << p.second << "\n";
+    }
+    
+    
     
     double tip_cycles = 0.0;
     for(auto &p : tip_map) {

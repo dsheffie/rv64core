@@ -4127,10 +4127,10 @@ always_ff@(negedge clk)
 `ifdef VERILATOR
    always_ff@(negedge clk)
      begin
-	if(t_pop_mem_uq)
+	if(((|w_mem_sched_oldest_ready) & !ds_done))
 	  begin
 	     pt_sched(r_cycle, 
-		      {{ (32-`LG_ROB_ENTRIES){1'b0}}, t_mem_uq.rob_ptr});
+		      {{ (32-`LG_ROB_ENTRIES){1'b0}}, t_picked_mem_uop.rob_ptr});
 	  end
 	
 	if(((t_alu_entry_rdy != 'd0) & !ds_done))
