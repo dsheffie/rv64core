@@ -282,13 +282,15 @@ endfunction
 			     WAIT_FOR_NOT_FULL = 'd6,
 			     INIT_PHT = 'd7,
 			     TLB_MISS = 'd8,
-			     TLB_MISS_TURNAROUND = 'd9
+			     TLB_MISS_TURNAROUND = 'd9,
+			     ZERO_PAGE_TLB_MISS = 'd10
 			    } state_t;
    
    logic [(`M_WIDTH-1):0] r_pc, n_pc, r_miss_pc, n_miss_pc;
    logic [(`M_WIDTH-1):0] r_cache_pc, n_cache_pc;
    logic [(`M_WIDTH-1):0] r_btb_pc;
-
+   logic [9:0]		  n_tlb_zero_cycles, r_tlb_zero_cycles;
+   
 
    wire [(`M_WIDTH-1):0]  w_cache_pc4 = r_cache_pc + 'd4;
    wire [(`M_WIDTH-1):0]  w_cache_pc8 = r_cache_pc + 'd8;
@@ -314,7 +316,7 @@ endfunction
    logic		  n_tlb_miss, r_tlb_miss;
    
    wire [`PA_WIDTH-1:0]	  w_tlb_pc;
-   wire			  w_tlb_hit, w_tlb_exec, w_tlb_user;  
+   wire			  w_tlb_hit, w_tlb_exec, w_tlb_user, w_tlb_zero_page;  
    logic		  t_reload_tlb;
    
    logic 		  t_clear_fq;
@@ -533,6 +535,7 @@ endfunction
 	n_cache_pc = 'd0;
 	n_state = r_state;
 	n_reload = r_reload;
+	n_tlb_zero_cycles = r_tlb_zero_cycles;
 	
 	n_restart_ack = 1'b0;
 	n_flush_req = r_flush_req | flush_req;
@@ -750,11 +753,18 @@ endfunction
 		 end
 	       else if(!w_tlb_hit & r_req && paging_active)
 		 begin
-		    //$display("iside TLB MISS for r_cache_pc %x, r_cycle %d", r_cache_pc, r_cycle);
-		    n_state = TLB_MISS;
 		    n_pc = r_pc;
 		    n_miss_pc = r_cache_pc;
-		    n_tlb_miss = 1'b1;
+		    n_tlb_zero_cycles = 'd0;
+		    if(w_tlb_zero_page)
+		      begin
+			 n_state = ZERO_PAGE_TLB_MISS;
+		      end
+		    else
+		      begin
+			 n_state = TLB_MISS;
+			 n_tlb_miss = 1'b1;
+		      end
 		 end
 	       else if(t_miss)
 		 begin
@@ -1026,6 +1036,27 @@ endfunction
 	       n_state = ACTIVE;
 	       n_req = 1'b1;
 	    end
+	  ZERO_PAGE_TLB_MISS:
+	    begin
+	       n_tlb_zero_cycles = r_tlb_zero_cycles + 'd1;
+	       if(n_restart_req)
+                 begin
+		    //$display("restart after %d cycles", r_tlb_zero_cycles);
+                    n_restart_ack = 1'b1;
+                    n_restart_req = 1'b0;
+                    n_pc = w_restart_pc;
+                    n_req = 1'b0;
+                    n_state = ACTIVE;
+                    t_clear_fq = 1'b1;
+                    n_page_fault = 1'b0;
+                 end
+	       else if(&r_tlb_zero_cycles)
+		 begin
+		    //$display("actually perform zero page tlb walk");
+		    n_state = TLB_MISS;
+		    n_tlb_miss = 1'b1;		    
+		 end 
+	    end
 	  default:
 	    begin
 	    end
@@ -1236,7 +1267,7 @@ endfunction
 	.writable(),
 	.executable(w_tlb_exec),	
 	.user(w_tlb_user),
-	.zero_page(),
+	.zero_page(w_tlb_zero_page),
 	.tlb_hits(tlb_hits),
 	.tlb_accesses(tlb_accesses),	
 	.replace_va(r_miss_pc),			
@@ -1545,6 +1576,7 @@ endfunction
 	     r_cache_hits <= 'd0;
 	     r_cache_accesses <= 'd0;
 	     r_resteer_bubble <= 1'b0;
+	     r_tlb_zero_cycles <= 'd0;
 	  end
 	else
 	  begin
@@ -1578,7 +1610,8 @@ endfunction
 	     r_spec_gbl_hist <= n_spec_gbl_hist;
 	     r_cache_hits <= n_cache_hits;
 	     r_cache_accesses <= n_cache_accesses;
-	     r_resteer_bubble <= n_resteer_bubble;	     
+	     r_resteer_bubble <= n_resteer_bubble;
+	     r_tlb_zero_cycles <= n_tlb_zero_cycles;
 	  end
      end
    

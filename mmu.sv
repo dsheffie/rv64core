@@ -1,5 +1,5 @@
 `include "rob.vh"
-//`define VERBOSE_MMU
+`define VERBOSE_MMU
 
 `ifdef VERILATOR
 import "DPI-C" function void mark_accessed_checker(input longint addr);
@@ -186,31 +186,15 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 `endif
    
 `ifdef VERBOSE_MMU   
-   always_ff@(posedge clk)
-     begin
-	if(r_state == IDLE)
-	  begin
-	     if(n_l1i_req & l1i_va[38:12] == 'd0)
-	       begin
-		  $display("translating zero page for iside");
-	       end
-	     if(n_l1d_req & l1d_va[38:12] == 'd0)
-	       begin
-		  $display("translating zero page for dside");
-	       end
-	  end
-     end
-
    always_ff@(negedge clk)
      begin
-	if(n_l1i_req)
+	if((n_state == LOAD0) && (r_state == IDLE))
 	  begin
-	     $display("MMU translate iside %x", l1i_va[38:12]);
+	     if(n_gnt_l1i)
+	       $display("MMU translate iside %x", l1i_va[38:12]);
+	     else if(n_gnt_l1d)
+	       $display("MMU translate dside %x", l1d_va[38:12]);
 	  end
-	if(n_l1d_req)
-	  begin
-	     $display("MMU translate dside %x", l1d_va[38:12]);
-	  end	
      end
 `endif	    
 
@@ -302,9 +286,9 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 	  LOAD0:
 	    begin
 	       n_addr = page_table_root + {52'd0, r_va[38:30], 3'd0};
-`ifdef VERBOSE_MMU
-	       $display("walker level 0 generates address %x", n_addr);	       
-`endif
+//`ifdef VERBOSE_MMU
+//	       $display("walker level 0 generates address %x", n_addr);	       
+//`endif
 	       
 	       if(w_bad_va)
 		 begin
@@ -348,9 +332,9 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 	  LOAD1:
 	    begin
 	       n_addr = {8'd0, r_addr[53:10], 12'd0} + {52'd0, r_va[29:21], 3'd0};
-`ifdef VERBOSE_MMU
-	       $display("walker level 1 generates address %x", n_addr);
-`endif
+//`ifdef VERBOSE_MMU
+//	       $display("walker level 1 generates address %x", n_addr);
+//`endif
 	       n_req = 1'b1;
 	       n_state = WAIT1;
 	    end
@@ -382,9 +366,9 @@ module mmu(clk, reset, clear_tlb, page_table_root,
 	  LOAD2:
 	    begin
 	       n_addr = {8'd0, r_addr[53:10], 12'd0} + {52'd0, r_va[20:12], 3'd0};
-`ifdef VERBOSE_MMU
-	       $display("walker level 2 generates address %x", n_addr);
-`endif
+//`ifdef VERBOSE_MMU
+//	       $display("walker level 2 generates address %x", n_addr);
+//`endif
 	       n_req = 1'b1;
 	       n_state = WAIT2;
 	    end
