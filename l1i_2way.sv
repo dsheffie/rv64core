@@ -297,10 +297,55 @@ endfunction
    wire [(`M_WIDTH-1):0]  w_cache_pc12 = r_cache_pc + 'd12;
    wire [(`M_WIDTH-1):0]  w_cache_pc16 = r_cache_pc + 'd16;
    wire [(`M_WIDTH-1):0]  w_cache_pc20 = r_cache_pc + 'd20;         
-   
-   
+
+   wire [27:0]		  w_cache_page = n_cache_pc[39:12];
+   wire [27:0]		  w_tlb_miss_page = r_miss_pc[39:12];
+
    state_t n_state, r_state;
    assign l1i_state = r_state;
+
+   wire			  w_update_pf_cache = (r_state == TLB_MISS) & page_walk_rsp_valid;
+
+   localparam		  LG_PFC_SZ = 6;
+   
+   localparam		  PFC_SZ = 1<<LG_PFC_SZ;
+   
+   logic [1:0]		  r_pf_cache[(PFC_SZ-1):0];
+   logic [1:0]		  r_pf_score;
+   wire [1:0]		  w_new_pf_score = (&r_pf_score) ? r_pf_score : (r_pf_score + 'd1);
+
+   wire [LG_PFC_SZ-1:0]	  w_pfc_rd_idx = w_cache_page[LG_PFC_SZ-1:0];
+   wire [LG_PFC_SZ-1:0]	  w_pfc_wr_idx = w_tlb_miss_page[LG_PFC_SZ-1:0];
+
+			  
+   always_ff@(posedge clk)
+     begin
+	if(reset)
+	  begin
+	     r_pf_score <= 'd0;
+	  end
+	else if(r_state == ACTIVE)
+	  begin
+	     r_pf_score <= r_pf_cache[w_pfc_rd_idx];
+	  end
+	
+	if(w_update_pf_cache)
+	  begin
+	     r_pf_cache[w_pfc_wr_idx] <= (page_walk_rsp.fault) ? 
+							   w_new_pf_score : 'd0;
+	     $display("updating pf cache for address %x, old score %b, new score %b, fault %b, entry %d", 
+		      r_miss_pc, r_pf_score, w_new_pf_score, page_walk_rsp.fault, 
+		      w_pfc_wr_idx);
+	     if(w_pfc_wr_idx == 'd0 && (w_new_pf_score=='d0))
+	       begin
+		  $stop();
+		  
+	       end
+	  end
+     end // always_ff@ (posedge clk)
+
+   
+   
    logic 		  r_restart_req, n_restart_req;
    logic 		  r_restart_ack, n_restart_ack;
    logic 		  r_req, n_req;
@@ -756,7 +801,10 @@ endfunction
 		    n_pc = r_pc;
 		    n_miss_pc = r_cache_pc;
 		    n_tlb_zero_cycles = 'd0;
-		    if(w_tlb_zero_page)
+		    
+		    $display("tlb miss for %x, score = %b", r_cache_pc, r_pf_score);
+		    
+		    if(/*w_tlb_zero_page*/ &r_pf_score)
 		      begin
 			 n_state = ZERO_PAGE_TLB_MISS;
 		      end
@@ -1022,7 +1070,8 @@ endfunction
 	  TLB_MISS:
 	    begin
 	       if(page_walk_rsp_valid)
-	          begin
+	         begin
+		    $display("got page fault for address %x",r_miss_pc);
 	             n_page_fault = page_walk_rsp.fault;
 	             t_reload_tlb = page_walk_rsp.fault==1'b0;
 		     n_state = TLB_MISS_TURNAROUND;
