@@ -155,16 +155,32 @@ module tlb(clk,
 	r_replace <= reset ? 'd0 : n_replace;
      end
 
+   wire w_no_pf_replace = replace ? ~page_walk_rsp.fault : 1'b0;
    always_comb
      begin
-	n_replace = r_replace+'d1;
-	if({1'b0, r_replace} == (N-1))
-	  begin
-	     n_replace = 'd0;
-	  end
+	n_replace = w_no_pf_replace ? (r_replace+'d1) : r_replace;
      end
    wire [LG_N-1:0] w_replace = r_replace;
 
+   
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if(w_no_pf_replace)
+   // 	  begin
+   // 	     if(ISIDE)
+   // 	       begin
+   // 		  $display("iside %x replace entry %d at cycle %d, global %b", 
+   // 			   replace_va[39:12], w_replace, r_cycle, page_walk_rsp.gbl);
+   // 	       end
+   // 	     else
+   // 	       begin
+   // 		  $display("dside %x replace entry %d at cycle %d, global %b", 
+   // 			   replace_va[39:12], w_replace, r_cycle, page_walk_rsp.gbl);
+   // 	       end
+   // 	  end // if (replace)
+   //   end // always_ff@ (negedge clk)
+   
+   
    always_ff@(posedge clk)
      begin   
 	if(reset || clear)
@@ -179,7 +195,7 @@ module tlb(clk,
    
    always_ff@(posedge clk)
      begin
-	if(replace)
+	if(w_no_pf_replace)
 	  begin
 	     r_dirty[w_replace] <= page_walk_rsp.dirty;
 	     r_readable[w_replace] <= page_walk_rsp.readable;

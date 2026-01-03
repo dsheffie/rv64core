@@ -165,6 +165,7 @@ typedef struct packed {
    logic       writable;
    logic       executable;
    logic       user;
+   logic       gbl;       
    logic [63:0] paddr;
    logic [1:0]	pgsize;
 } page_walk_rsp_t;
