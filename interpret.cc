@@ -554,9 +554,13 @@ void execRiscv(state_t *s) {
   uint32_t inst = 0, opcode = 0, rd = 0, lop = 0;
   int64_t irq = 0;
   riscv_t m(0);
+
   s->took_exception = false;
   s->did_rdtime = s->did_system = false;
-
+  //int64_t old_pc = s->pc;
+  //int64_t old[32];  
+  //memcpy(old, s->gpr, sizeof(int64_t)*32);
+  
   csr_t c(s->mie);
   //if(c.mie.mtie) {
   //printf("s->icnt = %lu\n", s->icnt);
@@ -762,7 +766,7 @@ void execRiscv(state_t *s) {
 	    }
 	    else if((inst>>20) == 0x602) { /* cpop */
 	      uint64_t u = *reinterpret_cast<uint64_t*>(&s->gpr[m.i.rs1]);
-	      s->gpr[m.i.rd] =  __builtin_popcountl(u);
+	      s->gpr[m.i.rd] = u==0 ? 0 : __builtin_popcountl(u);
 	    }	    
 	    
 	    else if( (inst>>20) == 0x604) { /* sext.b */
@@ -863,24 +867,20 @@ void execRiscv(state_t *s) {
 	    else if(sel == 0x18) { /* clzw */
 	      uint32_t u = *reinterpret_cast<uint32_t*>(&s->gpr[m.i.rs1]);
 	      //printf("clzw of %x\n", u);
-	      if(u == 0) {
-		s->gpr[m.i.rd] = ~0UL;
-	      }
-	      else {
-		switch( (inst>>20)&31 )
-		  {
-		  case 0: /* clzw */
-		    s->gpr[m.i.rd] = __builtin_clz(u);
-		    break;
-		  case 1: /* ctzw */
-		    s->gpr[m.i.rd] = __builtin_ctz(u);		    
-		    break;
-		  case 2: /* cpopw */
-		    s->gpr[m.i.rd] = __builtin_popcount(u);		    
-		    break;		    
-		  default:
-		    assert(0);
-		  }
+	      switch( (inst>>20)&31 )
+		{
+		case 0: /* clzw */
+		  s->gpr[m.i.rd] = (u==0) ? ~0UL : __builtin_clz(u);
+		  break;
+		case 1: /* ctzw */
+		  s->gpr[m.i.rd] = (u==0) ? ~0UL : __builtin_ctz(u);		    
+		  break;
+		case 2: /* cpopw */
+		  s->gpr[m.i.rd] =  __builtin_popcount(u);
+		  //printf("cpopw(%u) = %lu\n", u, s->gpr[m.i.rd]);
+		  break;		    
+		default:
+		  assert(0);
 	      }
 	    }
 	    else {
@@ -1889,6 +1889,10 @@ void execRiscv(state_t *s) {
       break;
     }
 
+  //if(old[15] != s->gpr[15]) {
+  //printf("x15 changed from %lx to %lx at pc %lx\n", old[15], s->gpr[15], old_pc);
+  //}
+  
   s->icnt++;
   return;
 
