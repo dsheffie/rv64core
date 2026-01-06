@@ -863,25 +863,20 @@ void execRiscv(state_t *s) {
 	    else if(sel == 0x18) { /* clzw */
 	      uint32_t u = *reinterpret_cast<uint32_t*>(&s->gpr[m.i.rs1]);
 	      //printf("clzw of %x\n", u);
-	      if(u == 0) {
-		s->gpr[m.i.rd] = ~0UL;
-	      }
-	      else {
-		switch( (inst>>20)&31 )
-		  {
-		  case 0: /* clzw */
-		    s->gpr[m.i.rd] = __builtin_clz(u);
-		    break;
-		  case 1: /* ctzw */
-		    s->gpr[m.i.rd] = __builtin_ctz(u);		    
-		    break;
-		  case 2: /* cpopw */
-		    s->gpr[m.i.rd] = __builtin_popcount(u);		    
-		    break;		    
-		  default:
-		    assert(0);
-		  }
-	      }
+	      switch( (inst>>20)&31 )
+		{
+		case 0: /* clzw */
+		  s->gpr[m.i.rd] = u ? __builtin_clz(u) : 0;
+		  break;
+		case 1: /* ctzw */
+		  s->gpr[m.i.rd] = u ? __builtin_ctz(u) : 0;		    
+		  break;
+		case 2: /* cpopw */
+		  s->gpr[m.i.rd] = __builtin_popcount(u);		    
+		  break;		    
+		default:
+		  assert(0);
+		}
 	    }
 	    else {
 	      goto report_unimplemented;
