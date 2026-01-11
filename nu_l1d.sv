@@ -29,7 +29,8 @@ import "DPI-C" function void pt_l1d_pass1_miss(input longint cycle,
 					       input longint unsigned pa);
 
 
-import "DPI-C" function void l1d_port_util(input int port1, input int port2);
+import "DPI-C" function void l1d_port_util(input int port1, input int port2, input int port2_miss);
+
 import "DPI-C" function void record_l1d(input int req, 
 					input int ack, 
 					input int new_req,
@@ -62,6 +63,9 @@ import "DPI-C" function void wr_log(input longint pc,
 				    input longint unsigned addr, 
 				    input longint unsigned data, 
 				    int 		   is_atomic);
+
+import "DPI-C" function void record_l1d_state(input int s);
+
 `endif
 
 //`define DEBUG
@@ -1268,7 +1272,7 @@ module nu_l1d(clk,
 	  end
 
 
-	if(mem_req_valid & (mem_req.opcode == MEM_SW)
+	if(mem_req_valid & (mem_req.opcode == MEM_SW))
 	  begin
 	     $display("mem req opcode %d addr %x data %x, tag %d, cycle %d", 
 		      mem_req.opcode, mem_req.addr, mem_req.data, mem_req.tag, r_cycle);
@@ -1529,9 +1533,32 @@ module nu_l1d(clk,
 
 `ifdef VERILATOR
    wire	w_aborted_sc = t_hit_cache & ((r_req.op == MEM_SCD) | (r_req.op == MEM_SCW)) & (!w_match_link);
-   wire	w_succces_sc = t_hit_cache & ((r_req.op == MEM_SCD) | (r_req.op == MEM_SCW)) & (w_match_link);   
+   wire	w_succces_sc = t_hit_cache & ((r_req.op == MEM_SCD) | (r_req.op == MEM_SCW)) & (w_match_link);
+
+	   logic [31:0] r_reload_cycles,n_reload_cycles;
+   always_comb
+	   begin
+	   n_reload_cycles = r_reload_cycles + 1;
+	   if((n_state == INJECT_RELOAD) && (r_state != INJECT_RELOAD))
+	   begin
+	   n_reload_cycles = 'd0;
+	   end
+	   
+	   end
+   always_ff@(negedge clk)
+begin
+	   r_reload_cycles <= reset ? 'd0 : n_reload_cycles;
+	   end	    
+	   
    always_ff@(negedge clk)
      begin
+	   record_l1d_state( {28'd0, r_state});
+
+	   if((n_state != INJECT_RELOAD) && (r_state == INJECT_RELOAD))
+	   begin
+	      //$display("reload took %d cycles, memory requests = %b, drain_ds_complete = %b", 
+//		    r_reload_cycles, core_mem_va_req_valid, drain_ds_complete);
+	   end
 	// if(n_link_reg_val & (r_link_reg_val==1'b0))	
 	//   begin
 	//      $display("set link reg at cycle %d", r_cycle);
@@ -1555,7 +1582,7 @@ module nu_l1d(clk,
 	//end
 	
 	
-	l1d_port_util({31'd0,r_got_req}, {31'd0, r_got_req2});
+	l1d_port_util({31'd0,r_got_req}, {31'd0, r_got_req2}, {31'd0, t_push_miss});
 	record_l1d({31'd0,core_mem_va_req_valid},
 		   {31'd0,core_mem_va_req_ack},
 		   {31'd0, t_new_req},

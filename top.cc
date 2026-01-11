@@ -67,6 +67,7 @@ static bool enable_checker = true, use_checkpoint = false;
 static long long mispred_cycle = -1L;
 static std::map<int, uint64_t> l1_to_l2_dist;
 static std::map<int, uint64_t> l2_state;
+static std::map<int, uint64_t> l1d_state;
 static uint64_t l1i_reqs_at_l2 = 0;
 
 
@@ -174,6 +175,21 @@ int is_satp_armed() {
   return not(s->unpaged_mode());
 }
 
+long long read_dword(int addr) {
+  //long long x = *reinterpret_cast<long long*>(s->mem + addr);
+  //std::cout << std::hex << addr << " -> " << x << std::hex << "\n";
+  return mem_r64(s, *reinterpret_cast<uint32_t*>(&addr));
+}
+
+
+void write_dword(int addr, long long data) {
+  mem_w64(s, *reinterpret_cast<uint32_t*>(&addr), data);
+  //uint64_t d = *reinterpret_cast<uint64_t*>(&data);
+
+  //*reinterpret_cast<uint64_t*>(s->mem +addr) = d;
+  
+}
+
 #define LOAD(x) long long load_##x() {/*printf("loading %s with %lx\n", #x, s->x);*/ return s->x;}
 
 LOAD(scounteren);
@@ -248,6 +264,10 @@ void l1_to_l2_queue_occupancy(int e) {
 }
 void record_l2_state(int s) {
   l2_state[s]++;
+}
+
+void record_l1d_state(int s) {
+  l1d_state[s]++;
 }
 
 static std::list<long long> inflight_uuids;
@@ -858,14 +878,17 @@ static int buildArgcArgv(const char *filename, const char *sysArgs, char ***argv
   return (int)args.size();
 }
 
-static uint64_t port1_active = 0, port2_active = 0;
+static uint64_t port1_active = 0, port2_active = 0, port2_completed = 0;
 
-void l1d_port_util(int port1, int port2) {
+void l1d_port_util(int port1, int port2, int port2_miss) {
   if(port1) {
     ++port1_active;
   }
   if(port2) {
     ++port2_active;
+    if(port2_miss == 0) {
+      ++port2_completed;
+    }
   }
 }
 
@@ -875,7 +898,7 @@ static uint64_t last_retired_loads = 0, last_retired_load_cycles = 0;
 
 static Vcore_l1d_l1i *tb = nullptr;
 
-uint32_t l1d_state[32] = {0};
+/* uint32_t l1d_state[32] = {0}; */
 
 void catchUnixSignal(int n) {
   std::cout << std::hex << "last_retired_pc = " << last_retired_pc
@@ -905,6 +928,23 @@ struct mem_req_t {
 };
 
 std::queue<mem_req_t> mem_queue;
+
+static const char* l1d_state_names[] = {
+  "INITIALIZE",
+  "INIT_CACHE",
+  "ACTIVE",
+  "INJECT_RELOAD",
+  "WAIT_INJECT_RELOAD",
+  "CLEAR_DIRTY",
+  "FLUSH_CACHE",
+  "FLUSH_CACHE_WAIT",
+  "FLUSH_CACHE_LAST_WAIT",
+  "FLUSH_CL",
+  "FLUSH_CL_WAIT",
+  "HANDLE_RELOAD",
+  "TLB_RELOAD",
+  "TLB_TURNAROUND"
+};
 
 static const char* l2_state_names[] = {
   "INITIALIZE",
@@ -1552,13 +1592,14 @@ int main(int argc, char **argv) {
 		    tb->mem_req_tag,
 		    cycle+lat);
       memcpy(req.data, tb->mem_req_store_data, sizeof(int)*4);
-
-      //printf("got memory request for address %x of type %d, tag %d, will reply at cycle %lu, now %lu\n",
-      //tb->mem_req_addr, tb->mem_req_opcode, tb->mem_req_tag,
-      //cycle+lat,
-      //cycle);
+      
+      printf("got memory request for address %x of type %d, tag %d, will reply at cycle %lu, now %lu\n",
+	     tb->mem_req_addr, tb->mem_req_opcode, tb->mem_req_tag,
+	     cycle+lat,
+	     cycle);
       
       mem_queue.push(req);
+      assert(false);
     }
     
     if(not(mem_queue.empty()) and mem_queue.front().reply_cycle ==cycle) {
@@ -1609,7 +1650,7 @@ int main(int argc, char **argv) {
       got_putchar = false;
     }
     ++cycle;
-    l1d_state[(int)tb->l1d_state]++;
+    /* l1d_state[(int)tb->l1d_state]++; */
     if((cycle & (((1UL<<16) -1))) == 0) {
       //printf("%lu mem ops\n", num_mem_ops);
       mem_txn_log << cycle << "," << num_mem_ops << "\n";
@@ -1909,6 +1950,10 @@ int main(int argc, char **argv) {
     std::cout << "l1d port1 util = " << port1_util << "\n";
     std::cout << "l1d port2 util = " << port2_util << "\n";
 
+    std::cout << "l2d port2 complete rate = " <<
+      static_cast<double>(port2_completed) /port2_active << "\n";
+
+    
     std::cout << "log_l1d_misses                      = " << log_l1d_misses << "\n";
     std::cout << "log_l1d_dirty_misses                = " << log_l1d_dirty_misses <<"\n";
     std::cout << "log_l1d_accesses                    = " << log_l1d_accesses << "\n";
@@ -1949,11 +1994,17 @@ int main(int argc, char **argv) {
     //for(auto &p : l1_to_l2_dist) {
     //std::cout << p.first << "," << p.second << "\n";
     //}
+
+    std::cout << "l1d_states:\n";
+    for(auto &p : l1d_state) {
+      std::cout << " " << l1d_state_names[p.first] << " : " << (100.0*(static_cast<double>(p.second) / cycle)) << "\n";
+    }
     
     std::cout << "l2 states:\n";
     for(auto &p : l2_state) {
-      std::cout << "  " << l2_state_names[p.first] << ":" << p.second << "\n";
+      std::cout << " " << l2_state_names[p.first] << " : " << (100.0*(static_cast<double>(p.second) / cycle)) << "\n";
     }
+    
     std::cout << "port0 sched       " << schedules[0] << "\n";
     std::cout << "port1 sched       " << schedules[1] << "\n";
     std::cout << "port0 sched alloc " << schedules_alloc[0] << "\n";

@@ -5,6 +5,10 @@
 import "DPI-C" function void l1_to_l2_queue_occupancy(int e);
 import "DPI-C" function void record_l2_state(int s);
 import "DPI-C" function void new_l1i_req_at_l2();
+
+import "DPI-C" function longint read_dword(input int addr);
+import "DPI-C" function void write_dword(input int addr, input longint data);
+
 `endif
 
 //`define VERBOSE_L2
@@ -356,13 +360,35 @@ module l2_2way(clk,
    wire			w_last;
 
 
+   //n_addr
+   logic [127:0]	r_hack_d;
    
+   always_ff@(posedge clk)
+     begin
+	r_hack_d[63:0] <= read_dword(n_addr);
+	r_hack_d[127:64] <= read_dword(n_addr+32'd8);
+	
+	if(t_wr_d0)
+	  begin
+	     write_dword(n_addr, t_d0[63:0]);
+	     write_dword(n_addr+32'd8, t_d0[127:64]);	     
+	  end
+	if(t_wr_d1)
+	  begin
+	     $stop();
+	  end
+	       
+     end
    
-   wire 		w_hit0 = w_valid0 ? (r_tag == w_tag0) : 1'b0;
-   wire 		w_hit1 = w_valid1 ? (r_tag == w_tag1) : 1'b0;
-   wire			w_hit = (w_hit0 | w_hit1) & r_got_req;
-   wire [127:0]		w_d = w_hit0 ? w_d0 : w_d1;
+   wire 		w_hit0 = 1'b1;
+   wire			w_hit1 = 1'b0;
+   wire			w_hit = r_got_req;
+   //(w_hit0 | w_hit1) & r_got_req;
+   wire [127:0]		w_d = r_hack_d;
+//w_hit0 ? w_d0 : w_d1;
 
+   
+   
 
    localparam		N_ROB_ENTRIES = (1<<`LG_L2_REQ_TAGS);
    logic		t_alloc_rob,t_pop_rob,t_is_wb,t_is_st;
@@ -390,9 +416,9 @@ module l2_2way(clk,
    
    
    
-   wire 		w_need_wb0 = w_valid0 ? w_dirty0 : 1'b0;
-   wire			w_need_wb1 = w_valid1 ? w_dirty1 : 1'b0;   
-   wire			w_need_wb = w_need_wb0 | w_need_wb1;
+   wire			      w_need_wb0 = 1'b0;
+   wire			      w_need_wb1 = 1'b0;
+   wire			      w_need_wb = w_need_wb0 | w_need_wb1;
 
    logic		n_mmu_mark_req, r_mmu_mark_req;
    logic		n_mmu_mark_dirty, r_mmu_mark_dirty;
@@ -1051,7 +1077,7 @@ module l2_2way(clk,
    
    always_comb
      begin
-	n_rsp_data = w_hit ? w_d : 128'hdeadbeef;//r_rsp_data;
+	n_rsp_data = r_hack_d;
 	n_mem_mark_rsp_valid = 1'b0;
 	
 	n_mmu_rsp_data = r_mmu_addr3 ? w_d[127:64] : w_d[63:0];
@@ -1082,6 +1108,7 @@ module l2_2way(clk,
 		  else if(r_last_gnt == 1'b0)
 		    begin
 		       n_l1i_rsp_valid  = 1'b1;
+		       //$display("l1i rsp valid, data %x", r_hack_d);
 		    end
 	       end // if (r_opcode == MEM_LW)
 	     else
@@ -1264,15 +1291,15 @@ module l2_2way(clk,
 
 	       t_wr_last = 1'b1;
 	       
-	       t_wr_valid0 = 1'b1;
-	       t_wr_dirty0 = 1'b1;
-	       t_wr_tag0 = 1'b1;
-	       t_wr_d0 = 1'b1;
+	       t_wr_valid0 = 1'b0;
+	       t_wr_dirty0 = 1'b0;
+	       t_wr_tag0 = 1'b0;
+	       t_wr_d0 = 1'b0;
 	       
-	       t_wr_valid1 = 1'b1;
-	       t_wr_dirty1 = 1'b1;
-	       t_wr_tag1 = 1'b1;
-	       t_wr_d1 = 1'b1;
+	       t_wr_valid1 = 1'b0;
+	       t_wr_dirty1 = 1'b0;
+	       t_wr_tag1 = 1'b0;
+	       //t_wr_d1 = 1'b1;
 	       
 	       t_idx = r_idx + 'd1;
 	       if(r_idx == (L2_LINES-1))
@@ -1480,8 +1507,8 @@ module l2_2way(clk,
 	  CHECK_VALID_AND_TAG:
 	    begin
 	       //load hit
-	       //$display("l2 hit %b for address %x op %d pointer %d", 
-	       //w_hit, r_addr, r_opcode, w_rob_tail_ptr);
+	       //$display("l2 hit %b for address %x op %d pointer %d, data %x", 
+	       //w_hit, r_addr, r_opcode, w_rob_tail_ptr, r_hack_d[31:0]);
 	       
 	       if(w_hit)
 		 begin
@@ -1678,6 +1705,7 @@ module l2_2way(clk,
 	       
 	       if(w_need_wb)
 		 begin
+		    $stop();
 		    n_mem_req_store_data = w_need_wb0 ? w_d0 : w_d1;
 		    n_addr = {(w_need_wb0 ? w_tag0 : w_tag1), t_idx, 4'd0};
 		    n_mem_opcode = MEM_SW; 
@@ -1702,6 +1730,7 @@ module l2_2way(clk,
 	    end // case: FLUSH_TRIAGE
 	  FLUSH_STORE:
 	    begin
+	       $stop();
 	       if(mem_rsp_valid)
 		 begin
 		    if(r_wb1)
@@ -1727,6 +1756,7 @@ module l2_2way(clk,
 	    end // case: FLUSH_STORE
 	  FLUSH_STORE_WAY2:
 	    begin
+	       $stop();
 	       n_wb1 = 1'b0;
 	       n_mem_req_store_data = r_data_wb1;
 	       n_addr = {r_tag_wb1, t_idx, 4'd0};
@@ -1803,7 +1833,7 @@ module l2_2way(clk,
      (.clk(clk), .addr(t_idx), .wr_data(t_valid), .wr_en(t_wr_valid0), .rd_data(w_valid0));   
 
    reg_ram1rw #(.WIDTH(1), .LG_DEPTH(LG_L2_LINES)) dirty_ram0
-     (.clk(clk), .addr(t_idx), .wr_data(t_dirty), .wr_en(t_wr_dirty0), .rd_data(w_dirty0));   
+     (.clk(clk), .addr(t_idx), .wr_data(t_dirty), .wr_en(t_wr_dirty0&1'b0), .rd_data(w_dirty0));   
 
    /* 2nd way */
    reg_ram1rw #(.WIDTH(128), .LG_DEPTH(LG_L2_LINES)) data_ram1
@@ -1816,7 +1846,7 @@ module l2_2way(clk,
      (.clk(clk), .addr(t_idx), .wr_data(t_valid), .wr_en(t_wr_valid1), .rd_data(w_valid1));   
 
    reg_ram1rw #(.WIDTH(1), .LG_DEPTH(LG_L2_LINES)) dirty_ram1
-     (.clk(clk), .addr(t_idx), .wr_data(t_dirty), .wr_en(t_wr_dirty1), .rd_data(w_dirty1));   
+     (.clk(clk), .addr(t_idx), .wr_data(t_dirty), .wr_en(t_wr_dirty1&1'b0), .rd_data(w_dirty1));   
 
 
    //always@(posedge clk)

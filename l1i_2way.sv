@@ -333,9 +333,10 @@ endfunction
 	  begin
 	     r_pf_cache[w_pfc_wr_idx] <= (page_walk_rsp.fault) ? 
 							   w_new_pf_score : 'd0;
-	     $display("updating pf cache for address %x, old score %b, new score %b, fault %b, entry %d", 
-		      r_miss_pc, r_pf_score, w_new_pf_score, page_walk_rsp.fault, 
-		      w_pfc_wr_idx);
+	     //$display("updating pf cache for address %x, old score %b, new score %b, fault %b, entry %d", 
+	     //r_miss_pc, r_pf_score, w_new_pf_score, page_walk_rsp.fault, 
+	     //w_pfc_wr_idx);
+	     
 	     if(w_pfc_wr_idx == 'd0 && (w_new_pf_score=='d0))
 	       begin
 		  $stop();
@@ -802,7 +803,7 @@ endfunction
 		    n_miss_pc = r_cache_pc;
 		    n_tlb_zero_cycles = 'd0;
 		    
-		    $display("tlb miss for %x, score = %b", r_cache_pc, r_pf_score);
+		    //$display("tlb miss for %x, score = %b", r_cache_pc, r_pf_score);
 		    
 		    if(/*w_tlb_zero_page*/ &r_pf_score)
 		      begin
@@ -1071,7 +1072,7 @@ endfunction
 	    begin
 	       if(page_walk_rsp_valid)
 	         begin
-		    $display("got page fault for address %x",r_miss_pc);
+		    //$display("got page fault for address %x",r_miss_pc);
 	             n_page_fault = page_walk_rsp.fault;
 	             t_reload_tlb = page_walk_rsp.fault==1'b0;
 		     n_state = TLB_MISS_TURNAROUND;
