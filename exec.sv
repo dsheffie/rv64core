@@ -209,7 +209,6 @@ module exec(clk,
    
    localparam N_MEM_SCHED_ENTRIES = 1<<`LG_MEM_SCHED_ENTRIES;
    
-   localparam N_MQ_ENTRIES = (1<<`LG_MQ_ENTRIES);
    localparam N_MDQ_ENTRIES = (1<<`LG_MDQ_ENTRIES);   
    localparam N_INT_PRF_ENTRIES = (1<<`LG_PRF_ENTRIES);
    
@@ -232,13 +231,7 @@ module exec(clk,
    logic 	t_alu_valid, t_alu_valid2;
    logic 	t_got_break;
    
-   mem_req_t r_mem_q[N_MQ_ENTRIES-1:0] ;
-   logic [`LG_MQ_ENTRIES:0] r_mq_head_ptr, n_mq_head_ptr;
-   logic [`LG_MQ_ENTRIES:0] r_mq_tail_ptr, n_mq_tail_ptr;
-   logic [`LG_MQ_ENTRIES:0] r_mq_next_tail_ptr, n_mq_next_tail_ptr;
-   mem_req_t t_mem_tail, t_mem_head;
-   logic 		    mem_q_full,mem_q_next_full, mem_q_empty;
-
+   mem_req_t t_mem_tail;
 
    mem_data_t r_mdq[N_MDQ_ENTRIES-1:0];
    mem_data_t t_mdq_tail, t_mdq_head;
@@ -1957,48 +1950,56 @@ module exec(clk,
 	.complete(t_div_complete),
 	.ready(t_div_ready)
 	);
-
+   
    assign divide_ready = t_div_ready;
-
-
-
-
-   
-   always_comb
-     begin
-	n_mq_head_ptr = r_mq_head_ptr;
-	n_mq_tail_ptr = r_mq_tail_ptr;
-	n_mq_next_tail_ptr = r_mq_next_tail_ptr;
-	
-	if(r_mem_ready)
-	  begin
-	     n_mq_tail_ptr = r_mq_tail_ptr + 'd1;
-	     n_mq_next_tail_ptr = r_mq_next_tail_ptr + 'd1;
-	  end
-	if(mem_req_ack)
-	  begin
-	     n_mq_head_ptr = r_mq_head_ptr + 'd1;
-	  end
-	
-	t_mem_head = r_mem_q[r_mq_head_ptr[`LG_MQ_ENTRIES-1:0]];
-	
-	mem_q_empty = (r_mq_head_ptr == r_mq_tail_ptr);
-	
-	mem_q_full = (r_mq_head_ptr != r_mq_tail_ptr) &&
-		     (r_mq_head_ptr[`LG_MQ_ENTRIES-1:0] == r_mq_tail_ptr[`LG_MQ_ENTRIES-1:0]);
-
-	mem_q_next_full = (r_mq_head_ptr != r_mq_next_tail_ptr) &&
-			  (r_mq_head_ptr[`LG_MQ_ENTRIES-1:0] == r_mq_next_tail_ptr[`LG_MQ_ENTRIES-1:0]);
-	
-     end // always_comb
-   
+   mem_req_t r_mem_req,n_mem_req;
+   logic [1:0] n_mem_st, r_mem_st;
    always_ff@(posedge clk)
      begin
-	if(r_mem_ready)
-	  begin
-	     r_mem_q[r_mq_tail_ptr[`LG_MQ_ENTRIES-1:0]] <= t_mem_tail;
-	  end
+        r_mem_req <= n_mem_req;
+	r_mem_st <= reset ? 'd0 : n_mem_st;
      end
+   wire w_mem_q_cap = (r_mem_st == 2'd0) & (n_mem_st == 2'd0);
+
+   always_comb
+     begin
+        n_mem_req = r_mem_req;
+	mem_req_valid = 1'b0;
+        mem_req = t_mem_tail;
+	n_mem_st = r_mem_st;
+	if(r_mem_st == 2'd0)
+          begin
+             if(r_mem_ready)
+	       begin
+                  n_mem_req = t_mem_tail;
+                  mem_req_valid = 1'b1;
+                  n_mem_st = mem_req_ack ? 2'd0 : 2'd1;
+               end
+          end
+        else if(r_mem_st == 2'd1)
+          begin
+             mem_req = r_mem_req;
+             mem_req_valid = 1'b1;
+             if(mem_req_ack)
+               begin
+                  n_mem_st = 2'd0;
+               end
+          end
+     end // always_comb                                                                                                          
+
+`ifdef VERILATOR
+   always_ff@(negedge clk)
+     begin
+        if(r_mem_st == 2'd1)
+          begin
+             if(r_mem_ready)
+               begin
+                  $stop();
+               end
+          end
+     end
+`endif
+
 
    
    always_comb
@@ -2031,8 +2032,6 @@ module exec(clk,
    
 
    
-   assign mem_req = t_mem_head;
-   assign mem_req_valid = !mem_q_empty;
    assign uq_wait = r_uq_wait;
    assign mq_wait = r_mq_wait;
    assign core_store_data_valid = !mem_mdq_empty;
@@ -2041,10 +2040,6 @@ module exec(clk,
    
    always_ff@(posedge clk)
      begin
-	r_mq_head_ptr <= reset ? 'd0 : n_mq_head_ptr;
-	r_mq_tail_ptr <= reset ? 'd0 : n_mq_tail_ptr;
-	r_mq_next_tail_ptr <= reset ? 'd1 : n_mq_next_tail_ptr;
-
 	r_mdq_head_ptr <= (reset | mem_dq_clr) ? 'd0 : n_mdq_head_ptr;
 	r_mdq_tail_ptr <= (reset | mem_dq_clr) ? 'd0 : n_mdq_tail_ptr;
 	r_mdq_next_tail_ptr <= (reset | mem_dq_clr) ? 'd1 : n_mdq_next_tail_ptr;	
@@ -3709,7 +3704,7 @@ module exec(clk,
 				       (r_start_int2 & t_wr_int_prf2 & (int_uop2.dst == r_mem_sched_uops[i].srcA)) |			 
 				       (r_start_int & t_wr_int_prf & (int_uop.dst == r_mem_sched_uops[i].srcA))
 				       );		
-		t_mem_entry_reg_rdy[i] = (r_mem_sched_valid[i] & (!(mem_q_next_full|mem_q_full))) ? (t_mem_srcA_match[i] |r_mem_srcA_rdy[i]) : 1'b0;
+		t_mem_entry_reg_rdy[i] = (r_mem_sched_valid[i] & w_mem_q_cap) ? (t_mem_srcA_match[i] |r_mem_srcA_rdy[i]) : 1'b0;
  	     end
 
 	   always_ff@(posedge clk)
