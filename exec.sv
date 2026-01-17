@@ -232,12 +232,7 @@ module exec(clk,
    logic 	t_alu_valid, t_alu_valid2;
    logic 	t_got_break;
    
-   mem_req_t r_mem_q[N_MQ_ENTRIES-1:0] ;
-   logic [`LG_MQ_ENTRIES:0] r_mq_head_ptr, n_mq_head_ptr;
-   logic [`LG_MQ_ENTRIES:0] r_mq_tail_ptr, n_mq_tail_ptr;
-   logic [`LG_MQ_ENTRIES:0] r_mq_next_tail_ptr, n_mq_next_tail_ptr;
-   mem_req_t t_mem_tail, t_mem_head;
-   logic 		    mem_q_full,mem_q_next_full, mem_q_empty;
+   mem_req_t t_mem_tail;
 
 
    mem_data_t r_mdq[N_MDQ_ENTRIES-1:0];
@@ -1911,37 +1906,6 @@ module exec(clk,
 
 
 
-   
-   always_comb
-     begin
-	n_mq_head_ptr = r_mq_head_ptr;
-	n_mq_tail_ptr = r_mq_tail_ptr;
-	n_mq_next_tail_ptr = r_mq_next_tail_ptr;
-	
-	if(r_mem_ready)
-	  begin
-	     n_mq_tail_ptr = r_mq_tail_ptr + 'd1;
-	     n_mq_next_tail_ptr = r_mq_next_tail_ptr + 'd1;
-	  end
-	if(mem_req_ack)
-	  begin
-	     n_mq_head_ptr = r_mq_head_ptr + 'd1;
-	  end
-	
-	t_mem_head = r_mem_q[r_mq_head_ptr[`LG_MQ_ENTRIES-1:0]];
-	
-	mem_q_empty = (r_mq_head_ptr == r_mq_tail_ptr);
-	
-	mem_q_full = (r_mq_head_ptr != r_mq_tail_ptr) &&
-		     (r_mq_head_ptr[`LG_MQ_ENTRIES-1:0] == r_mq_tail_ptr[`LG_MQ_ENTRIES-1:0]);
-
-	mem_q_next_full = (r_mq_head_ptr != r_mq_next_tail_ptr) &&
-			  (r_mq_head_ptr[`LG_MQ_ENTRIES-1:0] == r_mq_next_tail_ptr[`LG_MQ_ENTRIES-1:0]);
-	
-     end // always_comb
-   
-
-
    mem_req_t r_mem_req,n_mem_req;
    logic [1:0] n_mem_st, r_mem_st;
    always_ff@(posedge clk)
@@ -1990,14 +1954,6 @@ module exec(clk,
 	  end
      end
 `endif
-   
-   always_ff@(posedge clk)
-     begin
-	if(r_mem_ready)
-	  begin
-	     r_mem_q[r_mq_tail_ptr[`LG_MQ_ENTRIES-1:0]] <= t_mem_tail;
-	  end
-     end
 
    
    always_comb
@@ -2038,10 +1994,6 @@ module exec(clk,
    
    always_ff@(posedge clk)
      begin
-	r_mq_head_ptr <= reset ? 'd0 : n_mq_head_ptr;
-	r_mq_tail_ptr <= reset ? 'd0 : n_mq_tail_ptr;
-	r_mq_next_tail_ptr <= reset ? 'd1 : n_mq_next_tail_ptr;
-
 	r_mdq_head_ptr <= (reset | mem_dq_clr) ? 'd0 : n_mdq_head_ptr;
 	r_mdq_tail_ptr <= (reset | mem_dq_clr) ? 'd0 : n_mdq_tail_ptr;
 	r_mdq_next_tail_ptr <= (reset | mem_dq_clr) ? 'd1 : n_mdq_next_tail_ptr;	
