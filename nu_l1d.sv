@@ -10,7 +10,8 @@ import "DPI-C" function void pt_l1d_replay(input longint cycle,
 					   input int rob_id);
 
 import "DPI-C" function void pt_l1d_blocked(input longint cycle,
-					    input int rob_id);
+					    input int rob_id,
+					    input int why);
 
 import "DPI-C" function void pt_l1d_store_data_ready(input longint cycle,
 						     input int rob_id);
@@ -63,6 +64,7 @@ module nu_l1d(clk,
 	   l2_probe_ack,	   
 	   l1d_state,
 	   restart_complete,
+	   restart_valid,
 	   paging_active,
 	   clear_tlb,
 	   page_walk_req_valid,
@@ -127,6 +129,8 @@ module nu_l1d(clk,
    
    output logic [3:0] l1d_state;
    input logic 	      restart_complete;
+   input logic	      restart_valid;
+   
    input logic paging_active;
    input logic clear_tlb;
    output logic	page_walk_req_valid;
@@ -296,7 +300,8 @@ module nu_l1d(clk,
    logic 				  r_q_priority, n_q_priority;
    
    logic 				  n_core_mem_rsp_valid, r_core_mem_rsp_valid;
-
+   logic [63:0]				  r_cycle;
+   
    typedef struct packed {
       logic [(`PA_WIDTH-1):0] addr;
       logic [127:0] 	      data;
@@ -359,7 +364,40 @@ module nu_l1d(clk,
    
    wire  mem_rsp_valid = r_got_req & r_req.is_store ? 1'b0 : !w_l2q_empty;
 
+   logic r_in_clear, n_in_clear;
+   wire [10:0] w_memq_empty_bits;
+   
+   always_comb
+     begin
+	n_in_clear = r_in_clear;
+	if(restart_valid)
+	  begin
+	     n_in_clear = 1'b1;
+	  end
+	else if(restart_complete)
+	  begin
+	     n_in_clear = 1'b0;
+	  end
+     end
 
+   always_ff@(posedge clk)
+     begin
+	r_in_clear <= reset ? 1'b0 : n_in_clear;
+     end
+   
+   always_ff@(negedge clk)
+     begin
+	if(r_in_clear & core_mem_va_req_ack)
+	  begin
+	     $display("acking req when restart signal asserted");
+	  end
+     end
+   //if(r_in_clear & (memq_empty == 1'b0))
+   //begin
+   //$display("memq_empty at restart_valid = %b, cycle %d", 
+   //w_memq_empty_bits, r_cycle);
+   //end
+   //end
 
    
    always_ff@(posedge clk)
@@ -565,7 +603,7 @@ module nu_l1d(clk,
    logic [63:0] 	       r_store_stalls, n_store_stalls;
    
    
-   logic [63:0] 			 r_cycle;
+
    assign flush_complete = r_flush_complete;
 
    assign mem_req_valid = r_mem_req_valid;
@@ -1040,7 +1078,7 @@ module nu_l1d(clk,
 	     r_core_mem_rsp_valid <= 1'b0;
 	     r_store_stalls <= 'd0;
 	     r_inhibit_write <= 1'b0;
-	     memq_empty <= 1'b1;
+	     //memq_empty <= 1'b1;
 	     r_q_priority <= 1'b0;
 	     r_must_forward <= 1'b0;
 	     r_must_forward2 <= 1'b0;
@@ -1097,23 +1135,40 @@ module nu_l1d(clk,
 	     r_core_mem_rsp_valid <= n_core_mem_rsp_valid;
 	     r_store_stalls <= n_store_stalls;
 	     r_inhibit_write <= n_inhibit_write;
-	     memq_empty <= mem_q_empty
-			   & w_drained
-			   & (&n_mrq_credits)
-			     & !core_mem_va_req_valid
-			   & w_eb_empty
-			   & !t_got_req 
-			   & !t_got_req2 
-			   & !t_push_miss
-			   & !n_mem_req_valid
-			   & !mem_rsp_valid
-			   & (r_n_inflight == 'd0);
+	     //memq_empty <= mem_q_empty
+	     //& w_drained
+	     //& (&n_mrq_credits)
+	     //& !core_mem_va_req_valid
+	     //& w_eb_empty
+	     //& !t_got_req 
+	     //& !t_got_req2 
+	     //& !t_push_miss
+	     //& !n_mem_req_valid
+	     //& !mem_rsp_valid
+	     //& (r_n_inflight == 'd0);
 
 	     r_q_priority <= n_q_priority;
 	     r_must_forward  <= t_mh_block & t_pop_mq;
 	     r_must_forward2 <= t_cm_block & core_mem_va_req_ack;
 	  end
      end // always_ff@ (posedge clk)
+
+   assign w_memq_empty_bits[0] = mem_q_empty;
+   assign w_memq_empty_bits[1] = w_drained;
+   assign w_memq_empty_bits[2] = (&n_mrq_credits);
+   assign w_memq_empty_bits[3] = !core_mem_va_req_valid;
+   assign w_memq_empty_bits[4] = w_eb_empty;
+   assign w_memq_empty_bits[5] = t_got_req == 1'b0;
+   assign w_memq_empty_bits[6] = t_got_req2 == 1'b0;
+   assign w_memq_empty_bits[7] = t_push_miss == 1'b0;
+   assign w_memq_empty_bits[8] = n_mem_req_valid == 1'b0;
+   assign w_memq_empty_bits[9] = mem_rsp_valid == 1'b0;
+   assign w_memq_empty_bits[10] = (r_n_inflight == 'd0);
+
+   always_comb
+     begin
+	memq_empty = &w_memq_empty_bits;
+     end // always_comb
    
    //always_ff@(negedge clk)
    // begin
@@ -1962,10 +2017,12 @@ module nu_l1d(clk,
 	  end
 	
 	if(!t_accept & core_mem_va_req_valid)
-	  begin
+	   begin
+	   
 	     pt_l1d_blocked(r_cycle,
 			    {{ (32-`LG_ROB_ENTRIES){1'b0}}, 
-			     core_mem_va_req.rob_ptr});	
+			     core_mem_va_req.rob_ptr},
+			    {30'd0, w_reload_line_cond});	
 	  end
 	
 	if(t_push_miss)
@@ -2533,10 +2590,12 @@ module nu_l1d(clk,
 	  end
      end // always_ff@ (negedge clk)
 
-
-   wire w_reload_line = ((core_mem_va_req.addr[IDX_STOP-1:IDX_START] == r_miss_idx) & 
-			 (r_state != ACTIVE)) | 
-	((core_mem_va_req.addr[IDX_STOP-1:IDX_START] == t_miss_idx) & t_got_miss);
+   wire [1:0] w_reload_line_cond;
+	   
+   assign w_reload_line_cond[0] = ((core_mem_va_req.addr[IDX_STOP-1:IDX_START] == r_miss_idx) & (r_state != ACTIVE));
+   assign w_reload_line_cond[1] = ((core_mem_va_req.addr[IDX_STOP-1:IDX_START] == t_miss_idx) & t_got_miss);
+	   
+   wire w_reload_line = |w_reload_line_cond;
    
    
    always_comb

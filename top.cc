@@ -684,7 +684,7 @@ void pt_l1d_pass1_miss(long long cycle, int rob_id, int maybe_alias,
   }
 }
 
-void pt_l1d_blocked(long long cycle, int rob_id) {
+void pt_l1d_blocked(long long cycle, int rob_id, int why) {
   if(pl != nullptr) {
     auto &r = records[rob_id & (ROB_ENTRIES-1)];
     r.l1d_blocks.push_back(cycle);
