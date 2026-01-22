@@ -619,6 +619,7 @@ module
 	       .l2_probe_ack(w_l2_probe_ack),		 
 	       .l1d_state(l1d_state),
 	       .restart_complete(w_restart_complete),
+   	       .restart_valid(restart_valid),		  
 	       .paging_active(w_paging_active),
 	       .clear_tlb(w_clear_tlb),
 	       .page_walk_req_va(w_l1d_page_walk_req_va),
