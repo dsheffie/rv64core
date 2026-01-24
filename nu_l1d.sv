@@ -385,13 +385,13 @@ module nu_l1d(clk,
 	r_in_clear <= reset ? 1'b0 : n_in_clear;
      end
    
-   always_ff@(negedge clk)
-     begin
-	if(r_in_clear & core_mem_va_req_ack)
-	  begin
-	     $display("acking req when restart signal asserted");
-	  end
-     end
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if(r_in_clear & core_mem_va_req_ack)
+   // 	  begin
+   // 	     $display("acking req when restart signal asserted");
+   // 	  end
+   //   end
    //if(r_in_clear & (memq_empty == 1'b0))
    //begin
    //$display("memq_empty at restart_valid = %b, cycle %d", 
