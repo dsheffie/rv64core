@@ -174,9 +174,11 @@ module l1i_2way(clk,
    logic 				    r_mem_req_valid, n_mem_req_valid;
    logic [(`M_WIDTH-1):0] 		    r_mem_req_addr, n_mem_req_addr;
 
-   wire [127:0]				    w_array_out0, w_array_out1;   
+   wire [127:0]				    w_array_out0, w_array_out1;
    
-
+   logic [`LG_PHT_SZ-1:0]		    r_bpu_tbl [(1<<`LG_BPU_TBL_SZ)-1:0];
+   logic [`LG_BPU_TBL_SZ-1:0]		    r_bpu_idx, rr_bpu_idx;
+   
    insn_fetch_t r_fq[N_FQ_ENTRIES-1:0];
    
    logic [`LG_FQ_ENTRIES:0] r_fq_head_ptr, n_fq_head_ptr;
@@ -480,6 +482,7 @@ endfunction
 	  end
      end // always_ff@ (posedge clk)
 
+   wire [`LG_PHT_SZ-1:0] w_branch_pht_idx = r_bpu_tbl[bpu_idx];    
    
    always_ff@(posedge clk)
      begin
@@ -1098,7 +1101,7 @@ endfunction
 	t_insn.pc = r_cache_pc;
 	t_insn.pred_target = n_pc;
 	t_insn.pred = t_taken_branch_idx=='d0;
-	t_insn.bpu_idx = r_pht_idx;
+	t_insn.bpu_idx = r_bpu_idx;
 `ifdef	ENABLE_CYCLE_ACCOUNTING
 	t_insn.fetch_cycle = r_cycle;
 `endif
@@ -1108,7 +1111,7 @@ endfunction
 	t_insn2.pc = w_cache_pc4;
 	t_insn2.pred_target = n_pc;
 	t_insn2.pred = t_taken_branch_idx=='d1;
-	t_insn2.bpu_idx = r_pht_idx;
+	t_insn2.bpu_idx = r_bpu_idx;
 `ifdef	ENABLE_CYCLE_ACCOUNTING
 	t_insn2.fetch_cycle = r_cycle;
 `endif
@@ -1118,7 +1121,7 @@ endfunction
 	t_insn3.pc = w_cache_pc8;
 	t_insn3.pred_target = n_pc;
 	t_insn3.pred = t_taken_branch_idx=='d2;
-	t_insn3.bpu_idx = r_pht_idx;
+	t_insn3.bpu_idx = r_bpu_idx;
 `ifdef	ENABLE_CYCLE_ACCOUNTING
 	t_insn3.fetch_cycle = r_cycle;
 `endif
@@ -1128,7 +1131,7 @@ endfunction
 	t_insn4.pc = w_cache_pc12;
 	t_insn4.pred_target = n_pc;
 	t_insn4.pred = t_taken_branch_idx=='d3;
-	t_insn4.bpu_idx = r_pht_idx;
+	t_insn4.bpu_idx = r_bpu_idx;
 `ifdef	ENABLE_CYCLE_ACCOUNTING
 	t_insn4.fetch_cycle = r_cycle;
 `endif
@@ -1152,7 +1155,33 @@ endfunction
    
    //compute_pht_idx cpi0 (.pc(n_cache_pc), .hist(r_spec_gbl_hist), .idx(n_pht_idx));
    compute_pht_idx cpi0 (.pc({n_cache_pc[63:4], 4'd0}), .hist(r_spec_gbl_hist), .idx(n_pht_idx));
+   
+   always_ff@(posedge clk)
+     begin
+	if(t_update_spec_hist)
+	  begin
+	     //this should be n_pht_idx?
+	     r_bpu_tbl[r_bpu_idx] <= r_pht_idx;
+	 end 
+     end
+   
+   always_ff@(posedge clk)
+     begin
+	if(reset)
+	  begin
+	     r_bpu_idx <= 'd0;
+	  end
+	else if(t_update_spec_hist)
+	  begin
+	     r_bpu_idx <= r_bpu_idx + 'd1;
+	  end
+     end // always_ff@ (posedge clk)
 
+   always_ff@(posedge clk)
+     begin
+	rr_bpu_idx <= reset ? 'd0 : r_bpu_idx;
+     end
+   
    
    always_comb
      begin
@@ -1243,7 +1272,7 @@ endfunction
 	     r_pht_idx <= n_pht_idx;
 	     r_last_spec_gbl_hist <= r_spec_gbl_hist;
 	     r_pht_update <= branch_pc_valid;
-	     r_pht_update_idx <= bpu_idx;
+	     r_pht_update_idx <= w_branch_pht_idx;
 	     r_take_br <= took_branch;
 	     r_branch_pc <= branch_pc;
 	  end
@@ -1312,7 +1341,7 @@ endfunction
      (
       .clk(clk),
       .rd_addr0(n_pht_idx),
-      .rd_addr1(bpu_idx),
+      .rd_addr1(w_branch_pht_idx),
       .wr_addr(t_init_pht ? r_init_pht_idx : r_pht_update_idx),
       .wr_data(t_init_pht ? 8'b01010101 : t_pht_val_vec),
       .wr_en(t_init_pht || t_do_pht_wr),
