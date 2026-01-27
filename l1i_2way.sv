@@ -108,7 +108,7 @@ module l1i_2way(clk,
    input logic 			took_branch;
    input logic 			branch_fault;
    
-   input logic [`LG_PHT_SZ-1:0] bpu_idx;
+   input logic [`LG_BPU_TBL_SZ-1:0] bpu_idx;
 
    
    output insn_fetch_t insn;
@@ -177,6 +177,7 @@ module l1i_2way(clk,
    wire [127:0]				    w_array_out0, w_array_out1;
    
    logic [`LG_PHT_SZ-1:0]		    r_bpu_tbl [(1<<`LG_BPU_TBL_SZ)-1:0];
+   
    logic [`LG_BPU_TBL_SZ-1:0]		    r_bpu_idx, rr_bpu_idx;
    
    insn_fetch_t r_fq[N_FQ_ENTRIES-1:0];
@@ -482,7 +483,7 @@ endfunction
 	  end
      end // always_ff@ (posedge clk)
 
-   wire [`LG_PHT_SZ-1:0] w_branch_pht_idx = r_bpu_tbl[bpu_idx];    
+   wire [`LG_PHT_SZ-1:0] w_branch_pht_idx = r_bpu_tbl[bpu_idx[`LG_BPU_TBL_SZ-1:0]];    
    
    always_ff@(posedge clk)
      begin
@@ -492,7 +493,7 @@ endfunction
 	  end
 	else if(branch_pc_is_indirect & branch_pc_valid)
 	  begin
-	     r_btb[bpu_idx[(`LG_BTB_SZ-1):0]] <= target_pc;
+	     r_btb[w_branch_pht_idx[(`LG_BTB_SZ-1):0]] <= target_pc;
 	  end	
      end // always_ff@ (posedge clk)
 
