@@ -962,6 +962,21 @@ static const char* l2_state_names[] = {
   "UPDATE_PTE"
 };
 
+static const char* early_bit_names[] = {
+  "PUSH_MISS",
+  "THREE FREE CREDITS",
+  "VA/PA MISMATCH OR HIT CACHE",
+  "LAST EARLY VALID AND SAME CACHELINE",
+  "HIT BUSY OR FWD BUSY OR HIT POP",
+  "IS NOT LOAD OR STORE",
+  "TLB HIT",
+  "RR LAST WR",
+  "R_LAST_WR",
+  "N_LAST_WR",
+  "DIRTY MISS",
+  "GOT REQ and PORT1 HIT"
+};
+
 
 int main(int argc, char **argv) {
   static_assert(sizeof(itype) == 4, "itype must be 4 bytes");
@@ -1968,9 +1983,19 @@ int main(int argc, char **argv) {
     std::cout << "log_l1d_is_st_hit                   = " << log_l1d_is_st_hit << "\n";
     std::cout << "log_l1d_is_hit_under_miss           = " << log_l1d_is_hit_under_miss << "\n";
     std::cout << "log_l1d_vapa_mismatches             = " << log_l1d_vapa_mismatches << "\n";
+
     
+    
+
+    std::cout << "early stall reasons:\n";
+    uint64_t total_early_stalls = 0;
     for(int i = 0; i < (sizeof(log_l1d_early_bits)/sizeof(log_l1d_early_bits[0])); i++) {
-      std::cout << "log_l1d_early_bits[" << i << "] = " << log_l1d_early_bits[i] << "\n";
+      total_early_stalls += log_l1d_early_bits[i];
+    }
+    for(int i = 0; i < (sizeof(log_l1d_early_bits)/sizeof(log_l1d_early_bits[0])); i++) {
+      std::cout << "  " << early_bit_names[i] << ":"
+		<< (static_cast<double>(log_l1d_early_bits[i])/total_early_stalls)*100.0
+		<< "\n";
     }
 
     std::cout << "avg load cycles                    ="
