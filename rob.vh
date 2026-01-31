@@ -105,6 +105,8 @@ typedef struct packed {
    logic 		       dst_valid;
    logic [`M_WIDTH-1:0]        data;
    logic [`M_WIDTH-1:0]        pc;
+   logic [`LG_MRQ_ENTRIES:0]   mrq_id;
+   logic		       mrq_id_valid;
 `ifdef ENABLE_CYCLE_ACCOUNTING
    logic [63:0] 	    fetch_cycle;
    logic [63:0]		    uuid;   

@@ -3762,6 +3762,10 @@ module exec(clk,
 	t_mem_tail.amo_op = mem_uop.jmp_imm[4:0];
 	t_mem_tail.data = 'd0;
 	t_mem_tail.spans_cacheline = 1'b0;
+	
+	t_mem_tail.mrq_id = 'd0;
+	t_mem_tail.mrq_id_valid = 1'b0;
+	
 	t_mem_tail.unaligned = 1'b0;
 	t_mem_tail.pc = mem_uop.pc;
 	t_mem_tail.has_cause = 1'b0;

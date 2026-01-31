@@ -241,6 +241,10 @@ module nu_l1d(clk,
    logic [N_TAG_BITS-1:0] 		  rr_cache_tag;
    logic 				  r_valid_out, r_dirty_out;
    logic [L1D_CL_LEN_BITS-1:0] 		  r_array_out, t_data, t_data2;
+
+   logic [(`PA_WIDTH-1):0]		  t_eb_addr;
+   logic [L1D_CL_LEN_BITS-1:0]		  t_eb_data;
+   
    
    //2nd read port
    logic [`LG_L1D_NUM_SETS-1:0] 	  t_cache_idx2, r_cache_idx2, rr_cache_idx2;
@@ -296,6 +300,8 @@ module nu_l1d(clk,
    logic				  n_pending_tlb_zero_page, r_pending_tlb_zero_page;
    logic				  t_got_miss, t_dirty_miss;
    logic				  t_pop_eb, t_push_eb;
+   logic				  t_early_eb;
+   
    
    logic 				  t_push_miss;
    
@@ -388,7 +394,7 @@ module nu_l1d(clk,
 	  end
 	else
 	  begin
-	     if(t_push_eb)
+	     if(t_push_eb | t_early_eb)
 	       begin
 		  r_eb_valid[r_eb_tail_ptr[`LG_EB_ENTRIES-1:0]] <= 1'b1;
 	       end
@@ -398,14 +404,26 @@ module nu_l1d(clk,
 	       end
 	  end // else: !if(reset)
      end // always_ff@ (posedge clk)
+
+
+   always_comb
+     begin
+	t_eb_data = t_data;
+	t_eb_addr = n_port1_req_addr;
+	if(t_early_eb)
+	  begin
+	     t_eb_data = r_array_out2;
+	     t_eb_addr = {r_tag_out2,r_cache_idx2[LG_MAX_SET-1:0],4'd0};;
+	  end
+     end
    
 
    always_ff@(posedge clk)
      begin
-	if(t_push_eb)
+	if(t_push_eb | t_early_eb)
 	  begin
-	     r_sb[r_eb_tail_ptr[`LG_EB_ENTRIES-1:0]].data <= t_data;
-	     r_sb[r_eb_tail_ptr[`LG_EB_ENTRIES-1:0]].addr <= n_port1_req_addr;
+	     r_sb[r_eb_tail_ptr[`LG_EB_ENTRIES-1:0]].data <= t_eb_data;
+	     r_sb[r_eb_tail_ptr[`LG_EB_ENTRIES-1:0]].addr <= t_eb_addr;
 	  end
      end
 
@@ -782,8 +800,11 @@ module nu_l1d(clk,
    wire [`PA_WIDTH-1:0] w_req2_pa = {w_tlb_pa[`PA_WIDTH-1:`LG_PG_SZ], r_req2.addr[`LG_PG_SZ-1:0]};
 
    wire [11:0] 		w_early_bits;
-   wire 		w_gen_early_req = &w_early_bits;
+   wire [11:0]		w_early_bits_dirty;
    
+
+   wire			w_gen_early_req_dirty = &w_early_bits_dirty;
+   wire			w_gen_early_req = &w_early_bits | w_gen_early_req_dirty;
    
    wire	w_early_rsp = mem_rsp_valid ? (mem_rsp_tag != (1 << `LG_MRQ_ENTRIES)) : 1'b0;
 
@@ -1201,9 +1222,9 @@ module nu_l1d(clk,
 	  begin
 	     t_write_dirty_en = 1'b1;	     
 	  end
-	else if(t_push_eb)
+	else if(t_push_eb | t_early_eb)
 	  begin
-	     t_dirty_wr_addr = n_port1_req_addr[IDX_STOP-1:IDX_START];	     
+	     t_dirty_wr_addr = t_eb_addr[IDX_STOP-1:IDX_START];	     
 	     t_write_dirty_en = 1'b1;
 	  end	
 	else if(mem_rsp_reload)
@@ -1328,10 +1349,10 @@ module nu_l1d(clk,
 	  begin
 	     t_write_valid_en = 1'b1;
 	  end
-	else if(t_push_eb)
+	else if(t_push_eb | t_early_eb)
 	  begin
 	     t_write_valid_en = 1'b1;
-	     t_valid_wr_addr = n_port1_req_addr[IDX_STOP-1:IDX_START];
+	     t_valid_wr_addr = t_eb_addr[IDX_STOP-1:IDX_START];
 	     //$display("marking line %x as not valid at cycle %d", 
 	     //t_valid_wr_addr, r_cycle);
 	  end
@@ -1831,6 +1852,7 @@ begin
      end // always_comb
    
 
+   
    always_comb
      begin
 	t_core_mem_rsp.data = r_req.addr;
@@ -1842,12 +1864,11 @@ begin
 	t_core_mem_rsp.mark_page_dirty = 1'b0;
 	t_core_mem_rsp.cause = MISALIGNED_FETCH;
 	t_core_mem_rsp_valid = 1'b0;
-
+	
 	t_incr_busy = 1'b0;
 	n_stall_store = 1'b0;
 	
 	t_push_miss = 1'b0;
-	t_req2_pa = r_req2;
 	n_pending_tlb_miss  = r_pending_tlb_miss;
 	n_pending_tlb_zero_page = r_pending_tlb_zero_page;
 
@@ -1856,7 +1877,6 @@ begin
 	     t_core_mem_rsp.data = r_req2.addr;
 	     t_core_mem_rsp.rob_ptr = r_req2.rob_ptr;
 	     t_core_mem_rsp.dst_ptr = r_req2.dst_ptr;
-	     t_req2_pa.addr = {32'd0, w_tlb_pa};
 	     
 	     if(r_pending_tlb_miss)
 	       begin
@@ -1960,6 +1980,39 @@ begin
 	  end // if (r_got_req2)
      end // always_comb
 
+   always_comb
+     begin
+	t_req2_pa = r_req2;
+	t_req2_pa.addr = {32'd0, w_tlb_pa};
+	t_req2_pa.mrq_id = {1'b0, r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]};
+	t_req2_pa.mrq_id_valid = w_gen_early_req;
+     end
+   
+
+   
+   always_comb
+     begin
+	t_early_eb = 1'b0;
+	if(t_push_miss & w_gen_early_req_dirty)
+	  begin
+	     t_early_eb  = 1'b1;
+	  end
+     end
+
+   always_ff@(negedge clk)
+     begin
+	if(t_push_eb & t_early_eb)
+	  begin
+	     $stop();
+	  end
+	
+	//if(t_early_eb)
+	//begin
+	//$display("doing dirty early load, addr %x", t_eb_addr);
+	//end
+	    
+     end
+   
 `ifdef VERILATOR
    wire w_push_read_miss = t_push_miss ? (!w_port2_rd_hit) : 1'b0;	   
    always_ff@(negedge clk)
@@ -2088,7 +2141,6 @@ begin
 	t_got_miss = 1'b0;
 	t_dirty_miss = 1'b0;
 	t_push_eb = 1'b0;
-	
 	n_req = r_req;
 
 	t_tlb_xlat_replay = 1'b0;
@@ -2233,7 +2285,7 @@ begin
 		  else
 		    begin
 		       t_got_miss = 1'b1;
-		       n_inhibit_write = 1'b0;	
+		       n_inhibit_write = 1'b0;
 		       if(r_hit_busy_addr && r_is_retry || !r_hit_busy_addr || r_lock_cache)
 			 begin
 			    t_miss_idx = r_cache_idx;
@@ -2259,20 +2311,30 @@ begin
 				 n_port1_req_tag = (1 << `LG_MRQ_ENTRIES);
 				 n_state = INJECT_RELOAD;
 				 n_port1_req_valid = 1'b1;				 
-			      end // if (w_free_credit)
+			      end // else: !if((rr_cache_idx == r_cache_idx) && rr_last_wr)
 			 end // if (r_hit_busy_addr && r_is_retry || !r_hit_busy_addr || r_lock_cache)
+		       //else if(r_hit_busy_addr & (r_is_retry == 1'b0) & (r_hit_busy_addr = 1'b0) & (r_lock_cache == 1'b0))
+		       //begin
+		       //end
 		       else
 			 begin
 			    
-			    $display("r_valid_out = %b r_dirty_out = %b r_tag_out = %x r_cache_tag = %x line %x cycle %d",
-				     r_valid_out, r_dirty_out, r_tag_out, r_cache_tag, r_cache_idx, r_cycle);
+			    $display("r_valid_out = %b r_dirty_out = %b r_tag_out = %x r_cache_tag = %x line %x cycle %d, addr %x",
+				     r_valid_out, r_dirty_out, r_tag_out, r_cache_tag, r_cache_idx, r_cycle, {r_tag_out, r_cache_idx[LG_MAX_SET-1:0],4'd0});
+			    
 			    $display("r_hit_busy_addr %b,  r_is_retry  %b r_hit_busy_addr %b r_lock_cache %b",
 				     r_hit_busy_addr, r_is_retry, r_hit_busy_addr, r_lock_cache);
 			    
+			    $display("is_load = %b, is_store = %b, is_atomic = %b", r_req.is_load, r_req.is_store, r_req.is_atomic);
+
+			    $display("mrq id = %d, valid %b", r_req.mrq_id, r_req.mrq_id_valid);
+			    if(r_req.mrq_id_valid)
+			      begin
+				 $display("r_mq_inflight[r_req.mrq_id] = %d", r_mq_inflight[r_req.mrq_id[`LG_MRQ_ENTRIES-1:0]]);
+			      end
 			    $stop();
 			 end
 		    end // else: !if(r_valid_out && r_dirty_out && (r_tag_out != r_cache_tag) )
-		    
 		 end // if (r_got_req)
 	       else if(n_pending_tlb_miss)
 		 begin
@@ -2509,6 +2571,10 @@ begin
 
    always_ff@(negedge clk)
      begin
+	//if(t_got_req & |w_hit_busy_addrs)
+	//begin
+	//$display("cycle %d, hit busy inflight txn %b", r_cycle, w_hit_busy_addrs);
+	//end
 	
 	//if(t_push_eb)
 	//begin
@@ -2695,7 +2761,7 @@ begin
      begin
 	n_eb_head_ptr = r_eb_head_ptr;
 	n_eb_tail_ptr = r_eb_tail_ptr;	
-	if(t_push_eb)
+	if(t_push_eb | t_early_eb)
 	  begin
 	     n_eb_tail_ptr = r_eb_tail_ptr + 'd1;	
 	  end
@@ -2746,7 +2812,30 @@ begin
    assign w_early_bits[9] = (n_last_wr ? (t_cache_idx[`LG_L1D_NUM_SETS-LG_ALIAS_BITS-1:0] != r_req2.addr[`LG_PG_SZ-1:IDX_START]) : 1'b1);
    assign w_early_bits[10] = !w_port2_dirty_miss;
    assign w_early_bits[11] = (r_got_req ? w_cache_port1_hit : 1'b1);
-	   
+   
+   assign w_early_bits_dirty[0] = w_early_bits[0];
+   assign w_early_bits_dirty[1] = w_early_bits[1];
+   assign w_early_bits_dirty[2] = w_early_bits[2];
+   assign w_early_bits_dirty[3] = w_early_bits[3];
+   assign w_early_bits_dirty[4] = w_early_bits[4];   
+   assign w_early_bits_dirty[5] = w_early_bits[5];   
+   assign w_early_bits_dirty[6] = w_early_bits[6];   
+   assign w_early_bits_dirty[7] = w_early_bits[7];   
+   assign w_early_bits_dirty[8] = w_early_bits[8];
+   assign w_early_bits_dirty[9] = w_early_bits[9];   
+   assign w_early_bits_dirty[10] = (r_got_req == 1'b0) & (w_eb_full == 1'b0) & r_req2.is_load;
+   assign w_early_bits_dirty[11] = w_early_bits[11];      
+   
+   
+   //not got req and w_port2_dirty_miss
+
+   //always_ff@(negedge clk)
+   //begin
+   //if((w_gen_early_req==1'b0) && (w_gen_early_req_dirty == 1'b1))
+   //begin
+   //$display("got miss but cant gen early because of dirty");
+   //end
+   //end
 	   
 endmodule // l1d
 
