@@ -9,6 +9,8 @@
  * 
  * */
 
+//`define DEBUG 1
+
 `ifdef VERILATOR
 import "DPI-C" function void pt_l1d_pass1_hit(input longint cycle,
 					      input int	rob_id);
@@ -732,6 +734,15 @@ module nu_l1d(clk,
 	
      end // always_comb
 
+`ifdef DEBUG
+   always_ff@(negedge clk)
+     begin
+	if(t_pop_mq)
+	  begin
+	     $display("popped entry %d from mq at cycle", r_mq_head_ptr[`LG_MRQ_ENTRIES-1:0], r_cycle);
+	  end
+     end
+`endif
 
 
    always_ff@(posedge clk)
@@ -962,6 +973,19 @@ module nu_l1d(clk,
 	   assign w_unaligned_in_mq[i] = r_mq_addr_valid[i] ? r_mq_is_unaligned[i] : 1'b0;
 	end
    endgenerate
+
+   
+   //always_ff@(negedge clk)
+   //begin
+   //for(integer i = 0; i < N_MQ_ENTRIES; i++)
+   //begin
+   //if(w_hit_busy_addrs[i])
+   //begin
+   //$display("r_cycle %d : r_mq_addr[%d] = %x, rob_ptr %d", r_cycle, i, r_mq_addr[i], r_mem_q[i].rob_ptr);
+   //end
+   //end
+   //end
+
    
    always_ff@(posedge clk)
      begin
@@ -1169,17 +1193,19 @@ module nu_l1d(clk,
 	t_array_wr_en = (mem_rsp_reload) | t_wr_array;
      end
 
+`ifdef DEBUG
    always_ff@(negedge clk)
      begin
 	if(mem_rsp_reload)
 	  begin
-	     //$display("got reload, addr %x, idx %d, data %x, state %d",
-	     //mem_rsp_addr, mem_rsp_addr[IDX_STOP-1:IDX_START],
-	     //mem_rsp_load_data,
-	     //r_state);
+	     $display("got reload, addr %x, idx %d, data %x, state %d",
+		      mem_rsp_addr, mem_rsp_addr[IDX_STOP-1:IDX_START],
+		      mem_rsp_load_data,
+		      r_state);
 	  end
 	if(mem_rsp_reload & t_wr_array) $stop();
-     end
+     end // always_ff@ (negedge clk)
+`endif
    
  ram2r1w #(.WIDTH(N_TAG_BITS), .LG_DEPTH(`LG_L1D_NUM_SETS)) dc_tag
      (
@@ -1239,6 +1265,35 @@ module nu_l1d(clk,
 	  end	
      end // always_comb
 
+`ifdef VERILATOR
+   always_ff@(negedge clk)
+     begin
+	if(t_mark_invalid & (t_push_eb | t_early_eb))
+	  begin
+	     $stop();
+	  end
+	else if(t_mark_invalid & mem_rsp_reload)
+	  begin
+	     $stop();
+	  end
+	else if(t_mark_invalid & t_wr_array)
+	  begin
+	     $stop();
+	  end
+	else if(t_early_eb & mem_rsp_reload)
+	  begin
+	     $stop();
+	  end
+	else if((t_push_eb | t_early_eb) & t_wr_array)
+	  begin
+	     $stop();
+	  end
+	else if(mem_rsp_reload & t_wr_array)
+	  begin
+	     $stop();
+	  end
+     end // always_ff@ (negedge clk)
+`endif
    
 
 `ifdef DEBUG
@@ -2056,7 +2111,7 @@ begin
 		   w_gen_early_req ? 32'd1 : 32'd0,
 		   w_gen_early_req ? 32'd1 : 32'd0,
 		   w_gen_early_req ? 32'd1 : 32'd0,
-		   {20'd0, w_early_bits},
+		   {20'd0, w_early_bits_dirty},
 		   t_push_miss & r_req2.is_load ? 32'd1 : 32'0,
 		   t_push_miss & r_req2.is_load & (r_hit_busy_line2 | r_fwd_busy_addr2 | r_pop_busy_addr2) ? 32'd1 : 32'd0,
 		   r_req2.is_store & w_port2_rd_hit ? 32'd1 : 32'd0,
@@ -2215,14 +2270,20 @@ begin
 	       if(r_got_req)
 		 begin
 `ifdef DEBUG
-		    $display("---> cycle %d port1 addr %x for pc %x, rob_ptr %d, hit %b, data %x, store %b, dirty %b, idx %d", 
-			     r_cycle, r_req.addr, r_req.pc, 
+		    $display("---> cycle %d port1 addr %x for pc %x, rob_ptr %d, hit %b, data %x, store %b, dirty %b, idx %d, hit %b, valid %b, tag out %x, expected tag %x", 
+			     r_cycle, 
+			     r_req.addr, 
+			     r_req.pc, 
 			     r_req.rob_ptr, 
 			     w_got_hit, 
 			     t_rsp_data, 
 			     r_req.is_store,
 			     r_dirty_out,
-			     r_cache_idx);
+			     r_cache_idx,
+			     w_got_hit,
+			     r_valid_out,
+			     r_tag_out,
+			     r_cache_tag);
 `endif
 		    
 		    if(w_got_hit)
@@ -2312,10 +2373,7 @@ begin
 				 n_state = INJECT_RELOAD;
 				 n_port1_req_valid = 1'b1;				 
 			      end // else: !if((rr_cache_idx == r_cache_idx) && rr_last_wr)
-			 end // if (r_hit_busy_addr && r_is_retry || !r_hit_busy_addr || r_lock_cache)
-		       //else if(r_hit_busy_addr & (r_is_retry == 1'b0) & (r_hit_busy_addr = 1'b0) & (r_lock_cache == 1'b0))
-		       //begin
-		       //end
+			 end 
 		       else
 			 begin
 			    
@@ -2327,11 +2385,12 @@ begin
 			    
 			    $display("is_load = %b, is_store = %b, is_atomic = %b", r_req.is_load, r_req.is_store, r_req.is_atomic);
 
-			    $display("mrq id = %d, valid %b", r_req.mrq_id, r_req.mrq_id_valid);
+			    $display("rob id = %d, mrq id = %d, valid %b", r_req.rob_ptr, r_req.mrq_id, r_req.mrq_id_valid);
 			    if(r_req.mrq_id_valid)
 			      begin
 				 $display("r_mq_inflight[r_req.mrq_id] = %d", r_mq_inflight[r_req.mrq_id[`LG_MRQ_ENTRIES-1:0]]);
 			      end
+			    $display("r_hit_busy_addrs = %b", r_hit_busy_addrs);
 			    $stop();
 			 end
 		    end // else: !if(r_valid_out && r_dirty_out && (r_tag_out != r_cache_tag) )
@@ -2383,8 +2442,7 @@ begin
 			         t_got_rd_retry = 1'b1;
 	                       end
 	                      else
-	   begin
-	   //$display("replaying MEM_PREFETCH for pc %x, addr %x", t_mem_head.pc, t_mem_head.addr);
+				begin
 				   t_force_clear_busy = 1'b1;	   
 	                       end
 			   end // else: !if(t_mem_head.is_store || t_mem_head.is_atomic)
@@ -2823,7 +2881,7 @@ begin
    assign w_early_bits_dirty[7] = w_early_bits[7];   
    assign w_early_bits_dirty[8] = w_early_bits[8];
    assign w_early_bits_dirty[9] = w_early_bits[9];   
-   assign w_early_bits_dirty[10] = (r_got_req == 1'b0) & (w_eb_full == 1'b0) & r_req2.is_load;
+   assign w_early_bits_dirty[10] = (r_got_req == 1'b0) & (w_eb_full == 1'b0) & (mem_rsp_valid == 1'b0);
    assign w_early_bits_dirty[11] = w_early_bits[11];      
    
    
