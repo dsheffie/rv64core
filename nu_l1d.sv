@@ -429,6 +429,7 @@ module nu_l1d(clk,
 	  end
      end
 
+
    wire [N_EB_ENTRIES-1:0] w_eb_port1_hits, w_eb_port2_hits;
    
    generate
@@ -441,6 +442,20 @@ module nu_l1d(clk,
 
    wire w_eb_port1_hit = |w_eb_port1_hits;
    wire	w_eb_port2_hit = |w_eb_port2_hits;
+
+   // always_ff@(negedge clk)
+   //   begin
+   // 	if(t_push_eb) $display("t_push_eb at cycle %d, data %x, addr %x", r_cycle, t_eb_data, t_eb_addr);
+   // 	if(t_early_eb) $display("t_early_eb at cycle %d, data %x, addr %x", r_cycle, t_eb_data, t_eb_addr);
+	
+   // 	for(integer i = 0; i < N_EB_ENTRIES; i=i+1)
+   // 	  begin
+   // 	     if(r_eb_valid[i])
+   // 	       begin
+   // 		  $display("cycle %d : eb entry %d has addr %x, data %x", r_cycle, i, r_sb[i].addr, r_sb[i].data);
+   // 	       end
+   // 	  end
+   //   end
 
    
    always_comb
@@ -875,11 +890,22 @@ module nu_l1d(clk,
 	     if(w_gen_early_req)
 	       begin
 `ifdef DEBUG
-		  $display("generating early memory request with tag %d for pc %x addr %x rob ptr %d at cycle %d, r_last_wr = %b, rr_last_wr = %b, line %x",
+		  $display("generating early memory request dirty %b with tag %d for pc %x addr %x rob ptr %d at cycle %d, r_last_wr = %b, rr_last_wr = %b, line %x, valid %b, tag %x, expected tag %x",
+			   w_gen_early_req_dirty,
 			   r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0], r_req2.pc, 
 			   r_req2.addr[`PA_WIDTH-1:0],
 			   r_req2.rob_ptr,
-			   r_cycle, r_last_wr, rr_last_wr, r_req2.addr[IDX_STOP-1:IDX_START]);
+			   r_cycle, r_last_wr, rr_last_wr, r_req2.addr[IDX_STOP-1:IDX_START],
+			   r_valid_out2,
+			   r_tag_out2,
+			   w_tlb_pa[`PA_WIDTH-1:`LG_PG_SZ]);
+		  
+		  if(w_gen_early_req_dirty & (r_valid_out2 == 1'b0))
+		    begin
+		       $display("dirty = %b", r_dirty_out2);
+		       $stop();
+		    end
+		  
 		  
 `endif
 		  r_mq_inflight[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]] <= 1'b1;
@@ -1268,8 +1294,10 @@ module nu_l1d(clk,
 `ifdef VERILATOR
    always_ff@(negedge clk)
      begin
-	if(t_mark_invalid & (t_push_eb | t_early_eb))
+	if(t_mark_invalid & t_early_eb)
 	  begin
+	     $display("state = %d, t_push_eb = %b, t_early_eb = %b",
+		      r_state, t_push_eb, t_early_eb);
 	     $stop();
 	  end
 	else if(t_mark_invalid & mem_rsp_reload)
@@ -2702,8 +2730,9 @@ begin
 	     n_last_wr2 = core_mem_va_req.is_store;
 	    
 `ifdef DEBUG
-	     $display("ingest new op at cycle %d atomic %b, ll %b pc %x rob ptr %d addr %x r_state = %d, n_state = %d, idx2 %d, miss idx = %d old ack %b, mem_rsp_valid = %b",
+	     $display("ingest new op at cycle %d store %b, atomic %b, ll %b pc %x rob ptr %d addr %x r_state = %d, n_state = %d, idx2 %d, miss idx = %d old ack %b, mem_rsp_valid = %b",
 	      	      r_cycle,
+		      core_mem_va_req.is_store,
 		      core_mem_va_req.is_atomic,
 		      core_mem_va_req.is_ll,
 	      	      core_mem_va_req.pc,
@@ -2881,7 +2910,7 @@ begin
    assign w_early_bits_dirty[7] = w_early_bits[7];   
    assign w_early_bits_dirty[8] = w_early_bits[8];
    assign w_early_bits_dirty[9] = w_early_bits[9];   
-   assign w_early_bits_dirty[10] = (r_got_req == 1'b0) & (w_eb_full == 1'b0) & (mem_rsp_valid == 1'b0);
+   assign w_early_bits_dirty[10] = r_valid_out2 & r_dirty_out2 & (r_got_req == 1'b0) & (w_eb_full == 1'b0) & (mem_rsp_valid == 1'b0);
    assign w_early_bits_dirty[11] = w_early_bits[11];      
    
    

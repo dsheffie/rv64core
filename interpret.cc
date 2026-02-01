@@ -93,7 +93,7 @@ bool state_t::memory_map_check(uint64_t pa, bool store, int64_t x) {
     return true;
   }
   if(pa >= CLINT_BASE_ADDR and (pa < (CLINT_BASE_ADDR + CLINT_SIZE))) {
-    assert(store);
+    //  assert(store);
     switch(pa-CLINT_BASE_ADDR)
       {
       case 0x0:

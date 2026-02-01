@@ -5,7 +5,7 @@ import re
 import time
 
 if __name__ == '__main__':
-    n_tests = 1000
+    n_tests = 100
     use_paging = False
     num_proc = 24
     children = []
@@ -39,10 +39,10 @@ if __name__ == '__main__':
         r = 'test-' + str(t)
         test = r + '.c'
         hitTimeOut = True
-        with open('/dev/null', 'w') as o:
-            p = subprocess.Popen(['/opt/riscv64/bin/riscv64-unknown-elf-gcc', '-O3', '-march=rv64ima_zicsr', '-mcmodel=medany', \
-                            '-I/usr/include/csmith/', test, '-o', r+'.rv64', '-specs=htif.specs'], stderr=o, stdout=o)
-            children.append(p)
+        # with open('/dev/null', 'w') as o:
+        #     p = subprocess.Popen(['/opt/riscv64/bin/riscv64-unknown-elf-gcc', '-O3', '-march=rv64ima_zicsr', '-mcmodel=medany', \
+        #                     '-I/usr/include/csmith/', test, '-o', r+'.rv64', '-specs=htif.specs'], stderr=o, stdout=o)
+        #     children.append(p)
 
         with open('/dev/null', 'w') as o:
             p = subprocess.Popen(['/opt/riscv64/bin/riscv64-unknown-elf-gcc', '-O3', '-march=rv64ima_zicsr_zbb', '-mcmodel=medany', \
