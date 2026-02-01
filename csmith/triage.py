@@ -66,6 +66,7 @@ if __name__ == '__main__':
                 
     print('%d zero displacement loops' % zero_disp_loops)
     failures.sort()
+    failures.reverse()
     for f in failures:
         print('%d,%s' % f)
 
