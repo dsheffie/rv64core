@@ -542,8 +542,8 @@ module nu_l1d(clk,
 			     ACTIVE, //2
                              INJECT_RELOAD, //3
 			     WAIT_INJECT_RELOAD, //4
-                             CLEAR_DIRTY, //3			     			     
-                             FLUSH_CACHE, //5
+                             CLEAR_DIRTY, //5			     			     
+                             FLUSH_CACHE, //6
                              FLUSH_CACHE_WAIT, //6
 			     FLUSH_CACHE_LAST_WAIT, //7
                              FLUSH_CL, //8
@@ -1325,7 +1325,10 @@ module nu_l1d(clk,
       begin
 	 if(t_mark_invalid & mem_rsp_valid)
 	   begin
-	      $display("t_mark_invalid & mem_rsp_valid, t_early_eb = %b, t_push_eb = %b", t_early_eb, t_push_eb);
+	      $display("cycle %d, t_mark_invalid & mem_rsp_valid, t_early_eb = %b, t_push_eb = %b, state = %d, n_state = %d",
+		       r_cycle, t_early_eb, t_push_eb, r_state, n_state);
+	      $display("resp for tag %d, addr %x, data %x at cycle %d, t_array_wr_en = %b cycle %d",
+		       mem_rsp_tag, mem_rsp_addr, mem_rsp_load_data, r_cycle, t_array_wr_en, r_cycle);	      
 	      $stop();
 	   end
 	 else if(t_mark_invalid & t_wr_array)
@@ -2487,7 +2490,7 @@ begin
 	       begin
 		  t_old_ack = 1'b1;
 	       end  
-	     else if(r_flush_req && mem_q_empty && !(r_got_req && r_last_wr) && !w_eb_full)
+	     else if(r_flush_req & mem_q_empty & ((r_got_req & r_last_wr)==1'b0) & w_queues_drained)
 	       begin
 		  n_state = FLUSH_CACHE;
 		  if(!mem_q_empty) $stop();
