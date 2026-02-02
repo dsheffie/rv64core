@@ -10,6 +10,8 @@
 
 #define ROB_ENTRIES 64
 
+#define DISABLE_MAPS 1
+
 bool globals::syscall_emu = true;
 uint32_t globals::tohost_addr = 0;
 uint32_t globals::fromhost_addr = 0;
@@ -59,7 +61,6 @@ static uint64_t l1d_accept = 0;
 
 static uint64_t l1d_stores = 0;
 
-static std::map<int,uint64_t> block_distribution;
 static std::map<int,uint64_t> restart_distribution;
 static std::map<int,uint64_t> restart_ds_distribution;
 static std::map<int,uint64_t> fault_to_restart_distribution;
@@ -126,20 +127,24 @@ void log_mem_begin(int r, int l, long long c, long long pc, long long vaddr) {
 }
 
 static std::map<uint64_t, uint64_t> store_latency_map;
-static std::map<int, uint64_t> mem_lat_map, fp_lat_map, non_mem_lat_map, mispred_lat_map;
+static std::map<int, uint64_t> mem_lat_map,  mispred_lat_map;
 
 void log_store_release(int r, long long c) {
   //assert(is_load[r] == false);
   if(not(is_load[r])) {
     uint64_t cc = c - mem_table[r];
     //printf("store released after %lu cycles\n", cc);
+#ifndef DISABLE_MAPS
     store_latency_map[cc]++;
+#endif
   }
 }
 
 void log_mem_end(int r, long long c) {
   uint64_t cc = c - mem_table[r];
+#ifndef DISABLE_MAPS  
   mem_lat_map[cc]++;
+#endif
   if(is_load[r]) {
     ++n_logged_loads;
     total_load_lat += cc;
@@ -503,6 +508,7 @@ void report_exec(int int_valid, int int_ready,
   int total_ready = __builtin_popcount(ready_int) +
     __builtin_popcount(ready_int2);
   int_sched_rdy_map[total_ready]++;
+
 }
 
 
@@ -786,10 +792,14 @@ void record_retirement(long long pc,
     //std::cout << "mispredict at " << std::hex << pc << std::dec << " took " << t
     //<< " cycles from alloc to retire and "
     //<< tt << " cycles from fetch to retire\n";
+#ifndef DISABLE_MAPS  
     mispred_lat_map[complete_cycle-alloc_cycle]++;
+#endif
   }
-  
+
+#ifndef DISABLE_MAPS
   retire_map[delta]++;
+#endif
   
   last_retire_cycle = retire_cycle;
   last_retire_pc = pc;
@@ -926,7 +936,7 @@ int main(int argc, char **argv) {
       ("pipeend", po::value<uint64_t>(&pipeend)->default_value(~0UL), "when to stop logging")
       ("pipeip", po::value<uint64_t>(&pipeip)->default_value(0), "when to start logging")
       ("pipeipcnt", po::value<uint64_t>(&pipeipcnt)->default_value(0), "when to start logging")      
-      ("maxcycle", po::value<uint64_t>(&max_cycle)->default_value(1UL<<34), "maximum cycles")
+      ("maxcycle", po::value<uint64_t>(&max_cycle)->default_value(1UL<<50), "maximum cycles")
       ("maxicnt", po::value<uint64_t>(&max_icnt)->default_value(1UL<<50), "maximum icnt")
       ("trace,t", po::value<bool>(&trace_retirement)->default_value(false), "trace retired instruction stream")
       ("starttrace,s", po::value<uint64_t>(&start_trace_at)->default_value(~0UL), "start tracing retired instructions")
@@ -1132,14 +1142,18 @@ int main(int argc, char **argv) {
       if(tb->paging_active) {
 	pa = translate(last_retired_pc, tb->page_table_root, true, false);
       }
+#ifndef DISABLE_MAPS          
       tip_map[pa]+= 1.0;
+#endif
     }
     else if(!(tb->retire_valid or tb->retire_two_valid)) {
       uint64_t pa = tb->retire_pc;
       if(tb->paging_active) {
 	pa = translate(tb->retire_pc, tb->page_table_root, true, false);
-      }	
+      }
+#ifndef DISABLE_MAPS      
       tip_map[pa]+= 1.0;
+#endif
     }
     else {
       assert(tb->retire_valid or tb->retire_two_valid);
@@ -1157,8 +1171,10 @@ int main(int argc, char **argv) {
 	pa = tb->retire_two_pc;
 	if(tb->paging_active) {
 	  pa = translate(tb->retire_two_pc, tb->page_table_root, true, false);
-	}	
+	}
+#ifndef DISABLE_MAPS	
 	tip_map[pa]+= 1.0 / total;
+#endif
 	insn_cnts[pa]++;
       }
     }
@@ -1793,10 +1809,6 @@ int main(int argc, char **argv) {
     double avg_mem_lat = histo_mean_median(mem_lat_map, median_mem_lat);
     out << "avg mem alloc to complete = " << avg_mem_lat << "\n";
     out << "median mem alloc to complete = " << median_mem_lat << "\n";
-
-    avg_mem_lat = histo_mean_median(non_mem_lat_map, median_mem_lat);
-    out << "avg non-mem alloc to complete = " << avg_mem_lat << "\n";
-    out << "median non-mem alloc to complete = " << median_mem_lat << "\n";
 
     avg_mem_lat = histo_mean_median(mispred_lat_map, median_mem_lat);
     out << "avg mispred branch alloc to complete = " << avg_mem_lat << "\n";
