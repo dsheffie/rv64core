@@ -379,7 +379,8 @@ module nu_l1d(clk,
 
 
    
-   wire  mem_rsp_valid = r_got_req & r_req.is_store ? 1'b0 : !w_l2q_empty;
+   wire  mem_rsp_valid = r_got_req & 
+	 (r_req.is_store|r_req.is_atomic) ? 1'b0 : !w_l2q_empty;
 
 
 
@@ -825,7 +826,7 @@ module nu_l1d(clk,
    wire [11:0]		w_early_bits_dirty;
    
 
-   wire			w_gen_early_req_dirty = &w_early_bits_dirty;
+   wire			w_gen_early_req_dirty = (&w_early_bits_dirty);
    wire			w_gen_early_req = &w_early_bits | w_gen_early_req_dirty;
    
    wire	w_early_rsp = mem_rsp_valid ? (mem_rsp_tag != (1 << `LG_MRQ_ENTRIES)) : 1'b0;
@@ -1319,7 +1320,33 @@ module nu_l1d(clk,
      end // always_ff@ (negedge clk)
 `endif
    
-
+`ifdef VERILATOR
+    always_ff@(negedge clk)
+      begin
+	 if(t_mark_invalid & mem_rsp_valid)
+	   begin
+	      $display("t_mark_invalid & mem_rsp_valid, t_early_eb = %b, t_push_eb = %b", t_early_eb, t_push_eb);
+	      $stop();
+	   end
+	 else if(t_mark_invalid & t_wr_array)
+	   begin
+	      $display("t_mark_invalid & t_wr_array");
+	      $stop();
+	   end
+	 else if(mem_rsp_valid & t_wr_array)
+	   begin
+	      $display("write port conflict, state %d, n_state %d, r_req.pc %x, resp tag %d",
+		      r_state, n_state, r_req.pc, mem_rsp_tag);
+	      $display("store to line %x with value %x t_dirty_value %b t_write_dirty_en %b at cycle %d",
+		       t_array_wr_addr, t_array_wr_data, t_dirty_value, t_write_dirty_en, r_cycle);	  
+	      $display("r_got_req = %b, is_store = %b, is_load = %b, is_atomic = %b",
+		       r_got_req, r_req.is_store, r_req.is_load, r_req.is_atomic);
+	      
+	      $stop();
+	   end	 
+      end
+`endif
+   
 `ifdef DEBUG
     always_ff@(negedge clk)
       begin
@@ -1346,11 +1373,6 @@ module nu_l1d(clk,
 	      $display("replay t_cache_idx2 = %x at cycle %d", t_cache_idx2, r_cycle);
 	   end	 
 	 
-	 if(t_mark_invalid & mem_rsp_valid | t_mark_invalid & t_wr_array | mem_rsp_valid & t_wr_array)
-	   begin
-	      $display("multiple actions to dirty in a cycle");
-	      $stop();
-	   end
 	 
 	if(t_wr_array)
 	  begin
@@ -1380,12 +1402,6 @@ module nu_l1d(clk,
 
 	 	 
 	
-	if(mem_rsp_reload && t_wr_array)
-	  begin
-	     $display("write port conflict, state %d, n_state %d, r_req.pc %x, resp tag %d",
-		      r_state, n_state, r_req.pc, mem_rsp_tag);
-	     $stop();
-	  end
 	// if(t_wr_array)
 	//   begin
 	//      $display("pc %x op %d rob ptr %d: t_array_data = %x, t_data = %x, t_store_shift = %x, mem_rsp_valid = %b, fwd = %b",
@@ -2774,7 +2790,7 @@ begin
 	     n_mem_req_opcode = n_port2_req_opcode;
 	     n_mem_req_tag = n_port2_req_tag;
 	  end
-	else if(!(n_port1_req_valid|n_port2_req_valid) & !w_eb_empty & w_one_free_credit)
+	else if(!(n_port1_req_valid|n_port2_req_valid) & !w_eb_empty & w_three_free_credits)
 	  begin
 	     t_pop_eb = 1'b1;
 	     n_mem_req_valid = 1'b1;
@@ -2790,6 +2806,17 @@ begin
 
    wire w_decr_credit = n_mem_req_valid & !mem_rsp_valid;
    wire	w_incr_credit = !n_mem_req_valid & mem_rsp_valid;
+
+   //always_ff@(negedge clk)
+   //begin
+   //if(r_mrq_credits < 'd3)
+   //begin
+   //$display("%d credits available at cycle %d, pop mq %b, pop eb %b, dec %b, inc %b", 
+   //r_mrq_credits, r_cycle, t_pop_mq, t_pop_eb, w_decr_credit, w_incr_credit);
+   //end
+   //end
+
+   
    always_comb
      begin
 	n_mrq_credits = r_mrq_credits;
@@ -2798,8 +2825,14 @@ begin
 	     n_mrq_credits = r_mrq_credits - 'd1;
 	     if(r_mrq_credits == 'd0) 
 	       begin
-		  $display("trying to push with no free credits,  mem_rdy %b, w_gen_early_req %b, r_state = %d", 
-			   mem_rdy, w_gen_early_req, r_state);
+		  $display("trying to push with no free credits,  mem_rdy %b, w_gen_early_req %b, w_gen_early_req_dirty %b, p1 %b, p2 %b, eb %b, r_state = %d, ", 
+			   mem_rdy, 
+			   w_gen_early_req, 
+			   w_gen_early_req_dirty,
+			   n_port1_req_valid,
+			   n_port2_req_valid,
+			   t_pop_eb,
+			   r_state);
 		  $stop();
 	       end
 	  end
