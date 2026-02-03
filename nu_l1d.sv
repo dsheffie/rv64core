@@ -75,6 +75,8 @@ module nu_l1d(clk,
 	   l2_probe_val,
 	   l2_probe_ack,	   
 	   l1d_state,
+	   stop_reason,
+	   stopped,
 	   restart_complete,
            restart_valid,	      
 	   paging_active,
@@ -140,6 +142,9 @@ module nu_l1d(clk,
    output logic			 l2_probe_ack;
    
    output logic [3:0] l1d_state;
+   output logic [3:0] stop_reason;
+   output logic	      stopped;
+   
    input logic 	      restart_complete;
    input logic	      restart_valid;
     
@@ -319,6 +324,12 @@ module nu_l1d(clk,
    
    logic 				  n_core_mem_rsp_valid, r_core_mem_rsp_valid;
 
+   logic				  n_stop, r_stop;
+   logic [3:0]				  r_stop_reason, n_stop_reason;
+   
+   assign stopped = r_stop;
+   assign stop_reason = r_stop_reason;
+   
    typedef struct packed {
       logic [(`PA_WIDTH-1):0] addr;
       logic [127:0] 	      data;
@@ -329,6 +340,8 @@ module nu_l1d(clk,
    eb_t [(N_EB_ENTRIES-1):0] r_sb;   
    logic [`LG_EB_ENTRIES:0] r_eb_head_ptr, n_eb_head_ptr;
    logic [`LG_EB_ENTRIES:0] r_eb_tail_ptr, n_eb_tail_ptr;
+   logic [`LG_EB_ENTRIES:0] t_eb_tail_ptr_plus_one;
+      
    logic [(N_EB_ENTRIES-1):0] r_eb_valid;
    
    
@@ -372,10 +385,12 @@ module nu_l1d(clk,
 	     r_eb_tail_ptr <= n_eb_tail_ptr;	     
 	  end
      end // always_ff@ (posedge clk)
-
+   
    wire w_eb_empty = r_eb_head_ptr==r_eb_tail_ptr;
    wire w_eb_full =  (r_eb_head_ptr!=r_eb_tail_ptr) & 
 	(r_eb_head_ptr[`LG_EB_ENTRIES-1:0] == r_eb_tail_ptr[`LG_EB_ENTRIES-1:0]);
+   wire	w_eb_almost_full =  (r_eb_head_ptr!=t_eb_tail_ptr_plus_one) & 
+	(r_eb_head_ptr[`LG_EB_ENTRIES-1:0] == t_eb_tail_ptr_plus_one[`LG_EB_ENTRIES-1:0]);   
 
 
    
@@ -895,17 +910,15 @@ module nu_l1d(clk,
 			   r_cycle, r_last_wr, rr_last_wr, r_req2.addr[IDX_STOP-1:IDX_START],
 			   r_valid_out2,
 			   r_tag_out2,
-			   w_tlb_pa[`PA_WIDTH-1:`LG_PG_SZ]);
+			   w_tlb_pa[`PA_WIDTH-1:`LG_PG_SZ]);		  		 		  
+`endif
+		  r_mq_inflight[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]] <= 1'b1;
 		  
 		  if(w_gen_early_req_dirty & (r_valid_out2 == 1'b0))
 		    begin
 		       $display("dirty = %b", r_dirty_out2);
 		       $stop();
 		    end
-		  
-		  
-`endif
-		  r_mq_inflight[r_mq_tail_ptr[`LG_MRQ_ENTRIES-1:0]] <= 1'b1;
 	       end
 	     if(w_early_rsp & (mem_rsp_tag[`LG_MRQ_ENTRIES] == 1'b0))
 	       begin
@@ -1288,6 +1301,69 @@ module nu_l1d(clk,
 	  end	
      end // always_comb
 
+
+   always_ff@(posedge clk)
+     begin
+	r_stop <= reset ? 1'b0 : n_stop;
+	r_stop_reason <= reset ? 'd0 : n_stop_reason;
+     end
+
+   always_comb
+     begin
+	n_stop = r_stop;
+	n_stop_reason = r_stop_reason;
+	if(t_mark_invalid & t_early_eb)
+	  begin
+	     n_stop = 1'b1;
+	     n_stop_reason = 'd1;
+	  end
+	else if(t_push_eb & t_early_eb)
+	  begin
+	     n_stop = 1'b1;
+	     n_stop_reason = 'd2;
+	  end
+	else if(t_mark_invalid & mem_rsp_reload)
+	  begin
+	     n_stop = 1'b1;	
+	     n_stop_reason = 'd3;     
+	  end
+	else if(t_mark_invalid & t_wr_array)
+	  begin
+	     n_stop = 1'b1;	
+	     n_stop_reason = 'd4;     	     
+	  end
+	else if(t_early_eb & mem_rsp_reload)
+	  begin
+	     n_stop = 1'b1;	
+	     n_stop_reason = 'd5;     	     	     
+	  end
+	else if((t_push_eb | t_early_eb) & t_wr_array)
+	  begin
+	     n_stop = 1'b1;	
+	     n_stop_reason = 'd6;     	     	     	     
+	  end
+	else if(mem_rsp_reload & t_wr_array)
+	  begin
+	     n_stop = 1'b1;	
+	     n_stop_reason = 'd7;     	     	     	     	     
+	  end
+	else if( t_push_eb & w_eb_full)
+	  begin
+	     n_stop = 1'b1;	
+	     n_stop_reason = 'd8;     	     	     	     	     
+	  end
+	else if( t_early_eb & w_eb_full)
+	  begin
+	     n_stop = 1'b1;	
+	     n_stop_reason = 'd9;     	     	     	     	     
+	  end	
+	else if( t_pop_eb & w_eb_empty)
+	  begin
+	     n_stop = 1'b1;	
+	     n_stop_reason = 'd10;     	     	     	     	     
+	  end
+     end // always_comb
+
 `ifdef VERILATOR
    always_ff@(negedge clk)
      begin
@@ -1317,6 +1393,20 @@ module nu_l1d(clk,
 	  begin
 	     $stop();
 	  end
+	else if( t_push_eb & w_eb_full)
+	  begin
+	     $display("r_state = %d, n_state = %d", r_state, n_state);
+	     $stop();
+	  end
+	else if( t_early_eb & w_eb_full)
+	  begin
+	     $stop();
+	  end	
+	else if( t_pop_eb & w_eb_empty)
+	  begin
+	     $stop();	     
+	  end
+	
      end // always_ff@ (negedge clk)
 `endif
    
@@ -2189,7 +2279,7 @@ begin
 	t_new_req_c[5] = !t_cm_block_stall;
 	t_new_req_c[6] = !r_rob_inflight[core_mem_va_req.rob_ptr];
 	
-	t_new_req = core_mem_va_req_valid & (&t_new_req_c);
+	t_new_req = core_mem_va_req_valid & (&t_new_req_c) & (r_stop == 1'b0);
      end // always_comb
 
    always_ff@(posedge clk)
@@ -2438,7 +2528,7 @@ begin
 		 end
 	       
 	       /* not qualified on r_got_req */
-	       if(!mem_q_empty & !t_got_miss & !r_lock_cache & !n_pending_tlb_miss &!w_eb_port1_hit & !w_eb_full & w_two_free_credits)
+	       if(!mem_q_empty & !t_got_miss & !r_lock_cache & !n_pending_tlb_miss &!w_eb_port1_hit & !w_eb_almost_full & w_two_free_credits)
 		 begin		    
 		    if(!t_mh_block & (r_mq_inflight[r_mq_head_ptr[`LG_MRQ_ENTRIES-1:0]] == 1'b0)  )
 		      begin
@@ -2879,7 +2969,9 @@ begin
    always_comb
      begin
 	n_eb_head_ptr = r_eb_head_ptr;
-	n_eb_tail_ptr = r_eb_tail_ptr;	
+	n_eb_tail_ptr = r_eb_tail_ptr;
+	t_eb_tail_ptr_plus_one  = r_eb_tail_ptr + 'd1;
+      
 	if(t_push_eb | t_early_eb)
 	  begin
 	     n_eb_tail_ptr = r_eb_tail_ptr + 'd1;	
@@ -2942,7 +3034,7 @@ begin
    assign w_early_bits_dirty[7] = w_early_bits[7];   
    assign w_early_bits_dirty[8] = w_early_bits[8];
    assign w_early_bits_dirty[9] = w_early_bits[9];   
-   assign w_early_bits_dirty[10] = r_valid_out2 & r_dirty_out2 & (r_got_req == 1'b0) & (w_eb_full == 1'b0) & (mem_rsp_valid == 1'b0);
+   assign w_early_bits_dirty[10] = r_valid_out2 & r_dirty_out2 & (r_got_req == 1'b0) & (w_eb_almost_full == 1'b0) & (mem_rsp_valid == 1'b0);
    assign w_early_bits_dirty[11] = w_early_bits[11];      
    
    
