@@ -619,6 +619,7 @@ module
 	       .l2_probe_ack(w_l2_probe_ack),		 
 	       .l1d_state(/*l1d_state*/),
 	       .stop_reason(l1d_state),
+	       .stop_state(l1i_state),
 	       .stopped(),
 	       .restart_complete(w_restart_complete),
    	       .restart_valid(restart_valid),		  
@@ -751,7 +752,7 @@ module
  `endif
 	      .clk(clk),
 	      .reset(reset),
-	      .l1i_state(l1i_state),
+	      .l1i_state(/*l1i_state*/),
 	      .mode64(w_mode64),
 	      .priv(w_priv),
 	      .page_table_root(w_page_table_root),

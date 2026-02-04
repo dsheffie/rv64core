@@ -76,6 +76,7 @@ module nu_l1d(clk,
 	   l2_probe_ack,	   
 	   l1d_state,
 	   stop_reason,
+	   stop_state,
 	   stopped,
 	   restart_complete,
            restart_valid,	      
@@ -143,6 +144,8 @@ module nu_l1d(clk,
    
    output logic [3:0] l1d_state;
    output logic [3:0] stop_reason;
+   output logic [3:0] stop_state;
+   
    output logic	      stopped;
    
    input logic 	      restart_complete;
@@ -326,9 +329,12 @@ module nu_l1d(clk,
 
    logic				  n_stop, r_stop;
    logic [3:0]				  r_stop_reason, n_stop_reason;
+   logic [3:0]				  r_stop_state, n_stop_state;
    
    assign stopped = r_stop;
    assign stop_reason = r_stop_reason;
+   assign stop_state = r_stop_state;
+   
    
    typedef struct packed {
       logic [(`PA_WIDTH-1):0] addr;
@@ -389,8 +395,8 @@ module nu_l1d(clk,
    wire w_eb_empty = r_eb_head_ptr==r_eb_tail_ptr;
    wire w_eb_full =  (r_eb_head_ptr!=r_eb_tail_ptr) & 
 	(r_eb_head_ptr[`LG_EB_ENTRIES-1:0] == r_eb_tail_ptr[`LG_EB_ENTRIES-1:0]);
-   wire	w_eb_almost_full =  (r_eb_head_ptr!=t_eb_tail_ptr_plus_one) & 
-	(r_eb_head_ptr[`LG_EB_ENTRIES-1:0] == t_eb_tail_ptr_plus_one[`LG_EB_ENTRIES-1:0]);   
+   wire	w_eb_almost_full = ( (r_eb_head_ptr!=t_eb_tail_ptr_plus_one) & 
+	(r_eb_head_ptr[`LG_EB_ENTRIES-1:0] == t_eb_tail_ptr_plus_one[`LG_EB_ENTRIES-1:0])) | w_eb_full;   
 
 
    
@@ -559,7 +565,7 @@ module nu_l1d(clk,
 			     WAIT_INJECT_RELOAD, //4
                              CLEAR_DIRTY, //5			     			     
                              FLUSH_CACHE, //6
-                             FLUSH_CACHE_WAIT, //6
+                             FLUSH_CACHE_WAIT, //7
 			     FLUSH_CACHE_LAST_WAIT, //7
                              FLUSH_CL, //8
                              FLUSH_CL_WAIT, //9			     
@@ -1306,16 +1312,19 @@ module nu_l1d(clk,
      begin
 	r_stop <= reset ? 1'b0 : n_stop;
 	r_stop_reason <= reset ? 'd0 : n_stop_reason;
+	r_stop_state <= reset ? 'd0 : n_stop_state;
      end
 
    always_comb
      begin
 	n_stop = r_stop;
 	n_stop_reason = r_stop_reason;
+	n_stop_state = r_stop_state;
+	
 	if(t_mark_invalid & t_early_eb)
 	  begin
 	     n_stop = 1'b1;
-	     n_stop_reason = 'd1;
+	     n_stop_reason = 'd1;	     
 	  end
 	else if(t_push_eb & t_early_eb)
 	  begin
@@ -1362,11 +1371,21 @@ module nu_l1d(clk,
 	     n_stop = 1'b1;	
 	     n_stop_reason = 'd10;     	     	     	     	     
 	  end
+
+	if((n_stop==1'b1) & (r_stop == 1'b0))
+	  begin
+	     n_stop_state = r_state;
+	  end
+	
      end // always_comb
 
 `ifdef VERILATOR
    always_ff@(negedge clk)
      begin
+	//if(n_state == FLUSH_CACHE && r_state != FLUSH_CACHE)
+	//begin
+	//$display("---> cache flush starts after cycle %d", r_cycle);
+	//end
 	if(t_mark_invalid & t_early_eb)
 	  begin
 	     $display("state = %d, t_push_eb = %b, t_early_eb = %b",
@@ -1375,6 +1394,10 @@ module nu_l1d(clk,
 	  end
 	else if(t_mark_invalid & mem_rsp_reload)
 	  begin
+	     $display("t_mark_invalid = %b, mem_rsp_reload = %b", t_mark_invalid, mem_rsp_reload);
+	     $display("w_queues_drained = %b, state = %d, n_state = %d", w_queues_drained, r_state, n_state);
+	     $display("resp for tag %d, addr %x, data %x at cycle %d, t_array_wr_en = %b cycle %d",
+		      mem_rsp_tag, mem_rsp_addr, mem_rsp_load_data, r_cycle, t_array_wr_en, r_cycle);
 	     $stop();
 	  end
 	else if(t_mark_invalid & t_wr_array)
@@ -2580,7 +2603,7 @@ begin
 	       begin
 		  t_old_ack = 1'b1;
 	       end  
-	     else if(r_flush_req & mem_q_empty & ((r_got_req & r_last_wr)==1'b0) & w_queues_drained)
+	     else if(r_flush_req & mem_q_empty & (r_got_req ==1'b0) & w_queues_drained )
 	       begin
 		  n_state = FLUSH_CACHE;
 		  if(!mem_q_empty) $stop();
@@ -2588,7 +2611,7 @@ begin
 		  t_cache_idx = 'd0;
 		  n_flush_req = 1'b0;
 	       end
-	     else if(r_flush_cl_req & mem_q_empty & w_queues_drained & !(r_got_req && r_last_wr)
+	     else if(r_flush_cl_req & mem_q_empty & w_queues_drained & (r_got_req == 1'b0) & (r_got_req == 1'b0)
 		     & !(n_page_walk_req_valid | t_got_miss | r_wr_array | t_wr_array))
 	       begin
 		  if(!mem_q_empty) $stop();
@@ -3011,7 +3034,7 @@ begin
      end
 `endif
 
-   assign w_early_bits[0] = t_push_miss;
+   assign w_early_bits[0] = t_push_miss & (r_state == ACTIVE) & (r_flush_req == 1'b0) & (r_flush_cl_req == 1'b0);
    assign w_early_bits[1] = w_three_free_credits;
    assign w_early_bits[2] = w_port2_missed_no_alias;
    assign w_early_bits[3] = (r_last_early_valid ? (r_last_early != w_req2_pa[31:4]) : 1'b1);
