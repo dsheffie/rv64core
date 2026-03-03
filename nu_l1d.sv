@@ -3034,7 +3034,7 @@ begin
      end
 `endif
 
-   assign w_early_bits[0] = t_push_miss & (r_state == ACTIVE) & (r_flush_req == 1'b0) & (r_flush_cl_req == 1'b0);
+   assign w_early_bits[0] = t_push_miss & (r_flush_req == 1'b0) & (r_flush_cl_req == 1'b0);
    assign w_early_bits[1] = w_three_free_credits;
    assign w_early_bits[2] = w_port2_missed_no_alias;
    assign w_early_bits[3] = (r_last_early_valid ? (r_last_early != w_req2_pa[31:4]) : 1'b1);

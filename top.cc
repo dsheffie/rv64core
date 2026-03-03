@@ -10,7 +10,7 @@
 
 #define ROB_ENTRIES 64
 
-#define DISABLE_MAPS 1
+//#define DISABLE_MAPS 1
 
 bool globals::syscall_emu = true;
 uint32_t globals::tohost_addr = 0;
