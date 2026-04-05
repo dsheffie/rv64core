@@ -1155,9 +1155,6 @@ endfunction
    
    logic [`LG_L1I_NUM_SETS-1:0] t_valid_ram_idx;
 
-
-   
-
    always_comb
      begin
 	t_last_ram_en = r_req || (r_state == FLUSH_CACHE);
@@ -1170,14 +1167,19 @@ endfunction
    wire [31:0] w_bpu_idx0 = {16'd0, r_bpu_idx} + 'd0;
    wire [31:0] w_bpu_idx1 = {16'd0, r_bpu_idx} + 'd1;
    wire [31:0] w_bpu_idx2 = {16'd0, r_bpu_idx} + 'd2;
-   wire [31:0] w_bpu_idx3 = {16'd0, r_bpu_idx} + 'd3;   
+   wire [31:0] w_bpu_idx3 = {16'd0, r_bpu_idx} + 'd3;
+
+   wire [63:0] w_bpu_pc0 = n_cache_pc + 'd0;      
+   wire [63:0] w_bpu_pc1 = n_cache_pc + 'd4;      
+   wire [63:0] w_bpu_pc2 = n_cache_pc + 'd8;      
+   wire [63:0] w_bpu_pc3 = n_cache_pc + 'd12;      
    
-   always_comb
+   always_ff@(negedge clk)
      begin
-	t_hs_p0 = hashed_perceptron_predict({n_cache_pc[63:4], 4'd0},  w_bpu_idx0);
-	t_hs_p1 = hashed_perceptron_predict({n_cache_pc[63:4], 4'd4},  w_bpu_idx1);
-	t_hs_p2 = hashed_perceptron_predict({n_cache_pc[63:4], 4'd8},  w_bpu_idx2);
-	t_hs_p3 = hashed_perceptron_predict({n_cache_pc[63:4], 4'd12}, w_bpu_idx3);
+	t_hs_p0 = hashed_perceptron_predict(w_bpu_pc0, w_bpu_idx0);
+	t_hs_p1 = hashed_perceptron_predict(w_bpu_pc1, w_bpu_idx1);
+	t_hs_p2 = hashed_perceptron_predict(w_bpu_pc2, w_bpu_idx2);
+	t_hs_p3 = hashed_perceptron_predict(w_bpu_pc3, w_bpu_idx3);
      end
 
    always_ff@(posedge clk)

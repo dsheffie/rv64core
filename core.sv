@@ -2372,7 +2372,13 @@ module core(clk,
 	.syscall_emu(syscall_emu),	
 	.uop(t_dec_uop2)
 	);
-   
+
+
+   //always_ff@(negedge clk)
+   //begin
+   //$display("one pc %x -> key %d", insn.pc, insn.bpu_idx);
+   //$display("two pc %x -> key %d", insn_two.pc, insn_two.bpu_idx);	
+   //end
    
    logic t_push_1, t_push_2;
    

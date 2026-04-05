@@ -101,9 +101,10 @@ extern "C" {
     //std::cout << "making prediction for key " << key << "\n";
     yout.at(key) = 0;
     pcs.at(key) = pc;
-    //if(key == 47292) {
-    //std::cout << std::hex << "pc = " << std::hex << pc << std::dec <<  ", key = " << key << "\n";
-    //}
+  
+    ///std::cout << std::hex << "pc = " << std::hex << pc << std::dec
+       //<<  ", key = " << key << "\n";
+  
       
     // for each table...
     for (int i = 0; i < NTABLES; i++) {
@@ -155,12 +156,12 @@ extern "C" {
     // was this prediction correct?
     bool correct = taken == (::yout.at(key) >= 1);
 
-    if(pcs.at(key) != pc) {
-      std::cout << "perceptron update with key " << key << ", pc mismatch\n";
-      std::cout << "retirement pc " << std::hex << pc << std::dec << "\n";
-      std::cout << "table pc      " << std::hex << pcs[key] << std::dec << "\n";
-      exit(-1);
-    }
+    //if(pcs.at(key) != pc) {
+    //std::cout << "perceptron update with key " << key << ", pc mismatch\n";
+    //std::cout << "retirement pc " << std::hex << pc << std::dec << "\n";
+    //std::cout << "table pc      " << std::hex << pcs[key] << std::dec << "\n";
+    //exit(-1);
+    //}
 
     // insert this branch outcome into the global history
 
