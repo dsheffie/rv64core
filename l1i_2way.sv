@@ -6,6 +6,12 @@
 import "DPI-C" function void record_fetch(int push1, int push2, int push3, int push4,
 					  longint pc0, longint pc1, longint pc2, longint pc3,
 					  int bubble, int fq_full);
+
+import "DPI-C" function int hashed_perceptron_predict(longint pc, int key);
+
+import "DPI-C" function void hashed_perceptron_update(int key, longint pc, int taken);
+
+
 `endif
 
 
@@ -153,10 +159,15 @@ module l1i_2way(clk,
 
    logic 				  r_pht_update;
    logic [1:0] 				  r_pht_out;
-   logic [1:0]				  t_pht_out;
+
    logic [1:0] 				  t_pht_val;
    logic [7:0]				  r_pht_out_vec, r_pht_update_out;
    logic [7:0]				  t_pht_val_vec;
+
+   logic [31:0]				  t_hs_p0, t_hs_p1, t_hs_p2, t_hs_p3;
+   logic [3:0]				  r_hs_vec;
+      
+   
    
    logic 				  t_do_pht_wr;
    
@@ -178,7 +189,7 @@ module l1i_2way(clk,
    
    logic [`LG_PHT_SZ-1:0]		    r_bpu_tbl [(1<<`LG_BPU_TBL_SZ)-1:0];
    
-   logic [`LG_BPU_TBL_SZ-1:0]		    r_bpu_idx, rr_bpu_idx;
+   logic [`LG_BPU_TBL_SZ-1:0]		    r_bpu_idx;
    
    insn_fetch_t r_fq[N_FQ_ENTRIES-1:0];
    
@@ -580,15 +591,17 @@ endfunction
 	t_insn_data3 = select_cl32(w_array, t_insn_idx + 2'd2);
 	t_insn_data4 = select_cl32(w_array, t_insn_idx + 2'd3);
 
-	r_pht_out = t_insn_idx == 2'd0 ? r_pht_out_vec[1:0] :
-		    t_insn_idx == 2'd1 ? r_pht_out_vec[3:2] :
-		    t_insn_idx == 2'd2 ? r_pht_out_vec[5:4] :
-		    r_pht_out_vec[7:6];
+	r_pht_out = t_insn_idx == 2'd0 ? (r_hs_vec[0] ? 2'b11 : 2'b00) :
+		    t_insn_idx == 2'd1 ? (r_hs_vec[1] ? 2'b11 : 2'b00) :
+		    t_insn_idx == 2'd2 ? (r_hs_vec[2] ? 2'b11 : 2'b00) :
+		    (r_hs_vec[3] ? 2'b11 : 2'b00);
 	
-	t_tcb0 = (((t_pd0 == 'd1) & (r_pht_out_vec[1]==1'b0)) | (t_pd0 == 'd0))==1'b0;
-	t_tcb1 = (((t_pd1 == 'd1) & (r_pht_out_vec[3]==1'b0)) | (t_pd1 == 'd0))==1'b0;
-	t_tcb2 = (((t_pd2 == 'd1) & (r_pht_out_vec[5]==1'b0)) | (t_pd2 == 'd0))==1'b0;
-	t_tcb3 = (((t_pd3 == 'd1) & (r_pht_out_vec[7]==1'b0)) | (t_pd3 == 'd0))==1'b0;	
+		    
+	
+	t_tcb0 = (((t_pd0 == 'd1) & (r_hs_vec[0]==1'b0)) | (t_pd0 == 'd0))==1'b0;
+	t_tcb1 = (((t_pd1 == 'd1) & (r_hs_vec[1]==1'b0)) | (t_pd1 == 'd0))==1'b0;
+	t_tcb2 = (((t_pd2 == 'd1) & (r_hs_vec[2]==1'b0)) | (t_pd2 == 'd0))==1'b0;
+	t_tcb3 = (((t_pd3 == 'd1) & (r_hs_vec[3]==1'b0)) | (t_pd3 == 'd0))==1'b0;	
 	
 	t_spec_branch_marker = ({1'b1,
 				 t_tcb3,
@@ -641,10 +654,7 @@ endfunction
 	endcase
 
 	t_branch_idx = t_taken_branch_idx[1:0] + t_insn_idx;
-	t_pht_out = t_branch_idx=='d0 ? r_pht_out_vec[1:0] :
-		    t_branch_idx=='d1 ? r_pht_out_vec[3:2] :
-		    t_branch_idx=='d2 ? r_pht_out_vec[5:4] :
-		    r_pht_out_vec[7:6];
+
 	
 	t_first_pd = select_pd(w_jump, t_branch_idx);
 	
@@ -1112,7 +1122,7 @@ endfunction
 	t_insn2.pc = w_cache_pc4;
 	t_insn2.pred_target = n_pc;
 	t_insn2.pred = t_taken_branch_idx=='d1;
-	t_insn2.bpu_idx = r_bpu_idx;
+	t_insn2.bpu_idx = r_bpu_idx+'d1;
 `ifdef	ENABLE_CYCLE_ACCOUNTING
 	t_insn2.fetch_cycle = r_cycle;
 `endif
@@ -1122,7 +1132,7 @@ endfunction
 	t_insn3.pc = w_cache_pc8;
 	t_insn3.pred_target = n_pc;
 	t_insn3.pred = t_taken_branch_idx=='d2;
-	t_insn3.bpu_idx = r_bpu_idx;
+	t_insn3.bpu_idx = r_bpu_idx+'d2;
 `ifdef	ENABLE_CYCLE_ACCOUNTING
 	t_insn3.fetch_cycle = r_cycle;
 `endif
@@ -1132,7 +1142,7 @@ endfunction
 	t_insn4.pc = w_cache_pc12;
 	t_insn4.pred_target = n_pc;
 	t_insn4.pred = t_taken_branch_idx=='d3;
-	t_insn4.bpu_idx = r_bpu_idx;
+	t_insn4.bpu_idx = r_bpu_idx+'d3;
 `ifdef	ENABLE_CYCLE_ACCOUNTING
 	t_insn4.fetch_cycle = r_cycle;
 `endif
@@ -1156,13 +1166,51 @@ endfunction
    
    //compute_pht_idx cpi0 (.pc(n_cache_pc), .hist(r_spec_gbl_hist), .idx(n_pht_idx));
    compute_pht_idx cpi0 (.pc({n_cache_pc[63:4], 4'd0}), .hist(r_spec_gbl_hist), .idx(n_pht_idx));
+
+   wire [31:0] w_bpu_idx0 = {16'd0, r_bpu_idx} + 'd0;
+   wire [31:0] w_bpu_idx1 = {16'd0, r_bpu_idx} + 'd1;
+   wire [31:0] w_bpu_idx2 = {16'd0, r_bpu_idx} + 'd2;
+   wire [31:0] w_bpu_idx3 = {16'd0, r_bpu_idx} + 'd3;   
    
+   always_comb
+     begin
+	t_hs_p0 = hashed_perceptron_predict({n_cache_pc[63:4], 4'd0},  w_bpu_idx0);
+	t_hs_p1 = hashed_perceptron_predict({n_cache_pc[63:4], 4'd4},  w_bpu_idx1);
+	t_hs_p2 = hashed_perceptron_predict({n_cache_pc[63:4], 4'd8},  w_bpu_idx2);
+	t_hs_p3 = hashed_perceptron_predict({n_cache_pc[63:4], 4'd12}, w_bpu_idx3);
+     end
+
+   always_ff@(posedge clk)
+     begin
+	if(branch_pc_valid)
+	  begin
+	     //took_branch
+	     //$display("bpu_idx = %d for pc %x", bpu_idx, branch_pc);
+	     hashed_perceptron_update({16'd0, bpu_idx}, branch_pc, {31'd0, took_branch});
+	  end
+     end
+
+   always_ff@(posedge clk)
+     begin
+	if(reset)
+	  begin
+	     r_hs_vec <= 'd0;
+	  end
+	else
+	  begin
+	     r_hs_vec <= {t_hs_p3[3], t_hs_p2[2], t_hs_p1[1], t_hs_p0[0]};
+	  end
+     end
+
    always_ff@(posedge clk)
      begin
 	if(t_update_spec_hist)
 	  begin
 	     //this should be n_pht_idx?
 	     r_bpu_tbl[r_bpu_idx] <= r_pht_idx;
+	     r_bpu_tbl[r_bpu_idx+'d1] <= r_pht_idx;
+	     r_bpu_tbl[r_bpu_idx+'d2] <= r_pht_idx;
+	     r_bpu_tbl[r_bpu_idx+'d3] <= r_pht_idx;	     
 	 end 
      end
    
@@ -1174,15 +1222,10 @@ endfunction
 	  end
 	else if(t_update_spec_hist)
 	  begin
-	     r_bpu_idx <= r_bpu_idx + 'd1;
+	     r_bpu_idx <= r_bpu_idx + 'd4;
 	  end
      end // always_ff@ (posedge clk)
 
-   always_ff@(posedge clk)
-     begin
-	rr_bpu_idx <= reset ? 'd0 : r_bpu_idx;
-     end
-   
    
    always_comb
      begin
