@@ -189,7 +189,7 @@ module l1i_2way(clk,
    
    logic [`LG_PHT_SZ-1:0]		    r_bpu_tbl [(1<<`LG_BPU_TBL_SZ)-1:0];
    
-   logic [`LG_BPU_TBL_SZ-1:0]		    r_bpu_idx;
+   logic [`LG_BPU_TBL_SZ-1:0]		    r_bpu_idx, rr_bpu_idx;
    
    insn_fetch_t r_fq[N_FQ_ENTRIES-1:0];
    
@@ -222,6 +222,9 @@ module l1i_2way(clk,
    
    logic [63:0] 			 n_cache_accesses, r_cache_accesses;
    logic [63:0] 			 n_cache_hits, r_cache_hits;
+
+   logic [63:0]				 r_bpu_pc0, r_bpu_pc1, r_bpu_pc2, r_bpu_pc3;
+   
    
 function logic [31:0] select_cl32(logic [L1I_CL_LEN_BITS-1:0] cl, logic[LG_WORDS_PER_CL-1:0] pos);
    logic [31:0] 			 w32;
@@ -302,6 +305,7 @@ endfunction
    
    logic [(`M_WIDTH-1):0] r_pc, n_pc, r_miss_pc, n_miss_pc;
    logic [(`M_WIDTH-1):0] r_cache_pc, n_cache_pc;
+   
    logic [(`M_WIDTH-1):0] r_btb_pc;
    logic [9:0]		  n_tlb_zero_cycles, r_tlb_zero_cycles;
    
@@ -364,6 +368,8 @@ endfunction
    insn_fetch_t t_insn, t_insn2, t_insn3, t_insn4;
    logic [`N_PD_BITS-1:0] t_pd0, t_pd1, t_pd2, t_pd3, t_pd, t_first_pd;
    logic       t_tcb0, t_tcb1, t_tcb2, t_tcb3;
+   logic [3:0] t_tcb;
+   
    logic       t_br0,t_br1,t_br2,t_br3;
    
    
@@ -471,14 +477,14 @@ endfunction
 	else if(t_push_insn2)
 	  begin
 	     //$display("t_insn.pc = %x, t_clear_fq=%b", t_insn.pc,t_clear_fq);
-	     //$display("t_insn2.pc = %x", t_insn2.pc);	     
+	     //$display("t_insn2.pc = %x, t_insn2.pred = %b", t_insn2.pc, t_insn2.pred);	     
 	     r_fq[r_fq_tail_ptr[`LG_FQ_ENTRIES-1:0]] <= t_insn;
 	     r_fq[r_fq_next_tail_ptr[`LG_FQ_ENTRIES-1:0]] <= t_insn2;
 	  end
 	else if(t_push_insn3)
 	  begin
 	     //$display("t_insn.pc = %x, t_clear_fq=%b", t_insn.pc,t_clear_fq);	     	     
-	     //$display("t_insn2.pc = %x", t_insn2.pc);
+	     //$display("t_insn2.pc = %x, t_insn2.pred = %b", t_insn2.pc, t_insn2.pred);	     	     
 	     //$display("t_insn3.pc = %x", t_insn3.pc);	     	     	     
 	     r_fq[r_fq_tail_ptr[`LG_FQ_ENTRIES-1:0]] <= t_insn;
 	     r_fq[r_fq_next_tail_ptr[`LG_FQ_ENTRIES-1:0]] <= t_insn2;
@@ -486,7 +492,8 @@ endfunction
 	  end
 	else if(t_push_insn4)
 	  begin
-	     //$display("cycle %d t_insn4.pc = %x, idx = %x, t_take_br = %b", r_cycle, t_insn4.pc, r_pht_idx, t_take_br);	     	     	     
+	     //$display("cycle %d t_insn4.pc = %x, idx = %x, t_take_br = %b", r_cycle, t_insn4.pc, r_pht_idx, t_take_br);
+	     //$display("t_insn2.pc = %x, t_insn2.pred = %b", t_insn2.pc, t_insn2.pred);	     	     	     
 	     r_fq[r_fq_tail_ptr[`LG_FQ_ENTRIES-1:0]] <= t_insn;
 	     r_fq[r_fq_next_tail_ptr[`LG_FQ_ENTRIES-1:0]] <= t_insn2;
 	     r_fq[r_fq_next3_tail_ptr[`LG_FQ_ENTRIES-1:0]] <= t_insn3;
@@ -541,6 +548,27 @@ endfunction
      begin
 	r_wait_cycles <= reset ? 'd0 : n_wait_cycles;
      end
+
+   // always_ff@(negedge clk)
+   //   begin
+   // 	$display("cycle %d, r_cache_pc %x, r_pht_out = %b, t_pd2 = %b t_tcb2 = %b, r_hs_vec = %b, t_taken_branch_idx = %d, t_branch_marker = %b, t_insn_idx = %d, tcb = %b, %x %x %x %x", 
+   // 		 r_cycle, 
+   // 		 r_cache_pc,
+   // 		 r_pht_out,
+   // 		 t_pd2,		 
+   // 		 r_hs_vec[2] & (t_pd2 == 'd1),
+   // 		 r_hs_vec,
+   // 		 t_taken_branch_idx,
+   // 		 t_branch_marker,
+   // 		 t_insn_idx,
+   // 		 t_tcb,
+   // 		 r_bpu_pc0,
+   // 		 r_bpu_pc1,
+   // 		 r_bpu_pc2,
+   // 		 r_bpu_pc3
+   // 		 );
+   //   end
+   
    always_comb
      begin
 	n_wait_cycles = r_wait_cycles;
@@ -601,7 +629,10 @@ endfunction
 	t_tcb0 = (((t_pd0 == 'd1) & (r_hs_vec[0]==1'b0)) | (t_pd0 == 'd0))==1'b0;
 	t_tcb1 = (((t_pd1 == 'd1) & (r_hs_vec[1]==1'b0)) | (t_pd1 == 'd0))==1'b0;
 	t_tcb2 = (((t_pd2 == 'd1) & (r_hs_vec[2]==1'b0)) | (t_pd2 == 'd0))==1'b0;
-	t_tcb3 = (((t_pd3 == 'd1) & (r_hs_vec[3]==1'b0)) | (t_pd3 == 'd0))==1'b0;	
+	t_tcb3 = (((t_pd3 == 'd1) & (r_hs_vec[3]==1'b0)) | (t_pd3 == 'd0))==1'b0;
+	
+	t_tcb = {t_tcb3,t_tcb2,t_tcb1,t_tcb0};
+
 	
 	t_spec_branch_marker = ({1'b1,
 				 t_tcb3,
@@ -611,11 +642,7 @@ endfunction
 				 } >> t_insn_idx);
 	
 
-	t_branch_marker = ({t_tcb3,
-			    t_tcb2,
-			    t_tcb1,
-			    t_tcb0
-			    } >> t_insn_idx);
+	t_branch_marker = (t_tcb >> t_insn_idx);
 
 	t_any_branch = ({t_br3,
                          t_br2,
@@ -1112,7 +1139,7 @@ endfunction
 	t_insn.pc = r_cache_pc;
 	t_insn.pred_target = n_pc;
 	t_insn.pred = t_taken_branch_idx=='d0;
-	t_insn.bpu_idx = r_bpu_idx;
+	t_insn.bpu_idx = rr_bpu_idx;
 `ifdef	ENABLE_CYCLE_ACCOUNTING
 	t_insn.fetch_cycle = r_cycle;
 `endif
@@ -1122,7 +1149,7 @@ endfunction
 	t_insn2.pc = w_cache_pc4;
 	t_insn2.pred_target = n_pc;
 	t_insn2.pred = t_taken_branch_idx=='d1;
-	t_insn2.bpu_idx = r_bpu_idx+'d1;
+	t_insn2.bpu_idx = rr_bpu_idx+'d1;
 `ifdef	ENABLE_CYCLE_ACCOUNTING
 	t_insn2.fetch_cycle = r_cycle;
 `endif
@@ -1132,7 +1159,7 @@ endfunction
 	t_insn3.pc = w_cache_pc8;
 	t_insn3.pred_target = n_pc;
 	t_insn3.pred = t_taken_branch_idx=='d2;
-	t_insn3.bpu_idx = r_bpu_idx+'d2;
+	t_insn3.bpu_idx = rr_bpu_idx+'d2;
 `ifdef	ENABLE_CYCLE_ACCOUNTING
 	t_insn3.fetch_cycle = r_cycle;
 `endif
@@ -1142,7 +1169,7 @@ endfunction
 	t_insn4.pc = w_cache_pc12;
 	t_insn4.pred_target = n_pc;
 	t_insn4.pred = t_taken_branch_idx=='d3;
-	t_insn4.bpu_idx = r_bpu_idx+'d3;
+	t_insn4.bpu_idx = rr_bpu_idx+'d3;
 `ifdef	ENABLE_CYCLE_ACCOUNTING
 	t_insn4.fetch_cycle = r_cycle;
 `endif
@@ -1169,10 +1196,20 @@ endfunction
    wire [31:0] w_bpu_idx2 = {16'd0, r_bpu_idx} + 'd2;
    wire [31:0] w_bpu_idx3 = {16'd0, r_bpu_idx} + 'd3;
 
-   wire [63:0] w_bpu_pc0 = n_cache_pc + 'd0;      
-   wire [63:0] w_bpu_pc1 = n_cache_pc + 'd4;      
-   wire [63:0] w_bpu_pc2 = n_cache_pc + 'd8;      
-   wire [63:0] w_bpu_pc3 = n_cache_pc + 'd12;      
+   wire [63:0] w_aligned_pc = {n_cache_pc[63:4], 4'd0};
+   
+   wire [63:0] w_bpu_pc0 = w_aligned_pc + 'd0;      
+   wire [63:0] w_bpu_pc1 = w_aligned_pc + 'd4;      
+   wire [63:0] w_bpu_pc2 = w_aligned_pc + 'd8;      
+   wire [63:0] w_bpu_pc3 = w_aligned_pc + 'd12;      
+
+   always_ff@(posedge clk)
+     begin
+	r_bpu_pc0 <= w_bpu_pc0;
+	r_bpu_pc1 <= w_bpu_pc1;
+	r_bpu_pc2 <= w_bpu_pc2;
+	r_bpu_pc3 <= w_bpu_pc3;	
+     end
    
    always_ff@(negedge clk)
      begin
@@ -1181,6 +1218,8 @@ endfunction
 	t_hs_p2 = hashed_perceptron_predict(w_bpu_pc2, w_bpu_idx2);
 	t_hs_p3 = hashed_perceptron_predict(w_bpu_pc3, w_bpu_idx3);
      end
+
+   
 
    always_ff@(posedge clk)
      begin
@@ -1200,7 +1239,7 @@ endfunction
 	  end
 	else
 	  begin
-	     r_hs_vec <= {t_hs_p3[3], t_hs_p2[2], t_hs_p1[1], t_hs_p0[0]};
+	     r_hs_vec <= {t_hs_p3[0], t_hs_p2[0], t_hs_p1[0], t_hs_p0[0]};
 	  end
      end
 
@@ -1218,11 +1257,12 @@ endfunction
    
    always_ff@(posedge clk)
      begin
+	rr_bpu_idx <= reset ? 'd0 : r_bpu_idx;
 	if(reset)
 	  begin
 	     r_bpu_idx <= 'd0;
 	  end
-	else if(t_update_spec_hist)
+	else /*if(t_update_spec_hist) */
 	  begin
 	     r_bpu_idx <= r_bpu_idx + 'd4;
 	  end

@@ -1,6 +1,7 @@
 #include <cstdint>
 #include <iostream>
 #include <array>
+#include <set>
 
 /*
 
@@ -77,7 +78,8 @@ static int tables[NTABLES][TABLE_SIZE] = {0};
 
 // words that store the global history
 
-static unsigned int ghist_words[NGHIST_WORDS] = {0};
+static std::array<uint32_t,NGHIST_WORDS> ghist_words = {0};
+static std::array<uint32_t,NGHIST_WORDS> speculative_ghist_words = {0};
 
 // remember the indices into the tables from prediction to update
 
@@ -94,16 +96,25 @@ static std::array<uint64_t, 1<<16> pcs = {~0UL};
 // perceptron sum
 static std::array<int, 1<<16> yout = {0};
 
+static std::set<long long> branches;
+
 extern "C" {
 
   int hashed_perceptron_predict(long long pc, int key) {
     // initialize perceptron sum
     //std::cout << "making prediction for key " << key << "\n";
+
+    if(branches.find(pc) == branches.end()) {
+      return 0;
+    }
+    
     yout.at(key) = 0;
     pcs.at(key) = pc;
-  
-    ///std::cout << std::hex << "pc = " << std::hex << pc << std::dec
-       //<<  ", key = " << key << "\n";
+
+
+    
+    //std::cout << std::hex << "pc = " << std::hex << pc << std::dec
+    //<<  ", key = " << key << "\n";
   
       
     // for each table...
@@ -127,11 +138,11 @@ extern "C" {
 
       int j;
       for (j = 0; j < most_words; j++)
-	x ^= ::ghist_words[j];
+	x ^= ::speculative_ghist_words[j];
 
       // XOR in the last word
 
-      x ^= ::ghist_words[j] & ((1 << last_word) - 1);
+      x ^= ::speculative_ghist_words[j] & ((1 << last_word) - 1);
 
       // XOR in the PC to spread accesses around (like gshare)
 
@@ -149,19 +160,40 @@ extern "C" {
 
       yout[key] += ::tables[i][x];
     }
+    bool b = yout[key] >= 1;
+    for (int i = 0; i < NGHIST_WORDS; i++) {
+
+      // shift b into the lsb of the current word
+
+      ::speculative_ghist_words[i] <<= 1;
+      ::speculative_ghist_words[i] |= b;
+
+      // get b as the previous msb of the current word
+
+      b = !!(::speculative_ghist_words[i] & TABLE_SIZE);
+      ::speculative_ghist_words[i] &= TABLE_SIZE - 1;
+    }
+    std::cout << std::hex << pc << std::dec << ",key = " << key << ",pred = " << (yout[key]>=1) << "\n";
     return yout[key] >= 1;
   }
 
   void hashed_perceptron_update(int key, long long pc, int taken) {
+
+    if(branches.find(pc) == branches.end()) {
+      //printf("learning branch at pc %llx\n", pc);
+      branches.insert(pc);
+      return;
+    }
+    
     // was this prediction correct?
     bool correct = taken == (::yout.at(key) >= 1);
 
-    //if(pcs.at(key) != pc) {
-    //std::cout << "perceptron update with key " << key << ", pc mismatch\n";
-    //std::cout << "retirement pc " << std::hex << pc << std::dec << "\n";
-    //std::cout << "table pc      " << std::hex << pcs[key] << std::dec << "\n";
-    //exit(-1);
-    //}
+    if(pcs.at(key) != pc) {
+      std::cout << "perceptron update with key " << key << ", pc mismatch\n";
+      std::cout << "retirement pc " << std::hex << pc << std::dec << "\n";
+      std::cout << "table pc      " << std::hex << pcs[key] << std::dec << "\n";
+      //exit(-1);
+    }
 
     // insert this branch outcome into the global history
 
@@ -178,7 +210,12 @@ extern "C" {
       b = !!(::ghist_words[i] & TABLE_SIZE);
       ::ghist_words[i] &= TABLE_SIZE - 1;
     }
-
+    
+    if(not(correct)) {
+      std::cout << "mispredict, need to copy arch hist to speculative hist for pc " << std::hex << pc << std::dec << "\n";
+      speculative_ghist_words = ghist_words;
+    }
+    
     // get the magnitude of yout
 
     int a = (::yout[key] < 0) ? -::yout[key] : ::yout[key];
@@ -226,6 +263,7 @@ extern "C" {
       }
     }
 
+    pcs.at(key) = ~(0);
     //return correct;
   }
 }

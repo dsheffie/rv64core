@@ -1106,7 +1106,7 @@ module core(clk,
 			      n_restart_cycles = 'd1;
 			      n_restart_valid = 1'b1;
 			      t_bump_rob_head = 1'b1;
-			      //			      $display("mispredicted %x, direction %b, new target %x", 
+			      //$display("mispredicted %x, direction %b, new target %x", 
 			      //t_rob_head.pc, t_rob_head.take_br, t_rob_head.target_pc);
 			   end // else: !if(t_rob_head.is_ii)
 			 n_ds_done = 1'b1;
@@ -1623,6 +1623,14 @@ module core(clk,
 	
      end // always_comb
 
+    always_ff@(negedge clk)
+      begin
+   	 if(n_branch_valid & n_branch_fault)
+	   begin
+	      $display("branch pc = %x, n_bpu_idx = %d, n_took_branch = %b", n_branch_pc, n_bpu_idx, n_took_branch);
+	   end
+      end
+   
 `ifdef ENABLE_CYCLE_ACCOUNTING
    logic [63:0] r_uuid;
    always_ff@(posedge clk)
