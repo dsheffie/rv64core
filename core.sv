@@ -1889,15 +1889,14 @@ module core(clk,
 	t_mrob_tail.is_indirect = (t_alloc_uop.op == JALR) | (t_alloc_uop.op == JR);
 	t_mrob_tail.bpu_idx = t_alloc_uop.bpu_idx;
 	
-	t_mrob_tail.valid_dst = t_uop.dst_valid & t_alloc;
+
 	t_mrob_tail.ldst = t_uop.dst_valid ? t_uop.dst[4:0] : 'd0;
 	t_mrob_tail.pdst = t_uop.dst_valid ? n_prf_entry : 'd0;
+	
+	t_mrob_tail.valid_dst = t_uop.dst_valid & t_alloc;	
 	t_mrob_tail.old_pdst = t_uop.dst_valid ? r_alloc_rat[t_uop.dst[4:0]] : 'd0;
 
-	t_mrob_next_tail.valid_dst = t_uop2.dst_valid & t_alloc_two;
-	t_mrob_next_tail.ldst = t_uop2.dst_valid ? 'd0 : t_uop2.dst[4:0];
-	t_mrob_next_tail.pdst = t_uop2.dst_valid ? n_prf_entry2 : 'd0;
-	t_mrob_next_tail.old_pdst = t_uop2.dst_valid ? ((t_uop.dst_valid & (t_uop.dst == t_uop2.dst)) ? t_mrob_tail.pdst : r_alloc_rat[t_uop2.dst[4:0]]) : 'd0;
+
 	
 	t_mrob_next_tail.pc = t_alloc_uop2.pc;
 	t_mrob_next_tail.is_br = t_alloc_uop2.is_br;	
