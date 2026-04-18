@@ -635,6 +635,16 @@ module core(clk,
    logic [31:0] r_clear_cnt;
    always_ff@(posedge clk)
      begin
+	if(t_dq_full & t_push_dq_one)
+	  begin
+	     $stop();
+	  end
+	if(t_dq_next_full & t_push_dq_two)
+	  begin
+	     $stop();
+	  end
+
+	
 	if(reset)
 	  begin
 	     r_clear_cnt <= 'd0;
@@ -1136,25 +1146,10 @@ module core(clk,
 				   & !t_uq_full
 				   & !t_dq_empty					
 				   & t_enough_iprfs;
-			 
-			 t_alloc_two = t_alloc
-				       & !t_uop2.serializing_op
-				       & !t_dq_next_empty 
-				       & !t_rob_next_full
-				       & !t_uq_next_full
-				       & t_enough_next_iprfs;
+			 			 
 		      end // if (!t_dq_empty)
 		    t_retire = t_rob_head_complete & !t_arch_fault;
-		    t_retire_two = !t_rob_next_empty &
-		    		   & t_retire
-				   & !t_rob_head.faulted
-				   & !t_rob_head.mark_page_dirty
-		    		   & !t_rob_next_head.faulted 				    
-		    		   & t_rob_head_complete
-		    		   & t_rob_next_head_complete
-				   & (t_mrob_head.is_br   ? !t_mrob_next_head.is_br : 1'b1)
-				   & (!t_mrob_next_head.is_ret )
-				   & (!t_mrob_next_head.is_call );
+		    t_retire_two = 1'b0;
 		    /* todo - figure out where is is breaking the RSB */
 				     //& (t_mrob_head.is_ret  ? !t_mrob_next_head.is_ret : 1'b1)
 				     //& (t_mrob_head.is_call ? !t_mrob_next_head.is_call : 1'b1);
@@ -1188,12 +1183,6 @@ module core(clk,
 				   && t_enough_iprfs;
 			 
 			 
-			 t_alloc_two = t_alloc
-				       & !t_uop2.serializing_op
-				       & !t_dq_next_empty 
-				       & !t_rob_next_full
-				       & !t_uq_next_full
-				       & t_enough_next_iprfs;
 		      end // if (!t_uop.serializing_op)
 		 end // if (!t_dq_empty)
 	    end // case: ACTIVE
@@ -1503,11 +1492,6 @@ module core(clk,
 		  r_alloc_rat[t_uop.dst[4:0]] <= n_prf_entry;
 		  //$display("dest reg %x for pc %x", t_uop.pc, n_prf_entry);
 	       end
-	     if(t_alloc_two &&t_uop2.dst_valid)
-	       begin
-		  r_alloc_rat[t_uop2.dst[4:0]] <= n_prf_entry2;
-		  //$display("dest reg %x for pc %x", t_uop2.pc, n_prf_entry2);
-	       end	     
 	  end
      end // always_ff@ (posedge clk)
    
@@ -1560,14 +1544,7 @@ module core(clk,
 	     t_alloc_uop.rob_ptr = r_rob_tail_ptr[`LG_ROB_ENTRIES-1:0];
 	  end // if (t_alloc)
 	
-	if(t_alloc_two)
-	  begin
-	     if(t_uop2.dst_valid)
-	       begin
-		  t_alloc_uop2.dst = n_prf_entry2;
-	       end
-	     t_alloc_uop2.rob_ptr = r_rob_next_tail_ptr[`LG_ROB_ENTRIES-1:0];
-	  end
+
      end // always_comb
 
 
@@ -1630,10 +1607,6 @@ module core(clk,
 	if(reset)
 	  begin
 	     r_uuid <= 'd0;
-	  end
-	else if(t_alloc_two & t_alloc)
-	  begin
-	     r_uuid <= r_uuid + 'd2;
 	  end
 	else if(t_alloc)
 	  begin
@@ -1724,61 +1697,6 @@ module core(clk,
 	       end
 	     
 	  end // if (t_alloc)
-
-
-	if(t_alloc_two)
-	  begin
-
-	     
-`ifdef ENABLE_CYCLE_ACCOUNTING
-	     t_rob_next_tail.fetch_cycle = t_alloc_uop2.fetch_cycle;
-	     t_rob_next_tail.alloc_cycle = r_cycle;
-	     t_rob_next_tail.raw_insn = t_alloc_uop2.raw_insn;
-	     t_rob_next_tail.complete_cycle = 'd0;
-	     t_rob_next_tail.uuid = r_uuid + 'd1;
-`endif
-
-
-	     if(t_fold_uop2)
-	       begin
-`ifdef ENABLE_CYCLE_ACCOUNTING
-		  t_rob_next_tail.complete_cycle = r_cycle;
-`endif
-		  if(t_uop2.op == II)
-                   begin
-                      t_rob_next_tail.faulted = 1'b1;
-                      t_rob_next_tail.has_cause = 1'b1;
-                      t_rob_next_tail.cause = ILLEGAL_INSTRUCTION;
-                   end
-		  else if(t_uop2.op == FETCH_PF)
-		    begin
-                      t_rob_next_tail.faulted = 1'b1;
-                      t_rob_next_tail.has_cause = 1'b1;
-                      t_rob_next_tail.cause = FETCH_PAGE_FAULT;
-		    end
-		  else if(t_uop2.op == FETCH_NOT_EXEC)
-		    begin
-                       t_rob_next_tail.faulted = 1'b1;
-                       t_rob_next_tail.has_cause = 1'b1;
-                       t_rob_next_tail.cause = FAULT_FETCH;
-		    end
-		  else if(t_uop2.op == IRQ)
-		    begin
-                      t_rob_next_tail.faulted = 1'b1;
-                      t_rob_next_tail.has_cause = 1'b1;
-                      t_rob_next_tail.cause = w_irq_id[4:0];
-		    end
-		  else if(t_uop2.op == J)
-		    begin
-		       t_rob_next_tail.take_br = 1'b1;
-		    end
-	       end // if (t_fold_uop2)
-	  end // if (t_alloc_two)
-	
-	
-
-	
-
      end // always_comb
    
 
@@ -1802,16 +1720,7 @@ module core(clk,
 		  r_rob_complete[r_rob_tail_ptr[`LG_ROB_ENTRIES-1:0]] <= t_fold_uop;
 		  r_rob_sd_complete[r_rob_tail_ptr[`LG_ROB_ENTRIES-1:0]] <= !(t_uop.is_mem & t_uop.srcB_valid);
 	       end
-	     if(t_alloc_two)
-	       begin
-		  //if(r_rob_next_tail_ptr[`LG_ROB_ENTRIES-1:0] == 'd5)
-		  // begin
-		  //$display("alloc 2 : marking entry 5 in flight at cycle %d, fetch cycle %d", r_cycle, t_uop2.fetch_cycle);
-		  //end		  
-		  r_rob_complete[r_rob_next_tail_ptr[`LG_ROB_ENTRIES-1:0]] <= t_fold_uop2;
-		  r_rob_sd_complete[r_rob_next_tail_ptr[`LG_ROB_ENTRIES-1:0]] <= !(t_uop2.is_mem & t_uop2.srcB_valid);
-	       end
-	     if(t_complete_valid_1)
+     if(t_complete_valid_1)
 	       begin
 		  r_rob_complete[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]] <= t_complete_bundle_1.complete;
 	       end
@@ -1963,10 +1872,6 @@ module core(clk,
 	  begin
 	     r_rob[r_rob_tail_ptr[`LG_ROB_ENTRIES-1:0]] <= t_rob_tail;
 	  end
-	if(t_alloc_two)
-	  begin
-	     r_rob[r_rob_next_tail_ptr[`LG_ROB_ENTRIES-1:0]] <= t_rob_next_tail;
-	  end
 	if(t_complete_valid_1)
 	  begin
 	     r_rob[t_complete_bundle_1.rob_ptr[`LG_ROB_ENTRIES-1:0]].faulted <= t_complete_bundle_1.faulted;
@@ -2029,10 +1934,6 @@ module core(clk,
 	       begin
 		  r_rob_dead_insns[r_rob_tail_ptr[`LG_ROB_ENTRIES-1:0]] <= 1'b1;		  
 	       end
-	     if(t_alloc_two)
-	       begin
-		  r_rob_dead_insns[r_rob_next_tail_ptr[`LG_ROB_ENTRIES-1:0]] <= 1'b1;		  
-	       end
 	  end // else: !if(reset || t_clr_rob)
      end // always_ff@ (posedge clk)
 
@@ -2089,10 +1990,7 @@ module core(clk,
 		    begin
 		       r_rob_inflight[r_rob_tail_ptr[`LG_ROB_ENTRIES-1:0]] <= 1'b1;		  
 		    end
-		  if(t_alloc_two && !t_fold_uop2)
-		    begin
-		       r_rob_inflight[r_rob_next_tail_ptr[`LG_ROB_ENTRIES-1:0]] <= 1'b1;
-		    end
+
 	       end
 	  end // else: !if(reset)
      end // always_ff@ (posedge clk)
@@ -2165,15 +2063,10 @@ module core(clk,
 	  end
 	else
 	  begin
-	     if(t_alloc && !t_alloc_two)
+	     if(t_alloc)
 	       begin
 		  n_rob_tail_ptr = r_rob_tail_ptr + 'd1;
 		  n_rob_next_tail_ptr = r_rob_next_tail_ptr + 'd1;
-	       end
-	     else if(t_alloc && t_alloc_two)
-	       begin
-		  n_rob_tail_ptr = r_rob_tail_ptr + 'd2;
-		  n_rob_next_tail_ptr = r_rob_next_tail_ptr + 'd2;
 	       end
 
 	     
@@ -2287,10 +2180,6 @@ module core(clk,
 	  begin
 	     n_prf_free[{1'b0, t_gpr_ffs[`LG_PRF_ENTRIES-2:0]}] = 1'b0;
 	  end
-	if(t_alloc_two && t_uop2.dst_valid)
-	  begin
-	     n_prf_free[{1'b0, t_gpr_ffs2[`LG_PRF_ENTRIES-2:0]}] = 1'b0;
-	  end
 	if(t_free_reg)
 	  begin
 	     n_prf_free[{1'b0, t_free_reg_ptr[`LG_PRF_ENTRIES-2:0]}] = 1'b1;
@@ -2380,7 +2269,7 @@ module core(clk,
      begin
 	t_any_complete = t_complete_valid_1 | core_mem_rsp_valid | t_complete_valid_2;
 	t_push_1 = t_alloc && !t_fold_uop;
-	t_push_2 = t_alloc_two && !t_fold_uop2;
+	t_push_2 = 1'b0;
      end
 
    exec e (

@@ -8,8 +8,6 @@
 
 `define FPGA 1
 
-`define SECOND_EXEC_PORT 1
-`define TWO_SRC_CHEAP 1
 
 //`define FOUR_CYCLE_L1D 1
 
@@ -21,7 +19,7 @@
 `define NUM_DTLB_ENTRIES 32
 `define NUM_ITLB_ENTRIES 16
 
-`define LG_INT_SCHED0_ENTRIES 3
+`define LG_INT_SCHED0_ENTRIES 2
 `define LG_INT_SCHED1_ENTRIES 2
 `define LG_MEM_SCHED_ENTRIES 2
 
@@ -38,33 +36,32 @@
 `define LG_PRF_ENTRIES 7
 
 //queue between decode and alloc
-`define LG_DQ_ENTRIES 2
-
+`define LG_DQ_ENTRIES 1
 //queue between fetch and decode
-`define LG_FQ_ENTRIES 3
+`define LG_FQ_ENTRIES 1
 
 //rob size
-`define LG_ROB_ENTRIES 5
+`define LG_ROB_ENTRIES 4
 
 `define LG_RET_STACK_ENTRIES 3
 
 /* non-uop queue */
-`define LG_UQ_ENTRIES 3
+`define LG_UQ_ENTRIES 1
 /* mem uop queue */
-`define LG_MEM_UQ_ENTRIES 3
-
+`define LG_MEM_UQ_ENTRIES 1
 /* mem data queue */
-`define LG_MEM_DQ_ENTRIES 3
+`define LG_MEM_DQ_ENTRIES 1
 
 /* mem uop queue */
-`define LG_MQ_ENTRIES 2
+`define LG_MQ_ENTRIES 1
 
-`define LG_MDQ_ENTRIES 3
+`define LG_MRQ_ENTRIES 2
+
+`define LG_MDQ_ENTRIES 1
 
 `define LG_EB_ENTRIES 1
 
 /* mem retry queue */
-`define LG_MRQ_ENTRIES 3
 
 `define MUL_LAT 3
 

@@ -309,8 +309,8 @@ endfunction
    logic 		  t_miss, t_hit;
    logic		  t_qual_miss, t_qual_hit;
    
-   logic 		  t_push_insn, t_push_insn2,
-			  t_push_insn3, t_push_insn4;
+   logic		  t_push_insn, t_push_insn2;
+   
    
    logic		  n_page_fault, r_page_fault;
    logic		  n_tlb_miss, r_tlb_miss;
@@ -347,7 +347,8 @@ endfunction
    
    localparam PP = (`M_WIDTH-32);
    localparam SEXT = `M_WIDTH-16;
-   insn_fetch_t t_insn, t_insn2, t_insn3, t_insn4;
+   insn_fetch_t t_insn, t_insn2;
+   
    logic [`N_PD_BITS-1:0] t_pd0, t_pd1, t_pd2, t_pd3, t_pd, t_first_pd;
    logic       t_tcb0, t_tcb1, t_tcb2, t_tcb3;
    logic       t_br0,t_br1,t_br2,t_br3;
@@ -397,30 +398,16 @@ endfunction
 	fq_full2 = (r_fq_head_ptr != r_fq_next_tail_ptr) &&
 		   (r_fq_head_ptr[`LG_FQ_ENTRIES-1:0] == r_fq_next_tail_ptr[`LG_FQ_ENTRIES-1:0]) || fq_full;
 	
-	fq_full3 = (r_fq_head_ptr != r_fq_next3_tail_ptr) &&
-		   (r_fq_head_ptr[`LG_FQ_ENTRIES-1:0] == r_fq_next3_tail_ptr[`LG_FQ_ENTRIES-1:0]) || fq_full2;
+	fq_full3 = 1'b1;//(r_fq_head_ptr != r_fq_next3_tail_ptr) &&
+		   //(r_fq_head_ptr[`LG_FQ_ENTRIES-1:0] == r_fq_next3_tail_ptr[`LG_FQ_ENTRIES-1:0]) || fq_full2;
 	
-	fq_full4 = (r_fq_head_ptr != r_fq_next4_tail_ptr) &&
-		   (r_fq_head_ptr[`LG_FQ_ENTRIES-1:0] == r_fq_next4_tail_ptr[`LG_FQ_ENTRIES-1:0]) || fq_full3;
+	fq_full4 = 1'b1;//(r_fq_head_ptr != r_fq_next4_tail_ptr) &&
+		   //(r_fq_head_ptr[`LG_FQ_ENTRIES-1:0] == r_fq_next4_tail_ptr[`LG_FQ_ENTRIES-1:0]) || fq_full3;
 	
 	insn = r_fq[r_fq_head_ptr[`LG_FQ_ENTRIES-1:0]];
 	insn_two = r_fq[r_fq_next_head_ptr[`LG_FQ_ENTRIES-1:0]];
 
-	if(t_push_insn4)
-	  begin
-	     n_fq_tail_ptr = r_fq_tail_ptr + 'd4;
-	     n_fq_next_tail_ptr = r_fq_next_tail_ptr + 'd4;
-	     n_fq_next3_tail_ptr = r_fq_next3_tail_ptr + 'd4;
-	     n_fq_next4_tail_ptr = r_fq_next4_tail_ptr + 'd4;
-	  end
-	else if(t_push_insn3)
-	  begin
-	     n_fq_tail_ptr = r_fq_tail_ptr + 'd3;
-	     n_fq_next_tail_ptr = r_fq_next_tail_ptr + 'd3;
-	     n_fq_next3_tail_ptr = r_fq_next3_tail_ptr + 'd3;
-	     n_fq_next4_tail_ptr = r_fq_next4_tail_ptr + 'd3;
-	  end
-	else if(t_push_insn2)
+	if(t_push_insn2)
 	  begin
 	     n_fq_tail_ptr = r_fq_tail_ptr + 'd2;
 	     n_fq_next_tail_ptr = r_fq_next_tail_ptr + 'd2;
@@ -461,23 +448,7 @@ endfunction
 	     r_fq[r_fq_tail_ptr[`LG_FQ_ENTRIES-1:0]] <= t_insn;
 	     r_fq[r_fq_next_tail_ptr[`LG_FQ_ENTRIES-1:0]] <= t_insn2;
 	  end
-	else if(t_push_insn3)
-	  begin
-	     //$display("t_insn.pc = %x, t_clear_fq=%b", t_insn.pc,t_clear_fq);	     	     
-	     //$display("t_insn2.pc = %x", t_insn2.pc);
-	     //$display("t_insn3.pc = %x", t_insn3.pc);	     	     	     
-	     r_fq[r_fq_tail_ptr[`LG_FQ_ENTRIES-1:0]] <= t_insn;
-	     r_fq[r_fq_next_tail_ptr[`LG_FQ_ENTRIES-1:0]] <= t_insn2;
-	     r_fq[r_fq_next3_tail_ptr[`LG_FQ_ENTRIES-1:0]] <= t_insn3;	  	     
-	  end
-	else if(t_push_insn4)
-	  begin
-	     //$display("cycle %d t_insn4.pc = %x, idx = %x, t_take_br = %b", r_cycle, t_insn4.pc, r_pht_idx, t_take_br);	     	     	     
-	     r_fq[r_fq_tail_ptr[`LG_FQ_ENTRIES-1:0]] <= t_insn;
-	     r_fq[r_fq_next_tail_ptr[`LG_FQ_ENTRIES-1:0]] <= t_insn2;
-	     r_fq[r_fq_next3_tail_ptr[`LG_FQ_ENTRIES-1:0]] <= t_insn3;
-	     r_fq[r_fq_next4_tail_ptr[`LG_FQ_ENTRIES-1:0]] <= t_insn4;	  	     	     
-	  end
+
      end // always_ff@ (posedge clk)
 
    
@@ -656,8 +627,6 @@ endfunction
 	t_clear_fq = 1'b0;
 	t_push_insn = 1'b0;
 	t_push_insn2 = 1'b0;
-	t_push_insn3 = 1'b0;
-	t_push_insn4 = 1'b0;
 	
 	t_take_br = 1'b0;
 	t_take_br0 = 1'b0;
@@ -788,25 +757,7 @@ endfunction
 	       else if(t_hit && !fq_full)
 		 begin
 		    t_qual_hit = 1'b1;
-		    if((t_taken_branch_idx == 'd3) & !fq_full4 & (t_first_pd == 'd1 | t_first_pd == 'd3))
-		      begin
-			 t_update_spec_hist = 1'b1;
-			 t_push_insn4 = 1'b1;
-			 t_is_cflow = 1'b1;
-			 t_take_br = 1;
-			 n_pc = w_cache_pc12 + ((t_first_pd=='d3)? t_j_disp :	t_br_disp);
-			 //$display("branch = %x, n_pc = %x", w_cache_pc12, n_pc);
-		      end // if ((t_taken_branch_idx == 'd3) & !fq_full4)
-		    else if((t_taken_branch_idx == 'd2) & !fq_full3 & (t_first_pd == 'd1 | t_first_pd == 'd3))
-		      begin
-			 t_update_spec_hist = 1'b1;
-			 t_push_insn3 = 1'b1;
-			 t_is_cflow = 1'b1;
-			 t_take_br = 1;
-			 n_pc = w_cache_pc8 + ((t_first_pd=='d3) ? t_j_disp :t_br_disp);
-			 //$display("branch = %x, n_pc = %x", w_cache_pc8, n_pc);			 
-		      end
-		    else if((t_taken_branch_idx == 'd1) & !fq_full2 & (t_first_pd == 'd1 | t_first_pd == 'd3))
+		    if((t_taken_branch_idx == 'd1) & !fq_full2 & (t_first_pd == 'd1 | t_first_pd == 'd3))
 		      begin
 			 t_update_spec_hist = 1'b1;
 			 t_push_insn2 = 1'b1;
@@ -868,29 +819,7 @@ endfunction
 		    //initial push multiple logic
 		    if(t_is_cflow==1'b0)
 		      begin
-			 if(t_first_branch == 'd4 && !fq_full4)
-			   begin
-			      t_push_insn4 = 1'b1;
-			      t_cache_idx = r_cache_idx + 'd1;
-			      n_cache_pc = w_cache_pc16;
-			      t_cache_tag = n_cache_pc[(`PA_WIDTH-1):IDX_STOP];
-			      n_pc = w_cache_pc20;
-			      t_update_spec_hist = |t_any_branch;
-			   end
-			 else if(t_first_branch == 'd3 && !fq_full3)
-			   begin
-			      t_push_insn3 = 1'b1;
-			      n_cache_pc = w_cache_pc12;
-			      n_pc = w_cache_pc16;
-			      t_cache_tag = n_cache_pc[(`PA_WIDTH-1):IDX_STOP];
-			      t_update_spec_hist = |t_any_branch;			      
-			      if(t_insn_idx != 0)
-				begin
-				   t_cache_idx = r_cache_idx + 'd1;
-				end
-			      //
-			   end
-			 else if(t_first_branch == 'd2 && !fq_full2)
+			 if(t_first_branch == 'd2 && !fq_full2)
 			   begin
 			      t_push_insn2 = 1'b1;
 			      n_cache_pc = w_cache_pc8;
@@ -1112,26 +1041,6 @@ endfunction
 `ifdef	ENABLE_CYCLE_ACCOUNTING
 	t_insn2.fetch_cycle = r_cycle;
 `endif
-	t_insn3.insn_bytes = t_insn_data3;
-	t_insn3.page_fault = 1'b0;
-	t_insn3.bad_page_permissions = 1'b0;	
-	t_insn3.pc = w_cache_pc8;
-	t_insn3.pred_target = n_pc;
-	t_insn3.pred = t_taken_branch_idx=='d2;
-	t_insn3.bpu_idx = r_pht_idx;
-`ifdef	ENABLE_CYCLE_ACCOUNTING
-	t_insn3.fetch_cycle = r_cycle;
-`endif
-	t_insn4.insn_bytes = t_insn_data4;
-	t_insn4.page_fault = 1'b0;
-	t_insn4.bad_page_permissions = 1'b0;	
-	t_insn4.pc = w_cache_pc12;
-	t_insn4.pred_target = n_pc;
-	t_insn4.pred = t_taken_branch_idx=='d3;
-	t_insn4.bpu_idx = r_pht_idx;
-`ifdef	ENABLE_CYCLE_ACCOUNTING
-	t_insn4.fetch_cycle = r_cycle;
-`endif
      end // always_comb
    
    logic t_wr_valid_ram_en0, t_wr_valid_ram_en1;
@@ -1283,12 +1192,12 @@ endfunction
 	//$display("%b %b %b %b", t_push_insn, t_push_insn2, t_push_insn3, t_push_insn4);
 	record_fetch(t_push_insn ? 32'd1 : 32'd0,
 		     t_push_insn2 ? 32'd1 : 32'd0,
-		     t_push_insn3 ? 32'd1 : 32'd0,
-		     t_push_insn4 ? 32'd1 : 32'd0,
+		     32'd0,
+		     32'd0,
 		     { {(64-`M_WIDTH){1'b0}},t_insn.pc},
 		     { {(64-`M_WIDTH){1'b0}},t_insn2.pc},
-		     { {(64-`M_WIDTH){1'b0}},t_insn3.pc},
-		     { {(64-`M_WIDTH){1'b0}},t_insn4.pc},		     
+		     64'd0,
+		     64'd0,		     
 		     r_resteer_bubble ? 32'd1 : 32'd0,
 		     fq_full ? 32'd1 : 32'd0);
 	

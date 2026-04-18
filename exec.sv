@@ -269,18 +269,13 @@ module exec(clk,
 
    /* int alu scheduler signals */
    logic [N_INT_SCHED0_ENTRIES-1:0] r_alu_sched_valid;
-   logic [N_INT_SCHED1_ENTRIES-1:0] r_alu_sched_valid2;   
    logic [`LG_INT_SCHED0_ENTRIES:0] t_alu_sched_alloc_ptr;
-   logic [`LG_INT_SCHED1_ENTRIES:0] t_alu_sched_alloc_ptr2;   
    logic [N_INT_SCHED0_ENTRIES-1:0]  t_alu_alloc_entry, t_alu_select_entry;
-   logic [N_INT_SCHED1_ENTRIES-1:0]  t_alu_alloc_entry2, t_alu_select_entry2;
    
    uop_t r_alu_sched_uops[N_INT_SCHED0_ENTRIES-1:0], t_picked_uop;
    uop_t r_alu_sched_uops2[N_INT_SCHED1_ENTRIES-1:0], t_picked_uop2;
    logic [N_INT_SCHED0_ENTRIES-1:0] t_alu_entry_rdy;
    logic [`LG_INT_SCHED0_ENTRIES:0] t_alu_sched_select_ptr;
-   logic [N_INT_SCHED1_ENTRIES-1:0] t_alu_entry_rdy2;
-   logic [`LG_INT_SCHED1_ENTRIES:0] t_alu_sched_select_ptr2;
    
    
 	
@@ -295,9 +290,7 @@ module exec(clk,
    wire [N_INT_SCHED0_ENTRIES-1:0]   w_alu_sched_oldest_ready;
    wire [N_INT_SCHED1_ENTRIES-1:0]   w_alu_sched_oldest_ready2;   
    logic [N_INT_SCHED0_ENTRIES-1:0]  t_alu_sched_mask_valid;
-   logic [N_INT_SCHED1_ENTRIES-1:0]  t_alu_sched_mask_valid2;
    logic [N_INT_SCHED0_ENTRIES-1:0]  r_alu_sched_matrix [N_INT_SCHED0_ENTRIES-1:0];
-   logic [N_INT_SCHED1_ENTRIES-1:0]  r_alu_sched_matrix2 [N_INT_SCHED1_ENTRIES-1:0];
    
 
    /* mem scheduler signals */
@@ -698,11 +691,7 @@ module exec(clk,
      end
 
    wire w_alu_sched_avail = ((&r_alu_sched_valid) == 1'b0) & (t_flash_clear == 1'b0);
-`ifdef SECOND_EXEC_PORT   
-   wire	w_alu_sched_avail2 = ((&r_alu_sched_valid2) == 1'b0) & (t_flash_clear == 1'b0);
-`else
    wire	w_alu_sched_avail2 = 1'b0;
-`endif
    
    wire	w_uop1_on_sched1 = w_alu_sched_avail & (t_uq_empty==1'b0);
    wire	w_uop1_on_sched2 = w_alu_sched_avail2 & (t_uq_empty==1'b0) & t_uq.is_cheap_int;
@@ -915,11 +904,6 @@ module exec(clk,
    find_first_set#(`LG_INT_SCHED0_ENTRIES) ffs_int_sched_select( .in(w_alu_sched_oldest_ready),
 								.y(t_alu_sched_select_ptr));
 
-   find_first_set#(`LG_INT_SCHED1_ENTRIES) ffs_int_sched_alloc2( .in(~r_alu_sched_valid2),
-								.y(t_alu_sched_alloc_ptr2));
-   
-   find_first_set#(`LG_INT_SCHED1_ENTRIES) ffs_int_sched_select2( .in(w_alu_sched_oldest_ready2),
-								 .y(t_alu_sched_select_ptr2));
      
    always_comb
      begin
@@ -935,29 +919,10 @@ module exec(clk,
 	  end
      end // always_comb
 
-   always_comb
-     begin
-	t_alu_alloc_entry2 = 'd0;
-	t_alu_select_entry2 = 'd0;
-	if(w_alloc_uq2)
-	  begin
-	     t_alu_alloc_entry2[t_alu_sched_alloc_ptr2[`LG_INT_SCHED1_ENTRIES-1:0]] = 1'b1;
-	  end
-	if(t_alu_entry_rdy2 != 'd0)
-	  begin
-	     t_alu_select_entry2[t_alu_sched_select_ptr2[`LG_INT_SCHED1_ENTRIES-1:0]] = 1'b1;
-	  end
-     end // always_comb
-
 
    always_comb
      begin
 	t_picked_uop = r_alu_sched_uops[t_alu_sched_select_ptr[`LG_INT_SCHED0_ENTRIES-1:0]];
-     end
-
-   always_comb
-     begin
-	t_picked_uop2 = r_alu_sched_uops2[t_alu_sched_select_ptr2[`LG_INT_SCHED1_ENTRIES-1:0]];
      end
    
    
@@ -971,16 +936,6 @@ module exec(clk,
 	r_start_int <= reset ? 1'b0 : ((t_alu_entry_rdy != 'd0) & !ds_done);
      end // always_comb
    
-   always_ff@(posedge clk)
-     begin
-	int_uop2 <= t_picked_uop2;
-     end
-   
-   always_ff@(posedge clk)
-     begin
-	r_start_int2 <= reset ? 1'b0 : ((t_alu_entry_rdy2 != 'd0) & !ds_done);
-     end
-  
    
 
  
@@ -1018,7 +973,6 @@ module exec(clk,
    always_comb
      begin
 	t_alu_sched_mask_valid = r_alu_sched_valid & (~t_alu_select_entry);
-	t_alu_sched_mask_valid2 = r_alu_sched_valid2 & (~t_alu_select_entry2);	
      end
 
    generate
@@ -1043,28 +997,6 @@ module exec(clk,
 	end // for (genvar i = 0; i < N_INT_SCHED_ENTRIES; i=i+1)
    endgenerate
 
-   generate
-      for(genvar i = 0; i < N_INT_SCHED1_ENTRIES; i=i+1)
-	begin
-	   assign w_alu_sched_oldest_ready2[i] = t_alu_entry_rdy2[i] & (~(|(t_alu_entry_rdy2 & r_alu_sched_matrix2[i])));
-	   always_ff@(posedge clk)
-	     begin
-		if(reset || t_flash_clear)
-		  begin
-		     r_alu_sched_matrix2[i] <= 'd0;
-		  end
-		else if(t_alu_alloc_entry2[i])
-		  begin
-		     r_alu_sched_matrix2[i] <= t_alu_sched_mask_valid2;
-		     
-		  end
-		else if(t_alu_entry_rdy2 != 'd0)
-		  begin
-		     r_alu_sched_matrix2[i] <= r_alu_sched_matrix2[i] & (~t_alu_select_entry2);
-		  end
-	     end
-	end // for (genvar i = 0; i < N_INT_SCHED_ENTRIES; i=i+1)
-   endgenerate
 
 `ifdef VERILATOR   
    always_ff@(negedge clk)
@@ -1149,64 +1081,6 @@ module exec(clk,
    endgenerate
 
 
-   generate
-      for(genvar i = 0; i < N_INT_SCHED1_ENTRIES; i=i+1)
-	begin
-	   always_comb
-	     begin
-		t_alu_srcA_match2[i] = r_alu_sched_uops2[i].srcA_valid && (
-									   (mem_rsp_dst_valid & (mem_rsp_dst_ptr == r_alu_sched_uops2[i].srcA)) ||
-									   (t_mul_complete && (w_mul_prf_ptr == r_alu_sched_uops2[i].srcA)) ||
-									   (r_div_complete && (r_div_prf_ptr == r_alu_sched_uops2[i].srcA)) ||
-									   (r_start_int2 && t_wr_int_prf2 & (int_uop2.dst == r_alu_sched_uops2[i].srcA)) ||			 
-									   (r_start_int && t_wr_int_prf & (int_uop.dst == r_alu_sched_uops2[i].srcA))
-									   );
-		
-		t_alu_srcB_match2[i] = r_alu_sched_uops2[i].srcB_valid && (
-									   (mem_rsp_dst_valid & (mem_rsp_dst_ptr == r_alu_sched_uops2[i].srcB)) ||
-									   (t_mul_complete && (w_mul_prf_ptr == r_alu_sched_uops2[i].srcB)) ||
-									   (r_div_complete && (r_div_prf_ptr == r_alu_sched_uops2[i].srcB)) ||
-									   (r_start_int2 && t_wr_int_prf2 & (int_uop2.dst == r_alu_sched_uops2[i].srcB)) ||
-									   (r_start_int && t_wr_int_prf & (int_uop.dst == r_alu_sched_uops2[i].srcB))
-									   );
-		
-		t_alu_entry_rdy2[i] = r_alu_sched_valid2[i] 
-				      ? (
-					 (t_alu_srcA_match2[i] |r_alu_srcA_rdy2[i]) & 
-					 (t_alu_srcB_match2[i] |r_alu_srcB_rdy2[i]) 
-					 ) : 1'b0;
-	     end // always_comb
-	   
-	   always_ff@(posedge clk)
-	     begin
-		if(reset)
-		  begin
-		     r_alu_srcA_rdy2[i] <= 1'b0;
-		     r_alu_srcB_rdy2[i] <= 1'b0;
-		  end
-		else
-		  begin
-		     if(t_alu_alloc_entry2[i])
-		       begin //allocating to this entry
-			  r_alu_srcA_rdy2[i] <= uq2.srcA_valid ? (!r_prf_inflight[uq2.srcA] | t_alu_alloc_srcA_match2) : 1'b1;
-			  r_alu_srcB_rdy2[i] <= uq2.srcB_valid ? (!r_prf_inflight[uq2.srcB] | t_alu_alloc_srcB_match2) : 1'b1;
-		       end
-		     else if(t_alu_select_entry2[i])
-		       begin
-			  r_alu_srcA_rdy2[i] <= 1'b0;
-			  r_alu_srcB_rdy2[i] <= 1'b0;
-		       end
-		     else if(r_alu_sched_valid2[i])
-		       begin
-			  r_alu_srcA_rdy2[i] <= r_alu_srcA_rdy2[i] | t_alu_srcA_match2[i];
-			  r_alu_srcB_rdy2[i] <= r_alu_srcB_rdy2[i] | t_alu_srcB_match2[i];
-		       end // else: !if(t_pop_uq&&(t_alu_sched_alloc_ptr == i))
-		     
-		  end // else: !if(reset)
-	     end // always_ff@ (posedge clk)
-	end // for (genvar i = 0; i < LG_INT_SCHED_ENTRIES; i=i+1)
-   endgenerate
-   
    
 
    logic t_left_shift2, t_signed_shift2,t_circular_shift2;
@@ -1783,25 +1657,6 @@ module exec(clk,
      end // always_ff@ (posedge clk)
 
 
-   always_ff@(posedge clk)
-     begin
-	if(reset || t_flash_clear)
-	  begin
-	     r_alu_sched_valid2 <= 'd0;
-	  end
-	else
-	  begin
-	     if(w_alloc_uq2)
-	       begin
-		  r_alu_sched_valid2[t_alu_sched_alloc_ptr2[`LG_INT_SCHED1_ENTRIES-1:0]] <= 1'b1;
-		  r_alu_sched_uops2[t_alu_sched_alloc_ptr2[`LG_INT_SCHED1_ENTRIES-1:0]] <= uq2;
-	       end
-	     if(t_alu_entry_rdy2 != 'd0)
-	       begin
-		  r_alu_sched_valid2[t_alu_sched_select_ptr2[`LG_INT_SCHED1_ENTRIES-1:0]] <= 1'b0;
-	       end
-	  end // else: !if(reset)
-     end // always_ff@ (posedge clk)
    
    
    wire [63:0] w_shift_src = t_dup_shift_upper ? {t_srcA[31:0], t_srcA[31:0]} : 
@@ -2055,7 +1910,7 @@ module exec(clk,
 		    32'd0,
 		    32'd0,
 		    {{(32-N_INT_SCHED0_ENTRIES){1'b0}}, t_alu_entry_rdy},
-		    {{(32-N_INT_SCHED1_ENTRIES){1'b0}}, t_alu_entry_rdy2}
+		    32'd0
 		    );
      end
 `endif //  `ifdef VERILATOR
@@ -4136,11 +3991,6 @@ always_ff@(negedge clk)
 	     
 	  end
 
-	if(((t_alu_entry_rdy2 != 'd0) & !ds_done))
-	  begin
-	     pt_sched(r_cycle, 
-		      {{ (32-`LG_ROB_ENTRIES){1'b0}}, t_picked_uop2.rob_ptr});
-	  end
 	      
 	if(r_start_int && t_alu_valid || t_mul_complete || t_div_complete)
 	  begin
