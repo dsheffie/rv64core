@@ -387,7 +387,6 @@ module exec(clk,
    uop_t uq, uq2, int_uop;
    uop_t t_uq, t_uq2;
    
-   logic 			    r_start_int2;
    logic 			    r_start_int;
    
    
@@ -3295,8 +3294,6 @@ module exec(clk,
 	   .rdptr1(t_picked_uop.srcB),
 	   .rdptr2(t_picked_mem_uop.srcA),
 	   .rdptr3(t_mem_dq.src_ptr),
-	   .rdptr4('d0),
-	   .rdptr5('d0),
 	   .wrptr0(t_mul_complete ? w_mul_prf_ptr :
 		   t_div_complete ? w_div_prf_ptr :
 		   int_uop.dst),
@@ -3304,29 +3301,20 @@ module exec(clk,
 	   .wrptr2('d0),
 	   .wen0(t_mul_complete | t_div_complete | (r_start_int & t_wr_int_prf)),
 	   .wen1(mem_rsp_dst_valid),
-	   .wen2(1'b0),
 	   .wr0(t_mul_complete ? t_mul_result :
 		t_div_complete ? t_div_result :
 		t_result),
 	   .wr1(mem_rsp_load_data),
-	   .wr2(t_result2),
 	   .rd0(w_srcA),
 	   .rd1(w_srcB),
 	   .rd2(w_mem_srcA),
-	   .rd3(w_mem_srcB),
-	   .rd4(w_srcA_2),
-	   .rd5(w_srcB_2)
-	   
+	   .rd3(w_mem_srcB)
 	   );
 
 `ifdef VERILATOR
 always_ff@(negedge clk)
   begin
      if(r_start_int & t_alu_valid & t_mispred_br)
-       begin
-	  record_exec_mispred(r_cycle);
-       end
-     if(r_start_int2 & t_mispred_br2)
        begin
 	  record_exec_mispred(r_cycle);
        end
@@ -3338,7 +3326,7 @@ always_ff@(negedge clk)
    always_ff@(posedge clk)
      begin
 	complete_valid_1 <= reset ? 1'b0 :(r_start_int & t_alu_valid) | t_mul_complete | t_div_complete;
-	complete_valid_2 <= reset ? 1'b0 : r_start_int2;
+	complete_valid_2 <= 1'b0;
      end
 
    always_ff@(posedge clk)
@@ -3387,7 +3375,7 @@ always_ff@(negedge clk)
    always_comb
      begin
 	complete_valid_1 = (r_start_int & t_alu_valid) | t_mul_complete | t_div_complete;
-	complete_valid_2 = r_start_int2;
+	complete_valid_2 = 1'b0;
      end
 
    always_comb

@@ -296,7 +296,7 @@ module core(clk,
    localparam N_DQ_ENTRIES = (1<<`LG_DQ_ENTRIES);
    localparam HI_EBITS = `M_WIDTH-32;
 
-   logic 				  t_push_dq_one, t_push_dq_two;
+   logic 				  t_push_dq_one;
    
    uop_t r_dq[N_DQ_ENTRIES-1:0];
 
@@ -639,11 +639,6 @@ module core(clk,
 	  begin
 	     $stop();
 	  end
-	if(t_dq_next_full & t_push_dq_two)
-	  begin
-	     $stop();
-	  end
-
 	
 	if(reset)
 	  begin
@@ -871,11 +866,6 @@ module core(clk,
 		      {{ (32-`LG_ROB_ENTRIES){1'b0}}, t_alloc_uop.rob_ptr});
 	  end
 	
-	if(t_alloc_two)
-	  begin
-	     pt_alloc(t_uop2.pc, t_uop2.fetch_cycle, r_cycle, 
-		      {{ (32-`LG_ROB_ENTRIES){1'b0}}, t_alloc_uop2.rob_ptr});
-	  end
 	
 	record_alloc(t_rob_full ? 32'd1 : 32'd0,
 		     t_alloc ? 32'd1 : 32'd0,
@@ -1037,10 +1027,7 @@ module core(clk,
 	n_pending_ii = r_pending_ii;
 	
 	t_enough_iprfs = !((t_uop.dst_valid) && t_gpr_ffs_full);
-
-	
-	t_enough_next_iprfs = !((t_uop2.dst_valid) && t_gpr_ffs2_full);
-
+	t_enough_next_iprfs = 1'b0;
 	
 	t_fold_uop = (t_uop.op == NOP | t_uop.op == II | t_uop.op == FETCH_PF | t_uop.op == IRQ | t_uop.op == J | t_uop.op == FETCH_NOT_EXEC );
 	t_fold_uop2 = (t_uop2.op == NOP | t_uop2.op == II | t_uop2.op == FETCH_PF | t_uop2.op == IRQ | t_uop2.op == J | t_uop2.op == FETCH_NOT_EXEC);
@@ -1803,10 +1790,6 @@ module core(clk,
 	t_mrob_tail.pdst = t_uop.dst_valid ? n_prf_entry : 'd0;
 	t_mrob_tail.old_pdst = t_uop.dst_valid ? r_alloc_rat[t_uop.dst[4:0]] : 'd0;
 
-	t_mrob_next_tail.valid_dst = t_uop2.dst_valid & t_alloc_two;
-	t_mrob_next_tail.ldst = t_uop2.dst_valid ? 'd0 : t_uop2.dst[4:0];
-	t_mrob_next_tail.pdst = t_uop2.dst_valid ? n_prf_entry2 : 'd0;
-	t_mrob_next_tail.old_pdst = t_uop2.dst_valid ? ((t_uop.dst_valid & (t_uop.dst == t_uop2.dst)) ? t_mrob_tail.pdst : r_alloc_rat[t_uop2.dst[4:0]]) : 'd0;
 	
 	t_mrob_next_tail.pc = t_alloc_uop2.pc;
 	t_mrob_next_tail.is_br = t_alloc_uop2.is_br;	
@@ -1828,10 +1811,6 @@ module core(clk,
 	  begin
 	     r_rob_odd[r_rob_tail_ptr[`LG_ROB_ENTRIES-1:1]] <= t_mrob_tail;	     
 	  end
-	else if(w_alloc_rob_next_tail_odd)
-	  begin
-	     r_rob_odd[r_rob_next_tail_ptr[`LG_ROB_ENTRIES-1:1]] <= t_mrob_next_tail;	     	     
-	  end
      end // always_ff@ (posedge clk)
    
    always_ff@(posedge clk)
@@ -1839,10 +1818,6 @@ module core(clk,
 	if(w_alloc_rob_tail_even)
 	  begin
 	     r_rob_even[r_rob_tail_ptr[`LG_ROB_ENTRIES-1:1]] <= t_mrob_tail;
-	  end
-	else if(w_alloc_rob_next_tail_even)
-	  begin
-	     r_rob_even[r_rob_next_tail_ptr[`LG_ROB_ENTRIES-1:1]] <= t_mrob_next_tail;
 	  end
      end // always_ff@ (posedge clk)
 
@@ -2363,8 +2338,6 @@ module core(clk,
      begin
 	if(t_push_dq_one)
 	  r_dq[r_dq_tail_ptr[`LG_DQ_ENTRIES-1:0]] <= t_dec_uop;
-	if(t_push_dq_two)
-	  r_dq[r_dq_next_tail_ptr[`LG_DQ_ENTRIES-1:0]] <= t_dec_uop2;
      end
 
    always_ff@(negedge clk)
@@ -2386,7 +2359,6 @@ module core(clk,
    always_comb
      begin
 	t_push_dq_one = 1'b0;
-	t_push_dq_two = 1'b0;
 	n_dq_tail_ptr = r_dq_tail_ptr;
 	n_dq_head_ptr = r_dq_head_ptr;
 	n_dq_next_head_ptr = r_dq_next_head_ptr;
@@ -2396,13 +2368,10 @@ module core(clk,
 	t_dq_next_empty = (r_dq_tail_ptr == r_dq_next_head_ptr);
 	
 	t_dq_full = (r_dq_tail_ptr[`LG_DQ_ENTRIES-1:0] == r_dq_head_ptr[`LG_DQ_ENTRIES-1:0]) && (r_dq_tail_ptr != r_dq_head_ptr);
-
-	t_dq_next_full = (r_dq_next_tail_ptr[`LG_DQ_ENTRIES-1:0] == r_dq_head_ptr[`LG_DQ_ENTRIES-1:0]) && (r_dq_next_tail_ptr != r_dq_head_ptr);
+	t_dq_next_full = 1'b1;
 	
 	n_dq_cnt = r_dq_cnt;
-		
 	t_uop = r_dq[r_dq_head_ptr[`LG_DQ_ENTRIES-1:0]];
-	t_uop2 = r_dq[r_dq_next_head_ptr[`LG_DQ_ENTRIES-1:0]];
 	
 	if(t_clr_dq)
 	  begin
@@ -2414,7 +2383,7 @@ module core(clk,
 	  end
 	else
 	  begin
-	     if(insn_valid && !t_dq_full && !(!t_dq_next_full && insn_valid_two))
+	     if(insn_valid && !t_dq_full)
 	       begin
 		  //push one instruction
 		  t_push_dq_one = 1'b1;
@@ -2422,27 +2391,11 @@ module core(clk,
 		  n_dq_next_tail_ptr = r_dq_next_tail_ptr + 'd1;
 		  n_dq_cnt = n_dq_cnt + 'd1;
 	       end
-	     else if(insn_valid && !t_dq_full && !t_dq_next_full && insn_valid_two)
-	       begin
-		  //push two instructions
-		  t_push_dq_one = 1'b1;
-		  t_push_dq_two = 1'b1;		  
-		  n_dq_tail_ptr = r_dq_tail_ptr + 'd2;
-		  n_dq_next_tail_ptr = r_dq_next_tail_ptr + 'd2;
-		  n_dq_cnt = n_dq_cnt + 'd2;
-	       end
-	     
-	     if(t_alloc && !t_alloc_two)
+	     if(t_alloc)
 	       begin
 		  n_dq_head_ptr = r_dq_head_ptr + 'd1;
 		  n_dq_next_head_ptr = r_dq_next_head_ptr + 'd1;
 		  n_dq_cnt = n_dq_cnt - 'd1;
-	       end
-	     else if(t_alloc && t_alloc_two)
-	       begin
-		  n_dq_head_ptr = r_dq_head_ptr + 'd2;
-		  n_dq_next_head_ptr = r_dq_next_head_ptr + 'd2;
-		  n_dq_cnt = n_dq_cnt - 'd2;
 	       end
 	  end
      end // always_comb
