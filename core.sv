@@ -1641,20 +1641,6 @@ module core(clk,
 	  end
      end
 `endif
-
-   // always_ff@(negedge clk)
-   //   begin
-   // 	if(t_alloc & !t_alloc_two & !t_dq_next_empty & (r_state == ACTIVE))
-   // 	  begin
-   // 	     $display("cant alloc %x because rob full %b uq full %b out of prf %b serializing %b at cycle %d",
-   // 		      t_uop2.pc, t_rob_next_full, t_uq_next_full, !t_enough_next_iprfs,
-   // 		      t_uop2.serializing_op, r_cycle
-   // 		      );
-   // 	     if(!(t_rob_next_full|t_uq_next_full| (!t_enough_next_iprfs) | t_uop2.serializing_op))
-   // 	       $stop();
-   // 	  end
-   //   end
-   
    
    always_comb
      begin
@@ -2301,39 +2287,6 @@ module core(clk,
 	  end
      end // always_comb
 
-
-   /*
-   always_ff@(posedge clk)
-     begin
-	if(t_alloc & t_uop.dst_valid)
-	  begin
-	     if(t_gpr_ffs[`LG_PRF_ENTRIES-1]) $stop();
-	     $display("allocating to prf entry %d (%d) for pc %x", n_prf_entry, t_uop.dst, t_uop.pc);
-	  end
-	if(t_alloc_two && t_uop2.dst_valid)
-	  begin
-	     if(t_gpr_ffs2[`LG_PRF_ENTRIES-1]) $stop();
-	     $display("allocating to prf2 entry %d (%d) for pc %x", n_prf_entry2, t_uop2.dst, t_uop2.pc);	     
-	  end
-	if(t_alloc & t_uop.srcA_valid)
-	  begin
-	     $display("renamed source A = %d (%d) for pc %x", w_rn_srcA_1, t_uop.srcA, t_uop.pc);
-	  end
-	if(t_alloc & t_uop.srcB_valid)
-	  begin
-	     $display("renamed source B = %d (%d) for pc %x", w_rn_srcB_1, t_uop.srcB, t_uop.pc);
-	  end	
-	if(t_alloc_two & t_uop2.srcA_valid)
-	  begin
-	     $display("renamed source A = %d (%d) for pc %x", w_rn_srcA_2, t_uop2.srcA, t_uop2.pc);
-	  end
-	if(t_alloc_two & t_uop2.srcB_valid)
-	  begin
-    $display("renamed source B = %d (%d) for pc %x", w_rn_srcB_2, t_uop2.srcB, t_uop2.pc);
-	  end	
-     end
-    */
-      
    
    decode_riscv dec0 
      (

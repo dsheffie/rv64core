@@ -10,6 +10,15 @@ def main():
     if not os.path.isdir('verilog'):
         os.mkdir('verilog')
 
+    if 'perfect_l1i.sv' in svs:
+        svs.remove('perfect_l1i.sv')
+
+    if 'l1d.sv' in svs:
+        svs.remove('l1d.sv')
+
+    if 'l2.sv' in svs:
+        svs.remove('l2.sv')
+        
     outputs = []
     modules = set()
     for sv in svs:

@@ -477,13 +477,6 @@ module nu_l1d(clk,
    wire					  mem_rsp_reload = mem_rsp_valid & 
 					  (r_l2q[r_l2q_head_ptr[`LG_MRQ_ENTRIES-1:0]].writeback == 1'b0);
 
-   //always_ff@(negedge clk)
-   //begin
-   //if(mem_rsp_valid & !mem_rsp_reload)
-   //	  begin
-   //$stop();
-   //end
-   //end
       
    function logic [15:0] make_mask(mem_req_t r);
       logic [15:0]		  t_m, m;
@@ -851,12 +844,6 @@ module nu_l1d(clk,
 	  end
 	if(mem_req_valid)
 	  begin
-	     // if(mem_req_opcode == MEM_SW && (mem_req_tag !=  {1'b1, {`LG_MRQ_ENTRIES{1'b1}}}) && (r_state == ACTIVE))
-	     // begin
-	     // 	$display("generating store but tag is %d, n_port2_req_valid = %b, n_port1_req_valid = %b, r_state = %d, n_state = %d, r_cycle = %d", 
-	     // 		 n_mem_req_tag, n_port2_req_valid, n_port1_req_valid, r_state, n_state, r_cycle);
-	     // 	$stop();
-	     // end
 		
 	     $display("req for tag %d, line %x at cycle %d, opcode %d, r_last_wr = %b, rr_last_wr = %b, r_state = %d, req1 %b, req2 %b",
 		      mem_req.tag, 
@@ -1206,18 +1193,7 @@ module nu_l1d(clk,
 	t_array_wr_en = (mem_rsp_reload) | t_wr_array;
      end
 
-   always_ff@(negedge clk)
-     begin
-	if(mem_rsp_reload)
-	  begin
-	     //$display("got reload, addr %x, idx %d, data %x, state %d",
-	     //mem_rsp_addr, mem_rsp_addr[IDX_STOP-1:IDX_START],
-	     //mem_rsp_load_data,
-	     //r_state);
-	  end
-	if(mem_rsp_reload & t_wr_array) $stop();
-     end
-   
+  
  ram2r1w #(.WIDTH(N_TAG_BITS), .LG_DEPTH(`LG_L1D_NUM_SETS)) dc_tag
      (
       .clk(clk),
@@ -1944,7 +1920,7 @@ module nu_l1d(clk,
 		  //$display("TLB miss! for address %x", r_req2.addr);
 		  n_pending_tlb_miss = 1'b1;
 		  n_pending_tlb_zero_page = w_zero_page;
-		  if(r_pending_tlb_miss) $stop();
+	   //if(r_pending_tlb_miss) $stop();
 	       end
 	     else if(w_tlb_st_exc)
 	       begin
@@ -2257,7 +2233,7 @@ module nu_l1d(clk,
 			      n_core_mem_rsp.data = t_rsp_data[`M_WIDTH-1:0];
 			      n_core_mem_rsp.dst_valid = t_rsp_dst_valid;
 			      n_core_mem_rsp_valid = 1'b1;
-			      if(t_core_mem_rsp_valid) $stop();
+	   //if(t_core_mem_rsp_valid) $stop();
 			      n_core_mem_rsp.has_cause = r_req.spans_cacheline;
 
 			   end // else: !if(r_req.is_store)
@@ -2332,7 +2308,7 @@ module nu_l1d(clk,
 			    $display("r_hit_busy_addr %b,  r_is_retry  %b r_hit_busy_addr %b r_lock_cache %b",
 				     r_hit_busy_addr, r_is_retry, r_hit_busy_addr, r_lock_cache);
 			    
-			    $stop();
+	   //$stop();
 			 end
 		    end // else: !if(r_valid_out && r_dirty_out && (r_tag_out != r_cache_tag) )
 		    
@@ -2401,16 +2377,16 @@ module nu_l1d(clk,
 	     else if(r_flush_req && mem_q_empty && !(r_got_req && r_last_wr) && !w_eb_full)
 	       begin
 		  n_state = FLUSH_CACHE;
-		  if(!mem_q_empty) $stop();
-		  if(r_got_req && r_last_wr) $stop();
+	   //if(!mem_q_empty) $stop();
+	   //if(r_got_req && r_last_wr) $stop();
 		  t_cache_idx = 'd0;
 		  n_flush_req = 1'b0;
 	       end
 	     else if(r_flush_cl_req & mem_q_empty & w_queues_drained & !(r_got_req && r_last_wr)
 		     & !(n_page_walk_req_valid | t_got_miss | r_wr_array | t_wr_array))
 	       begin
-		  if(!mem_q_empty) $stop();
-		  if(r_got_req && r_last_wr) $stop();
+	   //if(!mem_q_empty) $stop();
+	   //if(r_got_req && r_last_wr) $stop();
 		  t_cache_idx = l2_probe_addr[IDX_STOP-1:IDX_START];
 		  n_flush_cl_req = 1'b0;
 		  n_flush_was_active = 1'b1;
@@ -2456,11 +2432,13 @@ module nu_l1d(clk,
 	       n_state = ACTIVE;
 	    end
 	  FLUSH_CL:
-	    begin
+	   begin
+`ifdef VERILATOR
 	       if(w_flush_hit & r_link_reg_val & (r_link_reg[31:0] == {r_tag_out,r_cache_idx[LG_MAX_SET-1:0],4'd0}))
 		 begin
 		    $stop();
-		 end
+	   end
+`endif
 	       if(r_dirty_out & w_flush_hit)
 		 begin
 		    n_port1_req_addr = {r_tag_out,r_cache_idx[LG_MAX_SET-1:0],4'd0};
@@ -2570,14 +2548,9 @@ module nu_l1d(clk,
      end // always_comb
 
 
+`ifdef VERILATOR
    always_ff@(negedge clk)
      begin
-	
-	//if(t_push_eb)
-	//begin
-	//$display("--> pushing addr %x, data %x to sb entry %d at cycle %d", 
-	//n_port1_req_addr, t_addr, r_eb_tail_ptr[`LG_EB_ENTRIES-1:0], r_cycle);
-	// end
       if(t_push_miss && mem_q_full)
 	begin
 	   $display("attempting to push to a full memory queue");
@@ -2589,7 +2562,8 @@ module nu_l1d(clk,
 	   $stop();
 	  end
      end // always_ff@ (negedge clk)
-
+`endif //  `ifdef VERILATOR
+	   
    wire [1:0] w_reload_line_cond;
 	   
    assign w_reload_line_cond[0] = ((core_mem_va_req.addr[IDX_STOP-1:IDX_START] == r_miss_idx) & (r_state != ACTIVE));
@@ -2662,12 +2636,12 @@ module nu_l1d(clk,
 		    end
 	     
 `endif //  `ifdef DEBUG
+`ifdef VERILATOR
 	     if(r_state != ACTIVE && (r_miss_idx ==t_cache_idx2))
 	       begin
 		  $stop();
 	       end
-
-	     
+`endif
 	  end // if (core_mem_va_req_valid &&...
      end // always_comb
    
@@ -2712,12 +2686,14 @@ module nu_l1d(clk,
 	if(w_decr_credit)
 	  begin
 	     n_mrq_credits = r_mrq_credits - 'd1;
+`ifdef VERILATOR
 	     if(r_mrq_credits == 'd0) 
 	       begin
 		  $display("trying to push with no free credits,  mem_rdy %b, w_gen_early_req %b, r_state = %d", 
 			   mem_rdy, w_gen_early_req, r_state);
 		  $stop();
 	       end
+`endif
 	  end
 	else if(w_incr_credit)
 	  begin

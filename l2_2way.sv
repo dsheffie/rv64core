@@ -541,18 +541,18 @@ module l2_2way(clk,
 	       begin
 		  r_rob_done[mem_rsp_tag] <= 1'b1;
 		  r_rob_data[mem_rsp_tag] <= mem_rsp_load_data;
-		  		     
+`ifdef VERILATOR	     
 		  if( r_rob_done[mem_rsp_tag] )
 		    begin
 		       $display("tag %d is already done.., valid %b", 
 				mem_rsp_tag, r_rob_valid[mem_rsp_tag]);
 		       $stop();
 		    end
-		  
 		  if( r_rob_valid[mem_rsp_tag] == 1'b0)
 		    begin
 		       $stop();
-		    end		  
+		    end
+`endif		  
 	       end // if (mem_rsp_valid)
 		 
 	     if(t_pop_rob)
@@ -943,7 +943,9 @@ module l2_2way(clk,
 	if(l1d_req_valid)
 	  begin
 	     r_mem_q[r_l1d_tail_ptr[`LG_MRQ_ENTRIES-1:0]] <= l1d_req;
+`ifdef VERILATOR
 	     if(w_l1d_full) $stop();
+`endif
 	  end
      end
    
@@ -1342,8 +1344,10 @@ module l2_2way(clk,
 			     end
 			   default:
 			     begin
+`ifdef VERILATOR
 				$display("hit busy for op type %d", r_rob_req_ty[w_rob_head_ptr]);
 				$stop();
+`endif
 			     end
 			 endcase
 		      end
@@ -1377,8 +1381,10 @@ module l2_2way(clk,
 			     end
 			   default:
 			     begin
+`ifdef VERILATOR
 				$display("handle req type %d", r_rob_req_ty[w_rob_head_ptr]);
 				$stop();
+`endif
 			     end
 			 endcase // case (r_rob_req_ty[w_rob_head_ptr])
 		      end
@@ -1451,7 +1457,9 @@ module l2_2way(clk,
 			      n_l1i_req = 1'b0;
 			      t_gnt_l1i = 1'b1;
 			      n_req_ty = L1I;
+`ifdef VERILATOR
 			      if(w_hit_any_l1i) $stop();
+`endif
 			   end
 			 else if(w_pick_l1d)
 			   begin
@@ -1467,7 +1475,9 @@ module l2_2way(clk,
 			      n_l1d_rsp_tag = t_l1dq.tag;
 			      t_gnt_l1d = 1'b1;
 			      n_req_ty = L1D;
+`ifdef VERILATOR
 			      if(w_hit_any_l1d) $stop();
+`endif
 			   end
 			 n_req_ack = 1'b1;
 			 n_got_req = 1'b1;		    
@@ -1501,9 +1511,9 @@ module l2_2way(clk,
 			      n_state = WAIT_STORE_IDLE;
 			      //$display("mark dirty %b, mark accessed %b", 
 			      //r_mmu_mark_dirty, r_mmu_mark_accessed);
-			      
+`ifdef VERILATOR
 			      if(!(r_mmu_mark_dirty|r_mmu_mark_accessed)) $stop();
-			      
+`endif	      
 			      n_mmu_mark_dirty = 1'b0;
 			      n_mmu_mark_accessed = 1'b0;
 			      t_wr_dirty0 = w_hit0;

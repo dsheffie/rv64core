@@ -920,12 +920,14 @@ endfunction
 	  INJECT_RELOAD:
 	    begin
 	       n_wait_cycles = r_wait_cycles + 'd1;
+`ifdef VERILATOR
 	       if(&r_wait_cycles)
 		 begin
 		    $display("icache fetch request for %x timed out at cycle %d, r_miss_pc %x, phys addr %x, cycles %d", 
 			     r_pc, r_cycle, r_miss_pc, r_mem_req_addr, r_wait_cycles);
 		    $stop();
 		 end
+`endif
 	       if(mem_rsp_valid)
 		 begin
 		    //$display("icache fetch request for %x returns with data %x at cycle %d, r_miss_pc %x", r_pc, mem_rsp_load_data, r_cycle, r_miss_pc);
