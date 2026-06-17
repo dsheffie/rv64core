@@ -71,6 +71,9 @@ module tlb(clk,
    
    
    wire [LG_N:0]	       w_idx;
+   wire [LG_N:0]	       w_idx_vec[NN-1:0];
+   logic [LG_N:0]	       t_idx;
+
    generate
       for(genvar i = N; i < NN; i=i+1)
 	begin
@@ -101,10 +104,30 @@ module tlb(clk,
 	       (r_pgsize[w_idx[LG_N-1:0]] == 2'd2) ? {r_pa_data[w_idx[LG_N-1:0]], va[11:0]} :
 	       {r_pa_data[w_idx[LG_N-1:0]][51:4], va[15:0]};
 	       
-	       	          
+
+`ifdef TLB_PRIORITY_ENC
+
    find_first_set#(.LG_N(LG_N)) 
-   ffs(.in(w_hits),
-       .y(w_idx));
+   ffs(.in(w_hits), .y(w_idx));
+   
+`else
+   generate
+      for(genvar i = 0; i < NN; i=i+1)
+	begin
+	   assign w_idx_vec[i] = i &  {(LG_N+1){w_hits[i]}};
+	end
+   endgenerate
+
+   always_comb
+     begin
+	t_idx = 'd0;
+	for(integer i = 0; i < NN; i=i+1)
+	  begin
+	     t_idx = t_idx | w_idx_vec[i];
+	  end
+     end
+   assign w_idx = t_idx;
+`endif
 
    always_comb
      begin

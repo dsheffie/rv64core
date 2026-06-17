@@ -25,6 +25,7 @@
 `define LG_INT_SCHED1_ENTRIES 2
 `define LG_MEM_SCHED_ENTRIES 2
 
+`define TLB_PRIORITY_INC 1
 
 //gshare branch predictor
 `define LG_PHT_SZ 16
