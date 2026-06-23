@@ -1,21 +1,3 @@
-`ifdef DEBUG_FPU
-import "DPI-C" function int fp32_add(input int a, input int b);
-import "DPI-C" function longint fp64_add(input longint a, input longint b);
-
-module bogo_fp32_add(input logic [31:0] a, input logic [31:0] b, output logic [31:0] y);
-   always_comb
-     begin
-	y = fp32_add(a,b);
-     end
-endmodule
-
-module bogo_fp64_add(input logic [63:0] a, input logic [63:0] b, output logic [63:0] y);
-   always_comb
-     begin
-	y = fp64_add(a,b);
-     end
-endmodule
-`endif
 
 module zero_detector(
    // Outputs
@@ -47,19 +29,22 @@ endmodule // zero_detector
 
 module fp_add(/*AUTOARG*/
    // Outputs
-   y,
+   y, denorm, fflags,
    // Inputs
-   clk, sub, a, b, en
+   clk, sub, a, b, en, rm
    );
    parameter W = 32;
    parameter ADD_LAT = 2;
-   
+
    input logic clk;
    input logic sub;
    input logic [W-1:0] a;
    input logic [W-1:0] b;
-   input logic	       en;         
+   input logic	       en;
+   input logic [1:0]   rm;          // 0=RN(ties-even) 1=RZ 2=RP(+inf) 3=RM(-inf)
    output logic [W-1:0] y;
+   output logic		denorm;
+   output logic [4:0]	fflags;     // IEEE flags {V,Z,O,U,I} (invalid,divzero,ovf,unf,inexact)
 
    localparam FW = (W==32) ? 23 : 52;
    localparam EW = (W==32) ? 8 : 11;
@@ -69,17 +54,6 @@ module fp_add(/*AUTOARG*/
    wire [W-1:0]  w_b = {w_sign_toggle_b, b[W-2:0]};
    wire 	 w_a_is_zero = (a[W-2:0] == 'd0);
    wire 	 w_b_is_zero = (b[W-2:0] == 'd0);
-
-   // wire 		 a_is_nan, a_is_inf, a_is_denorm, a_is_zero;
-   // wire 		 b_is_nan, b_is_inf, b_is_denorm, b_is_zero;
-   
-   // fp_special_cases #(.W(W)) fsc 
-   //   (.in_a(a), .in_b(b), 
-   //    .a_is_nan(a_is_nan), .a_is_inf(a_is_inf), .a_is_denorm(a_is_denorm), .a_is_zero(a_is_zero),
-   //    .b_is_nan(b_is_nan), .b_is_inf(b_is_inf), .b_is_denorm(b_is_denorm), .b_is_zero(b_is_zero)
-   //    );
-   
-   
 
    logic [W-1:0] t_aligned_a,t_aligned_b;
    logic [EW-1:0] t_dist_a, t_dist_b;
@@ -97,20 +71,11 @@ module fp_add(/*AUTOARG*/
 	t_dist_b =  b[W-2:FW] - a[W-2:FW];
      end
    
-   wire [FW+3:0] w_or_mant_a, w_or_mant_b;
-   generate
-      assign w_or_mant_a[0] = a[0];
-      assign w_or_mant_b[0] = b[0];
-      for(genvar i = 1; i < (FW+3); i=i+1)
-	begin
-	   assign w_or_mant_a[i] = |a[i:0]; //| w_or_mant_a[i-1];
-	   assign w_or_mant_b[i] = |b[i:0]; // | w_or_mant_b[i-1];
-	end
-   endgenerate
-   
-   wire a_shifted = w_or_mant_a[t_dist_b[LG_FW-1:0]];
-   wire b_shifted = w_or_mant_b[t_dist_b[LG_FW-1:0]];
-   
+   // sticky = OR of the bits shifted out of the smaller operand's mantissa.
+   // The shift collapses everything below the round bit into bit[0].
+   wire a_shifted = |(t_a_mant & ~({(FW+4){1'b1}} << t_dist_b));
+   wire b_shifted = |(t_b_mant & ~({(FW+4){1'b1}} << t_dist_a));
+
    //align inputs
    always_comb
      begin
@@ -127,7 +92,7 @@ module fp_add(/*AUTOARG*/
 	     t_align_exp = {1'b0,b[W-2:FW]};
 	  end
      end // always_comb
-
+   
 
    
    //perform add
@@ -240,12 +205,21 @@ module fp_add(/*AUTOARG*/
    logic [FW:0] t_round_add_mant;
    logic [EW:0] t_round_add_exp;
 
+   // Round-up (increment magnitude) decision per rounding mode. inexact = any
+   // discarded bit set; for RP/RM the direction depends on the result sign.
+   wire 	w_add_inexact = t_norm2_guard | t_norm2_round | t_norm2_sticky;
+   wire 	w_round_up =
+		(rm == 2'd0) ? (t_norm2_guard & (t_norm2_round | t_norm2_sticky | t_norm2_add_mant[0])) :
+		(rm == 2'd1) ? 1'b0 :
+		(rm == 2'd2) ? (~t_align_sign & w_add_inexact) :
+		               ( t_align_sign & w_add_inexact);
+
    always_comb
      begin
 	t_round_add_mant = t_norm2_add_mant;
 	t_round_add_exp = t_norm2_add_exp;
-	if (t_norm2_guard && (t_norm2_round | t_norm2_sticky | t_norm2_add_mant[0])) 
-	  begin	     
+	if (w_round_up)
+	  begin
 	     if(t_norm2_add_mant == {FW+1{1'b1}})
 	       begin
 		  t_round_add_exp = t_norm2_add_exp + 'd1;
@@ -260,67 +234,86 @@ module fp_add(/*AUTOARG*/
 
    wire w_is_zero = (a[W-1] ^ w_b[W-1]) & (t_round_add_mant=='d0);
    //wire w_is_zero = 1'b0;
-   
-   wire [W-1:0] w_y = w_is_zero ? 'd0 :
+
+   // -------- NaN / infinity inputs (IEEE special cases) --------
+   // NaN2008 convention: quiet bit = frac MSB. sNaN = NaN with that bit clear.
+   wire 	w_a_is_nan  = (&a[W-2:FW]) & (|a[FW-1:0]);
+   wire 	w_b_is_nan  = (&b[W-2:FW]) & (|b[FW-1:0]);
+   wire 	w_a_is_inf  = (&a[W-2:FW]) & ~(|a[FW-1:0]);
+   wire 	w_b_is_inf  = (&b[W-2:FW]) & ~(|b[FW-1:0]);
+   wire 	w_a_is_snan = w_a_is_nan & ~a[FW-1];
+   wire 	w_b_is_snan = w_b_is_nan & ~b[FW-1];
+   wire 	w_any_nan   = w_a_is_nan | w_b_is_nan;
+   wire 	w_special   = w_any_nan | w_a_is_inf | w_b_is_inf;
+   // inf - inf (opposite effective signs) is the invalid case for add
+   wire 	w_inf_sub_inf = w_a_is_inf & w_b_is_inf & (a[W-1] ^ w_b[W-1]);
+   wire 	w_invalid     = w_a_is_snan | w_b_is_snan | w_inf_sub_inf;
+   // NaN result: propagate (prefer a) and force quiet; default NaN otherwise
+   localparam [W-1:0] DEF_NAN = {1'b1, {EW{1'b1}}, 1'b1, {(FW-1){1'b0}}};
+   wire [W-1:0] w_nan_src = w_a_is_nan ? a : b;
+   wire [W-1:0] w_qnan    = {w_nan_src[W-1:FW], 1'b1, w_nan_src[FW-2:0]};
+   wire [W-1:0] w_specinf = w_a_is_inf ? {a[W-1], {EW{1'b1}}, {FW{1'b0}}}
+			                : {w_b[W-1], {EW{1'b1}}, {FW{1'b0}}};
+   wire [W-1:0] w_special_y = w_any_nan ? w_qnan : w_inf_sub_inf ? DEF_NAN : w_specinf;
+
+   // exponent overflow: the biased exponent reaches the reserved value when
+   // bit[EW] is set (>= 256, e.g. round of an all-ones mantissa) or the low EW
+   // bits are all 1 (== 255). With finite operands it cannot grow beyond that.
+   wire 	w_overflow = t_round_add_exp[EW] | (&t_round_add_exp[EW-1:0]);
+   // overflow default result depends on the mode (R4000 Table 7-1):
+   //  RN -> inf;  RZ -> max-finite;  RP -> +inf / -max;  RM -> -inf / +max
+   wire 	w_ovf_inf =
+		(rm == 2'd0) ? 1'b1 :
+		(rm == 2'd1) ? 1'b0 :
+		(rm == 2'd2) ? ~t_align_sign :
+		                t_align_sign;
+   wire [W-1:0] w_inf    = {t_align_sign, {EW{1'b1}}, {FW{1'b0}}};
+   wire [W-1:0] w_maxfin = {t_align_sign, {(EW-1){1'b1}}, 1'b0, {FW{1'b1}}};
+   wire [W-1:0] w_ovf_y  = w_ovf_inf ? w_inf : w_maxfin;
+
+   wire [W-1:0] w_y = w_special ? w_special_y :
+		w_is_zero ? 'd0 :
 		w_a_is_zero ? w_b :
 		w_b_is_zero ? a :
+		w_overflow ? w_ovf_y :
 		{t_align_sign, t_round_add_exp[EW-1:0], t_round_add_mant[FW-1:0]};
 
+   // Denormal detection. We don't compute correct subnormal results (the R4000
+   // punts these to the software emulator via the Unimplemented (E) trap); we
+   // just flag that a denormal is involved so the caller can take that path.
+   wire w_a_denorm = (a[W-2:FW] == 'd0) & (a[FW-1:0] != 'd0);
+   wire w_b_denorm = (b[W-2:FW] == 'd0) & (b[FW-1:0] != 'd0);
 
+   // result underflow: leading-zero normalize drives the biased exponent <= 0
+   wire [EW:0] 		w_lead = (t_add_mant[FW] == 1'b0) ? w_shift_dist : {(EW+1){1'b0}};
+   wire signed [EW+1:0] w_real_exp = $signed({1'b0, t_add_exp}) - $signed({1'b0, w_lead});
+   // w_real_exp <= 0 : sign bit set (negative) or all-zero
+   wire 		w_res_denorm = (w_real_exp[EW+1] | ~(|w_real_exp)) & (t_round_add_mant != 'd0) & ~w_is_zero;
 
-`ifdef DEBUG_FPU
-   logic [W-1:0] t_dpi;
-   generate
-      if(W == 32)
-	begin
-	   bogo_fp32_add bfp32(a,w_b,t_dpi);
-	end
-      else
-	begin
-	   bogo_fp64_add bfp64(a,w_b,t_dpi);
-	end
-   endgenerate
-   
-   always_ff@(negedge clk)
+   wire 		w_denorm = ~w_special & (w_a_denorm | w_b_denorm | w_res_denorm);
+
+   // IEEE exception flags. Special (NaN/inf) inputs raise only V (invalid).
+   // The zero / passthrough cases (a+0, 0+b, a-a) are exact, so raise nothing.
+   // Inexact = rounded-away bits OR overflow. Z (div-by-zero) never for add.
+   wire 		w_exact_path = w_special | w_is_zero | w_a_is_zero | w_b_is_zero;
+   wire 		w_f_inexact   = ~w_exact_path & (w_add_inexact | w_overflow);
+   wire 		w_f_overflow  = ~w_exact_path & w_overflow;
+   wire 		w_f_underflow = ~w_exact_path & w_res_denorm;
+   wire [4:0] 		w_fflags = {w_invalid, 1'b0, w_f_overflow, w_f_underflow, w_f_inexact};
+
+   // ADD_LAT-deep output pipeline. Result, denorm flag and IEEE flags travel
+   // together through the same registers so they stay aligned with y.
+   logic [W+5:0] r_pipe [ADD_LAT-1:0];
+   integer 	 i;
+   always_ff @(posedge clk)
      begin
-	if(en && (t_dpi != w_y) && (t_dpi[W-2:FW] != w_y[W-2:FW]) && 1'b0)
-	  begin
-    	     //$display("IN : a sign %b exp = %d, a frac = %x", 
-   	     //a[W-1], a[W-2:FW], a[FW-1:0]);
-   	     //$display("IN : b sign %b exp = %d, b frac = %x", 
-   	     //w_b[W-1], b[W-2:FW], b[FW-1:0]);
-	     $display("DPI = %x, RTL = %x : a = %x, w_b = %x", 
-		      t_dpi, w_y, a, w_b);
-	     $display("DPI exp = %x, RTL exp = %x", 
-		      t_dpi[W-2:FW], w_y[W-2:FW]);
-	     $display("DPI frac = %x, RTL frac = %x", 
-		      t_dpi[FW-1:0], w_y[FW-1:0]);	     
-	     $display("w_is_zero = %b, w_a_is_zero = %b, w_b_is_zero = %b",
-		      w_is_zero, w_a_is_zero, w_b_is_zero);
-	     $display("t_a_align_mant = %b, t_b_align_mant = %b", t_a_align_mant,t_b_align_mant);
-	     $display("t_dist_a = %d, t_dist_b = %d", t_dist_a, t_dist_b);
-	     
-	     $display("t_add_exp = %x, t_align_sum[FW+4] = %b", t_add_exp, t_align_sum[FW+4]);
-   	     $display("t_add_mant = %b, dist = %d", 
-	      	      t_add_mant, w_shft_lft_dist);
-	     
-	     $display("t_norm2_add_mant = %b", t_norm2_add_mant);
-	     
-   	     $display("\tnorm2 = sign %b exp %d, frac %x (t_dist_a = %d, t_dist_b = %d)",
-   		       t_align_sign,
-   	      	       t_norm2_add_exp[EW-1:0],
-   		       t_norm2_add_mant[FW-1:0],
-   		       t_dist_a,
-   		       t_dist_b);
-
-	     $display("\ta_shifted %b, b_shifted %b", a_shifted, b_shifted);
-   	     $display("\trounded frac %x", t_round_add_mant[FW-1:0]);	     	     
-	  end
+	r_pipe[0] <= {w_fflags, w_denorm, w_y};
+	for(i = 1; i < ADD_LAT; i = i + 1)
+	  r_pipe[i] <= r_pipe[i-1];
      end
-   shiftreg #(.W(W), .D(ADD_LAT)) sr0 (.clk(clk), .in(t_dpi), .out(y));
-`else
-   shiftreg #(.W(W), .D(ADD_LAT)) sr0 (.clk(clk), .in(w_y), .out(y));
-`endif
-   
-     
+
+   assign y      = r_pipe[ADD_LAT-1][W-1:0];
+   assign denorm = r_pipe[ADD_LAT-1][W];
+   assign fflags = r_pipe[ADD_LAT-1][W+5:W+1];
+
 endmodule // sp_add

@@ -80,20 +80,26 @@ module mul(clk,
    fp_mul #(.W(32), .MUL_LAT(`MUL_LAT+1)) sp_mul0
      (
       .y(w_fp_mul),
+      .denorm(),
+      .fflags(),      
       .clk(clk),
       .a(src_A[31:0]),
       .b(src_B[31:0]),
-      .en(1'b1)
+      .en(1'b1),
+      .rm(2'd0)
       );
 
    fp_add #(.W(32), .ADD_LAT(`MUL_LAT+1)) sp_add0
      (
       .y(w_fp_add),
+      .denorm(),
+      .fflags(),
       .clk(clk),
       .a(src_A[31:0]),
       .b(src_B[31:0]),
       .sub(is_fp_sub),
-      .en(1'b1)
+      .en(1'b1),
+      .rm(2'd0)
       );
 		
     			   
