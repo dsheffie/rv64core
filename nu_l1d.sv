@@ -2445,6 +2445,7 @@ module nu_l1d(clk,
 		    n_port1_req_addr = {r_tag_out,r_cache_idx[LG_MAX_SET-1:0],4'd0};
 		    n_port1_req_opcode = MEM_SW;
 		    n_port1_req_store_data = t_data;
+	            t_mark_invalid = 1'b1;
 		    n_state = FLUSH_CL_WAIT;
 		    n_inhibit_write = 1'b1;
 		    n_port1_req_valid = 1'b1;	       
@@ -2461,7 +2462,7 @@ module nu_l1d(clk,
 	    begin
 	       	if(w_queues_drained)
 		  begin
-		     n_state = n_flush_was_active ? ACTIVE : TLB_RELOAD;
+		     n_state = r_flush_was_active ? ACTIVE : TLB_RELOAD;
 		     n_flush_was_active = 1'b0;
 		     n_inhibit_write = 1'b0;
 		     n_l2_probe_ack = 1'b1;

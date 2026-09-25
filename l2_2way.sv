@@ -215,6 +215,10 @@ module l2_2way(clk,
 
    logic 	r_need_l1i,n_need_l1i,r_need_l1d,n_need_l1d;
    logic 	t_l2_flush_req;
+
+   logic	r_mark_pte_inflight, n_mark_pte_inflight;
+   logic	r_mark_pte_done, n_mark_pte_done;
+   
    
    flush_state_t n_flush_state, r_flush_state;
 
@@ -243,8 +247,7 @@ module l2_2way(clk,
 				     FLUSH_STORE, //8
 				     FLUSH_STORE_WAY2, //9
 				     FLUSH_WAIT,
-				     FLUSH_TRIAGE,
-				     UPDATE_PTE
+				     FLUSH_TRIAGE
 				     } state_t;
 
    state_t n_state, r_state;
@@ -414,7 +417,9 @@ module l2_2way(clk,
 			{w_d[127:72], r_mmu_mark_dirty|w_d[71], r_mmu_mark_accessed|w_d[70], w_d[69:0]} :
 			{w_d[127:8], r_mmu_mark_dirty|w_d[7], r_mmu_mark_accessed|w_d[6], w_d[5:0]};      
    wire [N_ROB_ENTRIES-1:0] w_hit_rob, w_mmu, w_pte, w_wb, w_st, w_hit_cl;
+   
 
+   
    generate
       for(genvar i = 0; i < N_ROB_ENTRIES; i=i+1)
 	begin
@@ -478,7 +483,6 @@ module l2_2way(clk,
    // wire			    w_hit_inflight = (|w_hit_rob) | r_txn_inflight | n_txn_inflight;
 
    wire			    w_hit_inflight = (|w_hit_rob);
-
    
    always_ff@(posedge clk)
      begin
@@ -667,6 +671,8 @@ module l2_2way(clk,
 	     r_replace <= 1'b0;
 	     r_wb1 <= 1'b0;
 	     r_last_idle <= 1'b0;
+	     r_mark_pte_inflight <= 1'b0;
+	     r_mark_pte_done <= 1'b0;
 	  end
 	else
 	  begin
@@ -720,6 +726,8 @@ module l2_2way(clk,
 	     r_replace <= n_replace;
 	     r_wb1 <= n_wb1;
 	     r_last_idle <= n_last_idle;
+	     r_mark_pte_inflight <= n_mark_pte_inflight;
+	     r_mark_pte_done <= n_mark_pte_done;
 	  end
      end // always_ff@ (posedge clk)
 
@@ -801,7 +809,8 @@ module l2_2way(clk,
    
    probe_state_t n_pstate, r_pstate;
    logic n_l2_probe_mmu, r_l2_probe_mmu;
-   logic n_l2_probe_ext, r_l2_probe_ext;   
+   logic n_l2_probe_ext, r_l2_probe_ext;
+   logic n_l2_probe_mark_pte, r_l2_probe_mark_pte;      
 
    // always_ff@(negedge clk)
    //   begin
@@ -826,6 +835,7 @@ module l2_2way(clk,
 	n_l2_probe_addr = r_l2_probe_addr;
 	n_l2_probe_mmu = r_l2_probe_mmu;
 	n_l2_probe_ext = r_l2_probe_ext;
+	n_l2_probe_mark_pte = r_l2_probe_mark_pte;
 	n_ext_probe_ack = 1'b0;
 	
 	case(r_pstate)
@@ -845,7 +855,13 @@ module l2_2way(clk,
 		    n_l2_probe_val = 1'b1;
 		    n_l2_probe_addr = ext_probe_addr;
 		    n_l2_probe_ext = 1'b1;
-		    
+		 end
+	       else if(n_mark_pte_inflight)
+		 begin
+		    n_pstate = PROBE_WAIT;
+		    n_l2_probe_val = 1'b1;
+		    n_l2_probe_addr = {mem_mark_addr[(`PA_WIDTH-1):`LG_L2_CL_LEN], {{`LG_L2_CL_LEN{1'b0}}}};
+		    n_l2_probe_mark_pte = 1'b1;
 		 end
 	    end
 	  PROBE_WAIT:
@@ -857,6 +873,7 @@ module l2_2way(clk,
 		    t_probe_mmu_req_valid = r_l2_probe_mmu;
 		    n_l2_probe_mmu = 1'b0;
 		    n_l2_probe_ext = 1'b0;
+		    n_l2_probe_mark_pte = 1'b0;		    
 		 end
 	    end
 	  default:
@@ -883,7 +900,8 @@ module l2_2way(clk,
 	     r_l2_probe_val <= 1'b0;
 	     r_l2_probe_addr <= 'd0;
 	     r_l2_probe_mmu <= 1'b0;
-	     r_l2_probe_ext <= 1'b0;	     
+	     r_l2_probe_ext <= 1'b0;	   
+	     r_l2_probe_mark_pte <= 1'b0;
 	     r_ext_probe_ack <= 1'b0;
 	  end
 	else
@@ -892,7 +910,8 @@ module l2_2way(clk,
 	     r_l2_probe_val <= n_l2_probe_val;
 	     r_l2_probe_addr <= n_l2_probe_addr;
 	     r_l2_probe_mmu <= n_l2_probe_mmu;
-	     r_l2_probe_ext <= n_l2_probe_ext;	     
+	     r_l2_probe_ext <= n_l2_probe_ext;
+	     r_l2_probe_mark_pte <= n_l2_probe_mark_pte;	     
 	     r_ext_probe_ack <= n_ext_probe_ack;
 	  end
      end
@@ -1006,6 +1025,7 @@ module l2_2way(clk,
    //r_l1d_req | l1d_req;
    wire	w_mmu_req = r_mmu_req | t_probe_mmu_req_valid;
    wire w_mem_mark_valid = mem_mark_valid | r_mmu_mark_req;
+   wire	w_mark_gate =  r_mark_pte_done;   
 
    wire	w_l1i_r = r_l1i_req | l1i_req;
    wire w_l1d_r = !w_l1d_empty;
@@ -1256,6 +1276,10 @@ module l2_2way(clk,
 	n_was_st = r_was_st;
 	n_was_busy = 1'b0;
 	n_was_rob = 1'b0;
+
+	n_mark_pte_inflight = (r_l2_probe_mark_pte & l2_probe_ack) ? 1'b0 : r_mark_pte_inflight;
+	n_mark_pte_done = r_mark_pte_done ? 1'b1 : (r_mark_pte_inflight & r_l2_probe_mark_pte & l2_probe_ack);
+	
 	
 	case(r_state)
 	  INITIALIZE:
@@ -1328,7 +1352,7 @@ module l2_2way(clk,
 			     begin
 				n_opcode =  MEM_LW;	
 				n_last_gnt = 1'b0;
-				n_req_ty = L1I;								
+				n_req_ty = L1I;
 			     end
 			   L1D:
 			     begin
@@ -1341,6 +1365,13 @@ module l2_2way(clk,
 				n_opcode = MEM_LW;			   
 				n_last_gnt = 1'b0;
 				n_mmu = 1'b1;
+				n_req_ty = MMU;
+			     end			   
+			   MARK_PTE:
+			     begin
+				n_opcode = MEM_LW;
+				n_mark_pte = 1'b1;
+				n_req_ty = MARK_PTE;
 			     end
 			   default:
 			     begin
@@ -1376,6 +1407,13 @@ module l2_2way(clk,
 				n_last_gnt = 1'b1;		
 				//n_l1d_rsp_valid  = 1'b1;
 			     end
+			   MARK_PTE:
+			     begin
+				n_state = CLEAN_RELOAD;
+				n_opcode = MEM_LW;
+				n_last_gnt = 1'b0;
+				n_mark_pte = 1'b1;
+			     end			   
 			   WRITEBACK:
 			     begin
 			     end
@@ -1393,22 +1431,7 @@ module l2_2way(clk,
 
 	       else if(w_debug & w_more_than_one_free_credit)
 		 begin
-		    if(r_need_wb & w_rob_empty)
-		      begin
-			 //$display("performing writeback at cycle %d for address %x", r_cycle, r_wb_addr);
-			 n_state = PREPARE_WRITEBACK;
-			 n_addr = r_wb_addr;
-			 n_need_wb = 1'b0;
-			 n_rob_tag = w_rob_tail_ptr;
-			 n_req_ty = WRITEBACK;
-		      end
-		    else if(n_flush_req)
-		      begin
-			 t_idx = 'd0;
-			 n_state = FLUSH_WAIT;
-			 n_req_ty = FLUSH;			 
-		      end
-		    else if(w_mem_mark_valid & w_rob_empty & !r_need_wb)
+		    if(w_mark_gate & w_rob_empty & !r_need_wb)
 		      begin
 			 n_mmu_mark_req = 1'b0;
 			 n_mmu_mark_dirty = mem_mark_dirty;
@@ -1423,6 +1446,27 @@ module l2_2way(clk,
 			 n_state = CHECK_VALID_AND_TAG;
 			 n_got_req = 1'b1;
 			 n_req_ty = MARK_PTE;
+		      end
+		    else if(r_need_wb & w_rob_empty)
+		      begin
+			 //$display("performing writeback at cycle %d for address %x", r_cycle, r_wb_addr);
+			 n_state = PREPARE_WRITEBACK;
+			 n_addr = r_wb_addr;
+			 n_need_wb = 1'b0;
+			 n_rob_tag = w_rob_tail_ptr;
+			 n_req_ty = WRITEBACK;
+		      end
+		    else if(n_flush_req & !w_mark_gate)
+		      begin
+			 t_idx = 'd0;
+			 n_state = FLUSH_WAIT;
+			 n_req_ty = FLUSH;			 
+		      end
+		    else if(w_mem_mark_valid & w_rob_empty & !r_need_wb & !r_mark_pte_inflight)
+		      begin
+			 n_state = IDLE;
+			 n_mark_pte_inflight = 1'b1;
+			 n_mark_pte_done = 1'b0;
 			 //$display("mark pte for addr %x, mem_mark_dirty %b n_mmu_mark_accessed %b",
 			 //n_saveaddr,mem_mark_dirty,mem_mark_accessed );
 		      end
@@ -1439,7 +1483,7 @@ module l2_2way(clk,
 			 n_got_req = 1'b1;
 			 n_req_ty = MMU;
 		      end
-		    else if((w_l1d_req | w_l1i_req) & !r_need_wb ) 
+		    else if((w_l1d_req | w_l1i_req) & !r_need_wb & !w_mark_gate ) 
 		      begin
 			 n_l1d = w_pick_l1d;
 			 n_l1i = w_pick_l1i;
@@ -1522,11 +1566,12 @@ module l2_2way(clk,
 			      t_wr_d0 = w_hit0;
 			      t_wr_d1 = w_hit1;			      
 			      n_mark_pte = 1'b0;
+			      n_mark_pte_done = 1'b0;
 			   end // if (r_mark_pte)
 			 else if(r_last_gnt)
 			   begin
 			      n_l1d_rsp_valid  = 1'b1;	
-			      if(w_l1d_req & !w_l1i_req & t_l1dq.opcode == MEM_LW & (r_need_wb==1'b0) & (r_was_rob == 1'b0))
+			      if(w_l1d_req & !w_l1i_req & t_l1dq.opcode == MEM_LW & (r_need_wb==1'b0) & (r_was_rob == 1'b0) & !w_mark_gate)
 				begin				   
 				   n_l1d = 1'b1;
 				   n_last_idle = 1'b1;
@@ -1552,7 +1597,7 @@ module l2_2way(clk,
 			 else
 			   begin
 			      //n_l1i_rsp_valid  = 1'b1;
-			      if(w_l1d_req & !w_l1i_req & t_l1dq.opcode == MEM_LW & (r_need_wb==1'b0) & (r_was_rob==1'b0))
+			      if(w_l1d_req & !w_l1i_req & t_l1dq.opcode == MEM_LW & (r_need_wb==1'b0) & (r_was_rob==1'b0) & !w_mark_gate)
 				begin
 				   n_l1d = 1'b1;
 				   n_last_idle = 1'b1;
