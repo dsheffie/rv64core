@@ -275,7 +275,7 @@ module decode_riscv(
 		 3'd1:
 		   begin
 		      uop.is_int = 1'b1;		      
-		      uop.op = w_priv_user ? WB_CACHES : FENCEI;
+		      uop.op = FENCEI;
 		      uop.serializing_op = 1'b1;
 		      uop.must_restart = 1'b1;		    		      
 		   end

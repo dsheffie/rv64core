@@ -270,8 +270,8 @@ module nu_l1d(clk,
    logic 				  t_hit_cache2;
    logic 				  t_rsp_dst_valid2;
    logic [63:0] 			  t_rsp_data2;
-
-
+   wire [`PA_WIDTH-1:0]			  w_req2_pa;
+   
    
    logic [127:0]			  t_array_data;
    
@@ -435,7 +435,7 @@ module nu_l1d(clk,
       for(genvar i = 0; i < N_EB_ENTRIES; i=i+1)
 	begin
 	   assign w_eb_port1_hits[i] = r_eb_valid[i] ? (r_sb[i].addr[`PA_WIDTH-1:IDX_START] == t_mem_head.addr[`PA_WIDTH-1:IDX_START]) : 1'b0;
-	   assign w_eb_port2_hits[i] = r_eb_valid[i] ? (r_sb[i].addr[IDX_STOP-1:IDX_START] == t_cache_idx2) : 1'b0;
+	   assign w_eb_port2_hits[i] = r_eb_valid[i] ? (r_sb[i].addr[IDX_STOP-1:IDX_START] == w_req2_pa[IDX_STOP-1:IDX_START]) : 1'b0;
 	end
    endgenerate
 
@@ -801,12 +801,12 @@ module nu_l1d(clk,
 
    wire	w_queues_drained = (&r_mrq_credits) & w_eb_empty;
 
-   wire [`PA_WIDTH-1:0] w_req2_pa = {w_tlb_pa[`PA_WIDTH-1:`LG_PG_SZ], r_req2.addr[`LG_PG_SZ-1:0]};
+   assign w_req2_pa = {w_tlb_pa[`PA_WIDTH-1:`LG_PG_SZ], r_req2.addr[`LG_PG_SZ-1:0]};
 
    
    wire	w_could_early_req_any = t_push_miss & w_three_free_credits & w_port2_missed_no_alias &
 	(r_last_early_valid ? (r_last_early != w_req2_pa[31:4]) : 1'b1) &
-	!(r_hit_busy_line2 | r_fwd_busy_addr2 | w_hit_pop ) &
+	!(r_hit_busy_line2 | r_fwd_busy_addr2 | w_hit_pop | w_eb_port2_hit) &
 	(r_req2.is_load | r_req.is_store) &
 	w_tlb_hit & 
 	(rr_last_wr ? (rr_cache_idx[`LG_L1D_NUM_SETS-LG_ALIAS_BITS-1:0] !=  r_req2.addr[`LG_PG_SZ-1:IDX_START]) : 1'b1) &
