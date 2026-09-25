@@ -2322,7 +2322,7 @@ module nu_l1d(clk,
 		 end
 	       
 	       /* not qualified on r_got_req */
-	       if(!mem_q_empty & !t_got_miss & !r_lock_cache & !n_pending_tlb_miss &!w_eb_port1_hit & !w_eb_full & w_two_free_credits)
+	       if(!mem_q_empty & !t_got_miss & !r_lock_cache & !n_pending_tlb_miss &!w_eb_port1_hit & w_eb_empty & w_two_free_credits)
 		 begin		    
 		    if(!t_mh_block & (r_mq_inflight[r_mq_head_ptr[`LG_MRQ_ENTRIES-1:0]] == 1'b0)  )
 		      begin
