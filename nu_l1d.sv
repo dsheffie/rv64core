@@ -539,7 +539,8 @@ module nu_l1d(clk,
                              FLUSH_CL_WAIT, //9			     
                              HANDLE_RELOAD, //10
 			     TLB_RELOAD, //11
-			     TLB_TURNAROUND //12
+			     TLB_TURNAROUND, //12
+			     POST_FLUSH_CACHE //13
                              } state_t;
 
    
@@ -2465,7 +2466,15 @@ module nu_l1d(clk,
 		     n_inhibit_write = 1'b0;
 		     n_l2_probe_ack = 1'b1;
 		  end	       
-	    end
+	   end
+	  POST_FLUSH_CACHE:
+	   begin
+	      if(w_queues_drained)
+	        begin
+	          n_state = ACTIVE;
+	          n_flush_complete = 1'b1;
+	        end
+	   end
 	  FLUSH_CACHE:
 	    begin
 	       t_cache_idx = r_cache_idx + 'd1;
@@ -2480,7 +2489,7 @@ module nu_l1d(clk,
 		    t_cache_idx = r_cache_idx + 'd1;
 		    if(r_cache_idx == (L1D_NUM_SETS-1))
 		      begin
-			 n_state = ACTIVE;
+			 n_state = POST_FLUSH_CACHE;
 			 n_flush_complete = 1'b1;
 		      end
 		 end
@@ -2503,9 +2512,8 @@ module nu_l1d(clk,
 	       //$display("stuck in flush cache at cycle %d", r_cycle);
 	       	if(mem_rsp_valid)
 		  begin
-		     n_state = ACTIVE;
+		     n_state = POST_FLUSH_CACHE;
 		     n_inhibit_write = 1'b0;
-		     n_flush_complete = 1'b1;
 		  end
 	    end	  
 	  FLUSH_CACHE_WAIT:
