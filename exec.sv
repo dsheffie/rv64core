@@ -2612,13 +2612,13 @@ module exec(clk,
 	    end
 	  CLZ:
 	    begin
-	       t_result = w_clz0_zero ? {64{1'b1}} : {57'd0,w_clz0_out};
+	       t_result = w_clz0_zero ? 64'd64 : {57'd0,w_clz0_out};
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
 	  CTZ:
 	    begin
-	       t_result = w_clz0_zero ? {64{1'b1}} : {57'd0,w_ctz0_out};
+	       t_result = w_clz0_zero ? 64'd64 : {57'd0,w_ctz0_out};
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
@@ -2631,14 +2631,14 @@ module exec(clk,
 	  CTZW:
 	    begin
 	       t_is_clzw_ctzw_cpopw = 1'b1;	       
-	       t_result = w_clz0_zero ? {64{1'b1}} : {57'd0,w_ctz0_out};
+	       t_result = w_clz0_zero ? 64'd32 : {57'd0,w_ctz0_out};
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end	  
 	  CLZW:
 	    begin
 	       t_is_clzw_ctzw_cpopw = 1'b1;
-	       t_result = w_clz0_zero ? {64{1'b1}} : {57'd0,w_clz0_out32};	       
+	       t_result = w_clz0_zero ? 64'd32 : {57'd0,w_clz0_out32};	       
 	       t_wr_int_prf = 1'b1;
 	       t_alu_valid = 1'b1;
 	    end
