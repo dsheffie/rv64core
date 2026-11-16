@@ -546,6 +546,58 @@ static void write_csr(int csr_id, state_t *s, int64_t v, bool &undef) {
 }
 
 
+/* RISC-V M divide / remainder, incl. the corner cases (matches the rv64core
+ * divider, nu_divider.sv): x/0 = all ones, x%0 = x, MIN/-1 = MIN, MIN%-1 = 0.
+ * The host's / and % trap (SIGFPE) on /0 and MIN/-1, so never use them raw. */
+static inline int64_t rv_div(int64_t a, int64_t b) {
+  if(b == 0) {
+    return -1;
+  }
+  if((a == INT64_MIN) and (b == -1)) {
+    return a;
+  }
+  return a / b;
+}
+static inline int64_t rv_rem(int64_t a, int64_t b) {
+  if(b == 0) {
+    return a;
+  }
+  if((a == INT64_MIN) and (b == -1)) {
+    return 0;
+  }
+  return a % b;
+}
+static inline uint64_t rv_divu(uint64_t a, uint64_t b) {
+  return (b == 0) ? ~0UL : a / b;
+}
+static inline uint64_t rv_remu(uint64_t a, uint64_t b) {
+  return (b == 0) ? a : a % b;
+}
+static inline int32_t rv_divw(int32_t a, int32_t b) {
+  if(b == 0) {
+    return -1;
+  }
+  if((a == INT32_MIN) and (b == -1)) {
+    return a;
+  }
+  return a / b;
+}
+static inline int32_t rv_remw(int32_t a, int32_t b) {
+  if(b == 0) {
+    return a;
+  }
+  if((a == INT32_MIN) and (b == -1)) {
+    return 0;
+  }
+  return a % b;
+}
+static inline uint32_t rv_divuw(uint32_t a, uint32_t b) {
+  return (b == 0) ? ~0U : a / b;
+}
+static inline uint32_t rv_remuw(uint32_t a, uint32_t b) {
+  return (b == 0) ? a : a % b;
+}
+
 void execRiscv(state_t *s) {
   //printf("%s:%lx\n", __PRETTY_FUNCTION__, s->pc);
   uint8_t *mem = s->mem;
@@ -758,11 +810,11 @@ void execRiscv(state_t *s) {
 	  case 1:
 	    if((inst>>20) == 0x600) { /* clz */
 	      uint64_t u = *reinterpret_cast<uint64_t*>(&s->gpr[m.i.rs1]);
-	      s->gpr[m.i.rd] = u==0 ? ~0UL : __builtin_clzl(u);
+	      s->gpr[m.i.rd] = u==0 ? 64 : __builtin_clzl(u);
 	    }
 	    else if((inst>>20) == 0x601) { /* ctz */
 	      uint64_t u = *reinterpret_cast<uint64_t*>(&s->gpr[m.i.rs1]);
-	      s->gpr[m.i.rd] = u==0 ? ~0UL : __builtin_ctzl(u);
+	      s->gpr[m.i.rd] = u==0 ? 64 : __builtin_ctzl(u);
 	    }
 	    else if((inst>>20) == 0x602) { /* cpop */
 	      uint64_t u = *reinterpret_cast<uint64_t*>(&s->gpr[m.i.rs1]);
@@ -870,10 +922,10 @@ void execRiscv(state_t *s) {
 	      switch( (inst>>20)&31 )
 		{
 		case 0: /* clzw */
-		  s->gpr[m.i.rd] = (u==0) ? ~0UL : __builtin_clz(u);
+		  s->gpr[m.i.rd] = (u==0) ? 32 : __builtin_clz(u);
 		  break;
 		case 1: /* ctzw */
-		  s->gpr[m.i.rd] = (u==0) ? ~0UL : __builtin_ctz(u);		    
+		  s->gpr[m.i.rd] = (u==0) ? 32 : __builtin_ctz(u);		    
 		  break;
 		case 2: /* cpopw */
 		  s->gpr[m.i.rd] =  __builtin_popcount(u);
@@ -1009,7 +1061,8 @@ void execRiscv(state_t *s) {
 	    s->store32(pa, s->gpr[m.a.rs2] ^ x);
 	    assert(not(atomic_queue.empty()));
 	    auto &t = atomic_queue.front();
-	    if(not(t.pc == s->pc and t.addr == pa and t.data == (s->gpr[m.a.rs2]^x))) {
+	    /* a .w AMO stores 32 bits: compare those (x is sign-extended, the RTL's data is not) */
+	    if(not(t.pc == s->pc and t.addr == pa and static_cast<uint32_t>(t.data) == static_cast<uint32_t>(s->gpr[m.a.rs2]^x))) {
 	      std::cout << "amoxor.w error:\n";
 	      std::cout << "rtl " << std::hex << t.pc << "," << t.addr << "," << t.data << std::dec << "\n";
 	      std::cout << "sim " << std::hex << s->pc << "," << pa << "," << (s->gpr[m.a.rs2]^x) << std::dec << "\n";	      
@@ -1029,7 +1082,7 @@ void execRiscv(state_t *s) {
 	    s->store32(pa, s->gpr[m.a.rs2] | x);
 	    assert(not(atomic_queue.empty()));
 	    auto &t = atomic_queue.front();
-	    if(not(t.pc == s->pc and t.addr == pa and t.data == (s->gpr[m.a.rs2]+x))) {
+	    if(not(t.pc == s->pc and t.addr == pa and static_cast<uint32_t>(t.data) == static_cast<uint32_t>(s->gpr[m.a.rs2]|x))) {
 	      std::cout << "amoor.w error:\n";
 	      std::cout << "rtl " << std::hex << t.pc << "," << t.addr << "," << t.data << std::dec << "\n";
 	      std::cout << "sim " << std::hex << s->pc << "," << pa << "," << (s->gpr[m.a.rs2]|x) << std::dec << "\n";	      
@@ -1286,7 +1339,7 @@ void execRiscv(state_t *s) {
 	  s->gpr[m.i.rd] = sext(xx);
 	}	
 	else if((m.r.sel == 4) & (m.r.special == 1)) { /* divw */
-	  int32_t c = b ? a/b : ~0;
+	  int32_t c = rv_divw(a, b);
 	  s->sext_xlen(c, m.r.rd);
 	}
 	else if((m.r.sel == 2) & (m.r.special == 16)) { /* sh1add.uw */
@@ -1322,7 +1375,7 @@ void execRiscv(state_t *s) {
 	else if((m.r.sel == 5) & (m.r.special == 1)) { /* divuw */
 	  uint32_t aa = s->get_reg_u32(m.r.rs1);
 	  uint32_t bb = s->get_reg_u32(m.r.rs2);
-	  uint32_t c = bb ? aa/bb : ~(0U);
+	  uint32_t c = rv_divuw(aa, bb);
 	  int32_t rr =  *reinterpret_cast<int32_t*>(&c);
 	  s->sext_xlen(rr, m.r.rd);
 	}
@@ -1331,13 +1384,13 @@ void execRiscv(state_t *s) {
 	  s->sext_xlen(c, m.r.rd);	  
 	}
 	else if((m.r.sel == 6) & (m.r.special == 1)) { /* remw */
-	  int32_t c = b ? a % b : ~0;
+	  int32_t c = rv_remw(a, b);
 	  s->sext_xlen(c, m.r.rd);
 	}
 	else if((m.r.sel == 7) & (m.r.special == 1)) { /* remuw */
 	  uint32_t aa = s->get_reg_u32(m.r.rs1);
 	  uint32_t bb = s->get_reg_u32(m.r.rs2);
-	  uint32_t c = bb ? aa%bb : ~(0U);
+	  uint32_t c = rv_remuw(aa, bb);
 	  int32_t rr =  *reinterpret_cast<int32_t*>(&c);
 	  s->sext_xlen(rr, m.r.rd);
 	}
@@ -1558,7 +1611,7 @@ void execRiscv(state_t *s) {
 		s->gpr[m.r.rd] = s->gpr[m.r.rs1] ^ s->gpr[m.r.rs2];
 		break;
 	      case 0x1:
-		s->gpr[m.r.rd] = s->gpr[m.r.rs2] ? s->gpr[m.r.rs1] / s->gpr[m.r.rs2] : ~(0L);
+		s->gpr[m.r.rd] = rv_div(s->gpr[m.r.rs1], s->gpr[m.r.rs2]);
 		break;
 	      case 0x5: /* min */
 		s->gpr[m.r.rd] = std::min(s->gpr[m.r.rs1], s->gpr[m.r.rs2]);	
@@ -1581,7 +1634,7 @@ void execRiscv(state_t *s) {
 		s->gpr[rd] = (*reinterpret_cast<uint64_t*>(&s->gpr[m.r.rs1]) >> (s->gpr[m.r.rs2] & (s->xlen()-1)));
 		break;
 	      case 0x1: {
-		*reinterpret_cast<uint64_t*>(&s->gpr[m.r.rd]) = u_rs2 ? u_rs1 / u_rs2 : ~(0UL);
+		*reinterpret_cast<uint64_t*>(&s->gpr[m.r.rd]) = rv_divu(u_rs1, u_rs2);
 		break;
 	      }
 	      case 0x5: /* minu */
@@ -1610,7 +1663,7 @@ void execRiscv(state_t *s) {
 		s->gpr[m.r.rd] = s->gpr[m.r.rs1] | s->gpr[m.r.rs2];
 		break;
 	      case 0x1:
-		s->gpr[m.r.rd] = s->gpr[m.r.rs2] ? s->gpr[m.r.rs1] % s->gpr[m.r.rs2] : ~(0L);
+		s->gpr[m.r.rd] = rv_rem(s->gpr[m.r.rs1], s->gpr[m.r.rs2]);
 		break;
 	      case 0x5: /* max */
 		s->gpr[m.r.rd] = std::max(s->gpr[m.r.rs1], s->gpr[m.r.rs2]);	
@@ -1633,7 +1686,7 @@ void execRiscv(state_t *s) {
 		s->gpr[m.r.rd] = s->gpr[m.r.rs1] & s->gpr[m.r.rs2];
 		break;
 	      case 0x1: { /* remu */
-		*reinterpret_cast<uint64_t*>(&s->gpr[m.r.rd]) = u_rs2 ? u_rs1 % u_rs2 : ~(0UL);
+		*reinterpret_cast<uint64_t*>(&s->gpr[m.r.rd]) = rv_remu(u_rs1, u_rs2);
 		break;
 	      }
 	      case 0x5: /* maxu */
