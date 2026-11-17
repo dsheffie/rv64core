@@ -750,6 +750,14 @@ endfunction
 			 n_page_fault = 1'b0;
 			 t_push_insn = 1'b1;
 		      end
+		    else
+		      begin
+			 /* hold the faulting pc until the fault uop can be pushed;
+			  * otherwise the default r_pc + 4 advance walks r_cache_pc
+			  * forward and the fault is reported at a later pc */
+			 n_pc = r_pc;
+			 n_cache_pc = r_cache_pc;
+		      end
 		 end
 	       else if(!w_tlb_hit & r_req && paging_active)
 		 begin
